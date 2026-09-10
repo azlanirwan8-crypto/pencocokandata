@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   Check,
   HelpCircle,
+  Layers,
 } from 'lucide-react';
 import type { TargetRow, MasterRow } from '../../types';
 import {
@@ -54,8 +55,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   canExecute,
   matchedDone,
 }) => {
-  // 3 Sub-Tabs State: 'unmatched' | 'recommendation' | 'matched'
-  const [checkerTab, setCheckerTab] = useState<'unmatched' | 'recommendation' | 'matched'>('unmatched');
+  // 3 Sub-Tabs State: 'upload' | 'recommendation' | 'matched'
+  const [checkerTab, setCheckerTab] = useState<'upload' | 'recommendation' | 'matched'>('upload');
   const [page, setPage] = useState(1);
   const pageSize = 15;
 
@@ -99,10 +100,10 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
 
   // Determine current dataset based on active tab
   const currentTabRows = useMemo(() => {
-    if (checkerTab === 'unmatched') return unmatchedRows;
+    if (checkerTab === 'upload') return rows;
     if (checkerTab === 'matched') return matchedRows;
     return []; // For recommendation tab, we use `recommendations` list directly
-  }, [checkerTab, unmatchedRows, matchedRows]);
+  }, [checkerTab, rows, matchedRows]);
 
   const currentTabRecs = useMemo(() => {
     if (checkerTab !== 'recommendation') return [];
@@ -174,35 +175,6 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
             Total {rows.length.toLocaleString('id-ID')} baris data terfilter (dari total {totalInputRows.toLocaleString('id-ID')} baris input awal).
           </p>
         </div>
-
-        {/* Execution Button di dalam card tabel */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={onExecuteMatching}
-            disabled={!canExecute || isProcessing}
-            id="btn-mulai-pencocokan"
-            style={{ padding: '0.42rem 0.95rem' }}
-          >
-            {isProcessing ? (
-              <>
-                <RotateCcw size={14} className="pulse-dot" />
-                <span>Memproses...</span>
-              </>
-            ) : matchedDone ? (
-              <>
-                <RotateCcw size={14} />
-                <span>Ulangi Pencocokan</span>
-              </>
-            ) : (
-              <>
-                <Play size={14} fill="currentColor" />
-                <span>Mulai Pencocokan Bertingkat</span>
-              </>
-            )}
-          </button>
-        </div>
       </div>
 
       {/* 3 SUB-TABS (VELZON UNDERLINE STYLE) */}
@@ -215,11 +187,11 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           flexWrap: 'wrap',
         }}
       >
-        {/* Tab 1: Data Tidak Match */}
+        {/* Tab 1: Data Upload */}
         <button
           type="button"
           onClick={() => {
-            setCheckerTab('unmatched');
+            setCheckerTab('upload');
             setPage(1);
           }}
           style={{
@@ -228,31 +200,31 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
             gap: '0.45rem',
             padding: '0.65rem 1.1rem',
             fontSize: '0.82rem',
-            fontWeight: checkerTab === 'unmatched' ? 600 : 500,
-            color: checkerTab === 'unmatched' ? '#f06548' : '#878a99',
+            fontWeight: checkerTab === 'upload' ? 600 : 500,
+            color: checkerTab === 'upload' ? '#3577f1' : '#878a99',
             background: 'transparent',
             border: 'none',
-            borderBottom: checkerTab === 'unmatched' ? '2px solid #f06548' : '2px solid transparent',
+            borderBottom: checkerTab === 'upload' ? '2px solid #3577f1' : '2px solid transparent',
             cursor: 'pointer',
             transition: 'all 0.15s ease',
             marginBottom: '-1px',
           }}
-          id="tab-btn-unmatched"
+          id="tab-btn-upload"
         >
-          <AlertTriangle size={14} color={checkerTab === 'unmatched' ? '#f06548' : '#878a99'} />
-          <span>Tab 1: Data Tidak Match</span>
+          <Layers size={14} color={checkerTab === 'upload' ? '#3577f1' : '#878a99'} />
+          <span>Tab 1: Data Upload</span>
           <span
             style={{
               padding: '0.12rem 0.5rem',
               borderRadius: '9999px',
               fontSize: '0.7rem',
               fontWeight: 600,
-              background: unmatchedRows.length > 0 ? 'rgba(240, 101, 72, 0.1)' : '#f3f3f9',
-              color: unmatchedRows.length > 0 ? '#f06548' : '#878a99',
-              border: unmatchedRows.length > 0 ? '1px solid rgba(240, 101, 72, 0.25)' : '1px solid #e9ebec',
+              background: rows.length > 0 ? 'rgba(53, 119, 241, 0.1)' : '#f3f3f9',
+              color: rows.length > 0 ? '#3577f1' : '#878a99',
+              border: rows.length > 0 ? '1px solid rgba(53, 119, 241, 0.25)' : '1px solid #e9ebec',
             }}
           >
-            {unmatchedRows.length.toLocaleString('id-ID')}
+            {rows.length.toLocaleString('id-ID')} Data
           </span>
         </button>
 
@@ -326,7 +298,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           id="tab-btn-matched"
         >
           <CheckCircle2 size={14} color={checkerTab === 'matched' ? '#0ab39c' : '#878a99'} />
-          <span>Tab 3: Data Match</span>
+          <span>Tab 3: Data Match (Clear)</span>
           <span
             style={{
               padding: '0.12rem 0.5rem',
@@ -338,7 +310,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               border: matchedRows.length > 0 ? '1px solid rgba(10, 179, 156, 0.25)' : '1px solid #e9ebec',
             }}
           >
-            {matchedRows.length.toLocaleString('id-ID')}
+            {matchedRows.length.toLocaleString('id-ID')} Clear
           </span>
         </button>
       </div>
@@ -359,6 +331,41 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {/* Action button in Tab 1: MULAI PENCOCOKAN */}
+          {checkerTab === 'upload' && (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={onExecuteMatching}
+              disabled={!canExecute || isProcessing}
+              id="btn-mulai-pencocokan"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                fontSize: '0.78rem',
+                padding: '0.35rem 0.95rem',
+              }}
+            >
+              {isProcessing ? (
+                <>
+                  <RotateCcw size={14} className="pulse-dot" />
+                  <span>Memproses...</span>
+                </>
+              ) : matchedDone ? (
+                <>
+                  <RotateCcw size={14} />
+                  <span>Ulangi Pencocokan</span>
+                </>
+              ) : (
+                <>
+                  <Play size={14} fill="currentColor" />
+                  <span>Mulai Pencocokan Data</span>
+                </>
+              )}
+            </button>
+          )}
+
           {/* Dropdown Wilayah */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
             <MapPin size={14} color="#405189" />
@@ -660,24 +667,24 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                 <tr>
                   <td colSpan={16} style={{ textAlign: 'center', padding: '3rem', color: '#878a99' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
-                      {checkerTab === 'unmatched' ? (
+                      {checkerTab === 'upload' ? (
                         <>
-                          <CheckCircle2 size={32} color="#0ab39c" />
+                          <AlertTriangle size={32} color="#878a99" />
                           <strong style={{ color: '#212529', fontSize: '0.95rem' }}>
-                            Semua Data Telah Berhasil Dicocokkan!
+                            Belum Ada Data Upload Target
                           </strong>
                           <span style={{ fontSize: '0.8rem', color: '#878a99' }}>
-                            Tidak ada data target yang berstatus Unmatched (Tab 1 & Tab 2 kosong).
+                            Silakan unggah berkas Excel target melalui tombol Upload Data Cek di atas.
                           </span>
                         </>
                       ) : (
                         <>
                           <AlertTriangle size={32} color="#878a99" />
                           <strong style={{ color: '#212529', fontSize: '0.95rem' }}>
-                            Belum Ada Data yang Cocok
+                            Belum Ada Data yang Cocok (Clear)
                           </strong>
                           <span style={{ fontSize: '0.8rem', color: '#878a99' }}>
-                            Jalankan pencocokan bertingkat atau setujui rekomendasi pada Tab 2.
+                            Jalankan pencocokan data pada Tab 1 atau setujui rekomendasi pada Tab 2.
                           </span>
                         </>
                       )}
