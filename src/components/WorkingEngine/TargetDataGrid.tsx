@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -14,7 +14,11 @@ import {
   Building2,
 } from 'lucide-react';
 import type { TargetRow, MasterRow } from '../../types';
-import { generateRecommendationsForUnmatched, type RecommendationResult } from '../../utils/recommender';
+import {
+  generateRecommendationsForUnmatched,
+  buildMasterProximityIndex,
+  type RecommendationResult,
+} from '../../utils/recommender';
 
 interface TargetDataGridProps {
   rows: TargetRow[];
@@ -63,10 +67,33 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     return rows.filter((r) => r._isMatched || r.Sandi || r['Sandi Cabang']);
   }, [rows]);
 
-  // Generate recommendations for unmatched rows based on master data proximity
-  const recommendations: RecommendationResult[] = useMemo(() => {
-    return generateRecommendationsForUnmatched(unmatchedRows, masterRows);
-  }, [unmatchedRows, masterRows]);
+  // Build Master Proximity Index once (O(1) bucket index)
+  const masterProximityIndex = useMemo(() => {
+    return buildMasterProximityIndex(masterRows);
+  }, [masterRows]);
+
+  // Recommendations state - LAZY evaluated so opening 'Data Cek' is 100% INSTANT!
+  const [recommendations, setRecommendations] = useState<RecommendationResult[]>([]);
+  const [isComputingRecs, setIsComputingRecs] = useState<boolean>(false);
+
+  // Trigger recommendation calculation ONLY when Tab 2 is active
+  useEffect(() => {
+    if (checkerTab !== 'recommendation') return;
+    if (unmatchedRows.length === 0 || masterRows.length === 0) {
+      setRecommendations([]);
+      return;
+    }
+
+    setIsComputingRecs(true);
+    // Non-blocking asynchronous calculation
+    const timer = setTimeout(() => {
+      const recs = generateRecommendationsForUnmatched(unmatchedRows, masterRows, masterProximityIndex);
+      setRecommendations(recs);
+      setIsComputingRecs(false);
+    }, 40);
+
+    return () => clearTimeout(timer);
+  }, [checkerTab, unmatchedRows, masterRows, masterProximityIndex]);
 
   // Determine current dataset based on active tab
   const currentTabRows = useMemo(() => {
@@ -118,6 +145,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   const handleApproveAll = () => {
     if (recommendations.length === 0) return;
     onApproveAllRecommendations(recommendations);
+    setRecommendations([]);
     // Pindah langsung ke Tab 3 (Data Match)
     setCheckerTab('matched');
     setPage(1);
@@ -258,12 +286,16 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               borderRadius: '9999px',
               fontSize: '0.7rem',
               fontWeight: 600,
-              background: recommendations.length > 0 ? 'rgba(247, 184, 75, 0.15)' : '#f3f3f9',
-              color: recommendations.length > 0 ? '#d97706' : '#878a99',
-              border: recommendations.length > 0 ? '1px solid rgba(247, 184, 75, 0.3)' : '1px solid #e9ebec',
+              background: (recommendations.length > 0 || unmatchedRows.length > 0) ? 'rgba(247, 184, 75, 0.15)' : '#f3f3f9',
+              color: (recommendations.length > 0 || unmatchedRows.length > 0) ? '#d97706' : '#878a99',
+              border: (recommendations.length > 0 || unmatchedRows.length > 0) ? '1px solid rgba(247, 184, 75, 0.3)' : '1px solid #e9ebec',
             }}
           >
-            {recommendations.length.toLocaleString('id-ID')} Rekomendasi
+            {recommendations.length > 0
+              ? `${recommendations.length.toLocaleString('id-ID')} Rekomendasi`
+              : unmatchedRows.length > 0
+              ? `${unmatchedRows.length.toLocaleString('id-ID')} Potensi`
+              : '0 Rekomendasi'}
           </span>
         </button>
 
@@ -412,7 +444,26 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
 
       {/* TAB 2: REKOMENDASI DATA (SMART PROXIMITY SUGGESTIONS) */}
       {checkerTab === 'recommendation' ? (
-        <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px' }}>
+        isComputingRecs ? (
+          <div
+            style={{
+              textAlign: 'center',
+              padding: '3.5rem 1.5rem',
+              background: '#ffffff',
+              borderRadius: '6px',
+              border: '1px solid #e9ebec',
+            }}
+          >
+            <RotateCcw size={28} className="pulse-dot" color="#3577f1" style={{ margin: '0 auto 0.85rem' }} />
+            <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#212529', margin: '0 0 0.35rem' }}>
+              Menganalisis Rekomendasi Cabang Terdekat...
+            </h4>
+            <p style={{ fontSize: '0.78rem', color: '#878a99', margin: 0 }}>
+              Mencocokkan {unmatchedRows.length.toLocaleString('id-ID')} data dengan indeks wilayah & kode pos
+            </p>
+          </div>
+        ) : (
+          <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px' }}>
           <table className="modern-table">
             <thead>
               <tr>
@@ -538,7 +589,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
             </tbody>
           </table>
         </div>
-      ) : (
+      )
+    ) : (
         /* TAB 1 & TAB 3: DATA GRID BIASA (UNMATCHED vs MATCHED) */
         <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px' }}>
           <table className="modern-table">

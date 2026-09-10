@@ -80,14 +80,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </nav>
       </div>
-
-      {/* Sidebar Footer Info */}
-      <div className="sidebar-footer">
-        <div className="sidebar-footer-card">
-          <span className="footer-label">Velzon Enterprise</span>
-          <span className="footer-status">● Sistem Siap</span>
-        </div>
-      </div>
     </aside>
   );
 };

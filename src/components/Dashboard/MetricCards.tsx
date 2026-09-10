@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layers, CheckCircle2, AlertTriangle, FileWarning, Database, Award } from 'lucide-react';
+import { Layers, CheckCircle2, AlertTriangle, Database } from 'lucide-react';
 import type { MatchingStats } from '../../types';
 
 interface MetricCardsProps {
@@ -13,18 +13,9 @@ export const MetricCards: React.FC<MetricCardsProps> = ({
   masterCount = 0,
   multiCabangCount = 0,
 }) => {
-  // Compute Data Quality Health Score (0 - 100)
-  const qualityScore = React.useMemo(() => {
-    if (stats.totalProcessed === 0) return 0;
-    const matchScore = stats.matchingRate * 0.6; // 60% weight
-    const ptenScore = (100 - stats.ptenDiscrepancyRate) * 0.3; // 30% weight
-    const masterBonus = masterCount > 0 ? (multiCabangCount === 0 ? 10 : Math.max(5, 10 - multiCabangCount * 0.1)) : 0; // 10% weight
-    return Math.min(100, Math.round(matchScore + ptenScore + masterBonus));
-  }, [stats, masterCount, multiCabangCount]);
-
   return (
-    <div className="metrics-grid">
-      {/* 1. TOTAL DATA DIPROSES */}
+    <div className="metrics-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+      {/* 1. TOTAL DATA TARGET */}
       <div className="metric-card blue">
         <div className="metric-header">
           <span className="metric-title">TOTAL DATA TARGET</span>
@@ -36,62 +27,46 @@ export const MetricCards: React.FC<MetricCardsProps> = ({
           {stats.totalProcessed.toLocaleString('id-ID')}
         </div>
         <div className="metric-footer">
-          <span style={{ color: '#38bdf8', fontWeight: 600 }}>N_in Terkunci</span> • Integritas baris 100%
+          <span style={{ color: '#38bdf8', fontWeight: 600 }}>N_in Terkunci</span> • Integritas Baris 100%
         </div>
       </div>
 
-      {/* 2. MATCHING RATE (SUKSES) */}
+      {/* 2. DATA BERHASIL COCOK (MATCHED) */}
       <div className="metric-card emerald">
         <div className="metric-header">
-          <span className="metric-title">MATCHING RATE</span>
+          <span className="metric-title">DATA COCOK (MATCHED)</span>
           <div className="metric-icon-bubble">
             <CheckCircle2 size={16} />
           </div>
         </div>
         <div className="metric-value">
-          {stats.matchingRate.toFixed(1)}%
+          {stats.matchedCount.toLocaleString('id-ID')}
         </div>
         <div className="metric-footer">
-          <span style={{ color: '#34d399', fontWeight: 600 }}>{stats.matchedCount.toLocaleString('id-ID')}</span> cocok presisi via O(1)
+          <span style={{ color: '#34d399', fontWeight: 600 }}>Terverifikasi</span> • Cocok dengan Sandi Master
         </div>
       </div>
 
-      {/* 3. UNMATCHED RECORDS */}
+      {/* 3. DATA BELUM COCOK (UNMATCHED) */}
       <div className="metric-card rose">
         <div className="metric-header">
-          <span className="metric-title">UNMATCHED</span>
+          <span className="metric-title">DATA BELUM COCOK</span>
           <div className="metric-icon-bubble">
             <AlertTriangle size={16} />
           </div>
         </div>
         <div className="metric-value">
-          {stats.totalProcessed > 0 ? (100 - stats.matchingRate).toFixed(1) : '0.0'}%
+          {stats.unmatchedCount.toLocaleString('id-ID')}
         </div>
         <div className="metric-footer">
-          <span style={{ color: '#fb7185', fontWeight: 600 }}>{stats.unmatchedCount.toLocaleString('id-ID')}</span> perlu update referensi
+          <span style={{ color: '#fb7185', fontWeight: 600 }}>Perlu Tindakan</span> • Tersedia di Tab Rekomendasi
         </div>
       </div>
 
-      {/* 4. PTEN DISCREPANCY */}
-      <div className="metric-card amber">
-        <div className="metric-header">
-          <span className="metric-title">SELISIH KODE POS PTEN</span>
-          <div className="metric-icon-bubble">
-            <FileWarning size={16} />
-          </div>
-        </div>
-        <div className="metric-value">
-          {stats.ptenDiscrepancyRate.toFixed(1)}%
-        </div>
-        <div className="metric-footer">
-          <span style={{ color: '#fbbf24', fontWeight: 600 }}>{stats.ptenDiscrepancyCount.toLocaleString('id-ID')}</span> beda pos vs PTEN
-        </div>
-      </div>
-
-      {/* 5. DATA MASTER AKTIF */}
+      {/* 4. DATABASE MASTER CABANG */}
       <div className="metric-card cyan">
         <div className="metric-header">
-          <span className="metric-title">REFERENSI MASTER</span>
+          <span className="metric-title">REFERENSI MASTER CABANG</span>
           <div className="metric-icon-bubble">
             <Database size={16} />
           </div>
@@ -103,32 +78,7 @@ export const MetricCards: React.FC<MetricCardsProps> = ({
           {multiCabangCount > 0 ? (
             <span style={{ color: '#f59e0b', fontWeight: 600 }}>{multiCabangCount} Multi-Cabang Alert</span>
           ) : (
-            <span style={{ color: '#38bdf8', fontWeight: 600 }}>Indeks Terverifikasi</span>
-          )}
-        </div>
-      </div>
-
-      {/* 6. DATA QUALITY HEALTH SCORE */}
-      <div className="metric-card purple">
-        <div className="metric-header">
-          <span className="metric-title">SKOR KUALITAS DATA</span>
-          <div className="metric-icon-bubble">
-            <Award size={16} />
-          </div>
-        </div>
-        <div className="metric-value">
-          {stats.totalProcessed > 0 ? qualityScore : '--'}
-          {stats.totalProcessed > 0 && <span style={{ fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-muted)', marginLeft: '2px' }}>/100</span>}
-        </div>
-        <div className="metric-footer">
-          {qualityScore >= 85 ? (
-            <span style={{ color: '#34d399', fontWeight: 600 }}>Kondisi Sangat Prima</span>
-          ) : qualityScore >= 60 ? (
-            <span style={{ color: '#fbbf24', fontWeight: 600 }}>Kondisi Cukup Baik</span>
-          ) : stats.totalProcessed > 0 ? (
-            <span style={{ color: '#fb7185', fontWeight: 600 }}>Perlu Perhatian</span>
-          ) : (
-            <span>Menunggu Eksekusi Data</span>
+            <span style={{ color: '#38bdf8', fontWeight: 600 }}>Database Aktif & Siap Digunakan</span>
           )}
         </div>
       </div>
