@@ -868,21 +868,21 @@ export const App: React.FC = () => {
             <div
               className="glass-card"
               style={{
-                padding: '0.65rem 1.15rem',
+                padding: '0.55rem 1.1rem',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 flexWrap: 'wrap',
-                gap: '0.75rem',
+                gap: '0.65rem',
                 marginBottom: '0',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                 <div
                   style={{
-                    width: '38px',
-                    height: '38px',
-                    borderRadius: '6px',
+                    width: '30px',
+                    height: '30px',
+                    borderRadius: '5px',
                     background: 'rgba(53, 119, 241, 0.1)',
                     display: 'flex',
                     alignItems: 'center',
@@ -890,28 +890,26 @@ export const App: React.FC = () => {
                     color: '#3577f1',
                   }}
                 >
-                  <Layers size={18} />
+                  <Layers size={15} />
                 </div>
                 <div>
-                  <h3 style={{ fontSize: '0.96rem', fontWeight: 600, color: '#212529', margin: 0 }}>
+                  <h3 style={{ fontSize: '0.92rem', fontWeight: 600, color: '#212529', margin: 0 }}>
                     Data Target
                   </h3>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   className="btn btn-primary btn-sm"
                   onClick={() => setIsTargetUploadModalOpen(true)}
                   id="btn-open-upload-target"
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.42rem 0.95rem' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.3rem 0.75rem' }}
                 >
-                  <UploadCloud size={14} />
+                  <UploadCloud size={13} />
                   <span>Upload Data Cek</span>
                 </button>
-
-
 
                 {targetRows.length > 0 && (
                   <button
@@ -922,13 +920,13 @@ export const App: React.FC = () => {
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '0.35rem',
+                      gap: '0.3rem',
                       color: '#f06548',
                       borderColor: 'rgba(240, 101, 72, 0.3)',
-                      padding: '0.42rem 0.85rem',
+                      padding: '0.3rem 0.7rem',
                     }}
                   >
-                    <RotateCcw size={13} />
+                    <RotateCcw size={12} />
                     <span>Reset Data Cek</span>
                   </button>
                 )}

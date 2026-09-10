@@ -207,7 +207,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   };
 
   return (
-    <div className="glass-card" style={{ marginTop: '0.65rem', padding: '1rem 1.25rem' }}>
+    <div className="glass-card" style={{ marginTop: '0.65rem', padding: '0.75rem 1.1rem' }}>
       {/* Top Header: Title & Matching Execution Button */}
       <div
         style={{
@@ -215,15 +215,15 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
-          gap: '0.75rem',
-          marginBottom: '0.85rem',
+          gap: '0.65rem',
+          marginBottom: '0.65rem',
         }}
       >
         <div>
-          <h2 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#212529', letterSpacing: '-0.01em' }}>
+          <h2 style={{ fontSize: '0.96rem', fontWeight: 600, color: '#212529', letterSpacing: '-0.01em' }}>
             Pratinjau & Manajemen Data Target
           </h2>
-          <p style={{ fontSize: '0.78rem', color: '#878a99', marginTop: '0.15rem' }}>
+          <p style={{ fontSize: '0.75rem', color: '#878a99', marginTop: '0.1rem' }}>
             {matchedDone
               ? `Analisis selesai • ${matchedRows.length.toLocaleString('id-ID')} Data Match • ${unmatchedRows.length.toLocaleString('id-ID')} Rekomendasi Data`
               : `Total ${rows.length.toLocaleString('id-ID')} baris data target menunggu pencocokan.`}
@@ -235,9 +235,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
       <div
         style={{
           display: 'flex',
-          gap: '0.5rem',
+          gap: '0.4rem',
           borderBottom: '1px solid #e9ebec',
-          marginBottom: '1rem',
+          marginBottom: '0.75rem',
           flexWrap: 'wrap',
         }}
       >
@@ -251,9 +251,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '0.45rem',
-            padding: '0.65rem 1.1rem',
-            fontSize: '0.82rem',
+            gap: '0.4rem',
+            padding: '0.45rem 0.85rem',
+            fontSize: '0.78rem',
             fontWeight: checkerTab === 'upload' ? 600 : 500,
             color: checkerTab === 'upload' ? '#3577f1' : '#878a99',
             background: 'transparent',
@@ -265,13 +265,13 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           }}
           id="tab-btn-upload"
         >
-          <Layers size={14} color={checkerTab === 'upload' ? '#3577f1' : '#878a99'} />
+          <Layers size={13} color={checkerTab === 'upload' ? '#3577f1' : '#878a99'} />
           <span>Data Upload</span>
           <span
             style={{
-              padding: '0.12rem 0.5rem',
+              padding: '0.08rem 0.42rem',
               borderRadius: '9999px',
-              fontSize: '0.7rem',
+              fontSize: '0.67rem',
               fontWeight: 600,
               background: (!matchedDone && rows.length > 0) ? 'rgba(53, 119, 241, 0.1)' : '#f3f3f9',
               color: (!matchedDone && rows.length > 0) ? '#3577f1' : '#878a99',
@@ -292,9 +292,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '0.45rem',
-            padding: '0.65rem 1.1rem',
-            fontSize: '0.82rem',
+            gap: '0.4rem',
+            padding: '0.45rem 0.85rem',
+            fontSize: '0.78rem',
             fontWeight: checkerTab === 'recommendation' ? 600 : 500,
             color: checkerTab === 'recommendation' ? '#d97706' : '#878a99',
             background: 'transparent',
@@ -306,13 +306,13 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           }}
           id="tab-btn-recommendation"
         >
-          <Sparkles size={14} color={checkerTab === 'recommendation' ? '#d97706' : '#878a99'} />
+          <Sparkles size={13} color={checkerTab === 'recommendation' ? '#d97706' : '#878a99'} />
           <span>Rekomendasi Data</span>
           <span
             style={{
-              padding: '0.12rem 0.5rem',
+              padding: '0.08rem 0.42rem',
               borderRadius: '9999px',
-              fontSize: '0.7rem',
+              fontSize: '0.67rem',
               fontWeight: 600,
               background: (matchedDone && (recommendations.length > 0 || unmatchedRows.length > 0)) ? 'rgba(247, 184, 75, 0.15)' : '#f3f3f9',
               color: (matchedDone && (recommendations.length > 0 || unmatchedRows.length > 0)) ? '#d97706' : '#878a99',
@@ -339,9 +339,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '0.45rem',
-            padding: '0.65rem 1.1rem',
-            fontSize: '0.82rem',
+            gap: '0.4rem',
+            padding: '0.45rem 0.85rem',
+            fontSize: '0.78rem',
             fontWeight: checkerTab === 'matched' ? 600 : 500,
             color: checkerTab === 'matched' ? '#0ab39c' : '#878a99',
             background: 'transparent',
@@ -353,13 +353,13 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           }}
           id="tab-btn-matched"
         >
-          <CheckCircle2 size={14} color={checkerTab === 'matched' ? '#0ab39c' : '#878a99'} />
+          <CheckCircle2 size={13} color={checkerTab === 'matched' ? '#0ab39c' : '#878a99'} />
           <span>Data Match</span>
           <span
             style={{
-              padding: '0.12rem 0.5rem',
+              padding: '0.08rem 0.42rem',
               borderRadius: '9999px',
-              fontSize: '0.7rem',
+              fontSize: '0.67rem',
               fontWeight: 600,
               background: (matchedDone && matchedRows.length > 0) ? 'rgba(10, 179, 156, 0.12)' : '#f3f3f9',
               color: (matchedDone && matchedRows.length > 0) ? '#0ab39c' : '#878a99',
@@ -625,9 +625,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               <tr>
                 <th
                   style={{
-                    width: '50px',
-                    minWidth: '50px',
-                    maxWidth: '50px',
+                    width: '44px',
+                    minWidth: '44px',
+                    maxWidth: '44px',
                     textAlign: 'center',
                     background: '#f3f6f9',
                     color: '#405189',
@@ -643,16 +643,16 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                 </th>
                 <th
                   style={{
-                    minWidth: '420px',
-                    maxWidth: '420px',
-                    width: '420px',
+                    minWidth: '385px',
+                    maxWidth: '385px',
+                    width: '385px',
                     background: '#fff9f0',
                     color: '#d97706',
                     position: 'sticky',
-                    left: '50px',
+                    left: '44px',
                     top: 0,
                     zIndex: 20,
-                    boxShadow: '4px 0 8px -2px rgba(0, 0, 0, 0.08)',
+                    boxShadow: '3px 0 6px -2px rgba(0, 0, 0, 0.06)',
                     borderRight: '2px solid #f7b84b',
                     borderBottom: '1px solid #e9ebec',
                   }}
@@ -660,18 +660,18 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                   Kandidat Rekomendasi Master (Top 2–3 Pilihan Terdekat)
                 </th>
                 {/* Data Target Asli (Wilayah Target Dihapus sesuai permintaan user) */}
-                <th style={{ color: '#878a99', minWidth: '105px', borderBottom: '1px solid #e9ebec' }}>KODE POS Target</th>
-                <th style={{ color: '#878a99', minWidth: '130px', borderBottom: '1px solid #e9ebec' }}>Kecamatan Target</th>
-                <th style={{ color: '#878a99', minWidth: '130px', borderBottom: '1px solid #e9ebec' }}>Kelurahan Target</th>
-                <th style={{ color: '#878a99', minWidth: '130px', borderBottom: '1px solid #e9ebec' }}>Dati II Target</th>
-                <th style={{ minWidth: '260px', color: '#878a99', borderBottom: '1px solid #e9ebec' }}>ALAMAT Target</th>
-                <th style={{ minWidth: '120px', borderBottom: '1px solid #e9ebec' }}>Provinsi Target</th>
+                <th style={{ color: '#878a99', minWidth: '95px', borderBottom: '1px solid #e9ebec' }}>KODE POS Target</th>
+                <th style={{ color: '#878a99', minWidth: '120px', borderBottom: '1px solid #e9ebec' }}>Kecamatan Target</th>
+                <th style={{ color: '#878a99', minWidth: '120px', borderBottom: '1px solid #e9ebec' }}>Kelurahan Target</th>
+                <th style={{ color: '#878a99', minWidth: '120px', borderBottom: '1px solid #e9ebec' }}>Dati II Target</th>
+                <th style={{ minWidth: '240px', color: '#878a99', borderBottom: '1px solid #e9ebec' }}>ALAMAT Target</th>
+                <th style={{ minWidth: '110px', borderBottom: '1px solid #e9ebec' }}>Provinsi Target</th>
               </tr>
             </thead>
             <tbody>
               {paginatedRecs.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: '#878a99' }}>
                     Tidak ada rekomendasi yang sesuai dengan filter pencarian.
                   </td>
                 </tr>
@@ -696,7 +696,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                           textAlign: 'center',
                           color: '#878a99',
                           fontWeight: 700,
-                          paddingTop: '0.85rem',
+                          paddingTop: '0.6rem',
                           position: 'sticky',
                           left: 0,
                           zIndex: 5,
@@ -712,16 +712,16 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                       <td
                         style={{
                           background: '#fffdfa',
-                          padding: '0.55rem 0.65rem',
+                          padding: '0.45rem 0.55rem',
                           position: 'sticky',
-                          left: '50px',
+                          left: '44px',
                           zIndex: 5,
-                          boxShadow: '4px 0 8px -2px rgba(0, 0, 0, 0.08)',
+                          boxShadow: '3px 0 6px -2px rgba(0, 0, 0, 0.06)',
                           borderRight: '2px solid rgba(247, 184, 75, 0.45)',
                           borderBottom: '1px solid #e9ebec',
-                          minWidth: '420px',
-                          maxWidth: '420px',
-                          width: '420px',
+                          minWidth: '385px',
+                          maxWidth: '385px',
+                          width: '385px',
                         }}
                       >
                         {(() => {
@@ -798,9 +798,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                 style={{
                                   border: cardBorder,
                                   borderRadius: '6px',
-                                  padding: '0.55rem 0.75rem',
+                                  padding: '0.42rem 0.62rem',
                                   background: cardBg,
-                                  boxShadow: isTop1 ? '0 1px 3px rgba(10, 179, 156, 0.08)' : 'none',
+                                  boxShadow: isTop1 ? '0 1px 2px rgba(10, 179, 156, 0.08)' : 'none',
                                 }}
                               >
                                 {/* Header Opsi: Badge Pilihan + Skor + Tombol (i) & Tombol Pilih Cabang Ini (WAJIB 1 BARIS) */}
@@ -810,17 +810,17 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                     alignItems: 'center',
                                     justifyContent: 'space-between',
                                     flexWrap: 'nowrap',
-                                    gap: '0.5rem',
-                                    marginBottom: '0.35rem',
+                                    gap: '0.4rem',
+                                    marginBottom: '0.25rem',
                                     width: '100%',
                                   }}
                                 >
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
                                     <span
                                       style={{
-                                        padding: '0.12rem 0.45rem',
-                                        borderRadius: '4px',
-                                        fontSize: '0.72rem',
+                                        padding: '0.1rem 0.4rem',
+                                        borderRadius: '3px',
+                                        fontSize: '0.68rem',
                                         fontWeight: 700,
                                         background: badgeBg,
                                         color: badgeColor,
@@ -833,19 +833,19 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                       style={{
                                         display: 'inline-flex',
                                         alignItems: 'center',
-                                        gap: '0.2rem',
-                                        fontSize: '0.72rem',
+                                        gap: '0.18rem',
+                                        fontSize: '0.68rem',
                                         fontWeight: 600,
                                         color: badgeColor,
                                         whiteSpace: 'nowrap',
                                       }}
                                     >
-                                      <Sparkles size={11} /> Skor {activeCand.score}%
+                                      <Sparkles size={10} /> Skor {activeCand.score}%
                                     </span>
                                   </div>
 
                                   {/* Tombol Info (i) & Tombol Pilih Cabang Ini */}
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
                                     <button
                                       type="button"
                                       onClick={() => setSelectedCandidateDetail({ targetRow: r, candidate: activeCand })}
@@ -853,8 +853,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                         display: 'inline-flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        width: '26px',
-                                        height: '26px',
+                                        width: '24px',
+                                        height: '24px',
                                         borderRadius: '4px',
                                         border: isTop1
                                           ? '1px solid rgba(10, 179, 156, 0.4)'
@@ -873,7 +873,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                       }}
                                       title="Lihat alasan penilaian skor & detail wilayah"
                                     >
-                                      <Info size={13} />
+                                      <Info size={12} />
                                     </button>
 
                                     <button
@@ -881,8 +881,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                       className="btn btn-outline btn-sm"
                                       onClick={() => onApproveRecommendation(r.No, m)}
                                       style={{
-                                        fontSize: '0.72rem',
-                                        padding: '0.22rem 0.65rem',
+                                        fontSize: '0.7rem',
+                                        padding: '0.18rem 0.55rem',
                                         color: badgeColor,
                                         borderColor: isTop1
                                           ? 'rgba(10, 179, 156, 0.45)'
@@ -900,17 +900,17 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                       }}
                                       title="Pilih dan setujui cabang master ini"
                                     >
-                                      <Check size={12} /> Gunakan Cabang Ini
+                                      <Check size={11} /> Gunakan Cabang Ini
                                     </button>
                                   </div>
                                 </div>
 
                                 {/* Rincian Cabang Master & Alamat Lengkap Real */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-                                  <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#212529' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.12rem' }}>
+                                  <div style={{ fontSize: '0.81rem', fontWeight: 600, color: '#212529' }}>
                                     {m['Sandi Cabang'] || m.Cabang || m.Sandi || '-'}
                                     {m['Nama Outlet'] && (
-                                      <span style={{ fontSize: '0.76rem', color: '#405189', fontWeight: 500, marginLeft: '0.4rem' }}>
+                                      <span style={{ fontSize: '0.73rem', color: '#405189', fontWeight: 500, marginLeft: '0.35rem' }}>
                                         • {m['Nama Outlet']}
                                       </span>
                                     )}
@@ -919,13 +919,13 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                   {/* Alamat Lengkap Master Asli (Clean & Ringkas) */}
                                   <div
                                     style={{
-                                      fontSize: '0.74rem',
+                                      fontSize: '0.71rem',
                                       color: '#343a40',
                                       background: '#f8f9fa',
-                                      padding: '0.22rem 0.5rem',
+                                      padding: '0.18rem 0.45rem',
                                       borderRadius: '4px',
                                       border: '1px solid #edf0f2',
-                                      marginTop: '0.15rem',
+                                      marginTop: '0.12rem',
                                       whiteSpace: 'normal',
                                       wordBreak: 'break-word',
                                       lineHeight: 1.35,
@@ -942,31 +942,31 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                       </td>
 
                       {/* Data Target Asli (Wilayah Target Dihapus, Teks Alamat Tampil Utuh) */}
-                      <td className="code-cell" style={{ color: '#f06548', fontWeight: 700, paddingTop: '0.85rem' }}>
+                      <td className="code-cell" style={{ color: '#f06548', fontWeight: 700, paddingTop: '0.55rem' }}>
                         {r['KODE POS']}
                       </td>
-                      <td style={{ paddingTop: '0.85rem', whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                      <td style={{ paddingTop: '0.55rem', whiteSpace: 'normal', wordBreak: 'break-word' }}>
                         {r.Kecamatan || '-'}
                       </td>
-                      <td style={{ paddingTop: '0.85rem', whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                      <td style={{ paddingTop: '0.55rem', whiteSpace: 'normal', wordBreak: 'break-word' }}>
                         {r.Kelurahan || '-'}
                       </td>
-                      <td style={{ paddingTop: '0.85rem', whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                      <td style={{ paddingTop: '0.55rem', whiteSpace: 'normal', wordBreak: 'break-word' }}>
                         {r['Dati II'] || '-'}
                       </td>
                       <td
                         style={{
-                          paddingTop: '0.85rem',
+                          paddingTop: '0.55rem',
                           whiteSpace: 'normal',
                           wordBreak: 'break-word',
-                          lineHeight: 1.4,
-                          fontSize: '0.78rem',
+                          lineHeight: 1.35,
+                          fontSize: '0.75rem',
                           color: '#212529',
                         }}
                       >
                         {r.ALAMAT || '-'}
                       </td>
-                      <td style={{ paddingTop: '0.85rem', whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                      <td style={{ paddingTop: '0.55rem', whiteSpace: 'normal', wordBreak: 'break-word' }}>
                         {r.Provinsi || '-'}
                       </td>
                     </tr>
