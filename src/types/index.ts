@@ -45,7 +45,7 @@ export interface TargetRow {
   // Visual/Processing flags
   _isMatched?: boolean;
   _isPtenDiscrepancy?: boolean;
-  _matchLevel?: 'level1' | 'level2' | 'none';
+  _matchLevel?: 'level1' | 'level2' | 'none' | 'recommendation';
   [key: string]: any;
 }
 

@@ -14,6 +14,7 @@ import { TargetDataGrid } from './components/WorkingEngine/TargetDataGrid';
 import { ExportAction } from './components/WorkingEngine/ExportAction';
 
 import type { MasterRow, TargetRow, BatchLog, MatchingStats, WilayahStat, UnmatchedArea } from './types';
+import type { RecommendationResult } from './utils/recommender';
 import { SAMPLE_MASTER_ROWS, SAMPLE_TARGET_ROWS } from './utils/sampleData';
 import { buildMasterIndex, analyzeMasterHealth, executeChunkMatching } from './utils/matcher';
 import { getItem, setItem, clearAllStorage } from './utils/storage';
@@ -59,7 +60,6 @@ export const App: React.FC = () => {
   // Filters State
   const [selectedWilayah, setSelectedWilayah] = useState<string>('ALL');
   const [dashboardWilayahFilter, setDashboardWilayahFilter] = useState<string>('ALL');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'matched' | 'unmatched' | 'pten_diff'>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
 
   // Batch Logs History State
@@ -160,13 +160,7 @@ export const App: React.FC = () => {
         return false;
       }
 
-      // Secondary Status filter
-      const isMatched = r._isMatched ?? (r.Sandi !== '');
-      const isPtenDiff = r['CEK KODE POS + PTEN'] === 'DIFFERENT';
 
-      if (statusFilter === 'matched' && !isMatched) return false;
-      if (statusFilter === 'unmatched' && isMatched) return false;
-      if (statusFilter === 'pten_diff' && !isPtenDiff) return false;
 
       // Search term
       if (searchTerm.trim()) {
@@ -187,7 +181,7 @@ export const App: React.FC = () => {
 
       return true;
     });
-  }, [targetRows, selectedWilayah, statusFilter, searchTerm]);
+  }, [targetRows, selectedWilayah, searchTerm]);
 
   // Dashboard Filtered Rows by Wilayah
   const dashboardFilteredRows = useMemo(() => {
@@ -380,6 +374,85 @@ export const App: React.FC = () => {
       fileName,
       initialCount: rows.length,
       matchedDone: false,
+    });
+  };
+
+  // Setujui Semua Rekomendasi: Mengisi atribut master ke baris target yang cocok, pindah ke matched, tab 1 & 2 kosong
+  const handleApproveAllRecommendations = (recs: RecommendationResult[]) => {
+    if (recs.length === 0) return;
+    const recMap = new Map<string | number, MasterRow>();
+    recs.forEach((r) => {
+      recMap.set(r.targetRow.No, r.recommendedMaster);
+    });
+
+    setTargetRows((prev) => {
+      const updated = prev.map((row) => {
+        const matchedMaster = recMap.get(row.No);
+        if (!matchedMaster) return row;
+
+        return {
+          ...row,
+          _isMatched: true,
+          _matchLevel: 'recommendation' as const,
+          'Sandi Cabang':
+            matchedMaster['Sandi Cabang'] ||
+            [matchedMaster.Sandi, matchedMaster.Cabang].filter(Boolean).join(' - ') ||
+            matchedMaster.Cabang ||
+            '',
+          Sandi: matchedMaster.Sandi || matchedMaster['Sandi Cabang'] || '',
+          Cabang: matchedMaster.Cabang || matchedMaster['Sandi Cabang'] || '',
+          'Branch Code': matchedMaster['Branch Code'] || '',
+          'Kode Cabang': matchedMaster['Kode Cabang'] || '',
+          'Nama Outlet': matchedMaster['Nama Outlet'] || '',
+          'Status Outlet': matchedMaster['Status Outlet'] || 'Aktif',
+          ALAMAT: matchedMaster.ALAMAT || '',
+        };
+      });
+
+      setItem('target_data', {
+        rows: updated,
+        fileName: targetFileName,
+        initialCount: initialTargetCount,
+        matchedDone: true,
+      });
+
+      return updated;
+    });
+  };
+
+  // Setujui Satu Rekomendasi Per Baris
+  const handleApproveSingleRecommendation = (rowNo: number | string, matchedMaster: MasterRow) => {
+    setTargetRows((prev) => {
+      const updated = prev.map((row) => {
+        if (row.No !== rowNo) return row;
+
+        return {
+          ...row,
+          _isMatched: true,
+          _matchLevel: 'recommendation' as const,
+          'Sandi Cabang':
+            matchedMaster['Sandi Cabang'] ||
+            [matchedMaster.Sandi, matchedMaster.Cabang].filter(Boolean).join(' - ') ||
+            matchedMaster.Cabang ||
+            '',
+          Sandi: matchedMaster.Sandi || matchedMaster['Sandi Cabang'] || '',
+          Cabang: matchedMaster.Cabang || matchedMaster['Sandi Cabang'] || '',
+          'Branch Code': matchedMaster['Branch Code'] || '',
+          'Kode Cabang': matchedMaster['Kode Cabang'] || '',
+          'Nama Outlet': matchedMaster['Nama Outlet'] || '',
+          'Status Outlet': matchedMaster['Status Outlet'] || 'Aktif',
+          ALAMAT: matchedMaster.ALAMAT || '',
+        };
+      });
+
+      setItem('target_data', {
+        rows: updated,
+        fileName: targetFileName,
+        initialCount: initialTargetCount,
+        matchedDone: true,
+      });
+
+      return updated;
     });
   };
 
@@ -618,14 +691,15 @@ export const App: React.FC = () => {
             <TargetDataGrid
               rows={filteredTargetRows}
               totalInputRows={initialTargetCount}
+              masterRows={masterRows}
               wilayahList={wilayahList}
               selectedWilayah={selectedWilayah}
               onWilayahChange={setSelectedWilayah}
-              statusFilter={statusFilter}
-              onStatusFilterChange={setStatusFilter}
               searchTerm={searchTerm}
               onSearchChange={setSearchTerm}
               onExecuteMatching={handleExecuteMatching}
+              onApproveAllRecommendations={handleApproveAllRecommendations}
+              onApproveRecommendation={handleApproveSingleRecommendation}
               isProcessing={isProcessing}
               canExecute={targetRows.length > 0 && masterRows.length > 0}
               matchedDone={matchedDone}
