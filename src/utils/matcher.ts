@@ -83,6 +83,11 @@ export function resolveLevel2TieBreaker(target: TargetRow, candidates: MasterRow
  * Match a single target row against Master index and validate PTEN
  */
 export function matchSingleRow(target: TargetRow, masterIndex: Map<string, MasterRow[]>): TargetRow {
+  // Jika baris ini sudah berstatus MATCH (misal dari file sebelumnya atau sudah disetujui dari rekomendasi), pertahankan data bersihnya!
+  if (target._isMatched && (target.Sandi || target['Sandi Cabang'] || target.Cabang)) {
+    return target;
+  }
+
   const result: TargetRow = { ...target };
 
   // 1. Standarisasi String Kode Pos

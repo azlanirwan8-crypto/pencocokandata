@@ -65,16 +65,23 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   const [pageSize, setPageSize] = useState<number | 'all'>(15);
   const effectivePageSize = useMemo(() => (pageSize === 'all' ? 999999 : pageSize), [pageSize]);
 
-  // Filter rows into Unmatched vs Matched (Hanya terisi jika sudah dilakukan pencocokan)
-  const unmatchedRows = useMemo(() => {
-    if (!matchedDone) return [];
-    return rows.filter((r) => !r._isMatched && !r.Sandi && !r['Sandi Cabang']);
-  }, [rows, matchedDone]);
+  // Helper to determine if a row is clean / matched
+  const isRowMatched = (r: TargetRow) => Boolean(r._isMatched) || Boolean(r.Sandi) || Boolean(r['Sandi Cabang']);
 
+  // Tab 3: Data Match (Data Bersih yang sudah cocok) - SELALU TERSEDIA jika ada data matched, tidak hilang saat upload baru
   const matchedRows = useMemo(() => {
-    if (!matchedDone) return [];
-    return rows.filter((r) => r._isMatched || r.Sandi || r['Sandi Cabang']);
-  }, [rows, matchedDone]);
+    return rows.filter(isRowMatched);
+  }, [rows]);
+
+  // Tab 2: Unmatched (Data yang sudah dianalisa tetapi belum cocok -> masuk rekomendasi)
+  const unmatchedRows = useMemo(() => {
+    return rows.filter((r) => !isRowMatched(r) && r._matchLevel === 'none');
+  }, [rows]);
+
+  // Tab 1: Data Upload (Data baru hasil upload yang masih menunggu pencocokan)
+  const pendingUploadRows = useMemo(() => {
+    return rows.filter((r) => !isRowMatched(r) && r._matchLevel !== 'none');
+  }, [rows]);
 
   // Build Master Proximity Index once (O(1) bucket index)
   const masterProximityIndex = useMemo(() => {
@@ -91,9 +98,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   } | null>(null);
   const [activeCandidateByRow, setActiveCandidateByRow] = useState<Record<string | number, number>>({});
 
-  // Trigger recommendation calculation ONLY when Tab 2 is active AND matchedDone is true
+  // Trigger recommendation calculation ONLY when Tab 2 is active and there are unmatched rows
   useEffect(() => {
-    if (checkerTab !== 'recommendation' || !matchedDone) {
+    if (checkerTab !== 'recommendation') {
       setRecommendations([]);
       return;
     }
@@ -111,22 +118,18 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     }, 40);
 
     return () => clearTimeout(timer);
-  }, [checkerTab, unmatchedRows, masterRows, masterProximityIndex, matchedDone]);
+  }, [checkerTab, unmatchedRows, masterRows, masterProximityIndex]);
 
   // Determine current dataset based on active tab
   const currentTabRows = useMemo(() => {
     if (checkerTab === 'upload') {
-      // Jika sudah di-analisa (pencocokan), data di tab upload kosong karena sudah berpindah
-      if (matchedDone) return [];
-      return rows;
+      return pendingUploadRows;
     }
     if (checkerTab === 'matched') {
-      // Sebelum pencocokan dilakukan, tab matched masih kosong
-      if (!matchedDone) return [];
       return matchedRows;
     }
     return []; // For recommendation tab, we use `recommendations` list directly
-  }, [checkerTab, rows, matchedRows, matchedDone]);
+  }, [checkerTab, pendingUploadRows, matchedRows]);
 
   const currentTabRecs = useMemo(() => {
     if (checkerTab !== 'recommendation') return [];
@@ -224,9 +227,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
             Pratinjau & Manajemen Data Target
           </h2>
           <p style={{ fontSize: '0.75rem', color: '#878a99', marginTop: '0.1rem' }}>
-            {matchedDone
-              ? `Analisis selesai • ${matchedRows.length.toLocaleString('id-ID')} Data Match • ${unmatchedRows.length.toLocaleString('id-ID')} Rekomendasi Data`
-              : `Total ${rows.length.toLocaleString('id-ID')} baris data target menunggu pencocokan.`}
+            {pendingUploadRows.length > 0
+              ? `${pendingUploadRows.length.toLocaleString('id-ID')} baris data target baru menunggu pencocokan • ${matchedRows.length.toLocaleString('id-ID')} Data Match (Bersih) tersimpan`
+              : `Analisis selesai • ${matchedRows.length.toLocaleString('id-ID')} Data Match (Bersih) • ${unmatchedRows.length.toLocaleString('id-ID')} Rekomendasi Data`}
           </p>
         </div>
       </div>
@@ -273,12 +276,12 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               borderRadius: '9999px',
               fontSize: '0.67rem',
               fontWeight: 600,
-              background: (!matchedDone && rows.length > 0) ? 'rgba(53, 119, 241, 0.1)' : '#f3f3f9',
-              color: (!matchedDone && rows.length > 0) ? '#3577f1' : '#878a99',
-              border: (!matchedDone && rows.length > 0) ? '1px solid rgba(53, 119, 241, 0.25)' : '1px solid #e9ebec',
+              background: pendingUploadRows.length > 0 ? 'rgba(53, 119, 241, 0.1)' : '#f3f3f9',
+              color: pendingUploadRows.length > 0 ? '#3577f1' : '#878a99',
+              border: pendingUploadRows.length > 0 ? '1px solid rgba(53, 119, 241, 0.25)' : '1px solid #e9ebec',
             }}
           >
-            {matchedDone ? '0 Data (Selesai)' : `${rows.length.toLocaleString('id-ID')} Data`}
+            {pendingUploadRows.length === 0 ? '0 Data (Selesai)' : `${pendingUploadRows.length.toLocaleString('id-ID')} Data`}
           </span>
         </button>
 
@@ -314,14 +317,12 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               borderRadius: '9999px',
               fontSize: '0.67rem',
               fontWeight: 600,
-              background: (matchedDone && (recommendations.length > 0 || unmatchedRows.length > 0)) ? 'rgba(247, 184, 75, 0.15)' : '#f3f3f9',
-              color: (matchedDone && (recommendations.length > 0 || unmatchedRows.length > 0)) ? '#d97706' : '#878a99',
-              border: (matchedDone && (recommendations.length > 0 || unmatchedRows.length > 0)) ? '1px solid rgba(247, 184, 75, 0.3)' : '1px solid #e9ebec',
+              background: (recommendations.length > 0 || unmatchedRows.length > 0) ? 'rgba(247, 184, 75, 0.15)' : '#f3f3f9',
+              color: (recommendations.length > 0 || unmatchedRows.length > 0) ? '#d97706' : '#878a99',
+              border: (recommendations.length > 0 || unmatchedRows.length > 0) ? '1px solid rgba(247, 184, 75, 0.3)' : '1px solid #e9ebec',
             }}
           >
-            {!matchedDone
-              ? '0 Rekomendasi'
-              : recommendations.length > 0
+            {recommendations.length > 0
               ? `${recommendations.length.toLocaleString('id-ID')} Rekomendasi`
               : unmatchedRows.length > 0
               ? `${unmatchedRows.length.toLocaleString('id-ID')} Belum Cocok`
@@ -361,20 +362,21 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               borderRadius: '9999px',
               fontSize: '0.67rem',
               fontWeight: 600,
-              background: (matchedDone && matchedRows.length > 0) ? 'rgba(10, 179, 156, 0.12)' : '#f3f3f9',
-              color: (matchedDone && matchedRows.length > 0) ? '#0ab39c' : '#878a99',
-              border: (matchedDone && matchedRows.length > 0) ? '1px solid rgba(10, 179, 156, 0.25)' : '1px solid #e9ebec',
+              background: matchedRows.length > 0 ? 'rgba(10, 179, 156, 0.12)' : '#f3f3f9',
+              color: matchedRows.length > 0 ? '#0ab39c' : '#878a99',
+              border: matchedRows.length > 0 ? '1px solid rgba(10, 179, 156, 0.25)' : '1px solid #e9ebec',
             }}
           >
-            {!matchedDone ? '0 Match' : `${matchedRows.length.toLocaleString('id-ID')} Match`}
+            {matchedRows.length > 0 ? `${matchedRows.length.toLocaleString('id-ID')} Match` : '0 Match'}
           </span>
         </button>
       </div>
 
       {/* Filter & Search Toolbar (Integrated inside Card) */}
       {!(
-        (checkerTab === 'upload' && matchedDone) ||
-        (!matchedDone && (checkerTab === 'recommendation' || checkerTab === 'matched'))
+        (checkerTab === 'upload' && pendingUploadRows.length === 0) ||
+        (checkerTab === 'recommendation' && unmatchedRows.length === 0 && recommendations.length === 0) ||
+        (checkerTab === 'matched' && matchedRows.length === 0)
       ) && (
         <div
           style={{
@@ -392,7 +394,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
         >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
           {/* Action button in Tab 1: PENCOCOKAN */}
-          {checkerTab === 'upload' && !matchedDone && (
+          {checkerTab === 'upload' && pendingUploadRows.length > 0 && (
             <button
               type="button"
               className="btn btn-primary btn-sm"
@@ -558,7 +560,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
 
       {/* TAB 2: REKOMENDASI DATA (SMART PROXIMITY SUGGESTIONS) */}
       {checkerTab === 'recommendation' ? (
-        !matchedDone ? (
+        (unmatchedRows.length === 0 && recommendations.length === 0) ? (
           <div
             style={{
               textAlign: 'center',
@@ -586,19 +588,23 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               Belum Ada Rekomendasi Data
             </h4>
             <p style={{ fontSize: '0.78rem', color: '#878a99', margin: '0 auto 0.85rem', maxWidth: '440px' }}>
-              Pencocokan data belum dijalankan. Silakan buka tab <strong>Data Upload</strong> dan klik tombol <strong>"Pencocokan"</strong> untuk menganalisa data target.
+              {pendingUploadRows.length > 0
+                ? 'Ada data baru di tab Data Upload yang belum dijalankan pencocokan.'
+                : 'Semua data target telah berhasil dicocokkan ke master data.'}
             </p>
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => {
-                setCheckerTab('upload');
-                setPage(1);
-              }}
-              style={{ fontSize: '0.76rem', padding: '0.3rem 0.85rem' }}
-            >
-              Buka Tab Data Upload
-            </button>
+            {pendingUploadRows.length > 0 && (
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => {
+                  setCheckerTab('upload');
+                  setPage(1);
+                }}
+                style={{ fontSize: '0.76rem', padding: '0.3rem 0.85rem' }}
+              >
+                Buka Tab Data Upload
+              </button>
+            )}
           </div>
         ) : isComputingRecs ? (
           <div
@@ -977,7 +983,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           </table>
         </div>
         )
-      ) : checkerTab === 'upload' && matchedDone ? (
+      ) : checkerTab === 'upload' && pendingUploadRows.length === 0 ? (
         /* TAB 1: DATA SUDAH DI-ANALISA (POST-MATCHING STATE) */
         <div
           style={{
@@ -1006,7 +1012,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
             Data sudah di Analisa silahkan cek di tab selanjutnya
           </h4>
           <p style={{ fontSize: '0.8rem', color: '#878a99', margin: '0 auto 1rem', maxWidth: '480px' }}>
-            Seluruh data target berhasil diproses dan dipindahkan. Silakan cek tab <strong>Rekomendasi Data</strong> untuk data yang perlu ditinjau atau <strong>Data Match</strong> untuk data yang telah cocok.
+            Seluruh antrean data target berhasil diproses dan dipindahkan. Silakan cek tab <strong>Rekomendasi Data</strong> untuk data yang perlu ditinjau atau <strong>Data Match</strong> untuk data yang telah cocok.
           </p>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
             <button
@@ -1052,8 +1058,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
             </button>
           </div>
         </div>
-      ) : checkerTab === 'matched' && !matchedDone ? (
-        /* TAB 3: PRE-MATCHING STATE (BELUM DI-KLIK PENCOCOKAN) */
+      ) : checkerTab === 'matched' && matchedRows.length === 0 ? (
+        /* TAB 3: PRE-MATCHING STATE (BELUM ADA DATA MATCH) */
         <div
           style={{
             textAlign: 'center',
