@@ -36,11 +36,12 @@ interface TargetDataGridProps {
   onApproveRecommendation: (rowNo: number | string, recommendedMaster: MasterRow) => void;
   isProcessing: boolean;
   canExecute: boolean;
+  matchedDone?: boolean;
 }
 
 export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   rows,
-  totalInputRows,
+  totalInputRows: _totalInputRows,
   masterRows,
   wilayahList,
   selectedWilayah,
@@ -52,20 +53,23 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   onApproveRecommendation,
   isProcessing,
   canExecute,
+  matchedDone = false,
 }) => {
   // 3 Sub-Tabs State: 'upload' | 'recommendation' | 'matched'
   const [checkerTab, setCheckerTab] = useState<'upload' | 'recommendation' | 'matched'>('upload');
   const [page, setPage] = useState(1);
   const pageSize = 15;
 
-  // Filter rows into Unmatched vs Matched
+  // Filter rows into Unmatched vs Matched (Hanya terisi jika sudah dilakukan pencocokan)
   const unmatchedRows = useMemo(() => {
+    if (!matchedDone) return [];
     return rows.filter((r) => !r._isMatched && !r.Sandi && !r['Sandi Cabang']);
-  }, [rows]);
+  }, [rows, matchedDone]);
 
   const matchedRows = useMemo(() => {
+    if (!matchedDone) return [];
     return rows.filter((r) => r._isMatched || r.Sandi || r['Sandi Cabang']);
-  }, [rows]);
+  }, [rows, matchedDone]);
 
   // Build Master Proximity Index once (O(1) bucket index)
   const masterProximityIndex = useMemo(() => {
@@ -77,9 +81,12 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   const [isComputingRecs, setIsComputingRecs] = useState<boolean>(false);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState<boolean>(false);
 
-  // Trigger recommendation calculation ONLY when Tab 2 is active
+  // Trigger recommendation calculation ONLY when Tab 2 is active AND matchedDone is true
   useEffect(() => {
-    if (checkerTab !== 'recommendation') return;
+    if (checkerTab !== 'recommendation' || !matchedDone) {
+      setRecommendations([]);
+      return;
+    }
     if (unmatchedRows.length === 0 || masterRows.length === 0) {
       setRecommendations([]);
       return;
@@ -94,14 +101,22 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     }, 40);
 
     return () => clearTimeout(timer);
-  }, [checkerTab, unmatchedRows, masterRows, masterProximityIndex]);
+  }, [checkerTab, unmatchedRows, masterRows, masterProximityIndex, matchedDone]);
 
   // Determine current dataset based on active tab
   const currentTabRows = useMemo(() => {
-    if (checkerTab === 'upload') return rows;
-    if (checkerTab === 'matched') return matchedRows;
+    if (checkerTab === 'upload') {
+      // Jika sudah di-analisa (pencocokan), data di tab upload kosong karena sudah berpindah
+      if (matchedDone) return [];
+      return rows;
+    }
+    if (checkerTab === 'matched') {
+      // Sebelum pencocokan dilakukan, tab matched masih kosong
+      if (!matchedDone) return [];
+      return matchedRows;
+    }
     return []; // For recommendation tab, we use `recommendations` list directly
-  }, [checkerTab, rows, matchedRows]);
+  }, [checkerTab, rows, matchedRows, matchedDone]);
 
   const currentTabRecs = useMemo(() => {
     if (checkerTab !== 'recommendation') return [];
@@ -170,7 +185,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
             Pratinjau & Manajemen Data Target
           </h2>
           <p style={{ fontSize: '0.78rem', color: '#878a99', marginTop: '0.15rem' }}>
-            Total {rows.length.toLocaleString('id-ID')} baris data terfilter (dari total {totalInputRows.toLocaleString('id-ID')} baris input awal).
+            {matchedDone
+              ? `Analisis selesai • ${matchedRows.length.toLocaleString('id-ID')} Data Match • ${unmatchedRows.length.toLocaleString('id-ID')} Rekomendasi Data`
+              : `Total ${rows.length.toLocaleString('id-ID')} baris data target menunggu pencocokan.`}
           </p>
         </div>
       </div>
@@ -217,12 +234,12 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               borderRadius: '9999px',
               fontSize: '0.7rem',
               fontWeight: 600,
-              background: rows.length > 0 ? 'rgba(53, 119, 241, 0.1)' : '#f3f3f9',
-              color: rows.length > 0 ? '#3577f1' : '#878a99',
-              border: rows.length > 0 ? '1px solid rgba(53, 119, 241, 0.25)' : '1px solid #e9ebec',
+              background: (!matchedDone && rows.length > 0) ? 'rgba(53, 119, 241, 0.1)' : '#f3f3f9',
+              color: (!matchedDone && rows.length > 0) ? '#3577f1' : '#878a99',
+              border: (!matchedDone && rows.length > 0) ? '1px solid rgba(53, 119, 241, 0.25)' : '1px solid #e9ebec',
             }}
           >
-            {rows.length.toLocaleString('id-ID')} Data
+            {matchedDone ? '0 Data (Selesai)' : `${rows.length.toLocaleString('id-ID')} Data`}
           </span>
         </button>
 
@@ -258,15 +275,17 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               borderRadius: '9999px',
               fontSize: '0.7rem',
               fontWeight: 600,
-              background: (recommendations.length > 0 || unmatchedRows.length > 0) ? 'rgba(247, 184, 75, 0.15)' : '#f3f3f9',
-              color: (recommendations.length > 0 || unmatchedRows.length > 0) ? '#d97706' : '#878a99',
-              border: (recommendations.length > 0 || unmatchedRows.length > 0) ? '1px solid rgba(247, 184, 75, 0.3)' : '1px solid #e9ebec',
+              background: (matchedDone && (recommendations.length > 0 || unmatchedRows.length > 0)) ? 'rgba(247, 184, 75, 0.15)' : '#f3f3f9',
+              color: (matchedDone && (recommendations.length > 0 || unmatchedRows.length > 0)) ? '#d97706' : '#878a99',
+              border: (matchedDone && (recommendations.length > 0 || unmatchedRows.length > 0)) ? '1px solid rgba(247, 184, 75, 0.3)' : '1px solid #e9ebec',
             }}
           >
-            {recommendations.length > 0
+            {!matchedDone
+              ? '0 Rekomendasi'
+              : recommendations.length > 0
               ? `${recommendations.length.toLocaleString('id-ID')} Rekomendasi`
               : unmatchedRows.length > 0
-              ? `${unmatchedRows.length.toLocaleString('id-ID')} Potensi`
+              ? `${unmatchedRows.length.toLocaleString('id-ID')} Belum Cocok`
               : '0 Rekomendasi'}
           </span>
         </button>
@@ -296,41 +315,45 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           id="tab-btn-matched"
         >
           <CheckCircle2 size={14} color={checkerTab === 'matched' ? '#0ab39c' : '#878a99'} />
-          <span>Tab 3: Data Match (Clear)</span>
+          <span>Data Match</span>
           <span
             style={{
               padding: '0.12rem 0.5rem',
               borderRadius: '9999px',
               fontSize: '0.7rem',
               fontWeight: 600,
-              background: matchedRows.length > 0 ? 'rgba(10, 179, 156, 0.12)' : '#f3f3f9',
-              color: matchedRows.length > 0 ? '#0ab39c' : '#878a99',
-              border: matchedRows.length > 0 ? '1px solid rgba(10, 179, 156, 0.25)' : '1px solid #e9ebec',
+              background: (matchedDone && matchedRows.length > 0) ? 'rgba(10, 179, 156, 0.12)' : '#f3f3f9',
+              color: (matchedDone && matchedRows.length > 0) ? '#0ab39c' : '#878a99',
+              border: (matchedDone && matchedRows.length > 0) ? '1px solid rgba(10, 179, 156, 0.25)' : '1px solid #e9ebec',
             }}
           >
-            {matchedRows.length.toLocaleString('id-ID')} Clear
+            {!matchedDone ? '0 Match' : `${matchedRows.length.toLocaleString('id-ID')} Match`}
           </span>
         </button>
       </div>
 
       {/* Filter & Search Toolbar (Integrated inside Card) */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '0.6rem',
-          padding: '0.65rem 0.85rem',
-          background: '#f8f9fa',
-          border: '1px solid #e9ebec',
-          borderRadius: '6px',
-          marginBottom: '0.85rem',
-        }}
-      >
+      {!(
+        (checkerTab === 'upload' && matchedDone) ||
+        (!matchedDone && (checkerTab === 'recommendation' || checkerTab === 'matched'))
+      ) && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '0.6rem',
+            padding: '0.65rem 0.85rem',
+            background: '#f8f9fa',
+            border: '1px solid #e9ebec',
+            borderRadius: '6px',
+            marginBottom: '0.85rem',
+          }}
+        >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
           {/* Action button in Tab 1: PENCOCOKAN */}
-          {checkerTab === 'upload' && (
+          {checkerTab === 'upload' && !matchedDone && (
             <button
               type="button"
               className="btn btn-primary btn-sm"
@@ -463,6 +486,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           )}
         </div>
       </div>
+      )}
 
       {/* =========================================================================
           TAB CONTENT RENDERING
@@ -470,7 +494,49 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
 
       {/* TAB 2: REKOMENDASI DATA (SMART PROXIMITY SUGGESTIONS) */}
       {checkerTab === 'recommendation' ? (
-        isComputingRecs ? (
+        !matchedDone ? (
+          <div
+            style={{
+              textAlign: 'center',
+              padding: '3.8rem 1.5rem',
+              background: '#ffffff',
+              borderRadius: '6px',
+              border: '1px solid #e9ebec',
+            }}
+          >
+            <div
+              style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: '50%',
+                background: 'rgba(247, 184, 75, 0.12)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 0.85rem',
+              }}
+            >
+              <Sparkles size={24} color="#d97706" />
+            </div>
+            <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#212529', margin: '0 0 0.35rem' }}>
+              Belum Ada Rekomendasi Data
+            </h4>
+            <p style={{ fontSize: '0.78rem', color: '#878a99', margin: '0 auto 1.25rem', maxWidth: '440px' }}>
+              Pencocokan data belum dijalankan. Silakan buka tab <strong>Data Upload</strong> dan klik tombol <strong>"Pencocokan"</strong> untuk menganalisa data target.
+            </p>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => {
+                setCheckerTab('upload');
+                setPage(1);
+              }}
+              style={{ fontSize: '0.78rem', padding: '0.35rem 0.95rem' }}
+            >
+              Buka Tab Data Upload
+            </button>
+          </div>
+        ) : isComputingRecs ? (
           <div
             style={{
               textAlign: 'center',
@@ -624,8 +690,126 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
             </table>
           </div>
         )
+      ) : checkerTab === 'upload' && matchedDone ? (
+        /* TAB 1: DATA SUDAH DI-ANALISA (POST-MATCHING STATE) */
+        <div
+          style={{
+            textAlign: 'center',
+            padding: '3.8rem 1.5rem',
+            background: '#ffffff',
+            borderRadius: '6px',
+            border: '1px solid #e9ebec',
+          }}
+        >
+          <div
+            style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              background: 'rgba(10, 179, 156, 0.12)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 1.2rem',
+            }}
+          >
+            <CheckCircle2 size={30} color="#0ab39c" />
+          </div>
+          <h4 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#212529', margin: '0 0 0.45rem' }}>
+            Data sudah di Analisa silahkan cek di tab selanjutnya
+          </h4>
+          <p style={{ fontSize: '0.82rem', color: '#878a99', margin: '0 auto 1.5rem', maxWidth: '480px' }}>
+            Seluruh data target berhasil diproses dan dipindahkan. Silakan cek tab <strong>Rekomendasi Data</strong> untuk data yang perlu ditinjau atau <strong>Data Match</strong> untuk data yang telah cocok.
+          </p>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => {
+                setCheckerTab('recommendation');
+                setPage(1);
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                fontSize: '0.8rem',
+                padding: '0.45rem 1.1rem',
+                color: '#d97706',
+                borderColor: '#f7b84b',
+                background: '#fffdf5',
+              }}
+            >
+              <Sparkles size={15} />
+              <span>Buka Rekomendasi Data ({unmatchedRows.length.toLocaleString('id-ID')})</span>
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => {
+                setCheckerTab('matched');
+                setPage(1);
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                fontSize: '0.8rem',
+                padding: '0.45rem 1.1rem',
+                background: '#0ab39c',
+                borderColor: '#0ab39c',
+              }}
+            >
+              <CheckCircle2 size={15} />
+              <span>Buka Data Match ({matchedRows.length.toLocaleString('id-ID')})</span>
+            </button>
+          </div>
+        </div>
+      ) : checkerTab === 'matched' && !matchedDone ? (
+        /* TAB 3: PRE-MATCHING STATE (BELUM DI-KLIK PENCOCOKAN) */
+        <div
+          style={{
+            textAlign: 'center',
+            padding: '3.8rem 1.5rem',
+            background: '#ffffff',
+            borderRadius: '6px',
+            border: '1px solid #e9ebec',
+          }}
+        >
+          <div
+            style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '50%',
+              background: 'rgba(10, 179, 156, 0.12)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 0.85rem',
+            }}
+          >
+            <CheckCircle2 size={24} color="#0ab39c" />
+          </div>
+          <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#212529', margin: '0 0 0.35rem' }}>
+            Belum Ada Data Match
+          </h4>
+          <p style={{ fontSize: '0.78rem', color: '#878a99', margin: '0 auto 1.25rem', maxWidth: '440px' }}>
+            Pencocokan data belum dijalankan. Silakan buka tab <strong>Data Upload</strong> dan klik tombol <strong>"Pencocokan"</strong> untuk menemukan data yang cocok dengan master.
+          </p>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={() => {
+              setCheckerTab('upload');
+              setPage(1);
+            }}
+            style={{ fontSize: '0.78rem', padding: '0.35rem 0.95rem' }}
+          >
+            Buka Tab Data Upload
+          </button>
+        </div>
       ) : (
-        /* TAB 1 & TAB 3: DATA GRID BIASA (UNMATCHED vs MATCHED) */
+        /* TAB 1 (PRE-MATCHING) ATAU TAB 3 (POST-MATCHING) DATA GRID */
         <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px' }}>
           <table className="modern-table">
             <thead>
@@ -675,10 +859,10 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                         <>
                           <AlertTriangle size={32} color="#878a99" />
                           <strong style={{ color: '#212529', fontSize: '0.95rem' }}>
-                            Belum Ada Data yang Cocok (Clear)
+                            Tidak Ada Data Match yang Sesuai
                           </strong>
                           <span style={{ fontSize: '0.8rem', color: '#878a99' }}>
-                            Jalankan pencocokan data pada Tab 1 atau setujui rekomendasi pada Tab 2.
+                            Tidak ditemukan data match yang sesuai dengan filter pencarian saat ini.
                           </span>
                         </>
                       )}
@@ -788,37 +972,42 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
       )}
 
       {/* Clean Pagination Bar */}
-      <div className="pagination-row" style={{ marginTop: '0.75rem', paddingTop: '0.5rem' }}>
-        <div style={{ fontSize: '0.78rem', color: '#878a99' }}>
-          Menampilkan{' '}
-          {checkerTab === 'recommendation'
-            ? `${(page - 1) * pageSize + 1} - ${Math.min(page * pageSize, currentTabRecs.length)} dari ${currentTabRecs.length.toLocaleString('id-ID')} rekomendasi`
-            : `${(page - 1) * pageSize + 1} - ${Math.min(page * pageSize, currentTabRows.length)} dari ${currentTabRows.length.toLocaleString('id-ID')} baris`}
+      {!(
+        (checkerTab === 'upload' && matchedDone) ||
+        (!matchedDone && (checkerTab === 'recommendation' || checkerTab === 'matched'))
+      ) && (
+        <div className="pagination-row" style={{ marginTop: '0.75rem', paddingTop: '0.5rem' }}>
+          <div style={{ fontSize: '0.78rem', color: '#878a99' }}>
+            Menampilkan{' '}
+            {checkerTab === 'recommendation'
+              ? `${(page - 1) * pageSize + 1} - ${Math.min(page * pageSize, currentTabRecs.length)} dari ${currentTabRecs.length.toLocaleString('id-ID')} rekomendasi`
+              : `${(page - 1) * pageSize + 1} - ${Math.min(page * pageSize, currentTabRows.length)} dari ${currentTabRows.length.toLocaleString('id-ID')} baris`}
+          </div>
+          <div className="pagination-controls">
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(p - 1, 1))}
+            >
+              <ChevronLeft size={13} />
+              <span>Sebelumnya</span>
+            </button>
+            <span style={{ padding: '0 0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: '#495057' }}>
+              Hal {page} / {totalPages}
+            </span>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+            >
+              <span>Berikutnya</span>
+              <ChevronRight size={13} />
+            </button>
+          </div>
         </div>
-        <div className="pagination-controls">
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            disabled={page <= 1}
-            onClick={() => setPage((p) => Math.max(p - 1, 1))}
-          >
-            <ChevronLeft size={13} />
-            <span>Sebelumnya</span>
-          </button>
-          <span style={{ padding: '0 0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: '#495057' }}>
-            Hal {page} / {totalPages}
-          </span>
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            disabled={page >= totalPages}
-            onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
-          >
-            <span>Berikutnya</span>
-            <ChevronRight size={13} />
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* Modal Panduan Skor Kedekatan untuk Pengguna Awam */}
       <ProximityGuideModal

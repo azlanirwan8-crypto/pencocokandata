@@ -19,6 +19,8 @@ export const TargetUploadModal: React.FC<TargetUploadModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [uploadStage, setUploadStage] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -28,9 +30,19 @@ export const TargetUploadModal: React.FC<TargetUploadModalProps> = ({
     setErrorMessage(null);
     setSuccessMessage(null);
     setIsLoading(true);
+    setUploadProgress(15);
+    setUploadStage('Mempersiapkan & membaca berkas Excel target...');
 
     try {
+      await new Promise((r) => setTimeout(r, 120));
+      setUploadProgress(45);
+      setUploadStage('Mengekstrak baris data lembar kerja...');
+
       const { data, headers } = await parseExcelFile<TargetRow>(file);
+
+      setUploadProgress(70);
+      setUploadStage('Memvalidasi format & kolom data target...');
+      await new Promise((r) => setTimeout(r, 100));
 
       // Verifikasi kecocokan header target
       const validation = validateTargetHeaders(headers);
@@ -48,24 +60,37 @@ export const TargetUploadModal: React.FC<TargetUploadModalProps> = ({
         return;
       }
 
+      setUploadProgress(88);
+      setUploadStage('Menata nomor urut & validasi baris...');
+      await new Promise((r) => setTimeout(r, 100));
+
       // Pastikan kolom No terisi rapi
       const sanitized = data.map((r, idx) => ({
         ...r,
         No: r.No !== undefined && r.No !== '' ? r.No : currentTargetCount + idx + 1,
       }));
 
+      setUploadProgress(95);
+      setUploadStage('Menyimpan data target baru...');
+      await new Promise((r) => setTimeout(r, 100));
+
       onTargetLoaded(sanitized, file.name);
+
+      setUploadProgress(100);
+      setUploadStage('Proses selesai!');
+      await new Promise((r) => setTimeout(r, 120));
+
+      setIsLoading(false);
       setSuccessMessage(
         `Berhasil menambahkan ${sanitized.length.toLocaleString('id-ID')} baris data target dari "${file.name}".`
       );
-      setIsLoading(false);
 
-      // Otomatis tutup modal setelah 1.2 detik jika sukses
+      // Otomatis tutup modal setelah 1.5 detik jika sukses
       setTimeout(() => {
         if (fileInputRef.current) fileInputRef.current.value = '';
         onClose();
         setSuccessMessage(null);
-      }, 1200);
+      }, 1500);
     } catch (err: any) {
       if (fileInputRef.current) fileInputRef.current.value = '';
       setIsLoading(false);
@@ -214,15 +239,32 @@ export const TargetUploadModal: React.FC<TargetUploadModalProps> = ({
             onDrop={handleDrop}
           >
             {isLoading ? (
-              <>
-                <RotateCcw size={32} color="#3577f1" className="pulse-dot" />
-                <span style={{ fontSize: '0.84rem', fontWeight: 600, color: '#3577f1' }}>
-                  Sedang membaca berkas Excel target...
-                </span>
-                <span style={{ fontSize: '0.74rem', color: '#878a99' }}>
-                  Mohon tunggu beberapa saat
-                </span>
-              </>
+              <div style={{ width: '100%', padding: '0.5rem 0.25rem' }}>
+                <RotateCcw size={28} color="#3577f1" className="pulse-dot" style={{ margin: '0 auto 0.75rem auto', display: 'block' }} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#3577f1' }}>
+                    {uploadStage || 'Sedang membaca berkas target...'}
+                  </span>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#3577f1' }}>
+                    {uploadProgress}%
+                  </span>
+                </div>
+                {/* Modern Progress Bar */}
+                <div style={{ width: '100%', height: '8px', background: '#e9ebec', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      width: `${uploadProgress}%`,
+                      height: '100%',
+                      background: 'linear-gradient(90deg, #3577f1 0%, #0ab39c 100%)',
+                      borderRadius: '4px',
+                      transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    }}
+                  />
+                </div>
+                <div style={{ fontSize: '0.72rem', color: '#878a99', marginTop: '0.5rem', textAlign: 'center' }}>
+                  Mohon jangan menutup jendela selama proses pembacaan & penataan data
+                </div>
+              </div>
             ) : (
               <>
                 <div

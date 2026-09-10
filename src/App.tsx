@@ -72,7 +72,7 @@ export const App: React.FC = () => {
   const [progress, setProgress] = useState<number>(0);
   const [processedCount, setProcessedCount] = useState<number>(0);
   const [durationMs, setDurationMs] = useState<number>(0);
-  const [, setMatchedDone] = useState<boolean>(false);
+  const [matchedDone, setMatchedDone] = useState<boolean>(false);
 
   // Filters State
   const [selectedWilayah, setSelectedWilayah] = useState<string>('ALL');
@@ -1006,6 +1006,7 @@ export const App: React.FC = () => {
                   onApproveRecommendation={handleApproveSingleRecommendation}
                   isProcessing={isProcessing}
                   canExecute={targetRows.length > 0 && masterRows.length > 0}
+                  matchedDone={matchedDone}
                 />
 
                 <ExportAction
