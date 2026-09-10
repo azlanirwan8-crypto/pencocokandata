@@ -40,6 +40,24 @@ export const App: React.FC = () => {
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
   const [isMasterUploadModalOpen, setIsMasterUploadModalOpen] = useState<boolean>(false);
   const [isTargetUploadModalOpen, setIsTargetUploadModalOpen] = useState<boolean>(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
   const [_isCloudConnected, setIsCloudConnected] = useState<boolean>(isSupabaseConfigured());
   const [_isNeonConnected, setIsNeonConnected] = useState<boolean>(false);
 
@@ -529,6 +547,7 @@ export const App: React.FC = () => {
         setActiveTab={setActiveTab}
         masterCount={masterRows.length}
         targetCount={targetRows.length}
+        isCollapsed={isSidebarCollapsed}
       />
 
       {/* 2. Main Content Area */}
@@ -536,6 +555,8 @@ export const App: React.FC = () => {
         <Topbar
           activeTab={activeTab}
           onResetAll={handleResetAll}
+          isSidebarCollapsed={isSidebarCollapsed}
+          onToggleSidebar={toggleSidebar}
         />
 
         <main className="page-content">

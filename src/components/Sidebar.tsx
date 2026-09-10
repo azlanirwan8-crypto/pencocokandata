@@ -6,6 +6,7 @@ interface SidebarProps {
   setActiveTab: (tab: 'dashboard' | 'master' | 'working') => void;
   masterCount: number;
   targetCount: number;
+  isCollapsed: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -13,9 +14,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setActiveTab,
   masterCount,
   targetCount,
+  isCollapsed,
 }) => {
   return (
-    <aside className="app-sidebar">
+    <aside className={`app-sidebar ${isCollapsed ? 'collapsed' : ''}`} id="app-sidebar">
       {/* Brand Header */}
       <div className="sidebar-brand">
         <div className="sidebar-brand-logo">
@@ -36,6 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className={`sidebar-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
             onClick={() => setActiveTab('dashboard')}
             id="sidebar-btn-dashboard"
+            title="Dashboard"
           >
             <div className="nav-item-icon">
               <LayoutDashboard size={18} />
@@ -49,6 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className={`sidebar-nav-item ${activeTab === 'master' ? 'active' : ''}`}
             onClick={() => setActiveTab('master')}
             id="sidebar-btn-master"
+            title="Data Master"
           >
             <div className="nav-item-icon">
               <Database size={18} />
@@ -67,6 +71,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className={`sidebar-nav-item ${activeTab === 'working' ? 'active' : ''}`}
             onClick={() => setActiveTab('working')}
             id="sidebar-btn-working"
+            title="Data Cek"
           >
             <div className="nav-item-icon">
               <FileCheck size={18} />

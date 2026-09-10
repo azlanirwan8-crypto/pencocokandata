@@ -1,12 +1,19 @@
 import React from 'react';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Menu } from 'lucide-react';
 
 interface TopbarProps {
   activeTab: 'dashboard' | 'master' | 'working';
   onResetAll?: () => void;
+  isSidebarCollapsed: boolean;
+  onToggleSidebar: () => void;
 }
 
-export const Topbar: React.FC<TopbarProps> = ({ activeTab, onResetAll }) => {
+export const Topbar: React.FC<TopbarProps> = ({
+  activeTab,
+  onResetAll,
+  isSidebarCollapsed,
+  onToggleSidebar,
+}) => {
   const getTabTitle = () => {
     switch (activeTab) {
       case 'dashboard':
@@ -23,11 +30,25 @@ export const Topbar: React.FC<TopbarProps> = ({ activeTab, onResetAll }) => {
   return (
     <header className="app-topbar">
       <div className="topbar-left">
-        <h4 className="topbar-title">{getTabTitle()}</h4>
-        <div className="topbar-breadcrumb">
-          <span>Aplikasi</span>
-          <span className="breadcrumb-separator">/</span>
-          <span className="breadcrumb-current">{getTabTitle()}</span>
+        {/* Velzon Hamburger Toggle Button */}
+        <button
+          type="button"
+          className="topbar-hamburger-btn"
+          onClick={onToggleSidebar}
+          id="btn-toggle-sidebar"
+          title={isSidebarCollapsed ? 'Tampilkan Menu Sidebar' : 'Sembunyikan / Perkecil Sidebar'}
+          aria-label="Toggle Sidebar"
+        >
+          <Menu size={19} />
+        </button>
+
+        <div>
+          <h4 className="topbar-title">{getTabTitle()}</h4>
+          <div className="topbar-breadcrumb">
+            <span>Aplikasi</span>
+            <span className="breadcrumb-separator">/</span>
+            <span className="breadcrumb-current">{getTabTitle()}</span>
+          </div>
         </div>
       </div>
 
