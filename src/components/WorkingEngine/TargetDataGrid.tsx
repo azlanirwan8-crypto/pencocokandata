@@ -36,7 +36,6 @@ interface TargetDataGridProps {
   onApproveRecommendation: (rowNo: number | string, recommendedMaster: MasterRow) => void;
   isProcessing: boolean;
   canExecute: boolean;
-  matchedDone: boolean;
 }
 
 export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
@@ -53,7 +52,6 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   onApproveRecommendation,
   isProcessing,
   canExecute,
-  matchedDone,
 }) => {
   // 3 Sub-Tabs State: 'upload' | 'recommendation' | 'matched'
   const [checkerTab, setCheckerTab] = useState<'upload' | 'recommendation' | 'matched'>('upload');
@@ -331,7 +329,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-          {/* Action button in Tab 1: MULAI PENCOCOKAN */}
+          {/* Action button in Tab 1: PENCOCOKAN */}
           {checkerTab === 'upload' && (
             <button
               type="button"
@@ -352,15 +350,10 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                   <RotateCcw size={14} className="pulse-dot" />
                   <span>Memproses...</span>
                 </>
-              ) : matchedDone ? (
-                <>
-                  <RotateCcw size={14} />
-                  <span>Ulangi Pencocokan</span>
-                </>
               ) : (
                 <>
                   <Play size={14} fill="currentColor" />
-                  <span>Mulai Pencocokan Data</span>
+                  <span>Pencocokan</span>
                 </>
               )}
             </button>
@@ -521,12 +514,14 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                   <th style={{ color: '#878a99' }}>Dati II Target</th>
                   <th style={{ minWidth: '220px', color: '#878a99' }}>ALAMAT Target</th>
                   <th>Provinsi</th>
+                  <th>KOTA PTEN</th>
+                  <th>KODE POS PTEN</th>
                 </tr>
               </thead>
               <tbody>
                 {paginatedRecs.length === 0 ? (
                   <tr>
-                    <td colSpan={11} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
+                    <td colSpan={14} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
                       Tidak ada rekomendasi yang sesuai dengan filter pencarian.
                     </td>
                   </tr>
@@ -622,6 +617,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                         <td style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.ALAMAT}>
                           {r.ALAMAT || '-'}
                         </td>
+                        <td>{r.Provinsi || '-'}</td>
+                        <td>{r['KOTA PTEN'] || '-'}</td>
+                        <td className="code-cell">{r['KODE POS PTEN'] || '-'}</td>
                       </tr>
                     );
                   })
@@ -653,19 +651,21 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                 <th style={{ color: '#405189' }}>Nama Outlet (Master)</th>
                 <th style={{ color: '#405189' }}>Status Outlet (Master)</th>
                 <th style={{ color: '#405189' }}>ALAMAT (Master)</th>
-                {/* Kolom Target Asli (Sampai Provinsi) */}
+                {/* Kolom Target Asli (Sampai Provinsi & PTEN) */}
                 <th>KODE POS</th>
                 <th>Kelurahan</th>
                 <th>Kecamatan</th>
                 <th>Dati II</th>
                 <th>Kode Dati II</th>
                 <th>Provinsi</th>
+                <th>KOTA PTEN</th>
+                <th>KODE POS PTEN</th>
               </tr>
             </thead>
             <tbody>
               {paginatedRows.length === 0 ? (
                 <tr>
-                  <td colSpan={16} style={{ textAlign: 'center', padding: '3rem', color: '#878a99' }}>
+                  <td colSpan={18} style={{ textAlign: 'center', padding: '3rem', color: '#878a99' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
                       {checkerTab === 'upload' ? (
                         <>
@@ -777,13 +777,15 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                         {r.ALAMAT || <span style={{ color: '#878a99' }}>-</span>}
                       </td>
 
-                      {/* Target Data Asli (Sampai Provinsi) */}
+                      {/* Target Data Asli (Sampai Provinsi & PTEN) */}
                       <td className="code-cell" style={{ color: '#405189', fontWeight: 700 }}>{r['KODE POS']}</td>
                       <td>{r.Kelurahan || '-'}</td>
                       <td>{r.Kecamatan || '-'}</td>
                       <td>{r['Dati II'] || '-'}</td>
                       <td className="code-cell">{r['Kode Dati II'] || '-'}</td>
                       <td>{r.Provinsi || '-'}</td>
+                      <td>{r['KOTA PTEN'] || '-'}</td>
+                      <td className="code-cell">{r['KODE POS PTEN'] || '-'}</td>
                     </tr>
                   );
                 })

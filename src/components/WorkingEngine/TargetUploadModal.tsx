@@ -263,7 +263,7 @@ export const TargetUploadModal: React.FC<TargetUploadModalProps> = ({
                     Tarik berkas ke sini atau <span style={{ color: '#3577f1', textDecoration: 'underline' }}>Pilih File</span>
                   </div>
                   <div style={{ fontSize: '0.74rem', color: '#878a99', marginTop: '0.2rem' }}>
-                    Mendukung format: .xlsx, .xls, .csv (Hanya sampai kolom Provinsi)
+                    Mendukung format: .xlsx, .xls, .csv (Sampai kolom KOTA PTEN & KODE POS PTEN)
                   </div>
                 </div>
               </>

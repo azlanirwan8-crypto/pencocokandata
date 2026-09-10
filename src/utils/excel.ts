@@ -34,6 +34,8 @@ export const TARGET_COLUMNS_WITH_SANDI_CABANG: string[] = [
   'Dati II',
   'Kode Dati II',
   'Provinsi',
+  'KOTA PTEN',
+  'KODE POS PTEN',
 ];
 
 export const MASTER_COLUMNS_SEPARATE: string[] = [
@@ -70,6 +72,8 @@ export const TARGET_COLUMNS_SEPARATE: string[] = [
   'Dati II',
   'Kode Dati II',
   'Provinsi',
+  'KOTA PTEN',
+  'KODE POS PTEN',
 ];
 
 /**
@@ -115,8 +119,17 @@ export function mapCanonicalHeader(header: string): string {
   if (norm === 'kode dati ii' || norm === 'kode dati 2' || norm === 'kodedatii') return 'Kode Dati II';
   if (norm === 'provinsi' || norm === 'propinsi') return 'Provinsi';
   if (norm === 'telp' || norm === 'telepon' || norm === 'no telp' || norm === 'no. telp' || norm === 'telephone') return 'Telp';
-  if (norm === 'kota pten' || norm === 'kotapten') return 'KOTA PTEN';
-  if (norm === 'kode pos pten' || norm === 'kodepos pten' || norm === 'kodepospten') return 'KODE POS PTEN';
+  if (norm === 'kota pten' || norm === 'kotapten' || norm === 'kota_pten' || norm === 'kota-pten') return 'KOTA PTEN';
+  if (
+    norm === 'kode pos pten' ||
+    norm === 'kodepos pten' ||
+    norm === 'kodepospten' ||
+    norm === 'kode_pos_pten' ||
+    norm === 'kodepos_pten' ||
+    norm === 'pos pten' ||
+    norm === 'pos_pten'
+  )
+    return 'KODE POS PTEN';
   if (norm === 'cek kode pos + pten' || norm === 'cek kode pos pten' || norm === 'cek kodepos pten') return 'CEK KODE POS + PTEN';
   if (norm === 'sumber data' || norm === 'sumberdata') return 'SUMBER DATA';
   if (norm === 'no' || norm === 'no.' || norm === 'nomor') return 'No';
@@ -294,24 +307,72 @@ export async function parseExcelFile<T>(file: File): Promise<{ data: T[]; header
   });
 }
 
-/**
- * Format timestamp YYYYMMDD_HHMMSS
- */
-function getFormattedTimestamp(): string {
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const year = now.getFullYear();
-  const month = pad(now.getMonth() + 1);
-  const day = pad(now.getDate());
-  const hours = pad(now.getHours());
-  const minutes = pad(now.getMinutes());
-  const seconds = pad(now.getSeconds());
-  return `${year}${month}${day}_${hours}${minutes}${seconds}`;
-}
 
 /**
  * Download Target results as formatted Excel file
  * Enforces Row Integrity Rule: assert total_downloaded_rows == total_uploaded_rows
+ */
+/**
+ * Format nama/nomor wilayah menjadi kode standar sheet (contoh: 1 -> W01, 2 -> W02, 10 -> W10)
+ */
+export function formatWilayahCode(rawWilayah: string | number): string {
+  const str = String(rawWilayah ?? '').trim();
+  if (!str) return 'W01';
+
+  // Jika format sudah W01, W02, w1, dll
+  const wMatch = str.match(/^w(\d+)$/i);
+  if (wMatch) {
+    const num = parseInt(wMatch[1], 10);
+    return `W${String(num).padStart(2, '0')}`;
+  }
+
+  // Jika cuma angka (contoh "1", "2") atau ada kata "Wilayah 1"
+  const numMatch = str.match(/\d+/);
+  if (numMatch) {
+    const num = parseInt(numMatch[0], 10);
+    return `W${String(num).padStart(2, '0')}`;
+  }
+
+  // Fallback nama wilayah non-numerik, sanitasi karakter ilegal Excel
+  return str.replace(/[:\\/?*\[\]]/g, '_').slice(0, 31) || 'W01';
+}
+
+/**
+ * Helper untuk membuat worksheet Excel dari baris TargetRow
+ */
+function createTargetWorksheet(rows: TargetRow[], exportColumns: string[]): XLSX.WorkSheet {
+  const exportData = rows.map((r, idx) => {
+    const item: Record<string, any> = {};
+    for (const col of exportColumns) {
+      if (col === 'No') {
+        item['No'] = r.No !== undefined && r.No !== '' ? r.No : idx + 1;
+      } else {
+        item[col] = r[col] ?? '';
+      }
+    }
+    return item;
+  });
+
+  const worksheet = XLSX.utils.json_to_sheet(exportData, { header: exportColumns });
+
+  // Set friendly column widths
+  const colWidths = exportColumns.map((col) => {
+    if (col === 'No') return { wch: 6 };
+    if (col === 'ALAMAT') return { wch: 40 };
+    if (col === 'Cabang' || col === 'Nama Outlet' || col === 'Sandi Cabang') return { wch: 28 };
+    if (col === 'KODE POS' || col === 'KODE POS PTEN' || col === 'CEK KODE POS + PTEN') return { wch: 18 };
+    if (col === 'KOTA PTEN') return { wch: 22 };
+    return { wch: 18 };
+  });
+  worksheet['!cols'] = colWidths;
+
+  return worksheet;
+}
+
+/**
+ * Download Target results as formatted Excel file
+ * 1. Filter Wilayah: nama berkas W01.xlsx (jika 1), nama tab sheet W01
+ * 2. Semua Wilayah: nama berkas All wilayah.xlsx, di-group per wilayah menjadi tab sheet W01, W02, dst.
  */
 export function exportTargetToExcel(
   rows: TargetRow[],
@@ -333,40 +394,56 @@ export function exportTargetToExcel(
   const usesCombined = rows.length > 0 && rows.some(r => r['Sandi Cabang'] && (!r.Sandi || r.Sandi === r['Sandi Cabang']));
   const exportColumns = usesCombined ? TARGET_COLUMNS_WITH_SANDI_CABANG : TARGET_COLUMNS_SEPARATE;
 
-  // Clean data to exact columns in order
-  const exportData = rows.map((r, idx) => {
-    const item: Record<string, any> = {};
-    for (const col of exportColumns) {
-      if (col === 'No') {
-        item['No'] = r.No !== undefined && r.No !== '' ? r.No : idx + 1;
-      } else {
-        item[col] = r[col] ?? '';
-      }
-    }
-    return item;
-  });
-
-  const worksheet = XLSX.utils.json_to_sheet(exportData, { header: exportColumns });
-
-  // Set friendly column widths
-  const colWidths = exportColumns.map((col) => {
-    if (col === 'No') return { wch: 6 };
-    if (col === 'ALAMAT') return { wch: 40 };
-    if (col === 'Cabang' || col === 'Nama Outlet' || col === 'Sandi Cabang') return { wch: 28 };
-    if (col === 'KODE POS' || col === 'KODE POS PTEN' || col === 'CEK KODE POS + PTEN') return { wch: 18 };
-    return { wch: 18 };
-  });
-  worksheet['!cols'] = colWidths;
-
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Hasil_Matching');
+  let filename = '';
 
-  // Filename format: Hasil_Matching_[Wilayah]_[Timestamp].xlsx
-  const safeWilayah = (wilayahFilterLabel || 'SEMUA')
-    .replace(/[^a-zA-Z0-9_-]/g, '_')
-    .slice(0, 30);
-  const timestamp = getFormattedTimestamp();
-  const filename = `Hasil_Matching_${safeWilayah}_${timestamp}.xlsx`;
+  if (isFiltered) {
+    // =========================================================================
+    // 1. JIKA FILTER WILAYAH
+    // Nama file excel: W01.xlsx (jika 1)
+    // Nama tab sheet: W01
+    // =========================================================================
+    const sheetName = formatWilayahCode(wilayahFilterLabel);
+    const worksheet = createTargetWorksheet(rows, exportColumns);
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+    filename = `${sheetName}.xlsx`;
+  } else {
+    // =========================================================================
+    // 2. JIKA DOWNLOAD SEMUA WILAYAH
+    // Nama file excel: All wilayah.xlsx
+    // Di-group berdasarkan wilayah, tab sheet-nya W01, W02, dst.
+    // =========================================================================
+    const groups = new Map<string, TargetRow[]>();
+
+    rows.forEach((r) => {
+      const code = formatWilayahCode(r.Wilayah || 'W01');
+      let arr = groups.get(code);
+      if (!arr) {
+        arr = [];
+        groups.set(code, arr);
+      }
+      arr.push(r);
+    });
+
+    // Urutkan kode sheet (W01, W02, W03, dst)
+    const sortedSheetNames = Array.from(groups.keys()).sort((a, b) =>
+      a.localeCompare(b, 'id', { numeric: true, sensitivity: 'base' })
+    );
+
+    // Buat sheet terpisah untuk setiap wilayah
+    sortedSheetNames.forEach((sheetName) => {
+      const groupRows = groups.get(sheetName) || [];
+      const worksheet = createTargetWorksheet(groupRows, exportColumns);
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+    });
+
+    if (sortedSheetNames.length === 0) {
+      const worksheet = createTargetWorksheet([], exportColumns);
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'W01');
+    }
+
+    filename = 'All wilayah.xlsx';
+  }
 
   XLSX.writeFile(workbook, filename);
 

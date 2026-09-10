@@ -12,7 +12,6 @@ interface FilterToolbarProps {
   onExecuteMatching: () => void;
   isProcessing: boolean;
   canExecute: boolean;
-  matchedDone: boolean;
 }
 
 export const FilterToolbar: React.FC<FilterToolbarProps> = ({
@@ -26,7 +25,6 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
   onExecuteMatching,
   isProcessing,
   canExecute,
-  matchedDone,
 }) => {
   return (
     <div className="filter-toolbar">
@@ -92,15 +90,10 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
               <RotateCcw size={16} className="pulse-dot" />
               <span>Memproses...</span>
             </>
-          ) : matchedDone ? (
-            <>
-              <RotateCcw size={16} />
-              <span>Ulangi Pencocokan</span>
-            </>
           ) : (
             <>
               <Play size={16} fill="currentColor" />
-              <span>Mulai Pencocokan Bertingkat</span>
+              <span>Pencocokan</span>
             </>
           )}
         </button>

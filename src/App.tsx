@@ -73,7 +73,7 @@ export const App: React.FC = () => {
   const [progress, setProgress] = useState<number>(0);
   const [processedCount, setProcessedCount] = useState<number>(0);
   const [durationMs, setDurationMs] = useState<number>(0);
-  const [matchedDone, setMatchedDone] = useState<boolean>(false);
+  const [, setMatchedDone] = useState<boolean>(false);
 
   // Filters State
   const [selectedWilayah, setSelectedWilayah] = useState<string>('ALL');
@@ -950,7 +950,7 @@ export const App: React.FC = () => {
                   type="button"
                   className="btn btn-outline btn-sm"
                   onClick={() => downloadTargetTemplate(false)}
-                  title="Unduh format template Excel target kosong (hanya sampai Provinsi)"
+                  title="Unduh format template Excel target kosong (sampai KOTA PTEN & KODE POS PTEN)"
                   style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.42rem 0.85rem' }}
                 >
                   <Download size={13} />
@@ -1058,7 +1058,6 @@ export const App: React.FC = () => {
                   onApproveRecommendation={handleApproveSingleRecommendation}
                   isProcessing={isProcessing}
                   canExecute={targetRows.length > 0 && masterRows.length > 0}
-                  matchedDone={matchedDone}
                 />
 
                 <ExportAction

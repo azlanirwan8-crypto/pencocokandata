@@ -82,8 +82,8 @@ export const ExportAction: React.FC<ExportActionProps> = ({
       });
     } else {
       const infoText = isFiltered
-        ? `Berhasil mengunduh ${result.rowCount.toLocaleString('id-ID')} baris data wilayah "${label}" ke berkas ${result.filename}.`
-        : `Berhasil mengunduh seluruh ${result.rowCount.toLocaleString('id-ID')} baris data terurut berdasarkan wilayah ke berkas ${result.filename}.`;
+        ? `Berhasil mengunduh ${result.rowCount.toLocaleString('id-ID')} baris data ke berkas "${result.filename}" (Tab sheet: ${result.filename.replace('.xlsx', '')}).`
+        : `Berhasil mengunduh seluruh ${result.rowCount.toLocaleString('id-ID')} baris data ke berkas "${result.filename}" (Dikelompokkan per tab sheet wilayah: W01, W02, dst).`;
 
       setAlertInfo({
         type: 'success',
