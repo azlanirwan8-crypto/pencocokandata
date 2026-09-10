@@ -4,7 +4,6 @@ import { Topbar } from './components/Topbar';
 import { MetricCards } from './components/Dashboard/MetricCards';
 import { RegionalAnalyticsCharts } from './components/Dashboard/RegionalAnalyticsCharts';
 import { RadarAnomalyTable } from './components/Dashboard/RadarAnomalyTable';
-import { AnalystInsightsBanner } from './components/Dashboard/AnalystInsightsBanner';
 import { MasterHealthCard } from './components/MasterData/MasterHealthCard';
 import { MasterDataGrid } from './components/MasterData/MasterDataGrid';
 import { MasterUploadModal } from './components/MasterData/MasterUploadModal';
@@ -658,13 +657,6 @@ export const App: React.FC = () => {
               stats={dashboardStats}
               masterCount={masterRows.length}
               multiCabangCount={masterHealth.multiOutletCount}
-            />
-
-            {/* Analyst Insights & Actionable Takeaways */}
-            <AnalystInsightsBanner
-              stats={dashboardStats}
-              regionalStats={regionalStats}
-              onNavigateToWorking={() => setActiveTab('working')}
             />
 
             {/* 2 Visual Analisis: Dekomposisi Donut Chart & Kinerja Wilayah (Mengikuti Filter) */}
