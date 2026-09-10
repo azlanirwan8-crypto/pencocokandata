@@ -596,9 +596,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
             <thead>
               <tr>
                 <th style={{ width: '50px', textAlign: 'center', background: '#f3f6f9', color: '#405189' }}>No</th>
-                <th style={{ minWidth: '380px', background: '#fff9f0', color: '#d97706' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.4rem' }}>
-                    <span>Kandidat Rekomendasi Master (Top 2–3 Pilihan Terdekat)</span>
+                <th style={{ minWidth: '420px', background: '#fff9f0', color: '#d97706' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'nowrap', gap: '0.4rem' }}>
+                    <span style={{ whiteSpace: 'nowrap' }}>Kandidat Rekomendasi Master (Top 2–3 Pilihan)</span>
                     <div
                       style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', cursor: 'pointer', fontSize: '0.72rem' }}
                       onClick={() => setIsGuideModalOpen(true)}
@@ -665,8 +665,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                               {/* Horizontal Segmented Pill Selector jika ada lebih dari 1 opsi */}
                               {candidates.length > 1 && (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
-                                  <span style={{ fontSize: '0.68rem', color: '#878a99', fontWeight: 600, marginRight: '0.1rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'nowrap', overflowX: 'auto', paddingBottom: '0.1rem' }}>
+                                  <span style={{ fontSize: '0.68rem', color: '#878a99', fontWeight: 600, marginRight: '0.1rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
                                     Opsi:
                                   </span>
                                   {candidates.map((cand) => {
@@ -691,6 +691,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                           border: isSelected ? `1px solid ${pillActiveBg}` : '1px solid #e9ebec',
                                           cursor: 'pointer',
                                           transition: 'all 0.15s ease',
+                                          flexShrink: 0,
+                                          whiteSpace: 'nowrap',
                                         }}
                                         title={`Klik untuk melihat Pilihan ${cand.rank} (${cand.score}%)`}
                                       >
@@ -723,26 +725,28 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                   boxShadow: isTop1 ? '0 1px 3px rgba(10, 179, 156, 0.08)' : 'none',
                                 }}
                               >
-                                {/* Header Opsi: Badge Pilihan + Skor + Tombol (i) & Tombol Pilih Cabang Ini */}
+                                {/* Header Opsi: Badge Pilihan + Skor + Tombol (i) & Tombol Pilih Cabang Ini (WAJIB 1 BARIS) */}
                                 <div
                                   style={{
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'space-between',
-                                    flexWrap: 'wrap',
-                                    gap: '0.4rem',
-                                    marginBottom: '0.3rem',
+                                    flexWrap: 'nowrap',
+                                    gap: '0.5rem',
+                                    marginBottom: '0.35rem',
+                                    width: '100%',
                                   }}
                                 >
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
                                     <span
                                       style={{
-                                        padding: '0.12rem 0.5rem',
+                                        padding: '0.12rem 0.45rem',
                                         borderRadius: '4px',
                                         fontSize: '0.72rem',
                                         fontWeight: 700,
                                         background: badgeBg,
                                         color: badgeColor,
+                                        whiteSpace: 'nowrap',
                                       }}
                                     >
                                       {isTop1 ? 'Pilihan 1 (Utama)' : `Pilihan ${activeCand.rank} (Alternatif)`}
@@ -755,6 +759,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                         fontSize: '0.72rem',
                                         fontWeight: 600,
                                         color: badgeColor,
+                                        whiteSpace: 'nowrap',
                                       }}
                                     >
                                       <Sparkles size={11} /> Skor {activeCand.score}%
@@ -762,7 +767,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                   </div>
 
                                   {/* Tombol Info (i) & Tombol Pilih Cabang Ini */}
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
                                     <button
                                       type="button"
                                       onClick={() => setSelectedCandidateDetail({ targetRow: r, candidate: activeCand })}
@@ -797,6 +802,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                         background: isTop1 ? 'rgba(10, 179, 156, 0.06)' : '#ffffff',
                                         fontWeight: 600,
                                         whiteSpace: 'nowrap',
+                                        flexShrink: 0,
                                       }}
                                       title="Pilih dan setujui cabang master ini"
                                     >
