@@ -713,15 +713,36 @@ export const App: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <>
-                {/* 2 Sub-Tabs for Menu Data Master (Velzon nav-tabs-custom style) */}
+              <div className="glass-card" style={{ marginTop: '1rem', padding: '1.25rem 1.5rem' }}>
+                {/* Header Title inside Card */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '0.75rem',
+                    marginBottom: '0.85rem',
+                  }}
+                >
+                  <div>
+                    <h2 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#212529', letterSpacing: '-0.01em', margin: 0 }}>
+                      Pratinjau & Manajemen Data Master
+                    </h2>
+                    <p style={{ fontSize: '0.78rem', color: '#878a99', marginTop: '0.15rem', margin: 0 }}>
+                      Total {masterRows.length.toLocaleString('id-ID')} cabang master terdaftar{masterFileName ? ` • Berkas: ${masterFileName}` : ''} • Multi-Cabang: {masterHealth.multiOutletCount} area
+                    </p>
+                  </div>
+                </div>
+
+                {/* 2 SUB-TABS (VELZON UNDERLINE STYLE DI DALAM CARD) */}
                 <div
                   style={{
                     display: 'flex',
                     gap: '0.5rem',
                     borderBottom: '1px solid #e9ebec',
-                    paddingBottom: '0',
                     marginBottom: '1rem',
+                    flexWrap: 'wrap',
                   }}
                 >
                   {/* Tab 1: Indikator Kesehatan Master */}
@@ -731,50 +752,35 @@ export const App: React.FC = () => {
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '0.5rem',
-                      padding: '0.65rem 1.15rem',
+                      gap: '0.45rem',
+                      padding: '0.65rem 1.1rem',
                       fontSize: '0.82rem',
                       fontWeight: masterSubTab === 'health' ? 600 : 500,
-                      color: masterSubTab === 'health' ? '#405189' : '#878a99',
+                      color: masterSubTab === 'health' ? (masterHealth.multiOutletCount > 0 ? '#d97706' : '#0ab39c') : '#878a99',
                       background: 'transparent',
                       border: 'none',
-                      borderBottom: masterSubTab === 'health' ? '2px solid #405189' : '2px solid transparent',
+                      borderBottom: masterSubTab === 'health' ? `2px solid ${masterHealth.multiOutletCount > 0 ? '#f7b84b' : '#0ab39c'}` : '2px solid transparent',
                       cursor: 'pointer',
                       transition: 'all 0.15s ease',
                       marginBottom: '-1px',
                     }}
                     id="tab-btn-master-health"
                   >
-                    <ShieldAlert size={14} color={masterSubTab === 'health' ? '#405189' : '#878a99'} />
+                    <ShieldAlert size={14} color={masterSubTab === 'health' ? (masterHealth.multiOutletCount > 0 ? '#d97706' : '#0ab39c') : '#878a99'} />
                     <span>Tab 1: Indikator Kesehatan Master</span>
-                    {masterHealth.multiOutletCount > 0 ? (
-                      <span
-                        style={{
-                          padding: '0.12rem 0.5rem',
-                          borderRadius: '9999px',
-                          fontSize: '0.7rem',
-                          fontWeight: 600,
-                          background: 'rgba(247, 184, 75, 0.15)',
-                          color: '#d97706',
-                          border: '1px solid rgba(247, 184, 75, 0.3)',
-                        }}
-                      >
-                        {masterHealth.multiOutletCount} Multi-Cabang
-                      </span>
-                    ) : (
-                      <span
-                        style={{
-                          padding: '0.12rem 0.5rem',
-                          borderRadius: '9999px',
-                          fontSize: '0.7rem',
-                          fontWeight: 600,
-                          background: 'rgba(10, 179, 156, 0.12)',
-                          color: '#0ab39c',
-                        }}
-                      >
-                        100% Optimal
-                      </span>
-                    )}
+                    <span
+                      style={{
+                        padding: '0.12rem 0.5rem',
+                        borderRadius: '9999px',
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        background: masterHealth.multiOutletCount > 0 ? 'rgba(247, 184, 75, 0.15)' : 'rgba(10, 179, 156, 0.12)',
+                        color: masterHealth.multiOutletCount > 0 ? '#d97706' : '#0ab39c',
+                        border: masterHealth.multiOutletCount > 0 ? '1px solid rgba(247, 184, 75, 0.3)' : '1px solid rgba(10, 179, 156, 0.25)',
+                      }}
+                    >
+                      {masterHealth.multiOutletCount > 0 ? `${masterHealth.multiOutletCount} Multi-Cabang` : '100% Optimal'}
+                    </span>
                   </button>
 
                   {/* Tab 2: Data Grid Master Cabang */}
@@ -784,21 +790,21 @@ export const App: React.FC = () => {
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '0.5rem',
-                      padding: '0.65rem 1.15rem',
+                      gap: '0.45rem',
+                      padding: '0.65rem 1.1rem',
                       fontSize: '0.82rem',
                       fontWeight: masterSubTab === 'grid' ? 600 : 500,
-                      color: masterSubTab === 'grid' ? '#405189' : '#878a99',
+                      color: masterSubTab === 'grid' ? '#3577f1' : '#878a99',
                       background: 'transparent',
                       border: 'none',
-                      borderBottom: masterSubTab === 'grid' ? '2px solid #405189' : '2px solid transparent',
+                      borderBottom: masterSubTab === 'grid' ? '2px solid #3577f1' : '2px solid transparent',
                       cursor: 'pointer',
                       transition: 'all 0.15s ease',
                       marginBottom: '-1px',
                     }}
                     id="tab-btn-master-grid"
                   >
-                    <Database size={14} color={masterSubTab === 'grid' ? '#405189' : '#878a99'} />
+                    <Database size={14} color={masterSubTab === 'grid' ? '#3577f1' : '#878a99'} />
                     <span>Tab 2: Data Grid Master Cabang</span>
                     <span
                       style={{
@@ -806,8 +812,9 @@ export const App: React.FC = () => {
                         borderRadius: '9999px',
                         fontSize: '0.7rem',
                         fontWeight: 600,
-                        background: 'rgba(64, 81, 137, 0.1)',
-                        color: '#405189',
+                        background: 'rgba(53, 119, 241, 0.1)',
+                        color: '#3577f1',
+                        border: '1px solid rgba(53, 119, 241, 0.25)',
                       }}
                     >
                       {masterRows.length.toLocaleString('id-ID')} Baris
@@ -815,13 +822,13 @@ export const App: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Sub-Tab Content */}
+                {/* Sub-Tab Content inside Single Card */}
                 {masterSubTab === 'health' ? (
                   <MasterHealthCard health={masterHealth} />
                 ) : (
                   <MasterDataGrid masterRows={masterRows} />
                 )}
-              </>
+              </div>
             )}
           </>
         )}

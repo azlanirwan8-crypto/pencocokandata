@@ -57,9 +57,9 @@ export const MasterHealthCard: React.FC<MasterHealthCardProps> = ({ health }) =>
   }, [filteredDuplicates, page, pageSize]);
 
   return (
-    <div style={{ marginTop: '1rem' }}>
+    <div style={{ marginTop: '0.5rem' }}>
       {health.multiOutletCount > 0 ? (
-        <div className="glass-card" style={{ padding: '1.25rem 1.5rem' }}>
+        <div>
           {/* Header Banner khas Velzon */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.1rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -230,9 +230,11 @@ export const MasterHealthCard: React.FC<MasterHealthCardProps> = ({ health }) =>
         </div>
       ) : (
         <div
-          className="glass-card"
           style={{
-            padding: '1.25rem',
+            padding: '1.5rem',
+            background: 'rgba(10, 179, 156, 0.04)',
+            border: '1px solid rgba(10, 179, 156, 0.2)',
+            borderRadius: '6px',
             display: 'flex',
             alignItems: 'center',
             gap: '0.85rem',
@@ -257,7 +259,7 @@ export const MasterHealthCard: React.FC<MasterHealthCardProps> = ({ health }) =>
             <strong style={{ color: '#0ab39c', fontSize: '0.95rem' }}>
               Kondisi Data Master 100% Sehat & Unik
             </strong>
-            <p style={{ fontSize: '0.78rem', color: '#878a99', marginTop: '0.1rem' }}>
+            <p style={{ fontSize: '0.78rem', color: '#878a99', marginTop: '0.1rem', margin: 0 }}>
               Tidak terdeteksi kode pos multi-cabang. Setiap kode pos memetakan 1 cabang unik secara deterministik.
             </p>
           </div>

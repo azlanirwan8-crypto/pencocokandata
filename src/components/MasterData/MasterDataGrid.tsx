@@ -45,16 +45,11 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
   if (masterRows.length === 0) return null;
 
   return (
-    <div className="glass-card" style={{ marginTop: '1rem', padding: '1.25rem 1.5rem' }}>
-      {/* Table Header Bar khas Velzon */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.1rem' }}>
-        <div>
-          <h3 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#212529', letterSpacing: '-0.01em' }}>
-            Data Grid Master Cabang
-          </h3>
-          <p style={{ fontSize: '0.78rem', color: '#878a99', marginTop: '0.15rem' }}>
-            Menampilkan {filteredRows.length.toLocaleString('id-ID')} entri terfilter dari total {masterRows.length.toLocaleString('id-ID')} baris aktif.
-          </p>
+    <div style={{ marginTop: '0.5rem' }}>
+      {/* Toolbar Pencarian & Info Entri Master */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
+        <div style={{ fontSize: '0.8rem', color: '#878a99' }}>
+          Menampilkan <strong style={{ color: '#212529' }}>{filteredRows.length.toLocaleString('id-ID')}</strong> entri terfilter dari total <strong style={{ color: '#212529' }}>{masterRows.length.toLocaleString('id-ID')}</strong> baris master aktif.
         </div>
 
         {/* Clean Velzon Search Input */}
