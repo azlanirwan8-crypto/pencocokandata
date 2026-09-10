@@ -13,14 +13,17 @@ import {
   Check,
   HelpCircle,
   Layers,
+  Info,
 } from 'lucide-react';
 import type { TargetRow, MasterRow } from '../../types';
 import {
   generateRecommendationsForUnmatched,
   buildMasterProximityIndex,
   type RecommendationResult,
+  type CandidateOption,
 } from '../../utils/recommender';
 import { ProximityGuideModal } from './ProximityGuideModal';
+import { CandidateDetailModal } from './CandidateDetailModal';
 
 interface TargetDataGridProps {
   rows: TargetRow[];
@@ -80,6 +83,10 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   const [recommendations, setRecommendations] = useState<RecommendationResult[]>([]);
   const [isComputingRecs, setIsComputingRecs] = useState<boolean>(false);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState<boolean>(false);
+  const [selectedCandidateDetail, setSelectedCandidateDetail] = useState<{
+    targetRow: TargetRow;
+    candidate: CandidateOption;
+  } | null>(null);
 
   // Trigger recommendation calculation ONLY when Tab 2 is active AND matchedDone is true
   useEffect(() => {
@@ -685,26 +692,51 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                     </span>
                                   </div>
 
-                                  {/* Tombol Pilih & Setujui Cabang Ini */}
-                                  <button
-                                    type="button"
-                                    className="btn btn-outline btn-sm"
-                                    onClick={() => onApproveRecommendation(r.No, m)}
-                                    style={{
-                                      fontSize: '0.72rem',
-                                      padding: '0.22rem 0.65rem',
-                                      color: isTop1 ? '#0ab39c' : '#405189',
-                                      borderColor: isTop1 ? 'rgba(10, 179, 156, 0.4)' : '#ced4da',
-                                      background: isTop1 ? 'rgba(10, 179, 156, 0.06)' : '#ffffff',
-                                      fontWeight: 600,
-                                    }}
-                                    title="Pilih dan setujui cabang master ini"
-                                  >
-                                    <Check size={12} /> Gunakan Cabang Ini
-                                  </button>
+                                  {/* Tombol Info (i) & Tombol Pilih Cabang Ini */}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedCandidateDetail({ targetRow: r, candidate: cand })}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        width: '26px',
+                                        height: '26px',
+                                        borderRadius: '4px',
+                                        border: '1px solid #ced4da',
+                                        background: '#ffffff',
+                                        color: '#405189',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s ease',
+                                        flexShrink: 0,
+                                      }}
+                                      title="Lihat alasan penilaian skor & detail wilayah"
+                                    >
+                                      <Info size={13} />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      className="btn btn-outline btn-sm"
+                                      onClick={() => onApproveRecommendation(r.No, m)}
+                                      style={{
+                                        fontSize: '0.72rem',
+                                        padding: '0.22rem 0.65rem',
+                                        color: isTop1 ? '#0ab39c' : '#405189',
+                                        borderColor: isTop1 ? 'rgba(10, 179, 156, 0.4)' : '#ced4da',
+                                        background: isTop1 ? 'rgba(10, 179, 156, 0.06)' : '#ffffff',
+                                        fontWeight: 600,
+                                        whiteSpace: 'nowrap',
+                                      }}
+                                      title="Pilih dan setujui cabang master ini"
+                                    >
+                                      <Check size={12} /> Gunakan Cabang Ini
+                                    </button>
+                                  </div>
                                 </div>
 
-                                {/* Rincian Cabang Master & Alamat Lengkap Real */}
+                                {/* Rincian Cabang Master & Alamat Lengkap Real (Clean & Compact) */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.18rem' }}>
                                   <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#212529' }}>
                                     {m['Sandi Cabang'] || m.Cabang || m.Sandi || '-'}
@@ -715,33 +747,23 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                     )}
                                   </div>
 
-                                  {/* Alamat Lengkap Master Asli (Responsive, Tampil Semua) */}
+                                  {/* Alamat Lengkap Master Asli (Clean & Ringkas) */}
                                   <div
                                     style={{
                                       fontSize: '0.74rem',
                                       color: '#343a40',
                                       background: '#f8f9fa',
-                                      padding: '0.3rem 0.5rem',
+                                      padding: '0.25rem 0.5rem',
                                       borderRadius: '4px',
                                       border: '1px solid #edf0f2',
                                       marginTop: '0.15rem',
                                       whiteSpace: 'normal',
                                       wordBreak: 'break-word',
-                                      lineHeight: 1.4,
+                                      lineHeight: 1.35,
                                     }}
                                   >
                                     <span style={{ fontWeight: 600, color: '#6c757d' }}>Alamat Master: </span>
                                     {m.ALAMAT || <em style={{ color: '#adb5bd' }}>Alamat tidak terisi di master</em>}
-                                  </div>
-
-                                  {/* Wilayah Master & Alasan Kedekatan */}
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.3rem', fontSize: '0.7rem', color: '#878a99', marginTop: '0.15rem' }}>
-                                    <span>
-                                      Pos: <strong style={{ color: '#405189' }}>{m['KODE POS'] || '-'}</strong> • {m.Kelurahan ? `${m.Kelurahan}, ` : ''}{m.Kecamatan ? `${m.Kecamatan}, ` : ''}{m['Dati II'] || '-'} ({m.Provinsi || '-'})
-                                    </span>
-                                    <span style={{ fontWeight: 500, color: '#495057' }}>
-                                      {cand.reason}
-                                    </span>
                                   </div>
                                 </div>
                               </div>
@@ -1109,6 +1131,14 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
       <ProximityGuideModal
         isOpen={isGuideModalOpen}
         onClose={() => setIsGuideModalOpen(false)}
+      />
+
+      {/* Modal Detail Rekomendasi & Alasan Penilaian Skor */}
+      <CandidateDetailModal
+        isOpen={Boolean(selectedCandidateDetail)}
+        onClose={() => setSelectedCandidateDetail(null)}
+        data={selectedCandidateDetail}
+        onApprove={onApproveRecommendation}
       />
     </div>
   );
