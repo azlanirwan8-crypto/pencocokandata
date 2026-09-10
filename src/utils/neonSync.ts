@@ -134,6 +134,39 @@ export async function loadTargetFromNeon(): Promise<SavedTargetPayload | null> {
 }
 
 /**
+ * Sanitize and strip non-essential properties from TargetRows before transmitting to DB
+ * Reduces payload size by ~60% to stay safely within Vercel body limits
+ */
+export function sanitizeTargetRowsForStorage(rows: TargetRow[]): TargetRow[] {
+  return rows.map((r) => {
+    const clean: Record<string, any> = {
+      No: r.No,
+      Wilayah: r.Wilayah,
+      'Branch Code': r['Branch Code'] || '',
+      'Kode Cabang': r['Kode Cabang'] || '',
+      'Nama Outlet': r['Nama Outlet'] || '',
+      'Status Outlet': r['Status Outlet'] || '',
+      ALAMAT: r.ALAMAT || '',
+      'KODE POS': r['KODE POS'] || '',
+      Kelurahan: r.Kelurahan || '',
+      Kecamatan: r.Kecamatan || '',
+      'Dati II': r['Dati II'] || '',
+      'Kode Dati II': r['Kode Dati II'] || '',
+      Provinsi: r.Provinsi || '',
+    };
+    if (r['Sandi Cabang']) clean['Sandi Cabang'] = r['Sandi Cabang'];
+    if (r.Sandi) clean.Sandi = r.Sandi;
+    if (r.Cabang) clean.Cabang = r.Cabang;
+    if (r['SUMBER DATA']) clean['SUMBER DATA'] = r['SUMBER DATA'];
+    if (r._isMatched !== undefined) clean._isMatched = r._isMatched;
+    if (r._matchLevel !== undefined) clean._matchLevel = r._matchLevel;
+    if (r._matchedAt) clean._matchedAt = r._matchedAt;
+    if (r._matchedBy) clean._matchedBy = r._matchedBy;
+    return clean as TargetRow;
+  });
+}
+
+/**
  * Save Target & Match Data to Neon DB via /api/target
  */
 export async function saveTargetToNeon(payload: SavedTargetPayload): Promise<boolean> {
@@ -145,6 +178,7 @@ export async function saveTargetToNeon(payload: SavedTargetPayload): Promise<boo
       },
       body: JSON.stringify({
         ...payload,
+        rows: sanitizeTargetRowsForStorage(payload.rows),
         updatedAt: new Date().toISOString(),
       }),
     });

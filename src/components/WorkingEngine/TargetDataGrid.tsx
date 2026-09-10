@@ -1189,21 +1189,34 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                       {/* Status Match Badge */}
                       <td>
                         {isMatched ? (
-                          <span
-                            className={`badge ${
-                              r._matchLevel === 'recommendation'
-                                ? 'badge-level2'
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                            <span
+                              className={`badge ${
+                                r._matchLevel === 'recommendation'
+                                  ? 'badge-level2'
+                                  : r._matchLevel === 'level2'
+                                  ? 'badge-level2'
+                                  : 'badge-match'
+                              }`}
+                              title={r._matchedAt ? `Diverifikasi: ${new Date(r._matchedAt).toLocaleString('id-ID')} (${r._matchedBy || 'Sistem'})` : undefined}
+                            >
+                              {r._matchLevel === 'recommendation'
+                                ? 'MATCH (REKOMENDASI)'
                                 : r._matchLevel === 'level2'
-                                ? 'badge-level2'
-                                : 'badge-match'
-                            }`}
-                          >
-                            {r._matchLevel === 'recommendation'
-                              ? 'MATCH (REKOMENDASI)'
-                              : r._matchLevel === 'level2'
-                              ? 'MATCH (L2 TIE)'
-                              : 'MATCH (L1)'}
-                          </span>
+                                ? 'MATCH (L2 TIE)'
+                                : 'MATCH (L1)'}
+                            </span>
+                            {r._matchedAt && (
+                              <span style={{ fontSize: '0.63rem', color: '#878a99' }}>
+                                {new Date(r._matchedAt).toLocaleDateString('id-ID', {
+                                  day: '2-digit',
+                                  month: 'short',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </span>
+                            )}
+                          </div>
                         ) : (
                           <span className="badge badge-unmatched">UNMATCHED</span>
                         )}

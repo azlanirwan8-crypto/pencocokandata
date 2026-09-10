@@ -122,6 +122,8 @@ export function matchSingleRow(target: TargetRow, masterIndex: Map<string, Maste
     result.ALAMAT = matchedMaster.ALAMAT || '';
 
     result._isMatched = true;
+    result._matchedAt = target._matchedAt || new Date().toISOString();
+    result._matchedBy = target._matchedBy || 'System (Auto)';
   } else {
     // No Candidate (0 Match): Kolom 3 s.d. 9 dibiarkan kosong (blank). Data asli tetap utuh.
     result['Sandi Cabang'] = '';

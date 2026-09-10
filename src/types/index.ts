@@ -42,6 +42,8 @@ export interface TargetRow {
   // Visual/Processing flags
   _isMatched?: boolean;
   _matchLevel?: 'level1' | 'level2' | 'none' | 'recommendation';
+  _matchedAt?: string;
+  _matchedBy?: string;
   [key: string]: any;
 }
 

@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { MasterRow, TargetRow } from '../types';
+import { sanitizeTargetRowsForStorage } from './neonSync';
 
 const STORAGE_KEY_URL = 'tools_matcher_supabase_url';
 const STORAGE_KEY_ANON = 'tools_matcher_supabase_anon';
@@ -226,7 +227,7 @@ export async function saveTargetToCloud(
       key: 'target_data',
       payload: {
         fileName,
-        rows,
+        rows: sanitizeTargetRowsForStorage(rows),
         initialCount,
         matchedDone,
         updatedAt: new Date().toISOString(),

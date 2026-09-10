@@ -37,14 +37,17 @@ import {
   clearTargetFromNeon,
 } from './utils/neonSync';
 import { SupabaseModal } from './components/SupabaseModal';
+import { SnapshotModal, type WorkspaceSnapshot } from './components/SnapshotModal';
 import { Database, ShieldAlert, Filter, UploadCloud, RotateCcw, Layers } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'master' | 'working'>('dashboard');
   const [masterSubTab, setMasterSubTab] = useState<'health' | 'grid'>('health');
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
+  const [isSnapshotModalOpen, setIsSnapshotModalOpen] = useState<boolean>(false);
   const [isMasterUploadModalOpen, setIsMasterUploadModalOpen] = useState<boolean>(false);
   const [isTargetUploadModalOpen, setIsTargetUploadModalOpen] = useState<boolean>(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>('Baru saja');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem('sidebar_collapsed') === 'true';
@@ -63,8 +66,8 @@ export const App: React.FC = () => {
     });
   };
 
-  const [_isCloudConnected, setIsCloudConnected] = useState<boolean>(isSupabaseConfigured());
-  const [_isNeonConnected, setIsNeonConnected] = useState<boolean>(false);
+  const [isCloudConnected, setIsCloudConnected] = useState<boolean>(isSupabaseConfigured());
+  const [isNeonConnected, setIsNeonConnected] = useState<boolean>(false);
 
   // Master Data State (Clean state for real data upload)
   const [masterRows, setMasterRows] = useState<MasterRow[]>([]);
@@ -147,6 +150,7 @@ export const App: React.FC = () => {
 
           if (neonCheck.status === 'fulfilled' && neonCheck.value.connected) {
             setIsNeonConnected(true);
+            setLastSyncedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
           }
 
           if (neonMaster.status === 'fulfilled' && neonMaster.value && neonMaster.value.rows.length > 0) {
@@ -165,6 +169,7 @@ export const App: React.FC = () => {
           // Fallback to Supabase Cloud if configured & not loaded from Neon
           if ((!hasNeonMaster || !hasNeonTarget) && isSupabaseConfigured()) {
             setIsCloudConnected(true);
+            setLastSyncedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
             const [cloudMaster, cloudTarget] = await Promise.allSettled([
               !hasNeonMaster ? loadMasterFromCloud() : Promise.resolve(null),
               !hasNeonTarget ? loadTargetFromCloud() : Promise.resolve(null),
@@ -209,6 +214,8 @@ export const App: React.FC = () => {
         console.warn('Cloud target auto-save skipped:', e)
       );
     }
+
+    setLastSyncedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
   };
 
   // Compute Wilayah List from Target Data
@@ -537,6 +544,8 @@ export const App: React.FC = () => {
           'Nama Outlet': matchedMaster['Nama Outlet'] || '',
           'Status Outlet': matchedMaster['Status Outlet'] || 'Aktif',
           ALAMAT: matchedMaster.ALAMAT || '',
+          _matchedAt: new Date().toISOString(),
+          _matchedBy: 'Operator (Approval)',
         };
       });
 
@@ -573,6 +582,8 @@ export const App: React.FC = () => {
           'Nama Outlet': matchedMaster['Nama Outlet'] || '',
           'Status Outlet': matchedMaster['Status Outlet'] || 'Aktif',
           ALAMAT: matchedMaster.ALAMAT || '',
+          _matchedAt: new Date().toISOString(),
+          _matchedBy: 'Operator (Approval)',
         };
       });
 
@@ -585,6 +596,40 @@ export const App: React.FC = () => {
 
       return updated;
     });
+  };
+
+  // Restore Session Snapshot (.json) - Memulihkan data Master, Target, dan Hasil Pencocokan
+  const handleRestoreSnapshot = (snapshot: WorkspaceSnapshot) => {
+    if (snapshot.masterData && Array.isArray(snapshot.masterData.rows)) {
+      setMasterRows(snapshot.masterData.rows);
+      setItem('master_data', {
+        rows: snapshot.masterData.rows,
+        fileName: snapshot.masterData.fileName || 'Snapshot Master',
+      });
+      saveMasterToNeon(snapshot.masterData.rows, snapshot.masterData.fileName || 'Snapshot Master').catch((e) =>
+        console.warn('Neon snapshot master save skipped:', e)
+      );
+      if (isSupabaseConfigured()) {
+        saveMasterToCloud(snapshot.masterData.rows, snapshot.masterData.fileName || 'Snapshot Master');
+      }
+    }
+
+    if (snapshot.targetData && Array.isArray(snapshot.targetData.rows)) {
+      setTargetRows(snapshot.targetData.rows);
+      setTargetFileName(snapshot.targetData.fileName || 'Snapshot Target');
+      setInitialTargetCount(snapshot.targetData.initialCount || snapshot.targetData.rows.length);
+      setMatchedDone(snapshot.targetData.matchedDone || false);
+
+      persistTargetData({
+        rows: snapshot.targetData.rows,
+        fileName: snapshot.targetData.fileName || 'Snapshot Target',
+        initialCount: snapshot.targetData.initialCount || snapshot.targetData.rows.length,
+        matchedDone: snapshot.targetData.matchedDone || false,
+      });
+    }
+
+    setLastSyncedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
+    setIsSnapshotModalOpen(false);
   };
 
   return (
@@ -601,6 +646,11 @@ export const App: React.FC = () => {
         <Topbar
           isSidebarCollapsed={isSidebarCollapsed}
           onToggleSidebar={toggleSidebar}
+          isNeonConnected={isNeonConnected}
+          isCloudConnected={isCloudConnected}
+          lastSyncedAt={lastSyncedAt}
+          onOpenSnapshotModal={() => setIsSnapshotModalOpen(true)}
+          onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
         />
 
         <main className="page-content">
@@ -1110,6 +1160,18 @@ export const App: React.FC = () => {
         onClose={() => setIsTargetUploadModalOpen(false)}
         onTargetLoaded={handleTargetLoaded}
         currentTargetCount={targetRows.length}
+      />
+
+      {/* Snapshot Backup / Restore Modal */}
+      <SnapshotModal
+        isOpen={isSnapshotModalOpen}
+        onClose={() => setIsSnapshotModalOpen(false)}
+        masterRows={masterRows}
+        targetRows={targetRows}
+        targetFileName={targetFileName}
+        initialTargetCount={initialTargetCount}
+        matchedDone={matchedDone}
+        onRestoreSnapshot={handleRestoreSnapshot}
       />
     </div>
   );
