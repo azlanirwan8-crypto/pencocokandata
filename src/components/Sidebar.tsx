@@ -4,16 +4,12 @@ import { LayoutDashboard, Database, FileCheck, Layers } from 'lucide-react';
 interface SidebarProps {
   activeTab: 'dashboard' | 'master' | 'working';
   setActiveTab: (tab: 'dashboard' | 'master' | 'working') => void;
-  masterCount: number;
-  targetCount: number;
   isCollapsed: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
   setActiveTab,
-  masterCount,
-  targetCount,
   isCollapsed,
 }) => {
   return (

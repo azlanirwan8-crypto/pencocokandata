@@ -16,7 +16,7 @@ import type { MasterRow, TargetRow, MatchingStats, WilayahStat, UnmatchedArea } 
 import type { RecommendationResult } from './utils/recommender';
 import { buildMasterIndex, analyzeMasterHealth, executeChunkMatching } from './utils/matcher';
 import { downloadMasterTemplate, downloadTargetTemplate } from './utils/excel';
-import { getItem, setItem, clearAllStorage } from './utils/storage';
+import { getItem, setItem } from './utils/storage';
 import {
   isSupabaseConfigured,
   saveMasterToCloud,
@@ -485,49 +485,18 @@ export const App: React.FC = () => {
     });
   };
 
-  const handleResetAll = async () => {
-    if (window.confirm('Kosongkan semua data (Master & Target) untuk memulai proses baru?')) {
-      setMasterRows([]);
-      // setMasterFileName('');
-      setTargetRows([]);
-      setInitialTargetCount(0);
-      setTargetFileName('');
-      setMatchedDone(false);
-      setProgress(0);
-
-      // Clear local IndexedDB
-      await clearAllStorage();
-
-      // Clear Vercel Neon DB
-      try {
-        await clearMasterFromNeon();
-      } catch (e) {
-        console.warn('Neon clear failed:', e);
-      }
-
-      // Clear Cloud Supabase if configured
-      if (isSupabaseConfigured()) {
-        await clearMasterFromCloud();
-      }
-    }
-  };
-
   return (
     <div className="layout-wrapper">
       {/* 1. Velzon Left Sidebar (Dashboard, Data Master, Data Cek) */}
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        masterCount={masterRows.length}
-        targetCount={targetRows.length}
         isCollapsed={isSidebarCollapsed}
       />
 
       {/* 2. Main Content Area */}
       <div className="main-content">
         <Topbar
-          activeTab={activeTab}
-          onResetAll={handleResetAll}
           isSidebarCollapsed={isSidebarCollapsed}
           onToggleSidebar={toggleSidebar}
         />
