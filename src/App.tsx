@@ -15,7 +15,7 @@ import { ExportAction } from './components/WorkingEngine/ExportAction';
 import type { MasterRow, TargetRow, MatchingStats, WilayahStat, UnmatchedArea } from './types';
 import type { RecommendationResult } from './utils/recommender';
 import { buildMasterIndex, analyzeMasterHealth, executeChunkMatching } from './utils/matcher';
-import { downloadMasterTemplate, downloadTargetTemplate } from './utils/excel';
+
 import { getItem, setItem } from './utils/storage';
 import {
   isSupabaseConfigured,
@@ -30,7 +30,7 @@ import {
   clearMasterFromNeon,
 } from './utils/neonSync';
 import { SupabaseModal } from './components/SupabaseModal';
-import { Database, ShieldAlert, Filter, UploadCloud, Download, RotateCcw, Layers } from 'lucide-react';
+import { Database, ShieldAlert, Filter, UploadCloud, RotateCcw, Layers } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'master' | 'working'>('dashboard');
@@ -651,16 +651,7 @@ export const App: React.FC = () => {
                   <span>Upload Data Master</span>
                 </button>
 
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  onClick={() => downloadMasterTemplate(false)}
-                  title="Unduh format template Excel master kosong"
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.42rem 0.85rem' }}
-                >
-                  <Download size={13} />
-                  <span>Template Excel</span>
-                </button>
+
 
                 {masterRows.length > 0 && (
                   <button
@@ -726,15 +717,7 @@ export const App: React.FC = () => {
                     <UploadCloud size={14} />
                     <span>Upload Data Master</span>
                   </button>
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm"
-                    onClick={() => downloadMasterTemplate(false)}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', padding: '0.45rem 0.95rem' }}
-                  >
-                    <Download size={13} />
-                    <span>Unduh Template</span>
-                  </button>
+
                 </div>
               </div>
             ) : (
@@ -893,16 +876,7 @@ export const App: React.FC = () => {
                   <span>Upload Data Cek</span>
                 </button>
 
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  onClick={() => downloadTargetTemplate(false)}
-                  title="Unduh format template Excel target kosong (sampai KOTA PTEN & KODE POS PTEN)"
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.42rem 0.85rem' }}
-                >
-                  <Download size={13} />
-                  <span>Template Target</span>
-                </button>
+
 
                 {targetRows.length > 0 && (
                   <button
@@ -968,15 +942,7 @@ export const App: React.FC = () => {
                     <UploadCloud size={14} />
                     <span>Upload Data Cek</span>
                   </button>
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm"
-                    onClick={() => downloadTargetTemplate(false)}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', padding: '0.45rem 0.95rem' }}
-                  >
-                    <Download size={13} />
-                    <span>Unduh Template</span>
-                  </button>
+
                 </div>
               </div>
             ) : (
