@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { UploadCloud, Download, AlertCircle, CheckCircle, X, RotateCcw, PlusCircle } from 'lucide-react';
+import { UploadCloud, Download, AlertCircle, CheckCircle, X, RotateCcw } from 'lucide-react';
 import type { MasterRow } from '../../types';
 import { parseExcelFile, validateMasterHeaders, downloadMasterTemplate } from '../../utils/excel';
 
@@ -167,26 +167,6 @@ export const MasterUploadModal: React.FC<MasterUploadModalProps> = ({
         {/* Modal Body */}
         <div style={{ padding: '1.25rem' }}>
           {/* Info Append Banner */}
-          <div
-            style={{
-              padding: '0.65rem 0.85rem',
-              borderRadius: '6px',
-              background: 'rgba(64, 81, 137, 0.06)',
-              border: '1px solid rgba(64, 81, 137, 0.15)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              marginBottom: '1rem',
-              fontSize: '0.78rem',
-              color: '#405189',
-            }}
-          >
-            <PlusCircle size={15} style={{ flexShrink: 0 }} />
-            <span>
-              Berkas yang diunggah akan <strong>menambahkan data baru</strong> ke database master yang sudah ada.
-            </span>
-          </div>
-
           <input
             ref={fileInputRef}
             type="file"
