@@ -34,6 +34,7 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
   const { targetRow: r, candidate: cand } = data;
   const m = cand.master;
   const isTop1 = cand.rank === 1;
+  const themeColor = isTop1 ? '#0ab39c' : cand.rank === 2 ? '#d97706' : '#3577f1';
 
   // Pembersihan teks untuk komparasi akurat
   const clean = (val: unknown) => String(val || '').trim().toUpperCase();
@@ -551,8 +552,8 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
               display: 'inline-flex',
               alignItems: 'center',
               gap: '0.4rem',
-              background: '#0ab39c',
-              borderColor: '#0ab39c',
+              background: themeColor,
+              borderColor: themeColor,
             }}
           >
             <CheckCircle2 size={14} />

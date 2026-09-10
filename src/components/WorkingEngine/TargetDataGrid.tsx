@@ -828,9 +828,17 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                         width: '26px',
                                         height: '26px',
                                         borderRadius: '4px',
-                                        border: '1px solid #ced4da',
-                                        background: '#ffffff',
-                                        color: '#405189',
+                                        border: isTop1
+                                          ? '1px solid rgba(10, 179, 156, 0.4)'
+                                          : activeCand.rank === 2
+                                          ? '1px solid rgba(217, 119, 6, 0.4)'
+                                          : '1px solid rgba(53, 119, 241, 0.4)',
+                                        background: isTop1
+                                          ? 'rgba(10, 179, 156, 0.05)'
+                                          : activeCand.rank === 2
+                                          ? 'rgba(217, 119, 6, 0.05)'
+                                          : 'rgba(53, 119, 241, 0.05)',
+                                        color: badgeColor,
                                         cursor: 'pointer',
                                         transition: 'all 0.15s ease',
                                         flexShrink: 0,
@@ -847,9 +855,17 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                       style={{
                                         fontSize: '0.72rem',
                                         padding: '0.22rem 0.65rem',
-                                        color: isTop1 ? '#0ab39c' : '#405189',
-                                        borderColor: isTop1 ? 'rgba(10, 179, 156, 0.4)' : '#ced4da',
-                                        background: isTop1 ? 'rgba(10, 179, 156, 0.06)' : '#ffffff',
+                                        color: badgeColor,
+                                        borderColor: isTop1
+                                          ? 'rgba(10, 179, 156, 0.45)'
+                                          : activeCand.rank === 2
+                                          ? 'rgba(217, 119, 6, 0.45)'
+                                          : 'rgba(53, 119, 241, 0.45)',
+                                        background: isTop1
+                                          ? 'rgba(10, 179, 156, 0.08)'
+                                          : activeCand.rank === 2
+                                          ? 'rgba(217, 119, 6, 0.08)'
+                                          : 'rgba(53, 119, 241, 0.08)',
                                         fontWeight: 600,
                                         whiteSpace: 'nowrap',
                                         flexShrink: 0,
