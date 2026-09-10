@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import type { TargetRow } from '../types';
 import { SAMPLE_MASTER_ROWS, SAMPLE_TARGET_ROWS } from './sampleData';
+import { formatWilayahName } from './normalizer';
 
 export const MASTER_COLUMNS_WITH_SANDI_CABANG: string[] = [
   'Wilayah',
@@ -439,4 +440,39 @@ export function downloadTargetTemplate(withSample = false) {
 
   const filename = withSample ? 'Template_Target_Dengan_Sampel.xlsx' : 'Template_Target_Kosong.xlsx';
   XLSX.writeFile(workbook, filename);
+}
+
+/**
+ * Clean & professional export of Matched Data rows to Excel
+ */
+export function exportCleanMatchedToExcel(
+  rows: TargetRow[],
+  wilayahLabel: string
+): { success: boolean; filename: string; rowCount: number; error?: string } {
+  try {
+    const usesCombined = rows.length > 0 && rows.some(r => r['Sandi Cabang'] && (!r.Sandi || r.Sandi === r['Sandi Cabang']));
+    const exportColumns = usesCombined ? TARGET_COLUMNS_WITH_SANDI_CABANG : TARGET_COLUMNS_SEPARATE;
+
+    const workbook = XLSX.utils.book_new();
+    const cleanWilayah = formatWilayahName(wilayahLabel).replace(/\s+/g, '_');
+    const filename = `Data_Match_${cleanWilayah}.xlsx`;
+
+    const worksheet = createTargetWorksheet(rows, exportColumns);
+    const sheetName = cleanWilayah.slice(0, 31);
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+
+    XLSX.writeFile(workbook, filename);
+    return {
+      success: true,
+      filename,
+      rowCount: rows.length,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      filename: '',
+      rowCount: 0,
+      error: err?.message || 'Gagal mengekspor file Excel.',
+    };
+  }
 }

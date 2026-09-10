@@ -3,7 +3,7 @@ import { Sidebar } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
 import { MetricCards } from './components/Dashboard/MetricCards';
 import { RegionalAnalyticsCharts } from './components/Dashboard/RegionalAnalyticsCharts';
-import { RadarAnomalyTable } from './components/Dashboard/RadarAnomalyTable';
+import { DashboardMatchTable } from './components/Dashboard/DashboardMatchTable';
 import { MasterHealthCard } from './components/MasterData/MasterHealthCard';
 import { MasterDataGrid } from './components/MasterData/MasterDataGrid';
 import { MasterUploadModal } from './components/MasterData/MasterUploadModal';
@@ -12,7 +12,7 @@ import { ProgressBar } from './components/WorkingEngine/ProgressBar';
 import { TargetDataGrid } from './components/WorkingEngine/TargetDataGrid';
 import { ExportAction } from './components/WorkingEngine/ExportAction';
 
-import type { MasterRow, TargetRow, MatchingStats, WilayahStat, UnmatchedArea } from './types';
+import type { MasterRow, TargetRow, MatchingStats, WilayahStat } from './types';
 import type { RecommendationResult } from './utils/recommender';
 import { buildMasterIndex, analyzeMasterHealth, executeChunkMatching } from './utils/matcher';
 import { formatWilayahName } from './utils/normalizer';
@@ -280,33 +280,6 @@ export const App: React.FC = () => {
       rate: data.total > 0 ? (data.matched / data.total) * 100 : 0,
     }));
   }, [dashboardFilteredRows, dashboardWilayahFilter]);
-
-  // Top 10 Unmatched Areas for Radar Anomaly (Mengikuti Filter Dashboard)
-  const topUnmatchedAreas: UnmatchedArea[] = useMemo(() => {
-    const map = new Map<string, { kecamatan: string; kodePos: string; count: number; wilayah: string }>();
-
-    dashboardFilteredRows.forEach((r) => {
-      const isMatched = r._isMatched ?? (r.Sandi !== '');
-      if (!isMatched) {
-        const key = `${r.Kecamatan}_${r['KODE POS']}`;
-        const existing = map.get(key);
-        if (existing) {
-          existing.count++;
-        } else {
-          map.set(key, {
-            kecamatan: r.Kecamatan || 'Kecamatan Tidak Diketahui',
-            kodePos: r['KODE POS'] || '-',
-            count: 1,
-            wilayah: r.Wilayah || '-',
-          });
-        }
-      }
-    });
-
-    return Array.from(map.values())
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
-  }, [dashboardFilteredRows]);
 
   // Execution Trigger
   const handleExecuteMatching = async () => {
@@ -668,10 +641,11 @@ export const App: React.FC = () => {
               selectedWilayah={dashboardWilayahFilter}
             />
 
-            {/* Radar Titik Anomali (Mengikuti Filter) */}
-            <RadarAnomalyTable
-              unmatchedAreas={topUnmatchedAreas}
-              totalUnmatchedCount={dashboardStats.unmatchedCount}
+            {/* Rekapitulasi Data Match per Wilayah & Download Laporan Excel/PDF */}
+            <DashboardMatchTable
+              allTargetRows={targetRows}
+              regionalStats={regionalStats}
+              selectedWilayah={dashboardWilayahFilter}
             />
           </>
         )}
