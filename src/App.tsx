@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Navbar } from './components/Navbar';
+import { Sidebar } from './components/Sidebar';
+import { Topbar } from './components/Topbar';
 import { MetricCards } from './components/Dashboard/MetricCards';
 import { WilayahChart } from './components/Dashboard/WilayahChart';
 import { RadarAnomalyTable } from './components/Dashboard/RadarAnomalyTable';
@@ -37,8 +38,8 @@ export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'master' | 'working'>('dashboard');
   const [masterSubTab, setMasterSubTab] = useState<'health' | 'grid'>('health');
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
-  const [isCloudConnected, setIsCloudConnected] = useState<boolean>(isSupabaseConfigured());
-  const [isNeonConnected, setIsNeonConnected] = useState<boolean>(false);
+  const [_isCloudConnected, setIsCloudConnected] = useState<boolean>(isSupabaseConfigured());
+  const [_isNeonConnected, setIsNeonConnected] = useState<boolean>(false);
 
   // Master Data State (Clean state for real data upload)
   const [masterRows, setMasterRows] = useState<MasterRow[]>([]);
@@ -412,27 +413,25 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="app-container">
-      <Navbar
+    <div className="layout-wrapper">
+      {/* 1. Velzon Left Sidebar (Dashboard, Data Master, Data Cek) */}
+      <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         masterCount={masterRows.length}
         targetCount={targetRows.length}
-        onResetAll={handleResetAll}
-        onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
-        isCloudConnected={isCloudConnected}
-        isNeonConnected={isNeonConnected}
       />
 
-      <SupabaseModal
-        isOpen={isSupabaseModalOpen}
-        onClose={() => setIsSupabaseModalOpen(false)}
-        onConnectedChange={setIsCloudConnected}
-      />
+      {/* 2. Main Content Area */}
+      <div className="main-content">
+        <Topbar
+          activeTab={activeTab}
+          onResetAll={handleResetAll}
+        />
 
-      <main className="main-wrapper">
-        {/* MENU 1: DASHBOARD (EXECUTIVE OPERATIONAL ANALYST DASHBOARD) */}
-        {activeTab === 'dashboard' && (
+        <main className="page-content">
+          {/* MENU 1: DASHBOARD (EXECUTIVE OPERATIONAL ANALYST DASHBOARD) */}
+          {activeTab === 'dashboard' && (
           <>
             <div className="section-header" style={{ flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
               <div>
@@ -648,7 +647,14 @@ export const App: React.FC = () => {
             />
           </>
         )}
-      </main>
+        </main>
+      </div>
+
+      <SupabaseModal
+        isOpen={isSupabaseModalOpen}
+        onClose={() => setIsSupabaseModalOpen(false)}
+        onConnectedChange={setIsCloudConnected}
+      />
     </div>
   );
 };
