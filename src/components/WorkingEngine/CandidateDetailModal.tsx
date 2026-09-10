@@ -394,38 +394,56 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
 
                 {/* Body Baris Data Target */}
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {/* Branch Code */}
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Branch Code</div>
+                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ flex: 1, color: '#c2410c', fontWeight: 700 }}>
+                      {r['Branch Code'] || r['Sandi Cabang'] || r.Cabang || r.Sandi || (r.No ? `Target #${r.No}` : '-')}
+                    </div>
+                  </div>
+
+                  {/* Nama Outlet */}
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Nama Outlet</div>
+                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>
+                      {r['Nama Outlet'] || r.Cabang || '-'}
+                    </div>
+                  </div>
+
                   {/* Kode Pos */}
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '100px', minWidth: '100px', color: '#64748b', fontWeight: 600 }}>Kode Pos</div>
-                    <div style={{ width: '15px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Kode Pos</div>
+                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
                     <div style={{ flex: 1, color: '#c2410c', fontWeight: 700 }}>{r['KODE POS'] || '-'}</div>
                   </div>
 
                   {/* Kecamatan */}
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '100px', minWidth: '100px', color: '#64748b', fontWeight: 600 }}>Kecamatan</div>
-                    <div style={{ width: '15px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Kecamatan</div>
+                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
                     <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{r.Kecamatan || '-'}</div>
                   </div>
 
                   {/* Kelurahan */}
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '100px', minWidth: '100px', color: '#64748b', fontWeight: 600 }}>Kelurahan</div>
-                    <div style={{ width: '15px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Kelurahan</div>
+                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
                     <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{r.Kelurahan || '-'}</div>
                   </div>
 
                   {/* Dati II (Kota) */}
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '100px', minWidth: '100px', color: '#64748b', fontWeight: 600 }}>Dati II (Kota)</div>
-                    <div style={{ width: '15px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Dati II (Kota)</div>
+                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
                     <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{r['Dati II'] || '-'}</div>
                   </div>
 
                   {/* Provinsi */}
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '100px', minWidth: '100px', color: '#64748b', fontWeight: 600 }}>Provinsi</div>
-                    <div style={{ width: '15px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Provinsi</div>
+                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
                     <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{r.Provinsi || '-'}</div>
                   </div>
 
@@ -472,38 +490,56 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
 
                 {/* Body Baris Data Master */}
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {/* Branch Code */}
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Branch Code</div>
+                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ flex: 1, color: themeColor, fontWeight: 700 }}>
+                      {m['Branch Code'] || m['Sandi Cabang'] || m.Cabang || m.Sandi || '-'}
+                    </div>
+                  </div>
+
+                  {/* Nama Outlet */}
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Nama Outlet</div>
+                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 700 }}>
+                      {m['Nama Outlet'] || m.Cabang || '-'}
+                    </div>
+                  </div>
+
                   {/* Kode Pos */}
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '100px', minWidth: '100px', color: '#64748b', fontWeight: 600 }}>Kode Pos</div>
-                    <div style={{ width: '15px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Kode Pos</div>
+                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
                     <div style={{ flex: 1, color: '#15803d', fontWeight: 700 }}>{m['KODE POS'] || '-'}</div>
                   </div>
 
                   {/* Kecamatan */}
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '100px', minWidth: '100px', color: '#64748b', fontWeight: 600 }}>Kecamatan</div>
-                    <div style={{ width: '15px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Kecamatan</div>
+                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
                     <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{m.Kecamatan || '-'}</div>
                   </div>
 
                   {/* Kelurahan */}
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '100px', minWidth: '100px', color: '#64748b', fontWeight: 600 }}>Kelurahan</div>
-                    <div style={{ width: '15px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Kelurahan</div>
+                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
                     <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{m.Kelurahan || '-'}</div>
                   </div>
 
                   {/* Dati II (Kota) */}
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '100px', minWidth: '100px', color: '#64748b', fontWeight: 600 }}>Dati II (Kota)</div>
-                    <div style={{ width: '15px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Dati II (Kota)</div>
+                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
                     <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{m['Dati II'] || '-'}</div>
                   </div>
 
                   {/* Provinsi */}
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '100px', minWidth: '100px', color: '#64748b', fontWeight: 600 }}>Provinsi</div>
-                    <div style={{ width: '15px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Provinsi</div>
+                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
                     <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{m.Provinsi || '-'}</div>
                   </div>
 
