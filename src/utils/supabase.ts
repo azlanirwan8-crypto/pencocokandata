@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { MasterRow } from '../types';
+import type { MasterRow, TargetRow } from '../types';
 
 const STORAGE_KEY_URL = 'tools_matcher_supabase_url';
 const STORAGE_KEY_ANON = 'tools_matcher_supabase_anon';
@@ -208,6 +208,93 @@ export async function clearMasterFromCloud(): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Save Target & Matched Data to Supabase Cloud
+ */
+export async function saveTargetToCloud(
+  rows: TargetRow[],
+  fileName: string,
+  initialCount: number,
+  matchedDone: boolean
+): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  try {
+    const { error } = await client.from('app_cloud_store').upsert({
+      key: 'target_data',
+      payload: {
+        fileName,
+        rows,
+        initialCount,
+        matchedDone,
+        updatedAt: new Date().toISOString(),
+      },
+      updated_at: new Date().toISOString(),
+    });
+
+    return !error;
+  } catch (err) {
+    console.error('Gagal menyimpan target ke Supabase:', err);
+    return false;
+  }
+}
+
+/**
+ * Load Target & Matched Data from Supabase Cloud
+ */
+export async function loadTargetFromCloud(): Promise<{
+  rows: TargetRow[];
+  fileName: string;
+  initialCount: number;
+  matchedDone: boolean;
+} | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  try {
+    const { data, error } = await client
+      .from('app_cloud_store')
+      .select('payload')
+      .eq('key', 'target_data')
+      .single();
+
+    if (error || !data || !data.payload) return null;
+
+    const { rows, fileName, initialCount, matchedDone } = data.payload;
+    if (Array.isArray(rows) && rows.length > 0) {
+      return {
+        rows,
+        fileName: fileName || 'Target_Cloud_Supabase.xlsx',
+        initialCount: initialCount || rows.length,
+        matchedDone: Boolean(matchedDone),
+      };
+    }
+
+    return null;
+  } catch (err) {
+    console.error('Gagal memuat target dari Supabase:', err);
+    return null;
+  }
+}
+
+/**
+ * Clear Target Data from Supabase Cloud
+ */
+export async function clearTargetFromCloud(): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  try {
+    await client.from('app_cloud_store').delete().eq('key', 'target_data');
+    return true;
+  } catch (err) {
+    console.error('Gagal menghapus target dari Supabase:', err);
+    return false;
+  }
+}
+
 
 /**
  * Standard SQL Setup Script for Supabase SQL Editor

@@ -1,4 +1,4 @@
-import type { MasterRow } from '../types';
+import type { MasterRow, TargetRow } from '../types';
 
 export interface NeonStatus {
   connected: boolean;
@@ -86,3 +86,75 @@ export async function clearMasterFromNeon(): Promise<boolean> {
     return false;
   }
 }
+
+export interface SavedTargetPayload {
+  rows: TargetRow[];
+  fileName: string;
+  initialCount: number;
+  matchedDone: boolean;
+}
+
+/**
+ * Load Target & Match Data from Neon DB via /api/target
+ */
+export async function loadTargetFromNeon(): Promise<SavedTargetPayload | null> {
+  try {
+    const res = await fetch('/api/target');
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json.ok && json.data && Array.isArray(json.data.rows) && json.data.rows.length > 0) {
+      return {
+        rows: json.data.rows,
+        fileName: json.data.fileName || 'Target_Neon_Vercel.xlsx',
+        initialCount: json.data.initialCount || json.data.rows.length,
+        matchedDone: Boolean(json.data.matchedDone),
+      };
+    }
+    return null;
+  } catch (err) {
+    console.warn('Neon target load error:', err);
+    return null;
+  }
+}
+
+/**
+ * Save Target & Match Data to Neon DB via /api/target
+ */
+export async function saveTargetToNeon(payload: SavedTargetPayload): Promise<boolean> {
+  try {
+    const res = await fetch('/api/target', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ...payload,
+        updatedAt: new Date().toISOString(),
+      }),
+    });
+    if (!res.ok) return false;
+    const json = await res.json();
+    return Boolean(json.ok);
+  } catch (err) {
+    console.warn('Neon target save error:', err);
+    return false;
+  }
+}
+
+/**
+ * Clear Target & Match Data from Neon DB via /api/target
+ */
+export async function clearTargetFromNeon(): Promise<boolean> {
+  try {
+    const res = await fetch('/api/target', {
+      method: 'DELETE',
+    });
+    if (!res.ok) return false;
+    const json = await res.json();
+    return Boolean(json.ok);
+  } catch (err) {
+    console.warn('Neon target delete error:', err);
+    return false;
+  }
+}
+

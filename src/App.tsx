@@ -23,12 +23,18 @@ import {
   saveMasterToCloud,
   loadMasterFromCloud,
   clearMasterFromCloud,
+  saveTargetToCloud,
+  loadTargetFromCloud,
+  clearTargetFromCloud,
 } from './utils/supabase';
 import {
   checkNeonStatus,
   loadMasterFromNeon,
   saveMasterToNeon,
   clearMasterFromNeon,
+  loadTargetFromNeon,
+  saveTargetToNeon,
+  clearTargetFromNeon,
 } from './utils/neonSync';
 import { SupabaseModal } from './components/SupabaseModal';
 import { Database, ShieldAlert, Filter, UploadCloud, RotateCcw, Layers } from 'lucide-react';
@@ -133,20 +139,55 @@ export const App: React.FC = () => {
           }
         }
 
-        const savedTarget = await getItem<{
-          rows: TargetRow[];
-          fileName: string;
-          initialCount: number;
-          matchedDone: boolean;
-        }>('target_data');
+        // 4. Restore Target & Match Data (Check Neon Postgres first, then Supabase, fallback to local IndexedDB)
+        let loadedTarget = false;
 
-        if (savedTarget && savedTarget.rows && savedTarget.rows.length > 0) {
-          setTargetRows(savedTarget.rows);
-          setTargetFileName(savedTarget.fileName || '');
-          setInitialTargetCount(savedTarget.initialCount || savedTarget.rows.length);
-          setMatchedDone(savedTarget.matchedDone || false);
+        // A. Neon Postgres
+        try {
+          const neonTarget = await loadTargetFromNeon();
+          if (neonTarget && neonTarget.rows && neonTarget.rows.length > 0) {
+            setTargetRows(neonTarget.rows);
+            setTargetFileName(neonTarget.fileName || '');
+            setInitialTargetCount(neonTarget.initialCount || neonTarget.rows.length);
+            setMatchedDone(neonTarget.matchedDone || false);
+            loadedTarget = true;
+          }
+        } catch (e) {
+          console.warn('Neon target load skipped:', e);
         }
 
+        // B. Cloud Supabase if configured & not loaded
+        if (!loadedTarget && isSupabaseConfigured()) {
+          try {
+            const cloudTarget = await loadTargetFromCloud();
+            if (cloudTarget && cloudTarget.rows && cloudTarget.rows.length > 0) {
+              setTargetRows(cloudTarget.rows);
+              setTargetFileName(cloudTarget.fileName || '');
+              setInitialTargetCount(cloudTarget.initialCount || cloudTarget.rows.length);
+              setMatchedDone(cloudTarget.matchedDone || false);
+              loadedTarget = true;
+            }
+          } catch (e) {
+            console.warn('Supabase target load skipped:', e);
+          }
+        }
+
+        // C. Fallback to local IndexedDB
+        if (!loadedTarget) {
+          const savedTarget = await getItem<{
+            rows: TargetRow[];
+            fileName: string;
+            initialCount: number;
+            matchedDone: boolean;
+          }>('target_data');
+
+          if (savedTarget && savedTarget.rows && savedTarget.rows.length > 0) {
+            setTargetRows(savedTarget.rows);
+            setTargetFileName(savedTarget.fileName || '');
+            setInitialTargetCount(savedTarget.initialCount || savedTarget.rows.length);
+            setMatchedDone(savedTarget.matchedDone || false);
+          }
+        }
 
       } catch (err) {
         console.warn('Gagal memulihkan data:', err);
@@ -155,6 +196,27 @@ export const App: React.FC = () => {
 
     restoreSavedData();
   }, []);
+
+  // Helper to persist target & match data across IndexedDB, Neon Postgres, and Supabase Cloud
+  const persistTargetData = (payload: {
+    rows: TargetRow[];
+    fileName: string;
+    initialCount: number;
+    matchedDone: boolean;
+  }) => {
+    // 1. Local IndexedDB (Instant local cache)
+    setItem('target_data', payload);
+
+    // 2. Neon Postgres (Serverless DB on Vercel)
+    saveTargetToNeon(payload).catch((e) => console.warn('Neon target auto-save skipped:', e));
+
+    // 3. Supabase Cloud if configured
+    if (isSupabaseConfigured()) {
+      saveTargetToCloud(payload.rows, payload.fileName, payload.initialCount, payload.matchedDone).catch((e) =>
+        console.warn('Cloud target auto-save skipped:', e)
+      );
+    }
+  };
 
   // Compute Wilayah List from Target Data
   const wilayahList = useMemo(() => {
@@ -310,8 +372,7 @@ export const App: React.FC = () => {
       setDurationMs(totalElapsed);
       setIsProcessing(false);
 
-
-      setItem('target_data', {
+      persistTargetData({
         rows: matchedData,
         fileName: targetFileName,
         initialCount: initialTargetCount,
@@ -424,7 +485,7 @@ export const App: React.FC = () => {
       setMatchedDone(false);
       setProgress(0);
 
-      setItem('target_data', {
+      persistTargetData({
         rows: combined,
         fileName: combinedFileName,
         initialCount: combined.length,
@@ -444,6 +505,10 @@ export const App: React.FC = () => {
         setMatchedDone(false);
         setProgress(0);
         await setItem('target_data', { rows: [], fileName: '', initialCount: 0, matchedDone: false });
+        clearTargetFromNeon().catch((e) => console.warn('Neon target clear warning:', e));
+        if (isSupabaseConfigured()) {
+          clearTargetFromCloud().catch((e) => console.warn('Cloud target clear warning:', e));
+        }
       } catch (e) {
         console.warn('Reset target error:', e);
       }
@@ -482,7 +547,7 @@ export const App: React.FC = () => {
         };
       });
 
-      setItem('target_data', {
+      persistTargetData({
         rows: updated,
         fileName: targetFileName,
         initialCount: initialTargetCount,
@@ -518,7 +583,7 @@ export const App: React.FC = () => {
         };
       });
 
-      setItem('target_data', {
+      persistTargetData({
         rows: updated,
         fileName: targetFileName,
         initialCount: initialTargetCount,
