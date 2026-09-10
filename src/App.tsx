@@ -199,7 +199,7 @@ export const App: React.FC = () => {
   // Dashboard Filtered Rows by Wilayah
   const dashboardFilteredRows = useMemo(() => {
     if (dashboardWilayahFilter === 'ALL') return targetRows;
-    return targetRows.filter((r) => r.Wilayah === dashboardWilayahFilter);
+    return targetRows.filter((r) => String(r.Wilayah || '').trim() === String(dashboardWilayahFilter).trim());
   }, [targetRows, dashboardWilayahFilter]);
 
   // Dashboard Aggregates & Metrics
@@ -221,11 +221,11 @@ export const App: React.FC = () => {
     };
   }, [dashboardFilteredRows]);
 
-  // Regional Stats for Widget Distribusi Wilayah
+  // Regional Stats for Widget Distribusi Wilayah (Mengikuti Filter Dashboard)
   const regionalStats: WilayahStat[] = useMemo(() => {
     const map = new Map<string, { total: number; matched: number; unmatched: number }>();
 
-    targetRows.forEach((r) => {
+    dashboardFilteredRows.forEach((r) => {
       const w = r.Wilayah || 'Wilayah Tidak Terdaftar';
       const isMatched = r._isMatched ?? (r.Sandi !== '');
       const current = map.get(w) || { total: 0, matched: 0, unmatched: 0 };
@@ -244,13 +244,13 @@ export const App: React.FC = () => {
       unmatched: data.unmatched,
       rate: data.total > 0 ? (data.matched / data.total) * 100 : 0,
     }));
-  }, [targetRows]);
+  }, [dashboardFilteredRows]);
 
-  // Top 10 Unmatched Areas for Radar Anomaly
+  // Top 10 Unmatched Areas for Radar Anomaly (Mengikuti Filter Dashboard)
   const topUnmatchedAreas: UnmatchedArea[] = useMemo(() => {
     const map = new Map<string, { kecamatan: string; kodePos: string; count: number; wilayah: string }>();
 
-    targetRows.forEach((r) => {
+    dashboardFilteredRows.forEach((r) => {
       const isMatched = r._isMatched ?? (r.Sandi !== '');
       if (!isMatched) {
         const key = `${r.Kecamatan}_${r['KODE POS']}`;
@@ -271,7 +271,7 @@ export const App: React.FC = () => {
     return Array.from(map.values())
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
-  }, [targetRows]);
+  }, [dashboardFilteredRows]);
 
   // Execution Trigger
   const handleExecuteMatching = async () => {
@@ -534,23 +534,79 @@ export const App: React.FC = () => {
           {/* MENU 1: DASHBOARD (EXECUTIVE OPERATIONAL ANALYST DASHBOARD) */}
           {activeTab === 'dashboard' && (
           <>
-            {/* Minimalist Regional Filter Toolbar if data exists */}
+            {/* Toolbar Filter Wilayah Dashboard - Mengontrol seluruh metrik, grafik, dan anomali */}
             {wilayahList.length > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.25rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#ffffff', border: '1px solid var(--border-subtle)', padding: '0.3rem 0.75rem', borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-sm)' }}>
-                  <Filter size={13} color="#878a99" />
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Filter Wilayah:</span>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '0.75rem',
+                  marginBottom: '1rem',
+                  background: '#ffffff',
+                  border: '1px solid #e9ebec',
+                  borderRadius: '6px',
+                  padding: '0.65rem 1rem',
+                  boxShadow: '0 1px 2px rgba(56, 65, 74, 0.05)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <div
+                    style={{
+                      width: '30px',
+                      height: '30px',
+                      borderRadius: '6px',
+                      background: 'rgba(64, 81, 137, 0.1)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#405189',
+                    }}
+                  >
+                    <Filter size={15} />
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#212529' }}>
+                      Filter Lingkup Wilayah
+                    </span>
+                    <span style={{ fontSize: '0.74rem', color: '#878a99', marginLeft: '0.5rem' }}>
+                      {dashboardWilayahFilter === 'ALL'
+                        ? `Menampilkan seluruh ${targetRows.length.toLocaleString('id-ID')} data (${wilayahList.length} Wilayah)`
+                        : `Menampilkan khusus Wilayah "${dashboardWilayahFilter}" (${dashboardFilteredRows.length.toLocaleString('id-ID')} data)`}
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <label htmlFor="dashboard-wilayah-filter" style={{ fontSize: '0.76rem', fontWeight: 600, color: '#495057' }}>
+                    Pilih Wilayah:
+                  </label>
                   <select
+                    id="dashboard-wilayah-filter"
                     value={dashboardWilayahFilter}
                     onChange={(e) => setDashboardWilayahFilter(e.target.value)}
                     className="filter-select"
-                    style={{ padding: '0.15rem 0.4rem', fontSize: '0.75rem', height: 'auto', border: 'none', background: 'transparent' }}
-                    id="dashboard-wilayah-filter"
+                    style={{
+                      padding: '0.35rem 0.75rem',
+                      fontSize: '0.78rem',
+                      fontWeight: 600,
+                      color: '#405189',
+                      border: '1px solid rgba(64, 81, 137, 0.3)',
+                      borderRadius: '4px',
+                      background: '#ffffff',
+                      cursor: 'pointer',
+                    }}
                   >
-                    <option value="ALL">Semua Wilayah ({targetRows.length} Data)</option>
-                    {wilayahList.map((w) => (
-                      <option key={w} value={w}>{w}</option>
-                    ))}
+                    <option value="ALL">Semua Wilayah ({targetRows.length.toLocaleString('id-ID')} Data)</option>
+                    {wilayahList.map((w) => {
+                      const countW = targetRows.filter(r => String(r.Wilayah || '').trim() === String(w).trim()).length;
+                      return (
+                        <option key={w} value={w}>
+                          Wilayah {w} ({countW.toLocaleString('id-ID')} Data)
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
               </div>
@@ -562,13 +618,14 @@ export const App: React.FC = () => {
               multiCabangCount={masterHealth.multiOutletCount}
             />
 
-            {/* 2 Grafik Analisis Wilayah: Volume Data Cek & Match vs Tidak Match */}
+            {/* 2 Grafik Analisis Wilayah: Volume Data Cek & Match vs Tidak Match (Mengikuti Filter) */}
             <RegionalAnalyticsCharts
               stats={regionalStats}
               totalDataCount={dashboardFilteredRows.length}
+              selectedWilayah={dashboardWilayahFilter}
             />
 
-            {/* Radar Titik Anomali (Dipertahankan) */}
+            {/* Radar Titik Anomali (Mengikuti Filter) */}
             <RadarAnomalyTable unmatchedAreas={topUnmatchedAreas} />
           </>
         )}
