@@ -137,7 +137,6 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               <option value="all">Status: Semua Data (All)</option>
               <option value="matched">Status: Matched Only</option>
               <option value="unmatched">Status: Unmatched Only</option>
-              <option value="pten_diff">Status: PTEN Discrepancy Only</option>
             </select>
           </div>
         </div>
@@ -186,7 +185,6 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
             <tr>
               <th style={{ width: '60px', textAlign: 'center', background: '#f3f6f9', borderRight: '1px solid #e9ebec', color: '#405189' }}>No</th>
               <th>Status Match</th>
-              <th>CEK PTEN</th>
               <th>Wilayah</th>
               {/* Atribut Hasil Enrichment Master */}
               {hasCombinedSandiCabang ? (
@@ -202,29 +200,25 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               <th style={{ color: '#405189' }}>Nama Outlet (Master)</th>
               <th style={{ color: '#405189' }}>Status Outlet (Master)</th>
               <th style={{ color: '#405189' }}>ALAMAT (Master)</th>
-              {/* Kolom Target Asli & Validasi */}
+              {/* Kolom Target Asli (Sampai Provinsi) */}
               <th>KODE POS</th>
               <th>Kelurahan</th>
               <th>Kecamatan</th>
               <th>Dati II</th>
               <th>Kode Dati II</th>
               <th>Provinsi</th>
-              <th>KOTA PTEN</th>
-              <th>KODE POS PTEN</th>
-              <th>SUMBER DATA</th>
             </tr>
           </thead>
           <tbody>
             {paginatedRows.length === 0 ? (
               <tr>
-                <td colSpan={20} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
+                <td colSpan={16} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
                   Tidak ada baris data yang cocok dengan kriteria filter saat ini.
                 </td>
               </tr>
             ) : (
               paginatedRows.map((r) => {
                 const isMatched = r._isMatched ?? (r.Sandi !== '' || r['Sandi Cabang'] !== '');
-                const isPtenDiff = r['CEK KODE POS + PTEN'] === 'DIFFERENT';
 
                 return (
                   <tr
@@ -253,17 +247,6 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                         </span>
                       ) : (
                         <span className="badge badge-unmatched">UNMATCHED</span>
-                      )}
-                    </td>
-
-                    {/* CEK KODE POS + PTEN */}
-                    <td>
-                      {r['CEK KODE POS + PTEN'] === 'MATCH' ? (
-                        <span className="badge badge-match">MATCH</span>
-                      ) : r['CEK KODE POS + PTEN'] === 'DIFFERENT' ? (
-                        <span className="badge badge-diff">DIFFERENT</span>
-                      ) : (
-                        <span style={{ color: '#878a99' }}>-</span>
                       )}
                     </td>
 
@@ -307,25 +290,13 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                       {r.ALAMAT || <span style={{ color: '#878a99' }}>-</span>}
                     </td>
 
-                    {/* Target Data Asli */}
+                    {/* Target Data Asli (Sampai Provinsi) */}
                     <td className="code-cell" style={{ color: '#405189', fontWeight: 700 }}>{r['KODE POS']}</td>
                     <td>{r.Kelurahan || '-'}</td>
                     <td>{r.Kecamatan || '-'}</td>
                     <td>{r['Dati II'] || '-'}</td>
                     <td className="code-cell">{r['Kode Dati II'] || '-'}</td>
                     <td>{r.Provinsi || '-'}</td>
-                    <td>{r['KOTA PTEN'] || '-'}</td>
-                    <td
-                      className="code-cell"
-                      style={{ color: isPtenDiff ? '#f06548' : '#405189', fontWeight: isPtenDiff ? 700 : 600 }}
-                    >
-                      {r['KODE POS PTEN'] || '-'}
-                    </td>
-                    <td>
-                      <span style={{ fontSize: '0.75rem', color: '#878a99' }}>
-                        {r['SUMBER DATA'] || '-'}
-                      </span>
-                    </td>
                   </tr>
                 );
               })

@@ -37,10 +37,10 @@ export interface TargetRow {
   'Dati II': string;
   'Kode Dati II': string;
   Provinsi: string;
-  'KOTA PTEN': string;
-  'KODE POS PTEN': string;
-  'CEK KODE POS + PTEN': 'MATCH' | 'DIFFERENT' | '';
-  'SUMBER DATA': string;
+  'KOTA PTEN'?: string;
+  'KODE POS PTEN'?: string;
+  'CEK KODE POS + PTEN'?: 'MATCH' | 'DIFFERENT' | '';
+  'SUMBER DATA'?: string;
 
   // Visual/Processing flags
   _isMatched?: boolean;
