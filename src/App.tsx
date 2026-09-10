@@ -23,6 +23,12 @@ import {
   loadMasterFromCloud,
   clearMasterFromCloud,
 } from './utils/supabase';
+import {
+  checkNeonStatus,
+  loadMasterFromNeon,
+  saveMasterToNeon,
+  clearMasterFromNeon,
+} from './utils/neonSync';
 import { SupabaseModal } from './components/SupabaseModal';
 import { Database, ShieldAlert } from 'lucide-react';
 
@@ -31,6 +37,7 @@ export const App: React.FC = () => {
   const [masterSubTab, setMasterSubTab] = useState<'health' | 'grid'>('health');
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
   const [isCloudConnected, setIsCloudConnected] = useState<boolean>(isSupabaseConfigured());
+  const [isNeonConnected, setIsNeonConnected] = useState<boolean>(false);
 
   // Master Data State (Clean state for real data upload)
   const [masterRows, setMasterRows] = useState<MasterRow[]>([]);
@@ -66,14 +73,30 @@ export const App: React.FC = () => {
     return analyzeMasterHealth(masterRows, masterIndex);
   }, [masterRows, masterIndex]);
 
-  // Restore persisted data (Check Cloud Supabase first, fallback to IndexedDB)
+  // Restore persisted data (Check Neon Postgres first, then Supabase, fallback to IndexedDB)
   useEffect(() => {
     const restoreSavedData = async () => {
       try {
         let loadedMaster = false;
 
-        // 1. Check Cloud Supabase if configured
-        if (isSupabaseConfigured()) {
+        // 1. Check Vercel Neon Postgres
+        try {
+          const neonCheck = await checkNeonStatus();
+          if (neonCheck.connected) {
+            setIsNeonConnected(true);
+            const neonMaster = await loadMasterFromNeon();
+            if (neonMaster && neonMaster.rows && neonMaster.rows.length > 0) {
+              setMasterRows(neonMaster.rows);
+              setMasterFileName(neonMaster.fileName || 'Master_Neon_Vercel.xlsx');
+              loadedMaster = true;
+            }
+          }
+        } catch (e) {
+          console.warn('Neon connection check skipped:', e);
+        }
+
+        // 2. Check Cloud Supabase if configured & not loaded
+        if (!loadedMaster && isSupabaseConfigured()) {
           const cloudMaster = await loadMasterFromCloud();
           if (cloudMaster && cloudMaster.rows && cloudMaster.rows.length > 0) {
             setMasterRows(cloudMaster.rows);
@@ -83,7 +106,7 @@ export const App: React.FC = () => {
           }
         }
 
-        // 2. Fallback to local IndexedDB
+        // 3. Fallback to local IndexedDB
         if (!loadedMaster) {
           const savedMaster = await getItem<{ rows: MasterRow[]; fileName: string }>('master_data');
           if (savedMaster && savedMaster.rows && savedMaster.rows.length > 0) {
@@ -310,6 +333,13 @@ export const App: React.FC = () => {
     setMasterFileName(fileName);
     setItem('master_data', { rows, fileName });
 
+    // Sync to Vercel Neon DB (Serverless)
+    try {
+      saveMasterToNeon(rows, fileName);
+    } catch (e) {
+      console.warn('Neon auto-save skipped:', e);
+    }
+
     // Sync to Supabase Cloud if configured
     if (isSupabaseConfigured()) {
       saveMasterToCloud(rows, fileName);
@@ -359,6 +389,13 @@ export const App: React.FC = () => {
       // Clear local IndexedDB
       await clearAllStorage();
 
+      // Clear Vercel Neon DB
+      try {
+        await clearMasterFromNeon();
+      } catch (e) {
+        console.warn('Neon clear failed:', e);
+      }
+
       // Clear Cloud Supabase if configured
       if (isSupabaseConfigured()) {
         await clearMasterFromCloud();
@@ -376,6 +413,7 @@ export const App: React.FC = () => {
         onResetAll={handleResetAll}
         onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
         isCloudConnected={isCloudConnected}
+        isNeonConnected={isNeonConnected}
       />
 
       <SupabaseModal
