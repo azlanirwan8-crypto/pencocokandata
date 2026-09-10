@@ -4,7 +4,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   Percent,
-  FileSpreadsheet,
 } from 'lucide-react';
 import type { MatchingStats } from '../../types';
 
@@ -18,7 +17,6 @@ export const MetricCards: React.FC<MetricCardsProps> = ({
   stats,
 }) => {
   const matchRate = stats.totalProcessed > 0 ? (stats.matchedCount / stats.totalProcessed) * 100 : 0;
-  const ptenDiffRate = stats.totalProcessed > 0 ? ((stats.ptenDifferentCount || 0) / stats.totalProcessed) * 100 : 0;
 
   const isRateHigh = matchRate >= 90;
   const isRateMedium = matchRate >= 70 && matchRate < 90;
@@ -27,7 +25,7 @@ export const MetricCards: React.FC<MetricCardsProps> = ({
     <div
       className="metrics-grid"
       style={{
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
         gap: '0.65rem',
       }}
     >
@@ -136,29 +134,6 @@ export const MetricCards: React.FC<MetricCardsProps> = ({
           ) : (
             <span style={{ color: '#0ab39c', fontWeight: 600 }}>Semua Data Terpetakan</span>
           )}
-        </div>
-      </div>
-
-      {/* 5. ANOMALI PTEN / DISCREPANCY RISK */}
-      <div className="metric-card amber">
-        <div className="metric-header">
-          <span className="metric-title">CEK POS VS PTEN</span>
-          <div className="metric-icon-bubble">
-            <FileSpreadsheet size={14} />
-          </div>
-        </div>
-        <div className="metric-value" style={{ color: (stats.ptenDifferentCount || 0) > 0 ? '#d97706' : '#212529' }}>
-          {(stats.ptenDifferentCount || 0).toLocaleString('id-ID')}
-          <span style={{ fontSize: '0.72rem', fontWeight: 500, color: '#878a99', marginLeft: '0.35rem' }}>
-            ({ptenDiffRate.toFixed(1)}%)
-          </span>
-        </div>
-        <div className="metric-footer" style={{ fontSize: '0.67rem' }}>
-          <span style={{ color: '#0ab39c' }}>Sesuai: {stats.ptenSameCount || 0}</span>
-          <span style={{ margin: '0 0.25rem' }}>•</span>
-          <span style={{ color: (stats.ptenDifferentCount || 0) > 0 ? '#d97706' : '#878a99' }}>
-            Beda: {stats.ptenDifferentCount || 0}
-          </span>
         </div>
       </div>
     </div>
