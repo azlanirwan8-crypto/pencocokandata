@@ -75,6 +75,12 @@ export interface MatchingStats {
   matchedCount: number;
   unmatchedCount: number;
   matchingRate: number; // percentage
+  level1Count?: number;
+  level2Count?: number;
+  recommendationCount?: number;
+  ptenSameCount?: number;
+  ptenDifferentCount?: number;
+  ptenUncheckedCount?: number;
 }
 
 export interface WilayahStat {

@@ -4,6 +4,7 @@ import { Topbar } from './components/Topbar';
 import { MetricCards } from './components/Dashboard/MetricCards';
 import { RegionalAnalyticsCharts } from './components/Dashboard/RegionalAnalyticsCharts';
 import { RadarAnomalyTable } from './components/Dashboard/RadarAnomalyTable';
+import { AnalystInsightsBanner } from './components/Dashboard/AnalystInsightsBanner';
 import { MasterHealthCard } from './components/MasterData/MasterHealthCard';
 import { MasterDataGrid } from './components/MasterData/MasterDataGrid';
 import { MasterUploadModal } from './components/MasterData/MasterUploadModal';
@@ -204,19 +205,51 @@ export const App: React.FC = () => {
   // Dashboard Aggregates & Metrics
   const dashboardStats: MatchingStats = useMemo(() => {
     const totalProcessed = dashboardFilteredRows.length;
-    const matchedCount = dashboardFilteredRows.filter(r => r._isMatched ?? (r.Sandi !== '')).length;
+    let matchedCount = 0;
+    let level1Count = 0;
+    let level2Count = 0;
+    let recommendationCount = 0;
+    let ptenSameCount = 0;
+    let ptenDifferentCount = 0;
+    let ptenUncheckedCount = 0;
+
+    dashboardFilteredRows.forEach((r) => {
+      const isMatched = r._isMatched ?? (Boolean(r.Sandi) || Boolean(r['Sandi Cabang']) || Boolean(r.Cabang));
+      if (isMatched) {
+        matchedCount++;
+        if (r._matchLevel === 'recommendation') {
+          recommendationCount++;
+        } else if (r._matchLevel === 'level2') {
+          level2Count++;
+        } else {
+          level1Count++;
+        }
+      }
+
+      const ptenStatus = String(r['CEK KODE POS + PTEN'] || '').trim().toUpperCase();
+      if (ptenStatus === 'SAME') {
+        ptenSameCount++;
+      } else if (ptenStatus === 'DIFFERENT') {
+        ptenDifferentCount++;
+      } else {
+        ptenUncheckedCount++;
+      }
+    });
+
     const unmatchedCount = totalProcessed - matchedCount;
-    const ptenDiscrepancyCount = dashboardFilteredRows.filter(r => r['CEK KODE POS + PTEN'] === 'DIFFERENT').length;
     const matchingRate = totalProcessed > 0 ? (matchedCount / totalProcessed) * 100 : 0;
-    const ptenDiscrepancyRate = totalProcessed > 0 ? (ptenDiscrepancyCount / totalProcessed) * 100 : 0;
 
     return {
       totalProcessed,
       matchedCount,
       unmatchedCount,
-      ptenDiscrepancyCount,
       matchingRate,
-      ptenDiscrepancyRate,
+      level1Count,
+      level2Count,
+      recommendationCount,
+      ptenSameCount,
+      ptenDifferentCount,
+      ptenUncheckedCount,
     };
   }, [dashboardFilteredRows]);
 
@@ -627,15 +660,26 @@ export const App: React.FC = () => {
               multiCabangCount={masterHealth.multiOutletCount}
             />
 
-            {/* 2 Grafik Analisis Wilayah: Volume Data Cek & Match vs Tidak Match (Mengikuti Filter) */}
+            {/* Analyst Insights & Actionable Takeaways */}
+            <AnalystInsightsBanner
+              stats={dashboardStats}
+              regionalStats={regionalStats}
+              onNavigateToWorking={() => setActiveTab('working')}
+            />
+
+            {/* 2 Visual Analisis: Dekomposisi Donut Chart & Kinerja Wilayah (Mengikuti Filter) */}
             <RegionalAnalyticsCharts
               stats={regionalStats}
+              matchingStats={dashboardStats}
               totalDataCount={dashboardFilteredRows.length}
               selectedWilayah={dashboardWilayahFilter}
             />
 
             {/* Radar Titik Anomali (Mengikuti Filter) */}
-            <RadarAnomalyTable unmatchedAreas={topUnmatchedAreas} />
+            <RadarAnomalyTable
+              unmatchedAreas={topUnmatchedAreas}
+              totalUnmatchedCount={dashboardStats.unmatchedCount}
+            />
           </>
         )}
 
