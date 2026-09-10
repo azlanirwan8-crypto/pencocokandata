@@ -207,7 +207,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   };
 
   return (
-    <div className="glass-card" style={{ marginTop: '1rem', padding: '1.25rem 1.5rem' }}>
+    <div className="glass-card" style={{ marginTop: '0.65rem', padding: '1rem 1.25rem' }}>
       {/* Top Header: Title & Matching Execution Button */}
       <div
         style={{
@@ -562,7 +562,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           <div
             style={{
               textAlign: 'center',
-              padding: '3.8rem 1.5rem',
+              padding: '1.75rem 1.25rem',
               background: '#ffffff',
               borderRadius: '6px',
               border: '1px solid #e9ebec',
@@ -570,22 +570,22 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           >
             <div
               style={{
-                width: '48px',
-                height: '48px',
+                width: '42px',
+                height: '42px',
                 borderRadius: '50%',
                 background: 'rgba(247, 184, 75, 0.12)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                margin: '0 auto 0.85rem',
+                margin: '0 auto 0.6rem',
               }}
             >
-              <Sparkles size={24} color="#d97706" />
+              <Sparkles size={20} color="#d97706" />
             </div>
-            <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#212529', margin: '0 0 0.35rem' }}>
+            <h4 style={{ fontSize: '0.92rem', fontWeight: 600, color: '#212529', margin: '0 0 0.25rem' }}>
               Belum Ada Rekomendasi Data
             </h4>
-            <p style={{ fontSize: '0.78rem', color: '#878a99', margin: '0 auto 1.25rem', maxWidth: '440px' }}>
+            <p style={{ fontSize: '0.78rem', color: '#878a99', margin: '0 auto 0.85rem', maxWidth: '440px' }}>
               Pencocokan data belum dijalankan. Silakan buka tab <strong>Data Upload</strong> dan klik tombol <strong>"Pencocokan"</strong> untuk menganalisa data target.
             </p>
             <button
@@ -595,7 +595,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                 setCheckerTab('upload');
                 setPage(1);
               }}
-              style={{ fontSize: '0.78rem', padding: '0.35rem 0.95rem' }}
+              style={{ fontSize: '0.76rem', padding: '0.3rem 0.85rem' }}
             >
               Buka Tab Data Upload
             </button>
@@ -982,7 +982,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
         <div
           style={{
             textAlign: 'center',
-            padding: '3.8rem 1.5rem',
+            padding: '1.75rem 1.25rem',
             background: '#ffffff',
             borderRadius: '6px',
             border: '1px solid #e9ebec',
@@ -990,25 +990,25 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
         >
           <div
             style={{
-              width: '56px',
-              height: '56px',
+              width: '46px',
+              height: '46px',
               borderRadius: '50%',
               background: 'rgba(10, 179, 156, 0.12)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              margin: '0 auto 1.2rem',
+              margin: '0 auto 0.65rem',
             }}
           >
-            <CheckCircle2 size={30} color="#0ab39c" />
+            <CheckCircle2 size={24} color="#0ab39c" />
           </div>
-          <h4 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#212529', margin: '0 0 0.45rem' }}>
+          <h4 style={{ fontSize: '0.98rem', fontWeight: 600, color: '#212529', margin: '0 0 0.25rem' }}>
             Data sudah di Analisa silahkan cek di tab selanjutnya
           </h4>
-          <p style={{ fontSize: '0.82rem', color: '#878a99', margin: '0 auto 1.5rem', maxWidth: '480px' }}>
+          <p style={{ fontSize: '0.8rem', color: '#878a99', margin: '0 auto 1rem', maxWidth: '480px' }}>
             Seluruh data target berhasil diproses dan dipindahkan. Silakan cek tab <strong>Rekomendasi Data</strong> untuk data yang perlu ditinjau atau <strong>Data Match</strong> untuk data yang telah cocok.
           </p>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
             <button
               type="button"
               className="btn btn-outline btn-sm"
@@ -1019,15 +1019,15 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '0.4rem',
-                fontSize: '0.8rem',
-                padding: '0.45rem 1.1rem',
+                gap: '0.35rem',
+                fontSize: '0.78rem',
+                padding: '0.35rem 0.95rem',
                 color: '#d97706',
                 borderColor: '#f7b84b',
                 background: '#fffdf5',
               }}
             >
-              <Sparkles size={15} />
+              <Sparkles size={14} />
               <span>Buka Rekomendasi Data ({unmatchedRows.length.toLocaleString('id-ID')})</span>
             </button>
             <button
@@ -1040,14 +1040,14 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '0.4rem',
-                fontSize: '0.8rem',
-                padding: '0.45rem 1.1rem',
+                gap: '0.35rem',
+                fontSize: '0.78rem',
+                padding: '0.35rem 0.95rem',
                 background: '#0ab39c',
                 borderColor: '#0ab39c',
               }}
             >
-              <CheckCircle2 size={15} />
+              <CheckCircle2 size={14} />
               <span>Buka Data Match ({matchedRows.length.toLocaleString('id-ID')})</span>
             </button>
           </div>
@@ -1057,7 +1057,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
         <div
           style={{
             textAlign: 'center',
-            padding: '3.8rem 1.5rem',
+            padding: '1.75rem 1.25rem',
             background: '#ffffff',
             borderRadius: '6px',
             border: '1px solid #e9ebec',
@@ -1065,22 +1065,22 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
         >
           <div
             style={{
-              width: '48px',
-              height: '48px',
+              width: '42px',
+              height: '42px',
               borderRadius: '50%',
               background: 'rgba(10, 179, 156, 0.12)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              margin: '0 auto 0.85rem',
+              margin: '0 auto 0.6rem',
             }}
           >
-            <CheckCircle2 size={24} color="#0ab39c" />
+            <CheckCircle2 size={20} color="#0ab39c" />
           </div>
-          <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#212529', margin: '0 0 0.35rem' }}>
+          <h4 style={{ fontSize: '0.92rem', fontWeight: 600, color: '#212529', margin: '0 0 0.25rem' }}>
             Belum Ada Data Match
           </h4>
-          <p style={{ fontSize: '0.78rem', color: '#878a99', margin: '0 auto 1.25rem', maxWidth: '440px' }}>
+          <p style={{ fontSize: '0.78rem', color: '#878a99', margin: '0 auto 0.85rem', maxWidth: '440px' }}>
             Pencocokan data belum dijalankan. Silakan buka tab <strong>Data Upload</strong> dan klik tombol <strong>"Pencocokan"</strong> untuk menemukan data yang cocok dengan master.
           </p>
           <button
@@ -1090,7 +1090,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               setCheckerTab('upload');
               setPage(1);
             }}
-            style={{ fontSize: '0.78rem', padding: '0.35rem 0.95rem' }}
+            style={{ fontSize: '0.76rem', padding: '0.3rem 0.85rem' }}
           >
             Buka Tab Data Upload
           </button>

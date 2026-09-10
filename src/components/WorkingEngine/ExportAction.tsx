@@ -96,8 +96,8 @@ export const ExportAction: React.FC<ExportActionProps> = ({
     <div
       className="glass-card"
       style={{
-        marginTop: '1.25rem',
-        padding: '0.85rem 1.25rem',
+        marginTop: '0.65rem',
+        padding: '0.65rem 1.15rem',
         background: '#ffffff',
         border: '1px solid #e9ebec',
         borderRadius: '6px',
