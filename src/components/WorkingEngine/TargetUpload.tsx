@@ -1,17 +1,16 @@
 import React, { useRef, useState } from 'react';
-import { UploadCloud, Download, RefreshCw, AlertCircle, CheckCircle2, Lock, FileSpreadsheet, Check } from 'lucide-react';
+import { UploadCloud, Download, AlertCircle, CheckCircle2, Lock, FileSpreadsheet, Check } from 'lucide-react';
 import type { TargetRow } from '../../types';
 import { parseExcelFile, validateTargetHeaders, downloadTargetTemplate } from '../../utils/excel';
 
 interface TargetUploadProps {
   onTargetLoaded: (rows: TargetRow[], fileName: string) => void;
-  onLoadSample: () => void;
+  onLoadSample?: () => void;
   targetCount: number;
 }
 
 export const TargetUpload: React.FC<TargetUploadProps> = ({
   onTargetLoaded,
-  onLoadSample,
   targetCount,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -67,38 +66,17 @@ export const TargetUpload: React.FC<TargetUploadProps> = ({
 
   return (
     <div className="glass-card" style={{ padding: '1.25rem 1.5rem' }}>
-      {/* Velzon Card Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.1rem' }}>
-        <div>
-          <h2 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#212529', letterSpacing: '-0.01em' }}>
-            Unggah Berkas Data Cek (19 Kolom Target)
-          </h2>
-          <p style={{ fontSize: '0.78rem', color: '#878a99', marginTop: '0.15rem' }}>
-            Unggah berkas transaksi operasional yang akan dicocokkan dengan master dan divalidasi kode pos PTEN.
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            onClick={() => downloadTargetTemplate(false)}
-            title="Unduh template Excel 19 kolom kosong"
-          >
-            <Download size={13} />
-            <span>Template Target</span>
-          </button>
-
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={onLoadSample}
-            title="Muat contoh transaksi operasional perbankan"
-          >
-            <RefreshCw size={13} />
-            <span>Muat Contoh Data</span>
-          </button>
-        </div>
+      {/* Action bar minimalis tanpa tulisan berlebih */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
+        <button
+          type="button"
+          className="btn btn-outline btn-sm"
+          onClick={() => downloadTargetTemplate(false)}
+          title="Unduh template Excel 19 kolom kosong"
+        >
+          <Download size={13} />
+          <span>Template Target</span>
+        </button>
       </div>
 
       <input

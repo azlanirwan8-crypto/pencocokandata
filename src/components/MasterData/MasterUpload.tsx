@@ -58,28 +58,17 @@ export const MasterUpload: React.FC<MasterUploadProps> = ({
 
   return (
     <div className="glass-card" style={{ padding: '1.25rem 1.5rem' }}>
-      {/* Card Header khas Velzon */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.1rem' }}>
-        <div>
-          <h2 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#212529', letterSpacing: '-0.01em' }}>
-            Data Master Referensi Cabang
-          </h2>
-          <p style={{ fontSize: '0.78rem', color: '#878a99', marginTop: '0.15rem' }}>
-            Unggah file master cabang (mendukung format 1 kolom <strong>Sandi Cabang</strong> atau terpisah <strong>Sandi & Cabang</strong>).
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            onClick={() => downloadMasterTemplate(false)}
-            title="Unduh template Excel master kosong"
-          >
-            <Download size={13} />
-            <span>Template Excel</span>
-          </button>
-        </div>
+      {/* Action Bar minimalis tanpa tulisan berlebih */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
+        <button
+          type="button"
+          className="btn btn-outline btn-sm"
+          onClick={() => downloadMasterTemplate(false)}
+          title="Unduh template Excel master kosong"
+        >
+          <Download size={13} />
+          <span>Template Excel</span>
+        </button>
       </div>
 
       <input

@@ -1,13 +1,38 @@
 import React, { useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, MapPin, Filter, Play, RotateCcw, X } from 'lucide-react';
 import type { TargetRow } from '../../types';
 
 interface TargetDataGridProps {
   rows: TargetRow[];
   totalInputRows: number;
+  wilayahList: string[];
+  selectedWilayah: string;
+  onWilayahChange: (wilayah: string) => void;
+  statusFilter: 'all' | 'matched' | 'unmatched' | 'pten_diff';
+  onStatusFilterChange: (status: 'all' | 'matched' | 'unmatched' | 'pten_diff') => void;
+  searchTerm: string;
+  onSearchChange: (search: string) => void;
+  onExecuteMatching: () => void;
+  isProcessing: boolean;
+  canExecute: boolean;
+  matchedDone: boolean;
 }
 
-export const TargetDataGrid: React.FC<TargetDataGridProps> = ({ rows, totalInputRows }) => {
+export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
+  rows,
+  totalInputRows,
+  wilayahList,
+  selectedWilayah,
+  onWilayahChange,
+  statusFilter,
+  onStatusFilterChange,
+  searchTerm,
+  onSearchChange,
+  onExecuteMatching,
+  isProcessing,
+  canExecute,
+  matchedDone,
+}) => {
   const [page, setPage] = useState(1);
   const pageSize = 15;
 
@@ -17,7 +42,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({ rows, totalInput
 
   return (
     <div className="glass-card" style={{ marginTop: '1rem', padding: '1.25rem 1.5rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.1rem' }}>
+      {/* Top Row: Title & Action Button */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.85rem' }}>
         <div>
           <h2 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#212529', letterSpacing: '-0.01em' }}>
             Pratinjau Data Target Operasional
@@ -25,6 +51,132 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({ rows, totalInput
           <p style={{ fontSize: '0.78rem', color: '#878a99', marginTop: '0.15rem' }}>
             Menampilkan {rows.length.toLocaleString('id-ID')} baris data terfilter (dari total {totalInputRows.toLocaleString('id-ID')} baris input awal).
           </p>
+        </div>
+
+        {/* Execution Button di dalam card tabel */}
+        <div>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={onExecuteMatching}
+            disabled={!canExecute || isProcessing}
+            id="btn-mulai-pencocokan"
+            style={{ padding: '0.42rem 0.95rem' }}
+          >
+            {isProcessing ? (
+              <>
+                <RotateCcw size={14} className="pulse-dot" />
+                <span>Memproses...</span>
+              </>
+            ) : matchedDone ? (
+              <>
+                <RotateCcw size={14} />
+                <span>Ulangi Pencocokan</span>
+              </>
+            ) : (
+              <>
+                <Play size={14} fill="currentColor" />
+                <span>Mulai Pencocokan Bertingkat</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Filter & Search Bar langsung di dalam tabel card (Velzon datatable filter row) */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '0.6rem',
+          padding: '0.65rem 0.85rem',
+          background: '#f8f9fa',
+          border: '1px solid #e9ebec',
+          borderRadius: '6px',
+          marginBottom: '0.85rem',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {/* Dropdown Wilayah */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <MapPin size={14} color="#405189" />
+            <select
+              className="filter-select"
+              value={selectedWilayah}
+              onChange={(e) => {
+                onWilayahChange(e.target.value);
+                setPage(1);
+              }}
+              id="filter-select-wilayah"
+              style={{ padding: '0.3rem 0.65rem', fontSize: '0.78rem' }}
+            >
+              <option value="ALL">Semua Wilayah / Region ({wilayahList.length})</option>
+              {wilayahList.map((w) => (
+                <option key={w} value={w}>
+                  {w}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Dropdown Status */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <Filter size={14} color="#878a99" />
+            <select
+              className="filter-select"
+              value={statusFilter}
+              onChange={(e) => {
+                onStatusFilterChange(e.target.value as any);
+                setPage(1);
+              }}
+              id="filter-select-status"
+              style={{ padding: '0.3rem 0.65rem', fontSize: '0.78rem' }}
+            >
+              <option value="all">Status: Semua Data (All)</option>
+              <option value="matched">Status: Matched Only</option>
+              <option value="unmatched">Status: Unmatched Only</option>
+              <option value="pten_diff">Status: PTEN Discrepancy Only</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Input Search */}
+        <div className="search-input-wrapper">
+          <Search size={14} className="search-icon-pos" />
+          <input
+            type="text"
+            className="search-input"
+            placeholder="Cari Sandi, Outlet, Alamat..."
+            value={searchTerm}
+            onChange={(e) => {
+              onSearchChange(e.target.value);
+              setPage(1);
+            }}
+            style={{ width: '240px', paddingRight: searchTerm ? '2rem' : '0.85rem' }}
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => {
+                onSearchChange('');
+                setPage(1);
+              }}
+              style={{
+                position: 'absolute',
+                right: '0.5rem',
+                background: 'transparent',
+                border: 'none',
+                color: '#878a99',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+              }}
+            >
+              <X size={13} />
+            </button>
+          )}
         </div>
       </div>
 

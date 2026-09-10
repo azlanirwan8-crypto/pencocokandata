@@ -9,7 +9,6 @@ import { MasterUpload } from './components/MasterData/MasterUpload';
 import { MasterHealthCard } from './components/MasterData/MasterHealthCard';
 import { MasterDataGrid } from './components/MasterData/MasterDataGrid';
 import { TargetUpload } from './components/WorkingEngine/TargetUpload';
-import { FilterToolbar } from './components/WorkingEngine/FilterToolbar';
 import { ProgressBar } from './components/WorkingEngine/ProgressBar';
 import { TargetDataGrid } from './components/WorkingEngine/TargetDataGrid';
 import { ExportAction } from './components/WorkingEngine/ExportAction';
@@ -606,7 +605,19 @@ export const App: React.FC = () => {
               targetCount={targetRows.length}
             />
 
-            <FilterToolbar
+            {isProcessing && (
+              <ProgressBar
+                isProcessing={isProcessing}
+                progress={progress}
+                processedCount={processedCount}
+                totalCount={targetRows.length}
+                durationMs={durationMs}
+              />
+            )}
+
+            <TargetDataGrid
+              rows={filteredTargetRows}
+              totalInputRows={initialTargetCount}
               wilayahList={wilayahList}
               selectedWilayah={selectedWilayah}
               onWilayahChange={setSelectedWilayah}
@@ -618,19 +629,6 @@ export const App: React.FC = () => {
               isProcessing={isProcessing}
               canExecute={targetRows.length > 0 && masterRows.length > 0}
               matchedDone={matchedDone}
-            />
-
-            <ProgressBar
-              isProcessing={isProcessing}
-              progress={progress}
-              processedCount={processedCount}
-              totalCount={targetRows.length}
-              durationMs={durationMs}
-            />
-
-            <TargetDataGrid
-              rows={filteredTargetRows}
-              totalInputRows={initialTargetCount}
             />
 
             <ExportAction
