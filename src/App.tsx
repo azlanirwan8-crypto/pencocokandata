@@ -61,7 +61,6 @@ export const App: React.FC = () => {
 
   // Master Data State (Clean state for real data upload)
   const [masterRows, setMasterRows] = useState<MasterRow[]>([]);
-  const [masterFileName, setMasterFileName] = useState<string>('');
 
   // Target Data State (Clean state for real data upload)
   const [targetRows, setTargetRows] = useState<TargetRow[]>([]);
@@ -105,7 +104,7 @@ export const App: React.FC = () => {
             const neonMaster = await loadMasterFromNeon();
             if (neonMaster && neonMaster.rows && neonMaster.rows.length > 0) {
               setMasterRows(neonMaster.rows);
-              setMasterFileName(neonMaster.fileName || 'Master_Neon_Vercel.xlsx');
+              // setMasterFileName(neonMaster.fileName || 'Master_Neon_Vercel.xlsx');
               loadedMaster = true;
             }
           }
@@ -118,7 +117,7 @@ export const App: React.FC = () => {
           const cloudMaster = await loadMasterFromCloud();
           if (cloudMaster && cloudMaster.rows && cloudMaster.rows.length > 0) {
             setMasterRows(cloudMaster.rows);
-            setMasterFileName(cloudMaster.fileName || 'Master_Cloud_Supabase.xlsx');
+            // setMasterFileName(cloudMaster.fileName || 'Master_Cloud_Supabase.xlsx');
             setIsCloudConnected(true);
             loadedMaster = true;
           }
@@ -129,7 +128,7 @@ export const App: React.FC = () => {
           const savedMaster = await getItem<{ rows: MasterRow[]; fileName: string }>('master_data');
           if (savedMaster && savedMaster.rows && savedMaster.rows.length > 0) {
             setMasterRows(savedMaster.rows);
-            setMasterFileName(savedMaster.fileName || '');
+            // setMasterFileName(savedMaster.fileName || '');
           }
         }
 
@@ -323,7 +322,7 @@ export const App: React.FC = () => {
     setMasterRows((prev) => {
       const combined = [...prev, ...newRows];
       const combinedFileName = prev.length > 0 ? `${combined.length} Cabang (${fileName})` : fileName;
-      setMasterFileName(combinedFileName);
+      // setMasterFileName(combinedFileName);
       setItem('master_data', { rows: combined, fileName: combinedFileName });
 
       // Sync to Vercel Neon DB (Serverless)
@@ -346,7 +345,7 @@ export const App: React.FC = () => {
     if (window.confirm('Kosongkan seluruh data master cabang?')) {
       try {
         setMasterRows([]);
-        setMasterFileName('');
+        // setMasterFileName('');
         await setItem('master_data', { rows: [], fileName: '' });
         try {
           await clearMasterFromNeon();
@@ -489,7 +488,7 @@ export const App: React.FC = () => {
   const handleResetAll = async () => {
     if (window.confirm('Kosongkan semua data (Master & Target) untuk memulai proses baru?')) {
       setMasterRows([]);
-      setMasterFileName('');
+      // setMasterFileName('');
       setTargetRows([]);
       setInitialTargetCount(0);
       setTargetFileName('');
@@ -771,17 +770,7 @@ export const App: React.FC = () => {
               </div>
             ) : (
               <div className="glass-card" style={{ marginTop: '1rem', padding: '1.25rem 1.5rem' }}>
-                {/* Header Title inside Card */}
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                    gap: '0.75rem',
-                    marginBottom: '0.85rem',
-                  }}
-                >
+                {/* Header Title inside Card Removed */}
 
 
                 {/* 2 SUB-TABS (VELZON UNDERLINE STYLE DI DALAM CARD) */}

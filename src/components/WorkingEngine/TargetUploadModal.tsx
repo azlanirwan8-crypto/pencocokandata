@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { UploadCloud, Download, AlertCircle, CheckCircle, X, RotateCcw, PlusCircle } from 'lucide-react';
+import { UploadCloud, Download, AlertCircle, CheckCircle, X, RotateCcw } from 'lucide-react';
 import type { TargetRow } from '../../types';
 import { parseExcelFile, validateTargetHeaders, downloadTargetTemplate } from '../../utils/excel';
 
