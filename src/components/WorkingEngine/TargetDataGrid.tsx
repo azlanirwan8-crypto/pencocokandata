@@ -597,17 +597,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               <tr>
                 <th style={{ width: '50px', textAlign: 'center', background: '#f3f6f9', color: '#405189' }}>No</th>
                 <th style={{ minWidth: '420px', background: '#fff9f0', color: '#d97706' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'nowrap', gap: '0.4rem' }}>
-                    <span style={{ whiteSpace: 'nowrap' }}>Kandidat Rekomendasi Master (Top 2–3 Pilihan)</span>
-                    <div
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', cursor: 'pointer', fontSize: '0.72rem' }}
-                      onClick={() => setIsGuideModalOpen(true)}
-                      title="Klik untuk melihat penjelasan cara hitung skor"
-                    >
-                      <HelpCircle size={13} color="#d97706" />
-                      <span>Panduan Skor</span>
-                    </div>
-                  </div>
+                  Kandidat Rekomendasi Master (Top 2–3 Pilihan Terdekat)
                 </th>
                 {/* Data Target Asli (Wilayah Target Dihapus sesuai permintaan user) */}
                 <th style={{ color: '#878a99', minWidth: '95px' }}>KODE POS Target</th>
