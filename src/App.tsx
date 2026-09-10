@@ -894,11 +894,8 @@ export const App: React.FC = () => {
                 </div>
                 <div>
                   <h3 style={{ fontSize: '0.96rem', fontWeight: 600, color: '#212529', margin: 0 }}>
-                    Pencocokan & Validasi Data Target (Data Cek)
+                    Data Target
                   </h3>
-                  <p style={{ fontSize: '0.76rem', color: '#878a99', margin: '0.15rem 0 0 0' }}>
-                    Total {targetRows.length.toLocaleString('id-ID')} baris data target aktif • {targetRows.filter(r => r._isMatched).length.toLocaleString('id-ID')} Cocok
-                  </p>
                 </div>
               </div>
 
