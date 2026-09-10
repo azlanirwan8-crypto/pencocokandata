@@ -592,20 +592,52 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           </div>
         ) : (
           <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', overflowX: 'auto' }}>
-          <table className="modern-table" style={{ width: '100%', minWidth: '1050px' }}>
+          <table className="modern-table" style={{ width: '100%', minWidth: '1200px', borderCollapse: 'separate', borderSpacing: 0 }}>
             <thead>
               <tr>
-                <th style={{ width: '50px', textAlign: 'center', background: '#f3f6f9', color: '#405189' }}>No</th>
-                <th style={{ minWidth: '420px', background: '#fff9f0', color: '#d97706' }}>
+                <th
+                  style={{
+                    width: '50px',
+                    minWidth: '50px',
+                    maxWidth: '50px',
+                    textAlign: 'center',
+                    background: '#f3f6f9',
+                    color: '#405189',
+                    position: 'sticky',
+                    left: 0,
+                    top: 0,
+                    zIndex: 20,
+                    borderRight: '1px solid #e9ebec',
+                    borderBottom: '1px solid #e9ebec',
+                  }}
+                >
+                  No
+                </th>
+                <th
+                  style={{
+                    minWidth: '420px',
+                    maxWidth: '420px',
+                    width: '420px',
+                    background: '#fff9f0',
+                    color: '#d97706',
+                    position: 'sticky',
+                    left: '50px',
+                    top: 0,
+                    zIndex: 20,
+                    boxShadow: '4px 0 8px -2px rgba(0, 0, 0, 0.08)',
+                    borderRight: '2px solid #f7b84b',
+                    borderBottom: '1px solid #e9ebec',
+                  }}
+                >
                   Kandidat Rekomendasi Master (Top 2–3 Pilihan Terdekat)
                 </th>
                 {/* Data Target Asli (Wilayah Target Dihapus sesuai permintaan user) */}
-                <th style={{ color: '#878a99', minWidth: '95px' }}>KODE POS Target</th>
-                <th style={{ color: '#878a99', minWidth: '120px' }}>Kecamatan Target</th>
-                <th style={{ color: '#878a99', minWidth: '120px' }}>Kelurahan Target</th>
-                <th style={{ color: '#878a99', minWidth: '120px' }}>Dati II Target</th>
-                <th style={{ minWidth: '240px', color: '#878a99' }}>ALAMAT Target</th>
-                <th style={{ minWidth: '110px' }}>Provinsi Target</th>
+                <th style={{ color: '#878a99', minWidth: '105px', borderBottom: '1px solid #e9ebec' }}>KODE POS Target</th>
+                <th style={{ color: '#878a99', minWidth: '130px', borderBottom: '1px solid #e9ebec' }}>Kecamatan Target</th>
+                <th style={{ color: '#878a99', minWidth: '130px', borderBottom: '1px solid #e9ebec' }}>Kelurahan Target</th>
+                <th style={{ color: '#878a99', minWidth: '130px', borderBottom: '1px solid #e9ebec' }}>Dati II Target</th>
+                <th style={{ minWidth: '260px', color: '#878a99', borderBottom: '1px solid #e9ebec' }}>ALAMAT Target</th>
+                <th style={{ minWidth: '120px', borderBottom: '1px solid #e9ebec' }}>Provinsi Target</th>
               </tr>
             </thead>
             <tbody>
@@ -630,12 +662,40 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
 
                   return (
                     <tr key={`rec-${r.No}-${idx}`} style={{ background: '#fffdfa', verticalAlign: 'top' }}>
-                      <td className="code-cell" style={{ textAlign: 'center', color: '#878a99', fontWeight: 700, paddingTop: '0.85rem' }}>
+                      <td
+                        className="code-cell"
+                        style={{
+                          textAlign: 'center',
+                          color: '#878a99',
+                          fontWeight: 700,
+                          paddingTop: '0.85rem',
+                          position: 'sticky',
+                          left: 0,
+                          zIndex: 5,
+                          background: '#fffdfa',
+                          borderRight: '1px solid #e9ebec',
+                          borderBottom: '1px solid #e9ebec',
+                        }}
+                      >
                         {globalIndex}
                       </td>
 
-                      {/* Multi-Kandidat Rekomendasi (Top 2 - 3 Opsi Asli Master dengan Segmented Pill Toggle) */}
-                      <td style={{ background: '#fffdfa', padding: '0.55rem 0.65rem' }}>
+                      {/* Multi-Kandidat Rekomendasi (Top 2 - 3 Opsi Asli Master dengan Segmented Pill Toggle) - FROZEN / STICKY */}
+                      <td
+                        style={{
+                          background: '#fffdfa',
+                          padding: '0.55rem 0.65rem',
+                          position: 'sticky',
+                          left: '50px',
+                          zIndex: 5,
+                          boxShadow: '4px 0 8px -2px rgba(0, 0, 0, 0.08)',
+                          borderRight: '2px solid rgba(247, 184, 75, 0.45)',
+                          borderBottom: '1px solid #e9ebec',
+                          minWidth: '420px',
+                          maxWidth: '420px',
+                          width: '420px',
+                        }}
+                      >
                         {(() => {
                           const activeRank = activeCandidateByRow[r.No] || 1;
                           const activeCand = candidates.find((c) => c.rank === activeRank) || candidates[0];
