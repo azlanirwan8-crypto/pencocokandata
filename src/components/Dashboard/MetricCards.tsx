@@ -27,7 +27,7 @@ export const MetricCards: React.FC<MetricCardsProps> = ({
           {stats.totalProcessed.toLocaleString('id-ID')}
         </div>
         <div className="metric-footer">
-          <span style={{ color: '#38bdf8', fontWeight: 600 }}>N_in Terkunci</span> • Integritas Baris 100%
+          <span style={{ color: '#38bdf8', fontWeight: 600 }}>Data Operasional</span> • Integritas Baris 100%
         </div>
       </div>
 

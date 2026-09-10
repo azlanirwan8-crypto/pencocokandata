@@ -134,11 +134,6 @@ export const ExportAction: React.FC<ExportActionProps> = ({
             <h4 style={{ fontSize: '0.94rem', fontWeight: 600, color: '#212529', margin: 0 }}>
               Ekspor Hasil Pencocokan (.xlsx)
             </h4>
-            <p style={{ fontSize: '0.76rem', color: '#878a99', margin: '0.15rem 0 0 0' }}>
-              {isAllChecked || selectedExportWilayah === 'ALL'
-                ? `Format: Seluruh data (${exportData.rows.length.toLocaleString('id-ID')} baris) diurutkan rapi berdasarkan Wilayah.`
-                : `Format: Filter Wilayah "${selectedExportWilayah}" (${exportData.rows.length.toLocaleString('id-ID')} baris terfilter).`}
-            </p>
           </div>
         </div>
 
