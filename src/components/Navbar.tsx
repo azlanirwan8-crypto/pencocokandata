@@ -33,7 +33,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             Data Matcher Cabang & Outlet
             <span className="badge-version">v2.0 Architecture</span>
           </h1>
-          <p>Otomasi Pencocokan, Validasi PTEN & Pengayaan Data Operasional Cabang</p>
+          <p>Otomasi Pencocokan, Pengayaan Data Operasional Cabang</p>
         </div>
       </div>
 

@@ -87,16 +87,6 @@ export function matchSingleRow(target: TargetRow, masterIndex: Map<string, Maste
 
   // 1. Standarisasi String Kode Pos
   const targetKp = normalizeKodePos(result['KODE POS']);
-  const ptenKp = normalizeKodePos(result['KODE POS PTEN']);
-
-  // 2. Validasi Silang PTEN
-  if (targetKp && ptenKp && targetKp === ptenKp) {
-    result['CEK KODE POS + PTEN'] = 'MATCH';
-    result._isPtenDiscrepancy = false;
-  } else {
-    result['CEK KODE POS + PTEN'] = 'DIFFERENT';
-    result._isPtenDiscrepancy = true;
-  }
 
   // 3. Hierarki Pencocokan Cabang
   const candidates = targetKp ? masterIndex.get(targetKp) : undefined;

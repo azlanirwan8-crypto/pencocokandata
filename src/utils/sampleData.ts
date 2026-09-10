@@ -241,9 +241,6 @@ export const SAMPLE_TARGET_ROWS: TargetRow[] = [
     'Dati II': 'Kota Jakarta Pusat',
     'Kode Dati II': '3171',
     Provinsi: 'DKI Jakarta',
-    'KOTA PTEN': 'Kota Jakarta Pusat',
-    'KODE POS PTEN': '10350',
-    'CEK KODE POS + PTEN': '',
     'SUMBER DATA': 'BATCH_MERCHANT_2026_09A',
   },
   {
@@ -262,9 +259,6 @@ export const SAMPLE_TARGET_ROWS: TargetRow[] = [
     'Dati II': 'Kota Jakarta Selatan',
     'Kode Dati II': '3174',
     Provinsi: 'DKI Jakarta',
-    'KOTA PTEN': 'Kota Jakarta Selatan',
-    'KODE POS PTEN': '12190',
-    'CEK KODE POS + PTEN': '',
     'SUMBER DATA': 'BATCH_MERCHANT_2026_09A',
   },
   {
@@ -283,9 +277,7 @@ export const SAMPLE_TARGET_ROWS: TargetRow[] = [
     'Dati II': 'Kota Jakarta Utara',
     'Kode Dati II': '3172',
     Provinsi: 'DKI Jakarta',
-    'KOTA PTEN': 'Kota Jakarta Utara',
     'KODE POS PTEN': '14250', // PTEN Discrepancy!
-    'CEK KODE POS + PTEN': '',
     'SUMBER DATA': 'BATCH_MERCHANT_2026_09A',
   },
   {
@@ -304,9 +296,6 @@ export const SAMPLE_TARGET_ROWS: TargetRow[] = [
     'Dati II': 'Kota Bandung',
     'Kode Dati II': '3273',
     Provinsi: 'Jawa Barat',
-    'KOTA PTEN': 'Kota Bandung',
-    'KODE POS PTEN': '40111',
-    'CEK KODE POS + PTEN': '',
     'SUMBER DATA': 'BATCH_REGIONAL_JABAR_01',
   },
   {
@@ -325,9 +314,6 @@ export const SAMPLE_TARGET_ROWS: TargetRow[] = [
     'Dati II': 'Kota Bandung',
     'Kode Dati II': '3273',
     Provinsi: 'Jawa Barat',
-    'KOTA PTEN': 'Kota Bandung',
-    'KODE POS PTEN': '40132',
-    'CEK KODE POS + PTEN': '',
     'SUMBER DATA': 'BATCH_REGIONAL_JABAR_01',
   },
   {
@@ -346,9 +332,6 @@ export const SAMPLE_TARGET_ROWS: TargetRow[] = [
     'Dati II': 'Kota Bogor',
     'Kode Dati II': '3271',
     Provinsi: 'Jawa Barat',
-    'KOTA PTEN': 'Kota Bogor',
-    'KODE POS PTEN': '16143',
-    'CEK KODE POS + PTEN': '',
     'SUMBER DATA': 'BATCH_REGIONAL_JABAR_01',
   },
   {
@@ -367,9 +350,6 @@ export const SAMPLE_TARGET_ROWS: TargetRow[] = [
     'Dati II': 'Kota Semarang',
     'Kode Dati II': '3374',
     Provinsi: 'Jawa Tengah',
-    'KOTA PTEN': 'Kota Semarang',
-    'KODE POS PTEN': '50132',
-    'CEK KODE POS + PTEN': '',
     'SUMBER DATA': 'BATCH_JATENG_EDC_04',
   },
   {
@@ -388,9 +368,6 @@ export const SAMPLE_TARGET_ROWS: TargetRow[] = [
     'Dati II': 'Kota Yogyakarta',
     'Kode Dati II': '3471',
     Provinsi: 'D.I. Yogyakarta',
-    'KOTA PTEN': 'Kota Yogyakarta',
-    'KODE POS PTEN': '55233',
-    'CEK KODE POS + PTEN': '',
     'SUMBER DATA': 'BATCH_JATENG_EDC_04',
   },
   {
@@ -409,9 +386,6 @@ export const SAMPLE_TARGET_ROWS: TargetRow[] = [
     'Dati II': 'Kota Surabaya',
     'Kode Dati II': '3578',
     Provinsi: 'Jawa Timur',
-    'KOTA PTEN': 'Kota Surabaya',
-    'KODE POS PTEN': '60271',
-    'CEK KODE POS + PTEN': '',
     'SUMBER DATA': 'BATCH_JATIM_OPS_08',
   },
   {
@@ -430,9 +404,7 @@ export const SAMPLE_TARGET_ROWS: TargetRow[] = [
     'Dati II': 'Kota Surabaya',
     'Kode Dati II': '3578',
     Provinsi: 'Jawa Timur',
-    'KOTA PTEN': 'Kota Surabaya',
     'KODE POS PTEN': '60260', // PTEN Discrepancy!
-    'CEK KODE POS + PTEN': '',
     'SUMBER DATA': 'BATCH_JATIM_OPS_08',
   },
   {
@@ -451,9 +423,6 @@ export const SAMPLE_TARGET_ROWS: TargetRow[] = [
     'Dati II': 'Kota Denpasar',
     'Kode Dati II': '5171',
     Provinsi: 'Bali',
-    'KOTA PTEN': 'Kota Denpasar',
-    'KODE POS PTEN': '80112',
-    'CEK KODE POS + PTEN': '',
     'SUMBER DATA': 'BATCH_BALI_02',
   },
   {
@@ -472,9 +441,6 @@ export const SAMPLE_TARGET_ROWS: TargetRow[] = [
     'Dati II': 'Kota Medan',
     'Kode Dati II': '1271',
     Provinsi: 'Sumatera Utara',
-    'KOTA PTEN': 'Kota Medan',
-    'KODE POS PTEN': '20112',
-    'CEK KODE POS + PTEN': '',
     'SUMBER DATA': 'BATCH_SUMUT_01',
   },
   {
@@ -493,9 +459,6 @@ export const SAMPLE_TARGET_ROWS: TargetRow[] = [
     'Dati II': 'Kota Pontianak',
     'Kode Dati II': '6171',
     Provinsi: 'Kalimantan Barat',
-    'KOTA PTEN': 'Kota Pontianak',
-    'KODE POS PTEN': '78121',
-    'CEK KODE POS + PTEN': '',
     'SUMBER DATA': 'BATCH_NEW_OUTLETS_KALIMANTAN',
   },
   {
@@ -514,9 +477,7 @@ export const SAMPLE_TARGET_ROWS: TargetRow[] = [
     'Dati II': 'Kota Makassar',
     'Kode Dati II': '7371',
     Provinsi: 'Sulawesi Selatan',
-    'KOTA PTEN': 'Kota Makassar',
     'KODE POS PTEN': '90115', // PTEN Discrepancy + Unmatched!
-    'CEK KODE POS + PTEN': '',
     'SUMBER DATA': 'BATCH_NEW_OUTLETS_SULAWESI',
   },
 ];

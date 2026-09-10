@@ -34,8 +34,6 @@ export const TARGET_COLUMNS_WITH_SANDI_CABANG: string[] = [
   'Dati II',
   'Kode Dati II',
   'Provinsi',
-  'KOTA PTEN',
-  'KODE POS PTEN',
 ];
 
 export const MASTER_COLUMNS_SEPARATE: string[] = [
@@ -72,8 +70,6 @@ export const TARGET_COLUMNS_SEPARATE: string[] = [
   'Dati II',
   'Kode Dati II',
   'Provinsi',
-  'KOTA PTEN',
-  'KODE POS PTEN',
 ];
 
 /**
@@ -93,44 +89,6 @@ export function mapCanonicalHeader(header: string): string {
   const norm = normalizeHeaderName(header);
 
   // Sandi Cabang combined variations
-  if (
-    norm === 'sandi cabang' ||
-    norm === 'sandi / cabang' ||
-    norm === 'sandi/cabang' ||
-    norm === 'sandi_cabang' ||
-    norm === 'sandicabang' ||
-    norm === 'sandi & cabang'
-  ) {
-    return 'Sandi Cabang';
-  }
-
-  if (norm === 'sandi') return 'Sandi';
-  if (norm === 'cabang') return 'Cabang';
-  if (norm === 'wilayah') return 'Wilayah';
-  if (norm === 'branch code' || norm === 'branchcode' || norm === 'branch_code') return 'Branch Code';
-  if (norm === 'kode cabang' || norm === 'kodecabang' || norm === 'kode_cabang') return 'Kode Cabang';
-  if (norm === 'nama outlet' || norm === 'namaoutlet' || norm === 'nama_outlet') return 'Nama Outlet';
-  if (norm === 'status outlet' || norm === 'statusoutlet' || norm === 'status_outlet') return 'Status Outlet';
-  if (norm === 'alamat') return 'ALAMAT';
-  if (norm === 'kode pos' || norm === 'kodepos' || norm === 'kode_pos' || norm === 'pos') return 'KODE POS';
-  if (norm === 'kelurahan') return 'Kelurahan';
-  if (norm === 'kecamatan') return 'Kecamatan';
-  if (norm === 'dati ii' || norm === 'dati 2' || norm === 'datii' || norm === 'kabupaten' || norm === 'kota' || norm === 'kabupaten / kota') return 'Dati II';
-  if (norm === 'kode dati ii' || norm === 'kode dati 2' || norm === 'kodedatii') return 'Kode Dati II';
-  if (norm === 'provinsi' || norm === 'propinsi') return 'Provinsi';
-  if (norm === 'telp' || norm === 'telepon' || norm === 'no telp' || norm === 'no. telp' || norm === 'telephone') return 'Telp';
-  if (norm === 'kota pten' || norm === 'kotapten' || norm === 'kota_pten' || norm === 'kota-pten') return 'KOTA PTEN';
-  if (
-    norm === 'kode pos pten' ||
-    norm === 'kodepos pten' ||
-    norm === 'kodepospten' ||
-    norm === 'kode_pos_pten' ||
-    norm === 'kodepos_pten' ||
-    norm === 'pos pten' ||
-    norm === 'pos_pten'
-  )
-    return 'KODE POS PTEN';
-  if (norm === 'cek kode pos + pten' || norm === 'cek kode pos pten' || norm === 'cek kodepos pten') return 'CEK KODE POS + PTEN';
   if (norm === 'sumber data' || norm === 'sumberdata') return 'SUMBER DATA';
   if (norm === 'no' || norm === 'no.' || norm === 'nomor') return 'No';
 
@@ -360,8 +318,7 @@ function createTargetWorksheet(rows: TargetRow[], exportColumns: string[]): XLSX
     if (col === 'No') return { wch: 6 };
     if (col === 'ALAMAT') return { wch: 40 };
     if (col === 'Cabang' || col === 'Nama Outlet' || col === 'Sandi Cabang') return { wch: 28 };
-    if (col === 'KODE POS' || col === 'KODE POS PTEN' || col === 'CEK KODE POS + PTEN') return { wch: 18 };
-    if (col === 'KOTA PTEN') return { wch: 22 };
+    if (col === 'KODE POS') return { wch: 18 };
     return { wch: 18 };
   });
   worksheet['!cols'] = colWidths;

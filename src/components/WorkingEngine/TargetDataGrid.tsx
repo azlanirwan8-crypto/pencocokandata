@@ -514,8 +514,6 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                   <th style={{ color: '#878a99' }}>Dati II Target</th>
                   <th style={{ minWidth: '220px', color: '#878a99' }}>ALAMAT Target</th>
                   <th>Provinsi</th>
-                  <th>KOTA PTEN</th>
-                  <th>KODE POS PTEN</th>
                 </tr>
               </thead>
               <tbody>
@@ -618,8 +616,6 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                           {r.ALAMAT || '-'}
                         </td>
                         <td>{r.Provinsi || '-'}</td>
-                        <td>{r['KOTA PTEN'] || '-'}</td>
-                        <td className="code-cell">{r['KODE POS PTEN'] || '-'}</td>
                       </tr>
                     );
                   })
@@ -658,8 +654,6 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                 <th>Dati II</th>
                 <th>Kode Dati II</th>
                 <th>Provinsi</th>
-                <th>KOTA PTEN</th>
-                <th>KODE POS PTEN</th>
               </tr>
             </thead>
             <tbody>
@@ -784,8 +778,6 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                       <td>{r['Dati II'] || '-'}</td>
                       <td className="code-cell">{r['Kode Dati II'] || '-'}</td>
                       <td>{r.Provinsi || '-'}</td>
-                      <td>{r['KOTA PTEN'] || '-'}</td>
-                      <td className="code-cell">{r['KODE POS PTEN'] || '-'}</td>
                     </tr>
                   );
                 })

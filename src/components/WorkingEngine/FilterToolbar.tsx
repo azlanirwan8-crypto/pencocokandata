@@ -5,8 +5,8 @@ interface FilterToolbarProps {
   wilayahList: string[];
   selectedWilayah: string;
   onWilayahChange: (wilayah: string) => void;
-  statusFilter: 'all' | 'matched' | 'unmatched' | 'pten_diff';
-  onStatusFilterChange: (status: 'all' | 'matched' | 'unmatched' | 'pten_diff') => void;
+  statusFilter: 'all' | 'matched' | 'unmatched';
+  onStatusFilterChange: (status: 'all' | 'matched' | 'unmatched') => void;
   searchTerm: string;
   onSearchChange: (search: string) => void;
   onExecuteMatching: () => void;
@@ -59,7 +59,6 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
             <option value="all">Status: Semua Data (All)</option>
             <option value="matched">Status: Matched Only</option>
             <option value="unmatched">Status: Unmatched Only</option>
-            <option value="pten_diff">Status: PTEN Discrepancy Only</option>
           </select>
         </div>
 

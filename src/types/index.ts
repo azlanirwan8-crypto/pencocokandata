@@ -37,14 +37,10 @@ export interface TargetRow {
   'Dati II': string;
   'Kode Dati II': string;
   Provinsi: string;
-  'KOTA PTEN'?: string;
-  'KODE POS PTEN'?: string;
-  'CEK KODE POS + PTEN'?: 'MATCH' | 'DIFFERENT' | '';
   'SUMBER DATA'?: string;
 
   // Visual/Processing flags
   _isMatched?: boolean;
-  _isPtenDiscrepancy?: boolean;
   _matchLevel?: 'level1' | 'level2' | 'none' | 'recommendation';
   [key: string]: any;
 }
@@ -70,7 +66,6 @@ export interface BatchLog {
   totalRows: number;
   matchedCount: number;
   unmatchedCount: number;
-  ptenDiscrepancyCount: number;
   durationMs: number;
   dataSnapshot: TargetRow[];
 }
@@ -79,9 +74,7 @@ export interface MatchingStats {
   totalProcessed: number;
   matchedCount: number;
   unmatchedCount: number;
-  ptenDiscrepancyCount: number;
   matchingRate: number; // percentage
-  ptenDiscrepancyRate: number; // percentage
 }
 
 export interface WilayahStat {

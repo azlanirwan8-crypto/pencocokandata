@@ -179,7 +179,7 @@ export function buildMasterProximityIndex(masterRows: MasterRow[]): MasterProxim
 
 /**
  * Hitung jarak kedekatan lokal antara target dan cabang master
- * Berdasarkan selisih numerik kode pos dan kesamaan teks alamat
+ * Berdasarkan selisih numerik kode pos dan kesamaan teks (Kecamatan, Kelurahan, Alamat)
  */
 function calculateLocalProximityDistance(target: TargetRow, master: MasterRow): number {
   const targetKpNum = parseInt(normalizeKodePos(target['KODE POS']), 10);
@@ -190,26 +190,26 @@ function calculateLocalProximityDistance(target: TargetRow, master: MasterRow): 
     postalDiff = Math.abs(targetKpNum - masterKpNum);
   }
 
-  const targetAlamat = cleanText(target.ALAMAT);
-  const masterAlamat = cleanText(master.ALAMAT);
-  const targetKel = cleanText(target.Kelurahan);
-  const masterKel = cleanText(master.Kelurahan);
-
-  const addressSim = textSimilarityScore(targetAlamat, masterAlamat);
-  const kelSim = textSimilarityScore(targetKel, masterKel);
+  const addressSim = textSimilarityScore(cleanText(target.ALAMAT), cleanText(master.ALAMAT));
+  const kelSim = textSimilarityScore(cleanText(target.Kelurahan), cleanText(master.Kelurahan));
+  const kecSim = textSimilarityScore(cleanText(target.Kecamatan), cleanText(master.Kecamatan));
+  const datiSim = textSimilarityScore(cleanText(target['Dati II']), cleanText(master['Dati II']));
+  const provSim = textSimilarityScore(cleanText(target.Provinsi), cleanText(master.Provinsi));
 
   // Semakin kecil jarak, semakin dekat
-  return postalDiff * 2 - (addressSim * 10) - (kelSim * 15);
+  // Penalti besar jika Dati II / Provinsi berbeda untuk mencegah salah wilayah
+  const provPenalty = provSim < 0.8 ? 100000 : 0;
+  const datiPenalty = datiSim < 0.8 ? 10000 : 0;
+
+  return postalDiff * 2 - (addressSim * 10) - (kelSim * 500) - (kecSim * 300) + provPenalty + datiPenalty;
 }
 
 /**
  * Temukan cabang terdekat berdasarkan hierarki aturan:
- * 1. Khusus Provinsi Aceh: Otomatis Cabang KIM (Skor 99%)
- * 2. Pengecekan 1: Apakah di kelurahan yang sama ada? Jika > 1 ambil terdekat. (Skor 95% - 98%)
- * 3. Pengecekan 2: Jika tidak ada, cari kelurahan terdekat. (Skor 85% - 94%)
- * 4. Pengecekan 3: Cek kecamatan. Jika di kecamatan ada 2 atau lebih, ambil yang terdekat dengan lokasi. (Skor 75% - 84%)
- * 5. Pengecekan 4: Cek kota/kabupaten terdekat. (Skor 60% - 74%)
- * 6. Fallback: Provinsi sekitar. (Skor 50% - 59%)
+ * 1. Khusus Provinsi Aceh: Otomatis Cabang KIM
+ * 2. Pengecekan 1: Dati II Sama (Di dalam Dati II yang sama, cari Kelurahan/Kecamatan/Kode Pos terdekat)
+ * 3. Pengecekan 2: Provinsi Sama (Jika Dati II tidak ada di master)
+ * 4. Fallback: Cabang terdekat secara global
  */
 export function findClosestMasterRecommendation(
   target: TargetRow,
@@ -232,146 +232,59 @@ export function findClosestMasterRecommendation(
     }
   }
 
-  const targetKel = cleanText(target.Kelurahan);
-  const targetKec = cleanText(target.Kecamatan);
   const targetDati = cleanText(target['Dati II']);
   const targetProv = cleanText(target.Provinsi);
-  const targetKp = normalizeKodePos(target['KODE POS']);
-
-  // =========================================================================
-  // TAHAP 1: PENGECEKAN KELURAHAN YANG SAMA
-  // =========================================================================
-  if (targetKel) {
-    const sameKelList = index.byKelurahan.get(targetKel) || [];
-    if (sameKelList.length > 0) {
-      // Jika ada lebih dari 1 cabang di kelurahan yang sama, ambil yang terdekat dengan lokasi
-      let best = sameKelList[0];
-      let minDistance = calculateLocalProximityDistance(target, best);
-
-      for (let i = 1; i < sameKelList.length; i++) {
-        const dist = calculateLocalProximityDistance(target, sameKelList[i]);
-        if (dist < minDistance) {
-          minDistance = dist;
-          best = sameKelList[i];
-        }
+  const targetKel = cleanText(target.Kelurahan);
+  
+  // Fungsi pembantu untuk mencari yang terbaik dari daftar kandidat
+  const findBestInList = (list: MasterRow[]) => {
+    let best = list[0];
+    let minDistance = calculateLocalProximityDistance(target, best);
+    for (let i = 1; i < list.length; i++) {
+      const dist = calculateLocalProximityDistance(target, list[i]);
+      if (dist < minDistance) {
+        minDistance = dist;
+        best = list[i];
       }
-
-      const masterKp = normalizeKodePos(best['KODE POS']);
-      const isExactPostal = targetKp && masterKp && targetKp === masterKp;
-
-      return {
-        targetRow: target,
-        recommendedMaster: best,
-        score: isExactPostal ? 98 : 96,
-        reason: `Kelurahan Sama (${best.Kelurahan || target.Kelurahan}) • ${isExactPostal ? 'Kode Pos Identik' : 'Cabang Terdekat di Kelurahan'}`,
-      };
     }
-  }
+    return best;
+  };
 
   // =========================================================================
-  // TAHAP 2: KELURAHAN TERDEKAT (RADIUS KODE POS SAMA / KECAMATAN SEKITAR)
-  // =========================================================================
-  if (targetKp.length >= 3) {
-    const p3 = targetKp.slice(0, 3);
-    const nearbyPostalList = index.byPostal3.get(p3) || [];
-    if (nearbyPostalList.length > 0) {
-      // Urutkan dan pilih kelurahan terdekat berdasarkan selisih kode pos & alamat
-      let best = nearbyPostalList[0];
-      let minDistance = calculateLocalProximityDistance(target, best);
-
-      for (let i = 1; i < nearbyPostalList.length; i++) {
-        const dist = calculateLocalProximityDistance(target, nearbyPostalList[i]);
-        if (dist < minDistance) {
-          minDistance = dist;
-          best = nearbyPostalList[i];
-        }
-      }
-
-      const masterKp = normalizeKodePos(best['KODE POS']);
-      const kpDiff = Math.abs(parseInt(targetKp, 10) - parseInt(masterKp, 10));
-      const score = Math.max(86, Math.min(94, 94 - Math.min(kpDiff, 8)));
-
-      return {
-        targetRow: target,
-        recommendedMaster: best,
-        score,
-        reason: `Kelurahan Terdekat (${best.Kelurahan || best.Kecamatan}) • Area Pos ${masterKp.slice(0, 3)}xx`,
-      };
-    }
-  }
-
-  // =========================================================================
-  // TAHAP 3: CEK KECAMATAN-NYA (JIKA ADA 2+ AMBIL YANG TERDEKAT DENGAN LOKASI)
-  // =========================================================================
-  if (targetKec) {
-    const sameKecList = index.byKecamatan.get(targetKec) || [];
-    if (sameKecList.length > 0) {
-      // "jika di kecamatan itu ada 2 maka ambil yang terdekat dengan lokasi nya"
-      let best = sameKecList[0];
-      let minDistance = calculateLocalProximityDistance(target, best);
-
-      for (let i = 1; i < sameKecList.length; i++) {
-        const dist = calculateLocalProximityDistance(target, sameKecList[i]);
-        if (dist < minDistance) {
-          minDistance = dist;
-          best = sameKecList[i];
-        }
-      }
-
-      const branchCountInfo = sameKecList.length > 1 ? `Dipilih Terdekat dari ${sameKecList.length} Cabang` : 'Cabang Utama Kecamatan';
-
-      return {
-        targetRow: target,
-        recommendedMaster: best,
-        score: 82,
-        reason: `Kecamatan Sama (${best.Kecamatan || target.Kecamatan}) • ${branchCountInfo}`,
-      };
-    }
-  }
-
-  // =========================================================================
-  // TAHAP 4: CEK KOTA / KABUPATEN (DATI II) TERDEKAT
+  // TAHAP 1: CARI DI DATI II YANG SAMA SEBAGAI PRIORITAS UTAMA
   // =========================================================================
   if (targetDati) {
     const sameDatiList = index.byDati.get(targetDati) || [];
     if (sameDatiList.length > 0) {
-      let best = sameDatiList[0];
-      let minDistance = calculateLocalProximityDistance(target, best);
-
-      for (let i = 1; i < sameDatiList.length; i++) {
-        const dist = calculateLocalProximityDistance(target, sameDatiList[i]);
-        if (dist < minDistance) {
-          minDistance = dist;
-          best = sameDatiList[i];
-        }
+      const best = findBestInList(sameDatiList);
+      
+      const kelMatch = textSimilarityScore(targetKel, cleanText(best.Kelurahan)) > 0.8;
+      const kecMatch = textSimilarityScore(cleanText(target.Kecamatan), cleanText(best.Kecamatan)) > 0.8;
+      
+      let reason = `Kota/Kabupaten Sama (${best['Dati II']})`;
+      let score = 72;
+      
+      if (kelMatch) {
+        reason = `Kelurahan Sama (${best.Kelurahan}) • ${reason}`;
+        score = 96;
+      } else if (kecMatch) {
+        reason = `Kecamatan Sama (${best.Kecamatan}) • ${reason}`;
+        score = 82;
+      } else {
+        reason = `Cabang Terdekat di ${reason}`;
       }
 
-      return {
-        targetRow: target,
-        recommendedMaster: best,
-        score: 72,
-        reason: `Kota/Kabupaten Sama (${best['Dati II'] || target['Dati II']}) • Cabang Terdekat di Kota`,
-      };
+      return { targetRow: target, recommendedMaster: best, score, reason };
     }
   }
 
   // =========================================================================
-  // TAHAP 5: FALLBACK PROVINSI / REGIONAL
+  // TAHAP 2: CARI DI PROVINSI YANG SAMA
   // =========================================================================
   if (targetProv) {
     const sameProvList = index.byProv.get(targetProv) || [];
     if (sameProvList.length > 0) {
-      let best = sameProvList[0];
-      let minDistance = calculateLocalProximityDistance(target, best);
-
-      for (let i = 1; i < sameProvList.length; i++) {
-        const dist = calculateLocalProximityDistance(target, sameProvList[i]);
-        if (dist < minDistance) {
-          minDistance = dist;
-          best = sameProvList[i];
-        }
-      }
-
+      const best = findBestInList(sameProvList);
       return {
         targetRow: target,
         recommendedMaster: best,
@@ -381,8 +294,10 @@ export function findClosestMasterRecommendation(
     }
   }
 
-  // Fallback terakhir jika semua tidak cocok
-  const fallback = index.all[0];
+  // =========================================================================
+  // TAHAP 3: FALLBACK GLOBAL (Sangat jarang terjadi kecuali data master kosong)
+  // =========================================================================
+  const fallback = findBestInList(index.all);
   return {
     targetRow: target,
     recommendedMaster: fallback,
