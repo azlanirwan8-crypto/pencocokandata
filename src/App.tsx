@@ -4,7 +4,6 @@ import { Topbar } from './components/Topbar';
 import { MetricCards } from './components/Dashboard/MetricCards';
 import { RegionalAnalyticsCharts } from './components/Dashboard/RegionalAnalyticsCharts';
 import { RadarAnomalyTable } from './components/Dashboard/RadarAnomalyTable';
-import { AuditLogTable } from './components/Dashboard/AuditLogTable';
 import { MasterHealthCard } from './components/MasterData/MasterHealthCard';
 import { MasterDataGrid } from './components/MasterData/MasterDataGrid';
 import { MasterUploadModal } from './components/MasterData/MasterUploadModal';
@@ -13,7 +12,7 @@ import { ProgressBar } from './components/WorkingEngine/ProgressBar';
 import { TargetDataGrid } from './components/WorkingEngine/TargetDataGrid';
 import { ExportAction } from './components/WorkingEngine/ExportAction';
 
-import type { MasterRow, TargetRow, BatchLog, MatchingStats, WilayahStat, UnmatchedArea } from './types';
+import type { MasterRow, TargetRow, MatchingStats, WilayahStat, UnmatchedArea } from './types';
 import type { RecommendationResult } from './utils/recommender';
 import { buildMasterIndex, analyzeMasterHealth, executeChunkMatching } from './utils/matcher';
 import { downloadMasterTemplate, downloadTargetTemplate } from './utils/excel';
@@ -81,8 +80,6 @@ export const App: React.FC = () => {
   const [dashboardWilayahFilter, setDashboardWilayahFilter] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
 
-  // Batch Logs History State
-  const [batchLogs, setBatchLogs] = useState<BatchLog[]>([]);
 
   // Build In-Memory Hash Map O(1)
   const masterIndex = useMemo(() => {
@@ -150,10 +147,7 @@ export const App: React.FC = () => {
           setMatchedDone(savedTarget.matchedDone || false);
         }
 
-        const savedLogs = await getItem<BatchLog[]>('batch_logs');
-        if (savedLogs && savedLogs.length > 0) {
-          setBatchLogs(savedLogs);
-        }
+
       } catch (err) {
         console.warn('Gagal memulihkan data:', err);
       }
@@ -308,27 +302,6 @@ export const App: React.FC = () => {
       setDurationMs(totalElapsed);
       setIsProcessing(false);
 
-      // Record in Audit Log
-      const matchedCount = matchedData.filter(r => r._isMatched).length;
-      const ptenDiffCount = matchedData.filter(r => r['CEK KODE POS + PTEN'] === 'DIFFERENT').length;
-      const newLog: BatchLog = {
-        id: `BATCH-${Date.now().toString().slice(-6)}`,
-        timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        fileName: targetFileName,
-        uploader: 'OpsAdmin.Lanpro',
-        totalRows: matchedData.length,
-        matchedCount,
-        unmatchedCount: matchedData.length - matchedCount,
-        ptenDiscrepancyCount: ptenDiffCount,
-        durationMs: totalElapsed,
-        dataSnapshot: matchedData,
-      };
-
-      setBatchLogs(prev => {
-        const updated = [newLog, ...prev];
-        setItem('batch_logs', updated);
-        return updated;
-      });
 
       setItem('target_data', {
         rows: matchedData,
@@ -519,7 +492,6 @@ export const App: React.FC = () => {
       setTargetFileName('');
       setMatchedDone(false);
       setProgress(0);
-      setBatchLogs([]);
 
       // Clear local IndexedDB
       await clearAllStorage();
@@ -590,17 +562,14 @@ export const App: React.FC = () => {
               multiCabangCount={masterHealth.multiOutletCount}
             />
 
-            {/* 3 Grafik Analisis Wilayah: Volume Cek, Match vs Tidak Match, dan Efektivitas Rekomendasi */}
+            {/* 2 Grafik Analisis Wilayah: Volume Data Cek & Match vs Tidak Match */}
             <RegionalAnalyticsCharts
               stats={regionalStats}
               totalDataCount={dashboardFilteredRows.length}
             />
 
-            {/* Row 2: Radar Titik Anomali */}
+            {/* Radar Titik Anomali (Dipertahankan) */}
             <RadarAnomalyTable unmatchedAreas={topUnmatchedAreas} />
-
-            {/* Row 3: Audit Log & Riwayat Batch */}
-            <AuditLogTable logs={batchLogs} />
           </>
         )}
 
