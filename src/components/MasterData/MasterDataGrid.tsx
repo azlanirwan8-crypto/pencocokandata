@@ -8,6 +8,7 @@ interface MasterDataGridProps {
 
 export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchBy, setSearchBy] = useState<string>('all');
   const [page, setPage] = useState(1);
   const pageSize = 15;
 
@@ -19,22 +20,51 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
     if (!searchTerm.trim()) return masterRows;
     const q = searchTerm.toLowerCase();
     return masterRows.filter((r) => {
-      return (
-        String(r.Wilayah || '').toLowerCase().includes(q) ||
-        String(r['Sandi Cabang'] || '').toLowerCase().includes(q) ||
-        String(r.Sandi || '').toLowerCase().includes(q) ||
-        String(r.Cabang || '').toLowerCase().includes(q) ||
-        String(r['Branch Code'] || '').toLowerCase().includes(q) ||
-        String(r['Kode Cabang'] || '').toLowerCase().includes(q) ||
-        String(r['Nama Outlet'] || '').toLowerCase().includes(q) ||
-        String(r['KODE POS'] || '').toLowerCase().includes(q) ||
-        String(r.Kecamatan || '').toLowerCase().includes(q) ||
-        String(r.Kelurahan || '').toLowerCase().includes(q) ||
-        String(r['Dati II'] || '').toLowerCase().includes(q) ||
-        String(r.ALAMAT || '').toLowerCase().includes(q)
-      );
+      switch (searchBy) {
+        case 'nama':
+          return String(r['Nama Outlet'] || '').toLowerCase().includes(q);
+        case 'kodepos':
+          return String(r['KODE POS'] || '').toLowerCase().includes(q);
+        case 'sandi':
+          return (
+            String(r['Sandi Cabang'] || '').toLowerCase().includes(q) ||
+            String(r.Sandi || '').toLowerCase().includes(q) ||
+            String(r.Cabang || '').toLowerCase().includes(q)
+          );
+        case 'kodecabang':
+          return (
+            String(r['Branch Code'] || '').toLowerCase().includes(q) ||
+            String(r['Kode Cabang'] || '').toLowerCase().includes(q)
+          );
+        case 'wilayah':
+          return String(r.Wilayah || '').toLowerCase().includes(q);
+        case 'alamat':
+          return (
+            String(r.ALAMAT || '').toLowerCase().includes(q) ||
+            String(r.Kecamatan || '').toLowerCase().includes(q) ||
+            String(r.Kelurahan || '').toLowerCase().includes(q) ||
+            String(r['Dati II'] || '').toLowerCase().includes(q) ||
+            String(r.Provinsi || '').toLowerCase().includes(q)
+          );
+        case 'all':
+        default:
+          return (
+            String(r.Wilayah || '').toLowerCase().includes(q) ||
+            String(r['Sandi Cabang'] || '').toLowerCase().includes(q) ||
+            String(r.Sandi || '').toLowerCase().includes(q) ||
+            String(r.Cabang || '').toLowerCase().includes(q) ||
+            String(r['Branch Code'] || '').toLowerCase().includes(q) ||
+            String(r['Kode Cabang'] || '').toLowerCase().includes(q) ||
+            String(r['Nama Outlet'] || '').toLowerCase().includes(q) ||
+            String(r['KODE POS'] || '').toLowerCase().includes(q) ||
+            String(r.Kecamatan || '').toLowerCase().includes(q) ||
+            String(r.Kelurahan || '').toLowerCase().includes(q) ||
+            String(r['Dati II'] || '').toLowerCase().includes(q) ||
+            String(r.ALAMAT || '').toLowerCase().includes(q)
+          );
+      }
     });
-  }, [masterRows, searchTerm]);
+  }, [masterRows, searchTerm, searchBy]);
 
   const totalPages = Math.ceil(filteredRows.length / pageSize) || 1;
   const paginatedRows = useMemo(() => {
@@ -52,20 +82,58 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
           Menampilkan <strong style={{ color: '#212529' }}>{filteredRows.length.toLocaleString('id-ID')}</strong> entri terfilter dari total <strong style={{ color: '#212529' }}>{masterRows.length.toLocaleString('id-ID')}</strong> baris master aktif.
         </div>
 
-        {/* Clean Velzon Search Input */}
-        <div className="search-input-wrapper">
-          <Search size={14} className="search-icon-pos" />
-          <input
-            type="text"
-            className="search-input"
-            placeholder="Cari Sandi, Outlet, Alamat..."
-            value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setPage(1);
-            }}
-            style={{ width: '240px', paddingRight: searchTerm ? '2rem' : '0.85rem' }}
-          />
+        {/* Clean Velzon Search & Filter By Toolbar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <span style={{ fontSize: '0.78rem', color: '#878a99', fontWeight: 500 }}>Search by:</span>
+            <select
+              value={searchBy}
+              onChange={(e) => {
+                setSearchBy(e.target.value);
+                setPage(1);
+              }}
+              style={{
+                fontSize: '0.78rem',
+                padding: '0.38rem 0.65rem',
+                borderRadius: '4px',
+                border: '1px solid #ced4da',
+                background: '#ffffff',
+                color: '#495057',
+                cursor: 'pointer',
+                outline: 'none',
+              }}
+            >
+              <option value="all">Semua Kolom</option>
+              <option value="nama">Nama Outlet</option>
+              <option value="kodepos">KODE POS</option>
+              <option value="sandi">Sandi Cabang</option>
+              <option value="kodecabang">Branch / Kode Cabang</option>
+              <option value="wilayah">Wilayah</option>
+              <option value="alamat">Alamat / Lokasi</option>
+            </select>
+          </div>
+
+          <div className="search-input-wrapper">
+            <Search size={14} className="search-icon-pos" />
+            <input
+              type="text"
+              className="search-input"
+              placeholder={
+                searchBy === 'nama' ? 'Cari nama outlet...' :
+                searchBy === 'kodepos' ? 'Cari kode pos...' :
+                searchBy === 'sandi' ? 'Cari sandi cabang...' :
+                searchBy === 'kodecabang' ? 'Cari kode cabang...' :
+                searchBy === 'wilayah' ? 'Cari wilayah...' :
+                searchBy === 'alamat' ? 'Cari alamat, kecamatan...' :
+                'Cari Sandi, Outlet, Alamat...'
+              }
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setPage(1);
+              }}
+              style={{ width: '230px', paddingRight: searchTerm ? '2rem' : '0.85rem' }}
+            />
           {searchTerm && (
             <button
               type="button"
@@ -84,6 +152,7 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
               <X size={13} />
             </button>
           )}
+          </div>
         </div>
       </div>
 

@@ -317,10 +317,48 @@ export const App: React.FC = () => {
     }
   };
 
-  // Master Actions (Appends new rows to existing master data)
+  // Master Actions (Appends new rows to existing master data with strict deduplication)
   const handleMasterLoaded = async (newRows: MasterRow[], fileName: string) => {
     setMasterRows((prev) => {
-      const combined = [...prev, ...newRows];
+      // Indeks kunci unik dari data master yang sudah tersimpan
+      const existingKeys = new Set<string>();
+      for (const r of prev) {
+        const bc = String(r['Branch Code'] || r['Kode Cabang'] || '').trim().toUpperCase();
+        const name = String(r['Nama Outlet'] || r['Sandi Cabang'] || r.Cabang || '').trim().toUpperCase();
+        const kp = String(r['KODE POS'] || '').trim();
+        const addr = String(r.ALAMAT || '').trim().toUpperCase();
+
+        if (bc && bc !== '-' && bc !== '0') existingKeys.add(`bc:${bc}`);
+        if (name && kp) existingKeys.add(`ot:${name}|${kp}`);
+        if (name && addr) existingKeys.add(`oa:${name}|${addr}`);
+      }
+
+      // Saring hanya baris yang benar-benar baru
+      const uniqueAppended: MasterRow[] = [];
+      for (const r of newRows) {
+        const bc = String(r['Branch Code'] || r['Kode Cabang'] || '').trim().toUpperCase();
+        const name = String(r['Nama Outlet'] || r['Sandi Cabang'] || r.Cabang || '').trim().toUpperCase();
+        const kp = String(r['KODE POS'] || '').trim();
+        const addr = String(r.ALAMAT || '').trim().toUpperCase();
+
+        const branchKey = bc && bc !== '-' && bc !== '0' ? `bc:${bc}` : '';
+        const outletKey = name && kp ? `ot:${name}|${kp}` : '';
+        const outletAddrKey = name && addr ? `oa:${name}|${addr}` : '';
+
+        const isDuplicate =
+          (branchKey && existingKeys.has(branchKey)) ||
+          (outletKey && existingKeys.has(outletKey)) ||
+          (outletAddrKey && existingKeys.has(outletAddrKey));
+
+        if (isDuplicate) continue;
+
+        if (branchKey) existingKeys.add(branchKey);
+        if (outletKey) existingKeys.add(outletKey);
+        if (outletAddrKey) existingKeys.add(outletAddrKey);
+        uniqueAppended.push(r);
+      }
+
+      const combined = [...prev, ...uniqueAppended];
       const combinedFileName = prev.length > 0 ? `${combined.length} Cabang (${fileName})` : fileName;
       // setMasterFileName(combinedFileName);
       setItem('master_data', { rows: combined, fileName: combinedFileName });
@@ -998,6 +1036,7 @@ export const App: React.FC = () => {
         onClose={() => setIsMasterUploadModalOpen(false)}
         onMasterLoaded={handleMasterLoaded}
         currentMasterCount={masterRows.length}
+        existingMasterRows={masterRows}
       />
 
       {/* Target Upload Modal */}

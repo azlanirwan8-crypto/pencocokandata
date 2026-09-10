@@ -65,8 +65,8 @@ export const MasterHealthCard: React.FC<MasterHealthCardProps> = ({ health }) =>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               <div
                 style={{
-                  width: '42px',
-                  height: '42px',
+                  width: '32px',
+                  height: '32px',
                   borderRadius: '50%',
                   background: 'rgba(247, 184, 75, 0.15)',
                   display: 'flex',
@@ -76,13 +76,13 @@ export const MasterHealthCard: React.FC<MasterHealthCardProps> = ({ health }) =>
                   flexShrink: 0,
                 }}
               >
-                <ShieldAlert size={22} />
+                <ShieldAlert size={16} />
               </div>
               <div>
-                <strong style={{ color: '#212529', fontSize: '0.98rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <strong style={{ color: '#212529', fontSize: '0.82rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem', letterSpacing: '-0.01em' }}>
                   Indikator Kesehatan Master: Terdeteksi {health.multiOutletCount} Kode Pos Multi-Cabang ({allDuplicateRows.length} Baris Terlibat)
                 </strong>
-                <p style={{ fontSize: '0.78rem', color: '#878a99', marginTop: '0.15rem' }}>
+                <p style={{ fontSize: '0.70rem', color: '#878a99', marginTop: '0.1rem', margin: 0 }}>
                   Rincian seluruh kolom cabang dengan kode pos ganda untuk mitigasi dini dan acuan Tie-Breaker Level 2.
                 </p>
               </div>
