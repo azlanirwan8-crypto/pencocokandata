@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
 import { MetricCards } from './components/Dashboard/MetricCards';
-import { WilayahChart } from './components/Dashboard/WilayahChart';
+import { RegionalAnalyticsCharts } from './components/Dashboard/RegionalAnalyticsCharts';
 import { RadarAnomalyTable } from './components/Dashboard/RadarAnomalyTable';
 import { AuditLogTable } from './components/Dashboard/AuditLogTable';
 import { MasterHealthCard } from './components/MasterData/MasterHealthCard';
@@ -31,7 +31,6 @@ import {
   clearMasterFromNeon,
 } from './utils/neonSync';
 import { SupabaseModal } from './components/SupabaseModal';
-import { PtenDiscrepancyPanel } from './components/Dashboard/PtenDiscrepancyPanel';
 import { Database, ShieldAlert, Filter, UploadCloud, Download, RotateCcw, Layers } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -591,11 +590,11 @@ export const App: React.FC = () => {
               multiCabangCount={masterHealth.multiOutletCount}
             />
 
-            {/* Row 1: Distribusi Wilayah & Matriks Kepatuhan PTEN */}
-            <div className="dashboard-columns">
-              <WilayahChart stats={regionalStats} />
-              <PtenDiscrepancyPanel targetRows={dashboardFilteredRows} />
-            </div>
+            {/* 3 Grafik Analisis Wilayah: Volume Cek, Match vs Tidak Match, dan Efektivitas Rekomendasi */}
+            <RegionalAnalyticsCharts
+              stats={regionalStats}
+              totalDataCount={dashboardFilteredRows.length}
+            />
 
             {/* Row 2: Radar Titik Anomali */}
             <RadarAnomalyTable unmatchedAreas={topUnmatchedAreas} />
