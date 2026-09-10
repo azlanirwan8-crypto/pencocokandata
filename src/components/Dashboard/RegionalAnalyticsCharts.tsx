@@ -43,7 +43,13 @@ export const RegionalAnalyticsCharts: React.FC<RegionalAnalyticsChartsProps> = (
   totalDataCount,
   selectedWilayah = 'ALL',
 }) => {
-  if (stats.length === 0) {
+  // Filter ketat: jika difilter, hanya tampilkan wilayah yang dipilih
+  const displayedStats = React.useMemo(() => {
+    if (!selectedWilayah || selectedWilayah === 'ALL') return stats;
+    return stats.filter((s) => String(s.wilayah).trim() === String(selectedWilayah).trim());
+  }, [stats, selectedWilayah]);
+
+  if (displayedStats.length === 0) {
     return (
       <div
         className="glass-card"
@@ -82,13 +88,13 @@ export const RegionalAnalyticsCharts: React.FC<RegionalAnalyticsChartsProps> = (
   }
 
   // Max total volume for scale calculation
-  const maxTotal = Math.max(...stats.map((s) => s.total), 1);
-  const totalUnmatchedAll = stats.reduce((acc, s) => acc + s.unmatched, 0);
-  const totalMatchedAll = stats.reduce((acc, s) => acc + s.matched, 0);
+  const maxTotal = Math.max(...displayedStats.map((s) => s.total), 1);
+  const totalUnmatchedAll = displayedStats.reduce((acc, s) => acc + s.unmatched, 0);
+  const totalMatchedAll = displayedStats.reduce((acc, s) => acc + s.matched, 0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', marginTop: '1rem' }}>
-      {/* Top Header: Title & Info */}
+      {/* Top Header: Title Only (Subtitle status/deskripsi dihapus sesuai permintaan) */}
       <div
         style={{
           display: 'flex',
@@ -113,11 +119,6 @@ export const RegionalAnalyticsCharts: React.FC<RegionalAnalyticsChartsProps> = (
             <BarChart3 size={18} color="#405189" />
             <span>Analisis Komparasi Data per Wilayah</span>
           </h3>
-          <p style={{ fontSize: '0.76rem', color: '#878a99', margin: '0.15rem 0 0 0' }}>
-            {selectedWilayah === 'ALL'
-              ? `Memetakan ${stats.length} Wilayah Operasional dari total ${totalDataCount.toLocaleString('id-ID')} baris data cek yang tersimpan`
-              : `Menampilkan data khusus Wilayah "${selectedWilayah}" (${totalDataCount.toLocaleString('id-ID')} baris data tersimpan)`}
-          </p>
         </div>
       </div>
 
@@ -176,7 +177,7 @@ export const RegionalAnalyticsCharts: React.FC<RegionalAnalyticsChartsProps> = (
                   Volume Data Cek per Wilayah
                 </h4>
                 <span style={{ fontSize: '0.74rem', color: '#878a99' }}>
-                  Jumlah baris data hasil upload Excel yang tersimpan
+                  Jumlah baris data hasil upload Excel yang tersimpan per wilayah
                 </span>
               </div>
             </div>
@@ -198,7 +199,7 @@ export const RegionalAnalyticsCharts: React.FC<RegionalAnalyticsChartsProps> = (
 
           {/* List of Bars with Vibrant Distinct Colors */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.95rem', flex: 1 }}>
-            {stats.map((item, idx) => {
+            {displayedStats.map((item, idx) => {
               const percentage = totalDataCount > 0 ? (item.total / totalDataCount) * 100 : 0;
               const barWidth = Math.max((item.total / maxTotal) * 100, 2);
               const barGradient = VIBRANT_REGION_COLORS[idx % VIBRANT_REGION_COLORS.length];
@@ -387,7 +388,7 @@ export const RegionalAnalyticsCharts: React.FC<RegionalAnalyticsChartsProps> = (
 
           {/* List of Stacked High-Contrast Bars */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.95rem', flex: 1 }}>
-            {stats.map((item) => {
+            {displayedStats.map((item) => {
               const matchPct = item.total > 0 ? (item.matched / item.total) * 100 : 0;
               const unmatchPct = item.total > 0 ? (item.unmatched / item.total) * 100 : 0;
 
@@ -489,29 +490,6 @@ export const RegionalAnalyticsCharts: React.FC<RegionalAnalyticsChartsProps> = (
                         boxShadow: unmatchPct > 0 ? '0 1px 2px rgba(247,184,75,0.3)' : 'none',
                       }}
                     />
-                  </div>
-
-                  {/* Subtext info MATCH (REKOMENDASI) */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      fontSize: '0.69rem',
-                      color: '#878a99',
-                      marginTop: '0.1rem',
-                    }}
-                  >
-                    <span>
-                      {item.unmatched > 0
-                        ? `${item.unmatched} data berstatus MATCH (REKOMENDASI)`
-                        : 'Seluruh cabang di wilayah ini sudah 100% Match'}
-                    </span>
-                    {item.unmatched > 0 && (
-                      <span style={{ color: '#d97706', fontWeight: 600 }}>
-                        Cek Tab 2 Rekomendasi
-                      </span>
-                    )}
                   </div>
                 </div>
               );

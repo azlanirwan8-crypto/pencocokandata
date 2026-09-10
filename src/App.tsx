@@ -226,15 +226,18 @@ export const App: React.FC = () => {
     const map = new Map<string, { total: number; matched: number; unmatched: number }>();
 
     dashboardFilteredRows.forEach((r) => {
-      const w = r.Wilayah || 'Wilayah Tidak Terdaftar';
+      const rawW = String(r.Wilayah || 'Wilayah Tidak Terdaftar').trim();
+      if (dashboardWilayahFilter !== 'ALL' && rawW !== String(dashboardWilayahFilter).trim()) {
+        return;
+      }
       const isMatched = r._isMatched ?? (r.Sandi !== '');
-      const current = map.get(w) || { total: 0, matched: 0, unmatched: 0 };
+      const current = map.get(rawW) || { total: 0, matched: 0, unmatched: 0 };
 
       current.total++;
       if (isMatched) current.matched++;
       else current.unmatched++;
 
-      map.set(w, current);
+      map.set(rawW, current);
     });
 
     return Array.from(map.entries()).map(([wilayah, data]) => ({
@@ -244,7 +247,7 @@ export const App: React.FC = () => {
       unmatched: data.unmatched,
       rate: data.total > 0 ? (data.matched / data.total) * 100 : 0,
     }));
-  }, [dashboardFilteredRows]);
+  }, [dashboardFilteredRows, dashboardWilayahFilter]);
 
   // Top 10 Unmatched Areas for Radar Anomaly (Mengikuti Filter Dashboard)
   const topUnmatchedAreas: UnmatchedArea[] = useMemo(() => {
