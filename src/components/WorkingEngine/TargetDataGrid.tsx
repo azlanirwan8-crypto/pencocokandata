@@ -25,6 +25,7 @@ import {
 } from '../../utils/recommender';
 import { ProximityGuideModal } from './ProximityGuideModal';
 import { CandidateDetailModal } from './CandidateDetailModal';
+import { formatWilayahName } from '../../utils/normalizer';
 
 interface TargetDataGridProps {
   rows: TargetRow[];
@@ -439,7 +440,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               <option value="ALL">Semua Wilayah / Region ({wilayahList.length})</option>
               {wilayahList.map((w) => (
                 <option key={w} value={w}>
-                  {w}
+                  {formatWilayahName(w)}
                 </option>
               ))}
             </select>
@@ -1209,7 +1210,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                       </td>
 
                       {/* Wilayah */}
-                      <td><span style={{ color: '#495057' }}>{r.Wilayah || '-'}</span></td>
+                      <td><span style={{ color: '#495057', fontWeight: 500 }}>{formatWilayahName(r.Wilayah)}</span></td>
 
                       {/* Auto-populated Master Attributes */}
                       {hasCombinedSandiCabang ? (

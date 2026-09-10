@@ -15,6 +15,7 @@ import { ExportAction } from './components/WorkingEngine/ExportAction';
 import type { MasterRow, TargetRow, MatchingStats, WilayahStat, UnmatchedArea } from './types';
 import type { RecommendationResult } from './utils/recommender';
 import { buildMasterIndex, analyzeMasterHealth, executeChunkMatching } from './utils/matcher';
+import { formatWilayahName } from './utils/normalizer';
 
 import { getItem, setItem } from './utils/storage';
 import {
@@ -614,7 +615,7 @@ export const App: React.FC = () => {
                     <span style={{ fontSize: '0.74rem', color: '#878a99', marginLeft: '0.5rem' }}>
                       {dashboardWilayahFilter === 'ALL'
                         ? `Menampilkan seluruh ${targetRows.length.toLocaleString('id-ID')} data (${wilayahList.length} Wilayah)`
-                        : `Menampilkan khusus Wilayah "${dashboardWilayahFilter}" (${dashboardFilteredRows.length.toLocaleString('id-ID')} data)`}
+                        : `Menampilkan khusus ${formatWilayahName(dashboardWilayahFilter)} (${dashboardFilteredRows.length.toLocaleString('id-ID')} data)`}
                     </span>
                   </div>
                 </div>
@@ -644,7 +645,7 @@ export const App: React.FC = () => {
                       const countW = targetRows.filter(r => String(r.Wilayah || '').trim() === String(w).trim()).length;
                       return (
                         <option key={w} value={w}>
-                          Wilayah {w} ({countW.toLocaleString('id-ID')} Data)
+                          {formatWilayahName(w)} ({countW.toLocaleString('id-ID')} Data)
                         </option>
                       );
                     })}

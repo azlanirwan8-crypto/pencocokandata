@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Download, CheckCircle, ShieldAlert, FileSpreadsheet, MapPin } from 'lucide-react';
 import type { TargetRow } from '../../types';
 import { exportTargetToExcel } from '../../utils/excel';
+import { formatWilayahName } from '../../utils/normalizer';
 
 interface ExportActionProps {
   allTargetRows: TargetRow[];
@@ -213,7 +214,7 @@ export const ExportAction: React.FC<ExportActionProps> = ({
                 const count = wilayahCounts.get(w) || 0;
                 return (
                   <option key={w} value={w}>
-                    {w} ({count.toLocaleString('id-ID')} Baris)
+                    {formatWilayahName(w)} ({count.toLocaleString('id-ID')} Baris)
                   </option>
                 );
               })}

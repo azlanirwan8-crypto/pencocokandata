@@ -2,6 +2,7 @@ import React from 'react';
 import { BarChart3, TrendingUp } from 'lucide-react';
 import type { WilayahStat, MatchingStats } from '../../types';
 import { MatchCompositionDonut } from './MatchCompositionDonut';
+import { formatWilayahName } from '../../utils/normalizer';
 
 interface RegionalAnalyticsChartsProps {
   stats: WilayahStat[];
@@ -185,7 +186,7 @@ export const RegionalAnalyticsCharts: React.FC<RegionalAnalyticsChartsProps> = (
                       {idx + 1}
                     </span>
                     <span style={{ fontWeight: 600, color: '#212529' }}>
-                      {item.wilayah}
+                      {formatWilayahName(item.wilayah)}
                     </span>
                   </div>
 

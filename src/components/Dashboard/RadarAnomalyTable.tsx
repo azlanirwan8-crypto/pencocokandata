@@ -1,6 +1,7 @@
 import React from 'react';
 import { ShieldAlert } from 'lucide-react';
 import type { UnmatchedArea } from '../../types';
+import { formatWilayahName } from '../../utils/normalizer';
 
 interface RadarAnomalyTableProps {
   unmatchedAreas: UnmatchedArea[];
@@ -176,7 +177,7 @@ export const RadarAnomalyTable: React.FC<RadarAnomalyTableProps> = ({
                           {item.kodePos || '-'}
                         </span>
                         <span>•</span>
-                        <span style={{ color: '#6c757d' }}>{item.wilayah}</span>
+                        <span style={{ color: '#6c757d' }}>{formatWilayahName(item.wilayah)}</span>
                       </div>
                     </div>
                   </div>

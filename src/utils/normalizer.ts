@@ -60,3 +60,26 @@ export function textSimilarityScore(a: string, b: string): number {
   const unionSize = new Set([...tokens1, ...tokens2]).size;
   return matches / unionSize;
 }
+
+/**
+ * Standardize Wilayah display label so numeric values like "1" or "8" display as "Wilayah 1", "Wilayah 8"
+ */
+export function formatWilayahName(val: unknown): string {
+  if (val === null || val === undefined) return 'Tanpa Wilayah';
+  const str = String(val).trim();
+  if (!str || str === '-' || str === '0') return 'Tanpa Wilayah';
+
+  // Jika sudah memiliki awalan "Wilayah" (case-insensitive)
+  if (/^wilayah\b/i.test(str)) {
+    return str.replace(/^wilayah/i, 'Wilayah');
+  }
+
+  // Jika awalan "Region"
+  if (/^region\b/i.test(str)) {
+    return str;
+  }
+
+  // Tambahkan prefix "Wilayah" (misal: "1" -> "Wilayah 1", "8" -> "Wilayah 8")
+  return `Wilayah ${str}`;
+}
+
