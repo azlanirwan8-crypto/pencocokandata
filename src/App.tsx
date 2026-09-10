@@ -666,11 +666,8 @@ export const App: React.FC = () => {
                 </div>
                 <div>
                   <h3 style={{ fontSize: '0.96rem', fontWeight: 600, color: '#212529', margin: 0 }}>
-                    Database Referensi Master Cabang & Outlet
+                    Data Master
                   </h3>
-                  <p style={{ fontSize: '0.76rem', color: '#878a99', margin: '0.15rem 0 0 0' }}>
-                    Total {masterRows.length.toLocaleString('id-ID')} cabang terdaftar{masterFileName ? ` • Berkas: ${masterFileName}` : ''} • Multi-Cabang Alert: {masterHealth.multiOutletCount} area
-                  </p>
                 </div>
               </div>
 
@@ -785,15 +782,7 @@ export const App: React.FC = () => {
                     marginBottom: '0.85rem',
                   }}
                 >
-                  <div>
-                    <h2 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#212529', letterSpacing: '-0.01em', margin: 0 }}>
-                      Pratinjau & Manajemen Data Master
-                    </h2>
-                    <p style={{ fontSize: '0.78rem', color: '#878a99', marginTop: '0.15rem', margin: 0 }}>
-                      Total {masterRows.length.toLocaleString('id-ID')} cabang master terdaftar{masterFileName ? ` • Berkas: ${masterFileName}` : ''} • Multi-Cabang: {masterHealth.multiOutletCount} area
-                    </p>
-                  </div>
-                </div>
+
 
                 {/* 2 SUB-TABS (VELZON UNDERLINE STYLE DI DALAM CARD) */}
                 <div
@@ -827,7 +816,7 @@ export const App: React.FC = () => {
                     id="tab-btn-master-health"
                   >
                     <ShieldAlert size={14} color={masterSubTab === 'health' ? (masterHealth.multiOutletCount > 0 ? '#d97706' : '#0ab39c') : '#878a99'} />
-                    <span>Tab 1: Indikator Kesehatan Master</span>
+                    <span>Indikator Kesehatan Master</span>
                     <span
                       style={{
                         padding: '0.12rem 0.5rem',
@@ -865,7 +854,7 @@ export const App: React.FC = () => {
                     id="tab-btn-master-grid"
                   >
                     <Database size={14} color={masterSubTab === 'grid' ? '#3577f1' : '#878a99'} />
-                    <span>Tab 2: Data Grid Master Cabang</span>
+                    <span>Data Grid Master Cabang</span>
                     <span
                       style={{
                         padding: '0.12rem 0.5rem',

@@ -172,26 +172,7 @@ export const TargetUploadModal: React.FC<TargetUploadModalProps> = ({
 
         {/* Modal Body */}
         <div style={{ padding: '1.25rem' }}>
-          {/* Info Append Banner */}
-          <div
-            style={{
-              padding: '0.65rem 0.85rem',
-              borderRadius: '6px',
-              background: 'rgba(53, 119, 241, 0.06)',
-              border: '1px solid rgba(53, 119, 241, 0.15)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              marginBottom: '1rem',
-              fontSize: '0.78rem',
-              color: '#3577f1',
-            }}
-          >
-            <PlusCircle size={15} style={{ flexShrink: 0 }} />
-            <span>
-              Berkas yang diunggah akan <strong>menambahkan data baru</strong> ke data target yang sudah ada (append) dengan penomoran urut otomatis.
-            </span>
-          </div>
+
 
           <input
             ref={fileInputRef}

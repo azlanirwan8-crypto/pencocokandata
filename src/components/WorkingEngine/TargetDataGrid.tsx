@@ -210,7 +210,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           id="tab-btn-upload"
         >
           <Layers size={14} color={checkerTab === 'upload' ? '#3577f1' : '#878a99'} />
-          <span>Tab 1: Data Upload</span>
+          <span>Data Upload</span>
           <span
             style={{
               padding: '0.12rem 0.5rem',
@@ -251,7 +251,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           id="tab-btn-recommendation"
         >
           <Sparkles size={14} color={checkerTab === 'recommendation' ? '#d97706' : '#878a99'} />
-          <span>Tab 2: Rekomendasi Data</span>
+          <span>Rekomendasi Data</span>
           <span
             style={{
               padding: '0.12rem 0.5rem',
