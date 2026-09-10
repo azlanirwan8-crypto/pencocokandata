@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Sparkles, Building2, MapPin, Mail, Globe } from 'lucide-react';
+import { X, Sparkles, CheckCircle2 } from 'lucide-react';
 
 interface ProximityGuideModalProps {
   isOpen: boolean;
@@ -28,7 +28,7 @@ export const ProximityGuideModal: React.FC<ProximityGuideModalProps> = ({ isOpen
         className="glass-card"
         style={{
           width: '100%',
-          maxWidth: '620px',
+          maxWidth: '640px',
           background: '#ffffff',
           borderRadius: '10px',
           boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.05)',
@@ -68,10 +68,10 @@ export const ProximityGuideModal: React.FC<ProximityGuideModalProps> = ({ isOpen
             </div>
             <div>
               <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#212529', margin: 0 }}>
-                Panduan Sederhana: Skor Kedekatan Cabang
+                Panduan Perhitungan Skor & Rekomendasi Cabang
               </h3>
               <p style={{ fontSize: '0.76rem', color: '#878a99', margin: '0.15rem 0 0 0' }}>
-                Penjelasan mudah tentang cara sistem mencocokkan cabang terdekat
+                Urutan pencarian otomatis cabang terdekat untuk data yang belum match
               </p>
             </div>
           </div>
@@ -95,181 +95,202 @@ export const ProximityGuideModal: React.FC<ProximityGuideModalProps> = ({ isOpen
 
         {/* Modal Body */}
         <div style={{ padding: '1.25rem 1.4rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.15rem' }}>
-          {/* Pengantar Bahasa Awam */}
+          {/* Info Khusus Aceh */}
           <div
             style={{
               padding: '0.85rem 1rem',
               borderRadius: '6px',
-              background: '#f8fafc',
-              border: '1px solid #e2e8f0',
+              background: '#ecfdf5',
+              border: '1px solid #a7f3d0',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.6rem',
               fontSize: '0.82rem',
-              color: '#334155',
-              lineHeight: 1.5,
+              color: '#065f46',
             }}
           >
-            💡 <strong>Tujuan Fitur:</strong> Data cek Anda yang belum ada cabangnya otomatis dicocokkan dengan <strong>cabang yang paling dekat lokasinya</strong> di peta, sehingga Anda tidak perlu mencocokkan satu per satu secara manual.
-          </div>
-
-          {/* 4 Unsur Penilaian */}
-          <div>
-            <h4 style={{ fontSize: '0.86rem', fontWeight: 700, color: '#1e293b', margin: '0 0 0.6rem 0' }}>
-              4 Unsur Penentu Kedekatan Lokasi (Total 100%):
-            </h4>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.65rem' }}>
-              <div
-                style={{
-                  padding: '0.75rem 0.85rem',
-                  borderRadius: '6px',
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  display: 'flex',
-                  gap: '0.6rem',
-                }}
-              >
-                <div style={{ color: '#d97706', marginTop: '2px' }}><Building2 size={16} /></div>
-                <div>
-                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>
-                    1. Kota / Kabupaten (Paling Utama: 35%)
-                  </div>
-                  <div style={{ fontSize: '0.73rem', color: '#64748b', marginTop: '0.15rem' }}>
-                    Jika nama Kota atau Kabupaten sama, poin otomatis tinggi karena pasti satu kota.
-                  </div>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  padding: '0.75rem 0.85rem',
-                  borderRadius: '6px',
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  display: 'flex',
-                  gap: '0.6rem',
-                }}
-              >
-                <div style={{ color: '#d97706', marginTop: '2px' }}><MapPin size={16} /></div>
-                <div>
-                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>
-                    2. Kecamatan (Paling Utama: 35%)
-                  </div>
-                  <div style={{ fontSize: '0.73rem', color: '#64748b', marginTop: '0.15rem' }}>
-                    Jika nama kecamatan cocok, cabang dipastikan berada di lingkungan terdekat.
-                  </div>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  padding: '0.75rem 0.85rem',
-                  borderRadius: '6px',
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  display: 'flex',
-                  gap: '0.6rem',
-                }}
-              >
-                <div style={{ color: '#d97706', marginTop: '2px' }}><Mail size={16} /></div>
-                <div>
-                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>
-                    3. Kode Pos Berdekatan (20%)
-                  </div>
-                  <div style={{ fontSize: '0.73rem', color: '#64748b', marginTop: '0.15rem' }}>
-                    Kode pos yang angka depannya mirip menandakan jarak fisik lokasi yang saling bertetangga.
-                  </div>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  padding: '0.75rem 0.85rem',
-                  borderRadius: '6px',
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  display: 'flex',
-                  gap: '0.6rem',
-                }}
-              >
-                <div style={{ color: '#d97706', marginTop: '2px' }}><Globe size={16} /></div>
-                <div>
-                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>
-                    4. Satu Provinsi (10%)
-                  </div>
-                  <div style={{ fontSize: '0.73rem', color: '#64748b', marginTop: '0.15rem' }}>
-                    Memastikan data tidak keliru nyasar ke luar pulau atau provinsi lain.
-                  </div>
-                </div>
-              </div>
+            <CheckCircle2 size={18} color="#059669" style={{ flexShrink: 0 }} />
+            <div>
+              <strong>Aturan Khusus Wilayah Aceh:</strong> Data yang berlokasi di Provinsi Aceh secara otomatis dialokasikan ke <strong>Cabang KIM</strong> (Skor 99%).
             </div>
           </div>
 
-          {/* Arti Persentase Angka */}
-          <div
-            style={{
-              padding: '0.9rem 1rem',
-              borderRadius: '8px',
-              background: '#fffdf8',
-              border: '1px solid rgba(247, 184, 75, 0.35)',
-            }}
-          >
-            <h4 style={{ fontSize: '0.84rem', fontWeight: 700, color: '#92400e', margin: '0 0 0.55rem 0' }}>
-              Arti Persentase (Kenapa ada 60%, 70%, 90%?):
+          {/* Urutan Pengecekan Cabang Terdekat */}
+          <div>
+            <h4 style={{ fontSize: '0.86rem', fontWeight: 700, color: '#1e293b', margin: '0 0 0.65rem 0' }}>
+              Tahapan Pengecekan Lokasi Cabang Terdekat:
             </h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', fontSize: '0.78rem' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
-                <span
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+              {/* Tahap 1 */}
+              <div
+                style={{
+                  padding: '0.75rem 0.85rem',
+                  borderRadius: '6px',
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '0.65rem',
+                }}
+              >
+                <div
                   style={{
-                    padding: '0.15rem 0.45rem',
-                    borderRadius: '4px',
-                    fontWeight: 700,
-                    background: 'rgba(10, 179, 156, 0.15)',
-                    color: '#0ab39c',
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    background: '#0ab39c',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                     fontSize: '0.72rem',
-                    whiteSpace: 'nowrap',
+                    fontWeight: 700,
+                    flexShrink: 0,
+                    marginTop: '2px',
                   }}
                 >
-                  80% - 99% (Sangat Cocok)
-                </span>
-                <span style={{ color: '#475569', lineHeight: 1.4 }}>
-                  Kota sama, Kecamatan sama, dan Kode Pos sama/mirip. <strong>Sangat aman untuk langsung disetujui.</strong>
-                </span>
+                  1
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                    <strong style={{ fontSize: '0.82rem', color: '#0f172a' }}>Pengecekan Pertama: Kelurahan Sama</strong>
+                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#0ab39c', background: 'rgba(10, 179, 156, 0.1)', padding: '0.1rem 0.45rem', borderRadius: '4px' }}>
+                      Skor 95% - 98%
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '0.74rem', color: '#64748b', margin: '0.15rem 0 0 0' }}>
+                    Sistem mengecek apakah di kelurahan target yang sama terdapat cabang. Jika ada lebih dari 1 cabang di kelurahan tersebut, sistem otomatis memilih yang paling dekat dengan lokasi (kode pos/alamat).
+                  </p>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
-                <span
+              {/* Tahap 2 */}
+              <div
+                style={{
+                  padding: '0.75rem 0.85rem',
+                  borderRadius: '6px',
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '0.65rem',
+                }}
+              >
+                <div
                   style={{
-                    padding: '0.15rem 0.45rem',
-                    borderRadius: '4px',
-                    fontWeight: 700,
-                    background: 'rgba(247, 184, 75, 0.2)',
-                    color: '#d97706',
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    background: '#3577f1',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                     fontSize: '0.72rem',
-                    whiteSpace: 'nowrap',
+                    fontWeight: 700,
+                    flexShrink: 0,
+                    marginTop: '2px',
                   }}
                 >
-                  65% - 79% (Cabang Terdekat)
-                </span>
-                <span style={{ color: '#475569', lineHeight: 1.4 }}>
-                  Satu Kota dan satu Provinsi, tapi di kecamatan tetangga (karena di kecamatan tersebut belum ada cabang). <strong>Layak disetujui sebagai cabang pelayan terdekat.</strong>
-                </span>
+                  2
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                    <strong style={{ fontSize: '0.82rem', color: '#0f172a' }}>Jika Tidak Ada: Kelurahan Terdekat</strong>
+                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#3577f1', background: 'rgba(53, 119, 241, 0.1)', padding: '0.1rem 0.45rem', borderRadius: '4px' }}>
+                      Skor 85% - 94%
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '0.74rem', color: '#64748b', margin: '0.15rem 0 0 0' }}>
+                    Mencari cabang di kelurahan tetangga dalam radius kode pos yang sama (3-4 digit kode pos sama/bersebelahan).
+                  </p>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
-                <span
+              {/* Tahap 3 */}
+              <div
+                style={{
+                  padding: '0.75rem 0.85rem',
+                  borderRadius: '6px',
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '0.65rem',
+                }}
+              >
+                <div
                   style={{
-                    padding: '0.15rem 0.45rem',
-                    borderRadius: '4px',
-                    fontWeight: 700,
-                    background: 'rgba(53, 119, 241, 0.12)',
-                    color: '#3577f1',
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    background: '#f7b84b',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                     fontSize: '0.72rem',
-                    whiteSpace: 'nowrap',
+                    fontWeight: 700,
+                    flexShrink: 0,
+                    marginTop: '2px',
                   }}
                 >
-                  50% - 64% (Alternatif Sekitar)
-                </span>
-                <span style={{ color: '#475569', lineHeight: 1.4 }}>
-                  Cabang alternatif yang masih berada dalam satu area regional yang sama.
-                </span>
+                  3
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                    <strong style={{ fontSize: '0.82rem', color: '#0f172a' }}>Jika Tidak Juga: Cek Kecamatan Sama</strong>
+                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#d97706', background: 'rgba(247, 184, 75, 0.2)', padding: '0.1rem 0.45rem', borderRadius: '4px' }}>
+                      Skor 75% - 84%
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '0.74rem', color: '#64748b', margin: '0.15rem 0 0 0' }}>
+                    Mencari cabang di kecamatan yang sama. <strong>Jika di kecamatan itu ada 2 cabang atau lebih, sistem otomatis mengambil cabang yang jarak kode pos dan alamatnya paling dekat dengan lokasi target.</strong>
+                  </p>
+                </div>
+              </div>
+
+              {/* Tahap 4 */}
+              <div
+                style={{
+                  padding: '0.75rem 0.85rem',
+                  borderRadius: '6px',
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '0.65rem',
+                }}
+              >
+                <div
+                  style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    background: '#878a99',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    flexShrink: 0,
+                    marginTop: '2px',
+                  }}
+                >
+                  4
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                    <strong style={{ fontSize: '0.82rem', color: '#0f172a' }}>Cek Kota / Kabupaten (Dati II)</strong>
+                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#878a99', background: '#f3f3f9', padding: '0.1rem 0.45rem', borderRadius: '4px' }}>
+                      Skor 60% - 74%
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '0.74rem', color: '#64748b', margin: '0.15rem 0 0 0' }}>
+                    Jika di kecamatan tidak ada cabang, sistem mengambil cabang terdekat yang masih berada di Kota/Kabupaten yang sama.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
