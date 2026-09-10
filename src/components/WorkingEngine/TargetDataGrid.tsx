@@ -61,7 +61,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   // 3 Sub-Tabs State: 'upload' | 'recommendation' | 'matched'
   const [checkerTab, setCheckerTab] = useState<'upload' | 'recommendation' | 'matched'>('upload');
   const [page, setPage] = useState(1);
-  const pageSize = 15;
+  const [pageSize, setPageSize] = useState<number | 'all'>(15);
+  const effectivePageSize = useMemo(() => (pageSize === 'all' ? 999999 : pageSize), [pageSize]);
 
   // Filter rows into Unmatched vs Matched (Hanya terisi jika sudah dilakukan pencocokan)
   const unmatchedRows = useMemo(() => {
@@ -161,21 +162,22 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   }, [checkerTab, recommendations, searchTerm]);
 
   const totalPages = useMemo(() => {
-    if (checkerTab === 'recommendation') {
-      return Math.ceil(currentTabRecs.length / pageSize) || 1;
-    }
-    return Math.ceil(currentTabRows.length / pageSize) || 1;
-  }, [checkerTab, currentTabRecs.length, currentTabRows.length, pageSize]);
+    if (pageSize === 'all') return 1;
+    const totalItems = checkerTab === 'recommendation' ? currentTabRecs.length : currentTabRows.length;
+    return Math.ceil(totalItems / effectivePageSize) || 1;
+  }, [checkerTab, currentTabRecs.length, currentTabRows.length, pageSize, effectivePageSize]);
 
   const paginatedRows = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return currentTabRows.slice(start, start + pageSize);
-  }, [currentTabRows, page, pageSize]);
+    if (pageSize === 'all') return currentTabRows;
+    const start = (page - 1) * effectivePageSize;
+    return currentTabRows.slice(start, start + effectivePageSize);
+  }, [currentTabRows, page, pageSize, effectivePageSize]);
 
   const paginatedRecs = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return currentTabRecs.slice(start, start + pageSize);
-  }, [currentTabRecs, page, pageSize]);
+    if (pageSize === 'all') return currentTabRecs;
+    const start = (page - 1) * effectivePageSize;
+    return currentTabRecs.slice(start, start + effectivePageSize);
+  }, [currentTabRecs, page, pageSize, effectivePageSize]);
 
   const hasCombinedSandiCabang = rows.some((r) => r['Sandi Cabang'] && (!r.Sandi || r.Sandi === r['Sandi Cabang']));
 
@@ -658,7 +660,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                       rank: 1,
                     }
                   ];
-                  const globalIndex = (page - 1) * pageSize + idx + 1;
+                  const globalIndex = pageSize === 'all' ? idx + 1 : (page - 1) * effectivePageSize + idx + 1;
 
                   return (
                     <tr key={`rec-${r.No}-${idx}`} style={{ background: '#fffdfa', verticalAlign: 'top' }}>
@@ -1235,36 +1237,74 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
         (checkerTab === 'upload' && matchedDone) ||
         (!matchedDone && (checkerTab === 'recommendation' || checkerTab === 'matched'))
       ) && (
-        <div className="pagination-row" style={{ marginTop: '0.75rem', paddingTop: '0.5rem' }}>
-          <div style={{ fontSize: '0.78rem', color: '#878a99' }}>
-            Menampilkan{' '}
-            {checkerTab === 'recommendation'
-              ? `${(page - 1) * pageSize + 1} - ${Math.min(page * pageSize, currentTabRecs.length)} dari ${currentTabRecs.length.toLocaleString('id-ID')} rekomendasi`
-              : `${(page - 1) * pageSize + 1} - ${Math.min(page * pageSize, currentTabRows.length)} dari ${currentTabRows.length.toLocaleString('id-ID')} baris`}
+        <div className="pagination-row" style={{ marginTop: '0.75rem', paddingTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+          {/* Info Jumlah Data & Pilihan Tampilkan Semua Data */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <div style={{ fontSize: '0.78rem', color: '#878a99' }}>
+              Menampilkan{' '}
+              {pageSize === 'all'
+                ? `Semua ${checkerTab === 'recommendation' ? currentTabRecs.length.toLocaleString('id-ID') : currentTabRows.length.toLocaleString('id-ID')} data`
+                : checkerTab === 'recommendation'
+                ? `${(page - 1) * effectivePageSize + 1} - ${Math.min(page * effectivePageSize, currentTabRecs.length)} dari ${currentTabRecs.length.toLocaleString('id-ID')} rekomendasi`
+                : `${(page - 1) * effectivePageSize + 1} - ${Math.min(page * effectivePageSize, currentTabRows.length)} dari ${currentTabRows.length.toLocaleString('id-ID')} baris`}
+            </div>
+
+            {/* Dropdown Pilihan Jumlah Data / Tampilkan Semua Data */}
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.78rem', color: '#495057' }}>
+              <span>Tampilkan:</span>
+              <select
+                value={String(pageSize)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setPageSize(val === 'all' ? 'all' : Number(val));
+                  setPage(1);
+                }}
+                style={{
+                  padding: '0.22rem 0.5rem',
+                  borderRadius: '4px',
+                  border: '1px solid #ced4da',
+                  background: '#ffffff',
+                  fontSize: '0.76rem',
+                  color: '#495057',
+                  cursor: 'pointer',
+                  outline: 'none',
+                }}
+              >
+                <option value="15">15 per halaman</option>
+                <option value="25">25 per halaman</option>
+                <option value="50">50 per halaman</option>
+                <option value="100">100 per halaman</option>
+                <option value="all">Semua Data (Tampilkan Semua)</option>
+              </select>
+            </div>
           </div>
-          <div className="pagination-controls">
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(p - 1, 1))}
-            >
-              <ChevronLeft size={13} />
-              <span>Sebelumnya</span>
-            </button>
-            <span style={{ padding: '0 0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: '#495057' }}>
-              Hal {page} / {totalPages}
-            </span>
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
-            >
-              <span>Berikutnya</span>
-              <ChevronRight size={13} />
-            </button>
-          </div>
+
+          {/* Tombol Navigasi Pagination */}
+          {pageSize !== 'all' && totalPages > 1 && (
+            <div className="pagination-controls" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(p - 1, 1))}
+              >
+                <ChevronLeft size={13} />
+                <span>Sebelumnya</span>
+              </button>
+              <span style={{ padding: '0 0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: '#495057' }}>
+                Hal {page} / {totalPages}
+              </span>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+              >
+                <span>Berikutnya</span>
+                <ChevronRight size={13} />
+              </button>
+            </div>
+          )}
         </div>
       )}
 

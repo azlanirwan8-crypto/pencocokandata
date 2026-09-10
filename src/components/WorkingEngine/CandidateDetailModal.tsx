@@ -154,9 +154,6 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
               <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#212529', margin: 0 }}>
                 Detail Rekomendasi & Alasan Penilaian Skor
               </h3>
-              <p style={{ fontSize: '0.74rem', color: '#878a99', margin: '0.15rem 0 0 0' }}>
-                Pilihan {cand.rank} • Baris Target No. {r.No}
-              </p>
             </div>
           </div>
           <button
@@ -398,8 +395,8 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
                     <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Branch Code</div>
                     <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
-                    <div style={{ flex: 1, color: '#c2410c', fontWeight: 700 }}>
-                      {r['Branch Code'] || r['Sandi Cabang'] || r.Cabang || r.Sandi || (r.No ? `Target #${r.No}` : '-')}
+                    <div style={{ flex: 1, color: r['Branch Code'] || r['Sandi Cabang'] || r.Cabang || r.Sandi ? '#c2410c' : '#64748b', fontWeight: 700 }}>
+                      {r['Branch Code'] || r['Sandi Cabang'] || r.Cabang || r.Sandi || '-'}
                     </div>
                   </div>
 
