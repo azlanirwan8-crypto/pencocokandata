@@ -87,6 +87,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     targetRow: TargetRow;
     candidate: CandidateOption;
   } | null>(null);
+  const [activeCandidateByRow, setActiveCandidateByRow] = useState<Record<string | number, number>>({});
 
   // Trigger recommendation calculation ONLY when Tab 2 is active AND matchedDone is true
   useEffect(() => {
@@ -180,7 +181,22 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
 
   const handleApproveAll = () => {
     if (recommendations.length === 0) return;
-    onApproveAllRecommendations(recommendations);
+    const effectiveRecs = recommendations.map((rec) => {
+      const activeRank = activeCandidateByRow[rec.targetRow.No];
+      if (activeRank && rec.candidates) {
+        const chosen = rec.candidates.find((c) => c.rank === activeRank);
+        if (chosen) {
+          return {
+            ...rec,
+            recommendedMaster: chosen.master,
+            score: chosen.score,
+            reason: chosen.reason,
+          };
+        }
+      }
+      return rec;
+    });
+    onApproveAllRecommendations(effectiveRecs);
     setRecommendations([]);
     // Pindah langsung ke Tab 3 (Data Match)
     setCheckerTab('matched');
@@ -628,33 +644,86 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                         {globalIndex}
                       </td>
 
-                      {/* Multi-Kandidat Rekomendasi (Top 2 - 3 Opsi Asli Master) */}
-                      <td style={{ background: '#fffdfa', padding: '0.65rem' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
-                          {candidates.map((cand) => {
-                            const m = cand.master;
-                            const isTop1 = cand.rank === 1;
-                            const badgeBg = isTop1
-                              ? 'rgba(10, 179, 156, 0.12)'
-                              : cand.rank === 2
-                              ? 'rgba(247, 184, 75, 0.15)'
-                              : 'rgba(53, 119, 241, 0.1)';
-                            const badgeColor = isTop1 ? '#0ab39c' : cand.rank === 2 ? '#d97706' : '#3577f1';
-                            const cardBorder = isTop1 ? '1px solid rgba(10, 179, 156, 0.35)' : '1px solid #e9ebec';
-                            const cardBg = isTop1 ? '#ffffff' : '#fafafa';
+                      {/* Multi-Kandidat Rekomendasi (Top 2 - 3 Opsi Asli Master dengan Segmented Pill Toggle) */}
+                      <td style={{ background: '#fffdfa', padding: '0.55rem 0.65rem' }}>
+                        {(() => {
+                          const activeRank = activeCandidateByRow[r.No] || 1;
+                          const activeCand = candidates.find((c) => c.rank === activeRank) || candidates[0];
+                          const m = activeCand.master;
+                          const isTop1 = activeCand.rank === 1;
 
-                            return (
+                          const badgeBg = isTop1
+                            ? 'rgba(10, 179, 156, 0.12)'
+                            : activeCand.rank === 2
+                            ? 'rgba(247, 184, 75, 0.15)'
+                            : 'rgba(53, 119, 241, 0.1)';
+                          const badgeColor = isTop1 ? '#0ab39c' : activeCand.rank === 2 ? '#d97706' : '#3577f1';
+                          const cardBorder = isTop1 ? '1px solid rgba(10, 179, 156, 0.35)' : '1px solid #e9ebec';
+                          const cardBg = isTop1 ? '#ffffff' : '#fafafa';
+
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                              {/* Horizontal Segmented Pill Selector jika ada lebih dari 1 opsi */}
+                              {candidates.length > 1 && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
+                                  <span style={{ fontSize: '0.68rem', color: '#878a99', fontWeight: 600, marginRight: '0.1rem' }}>
+                                    Opsi:
+                                  </span>
+                                  {candidates.map((cand) => {
+                                    const isSelected = cand.rank === activeCand.rank;
+                                    const pillActiveBg = cand.rank === 1 ? '#0ab39c' : cand.rank === 2 ? '#d97706' : '#3577f1';
+
+                                    return (
+                                      <button
+                                        key={`pill-${r.No}-${cand.rank}`}
+                                        type="button"
+                                        onClick={() => setActiveCandidateByRow((prev) => ({ ...prev, [r.No]: cand.rank }))}
+                                        style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '0.25rem',
+                                          padding: '0.15rem 0.45rem',
+                                          borderRadius: '9999px',
+                                          fontSize: '0.7rem',
+                                          fontWeight: isSelected ? 700 : 500,
+                                          background: isSelected ? pillActiveBg : '#f3f6f9',
+                                          color: isSelected ? '#ffffff' : '#495057',
+                                          border: isSelected ? `1px solid ${pillActiveBg}` : '1px solid #e9ebec',
+                                          cursor: 'pointer',
+                                          transition: 'all 0.15s ease',
+                                        }}
+                                        title={`Klik untuk melihat Pilihan ${cand.rank} (${cand.score}%)`}
+                                      >
+                                        <span>{cand.rank === 1 ? 'Pilihan 1' : `Pilihan ${cand.rank}`}</span>
+                                        <span
+                                          style={{
+                                            fontSize: '0.65rem',
+                                            padding: '0.05rem 0.3rem',
+                                            borderRadius: '9999px',
+                                            background: isSelected ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.06)',
+                                            color: isSelected ? '#ffffff' : '#6c757d',
+                                            fontWeight: 700,
+                                          }}
+                                        >
+                                          {cand.score}%
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
+                              {/* Single Active Candidate Card */}
                               <div
-                                key={`cand-${cand.rank}-${m['Branch Code'] || m.Cabang}-${idx}`}
                                 style={{
                                   border: cardBorder,
                                   borderRadius: '6px',
-                                  padding: '0.6rem 0.75rem',
+                                  padding: '0.55rem 0.75rem',
                                   background: cardBg,
                                   boxShadow: isTop1 ? '0 1px 3px rgba(10, 179, 156, 0.08)' : 'none',
                                 }}
                               >
-                                {/* Header Opsi: Badge Pilihan + Skor + Tombol Pilih */}
+                                {/* Header Opsi: Badge Pilihan + Skor + Tombol (i) & Tombol Pilih Cabang Ini */}
                                 <div
                                   style={{
                                     display: 'flex',
@@ -662,10 +731,10 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                     justifyContent: 'space-between',
                                     flexWrap: 'wrap',
                                     gap: '0.4rem',
-                                    marginBottom: '0.35rem',
+                                    marginBottom: '0.3rem',
                                   }}
                                 >
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
                                     <span
                                       style={{
                                         padding: '0.12rem 0.5rem',
@@ -676,7 +745,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                         color: badgeColor,
                                       }}
                                     >
-                                      {isTop1 ? 'Pilihan 1 (Utama)' : `Pilihan ${cand.rank} (Alternatif)`}
+                                      {isTop1 ? 'Pilihan 1 (Utama)' : `Pilihan ${activeCand.rank} (Alternatif)`}
                                     </span>
                                     <span
                                       style={{
@@ -688,7 +757,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                         color: badgeColor,
                                       }}
                                     >
-                                      <Sparkles size={11} /> Skor {cand.score}%
+                                      <Sparkles size={11} /> Skor {activeCand.score}%
                                     </span>
                                   </div>
 
@@ -696,7 +765,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                                     <button
                                       type="button"
-                                      onClick={() => setSelectedCandidateDetail({ targetRow: r, candidate: cand })}
+                                      onClick={() => setSelectedCandidateDetail({ targetRow: r, candidate: activeCand })}
                                       style={{
                                         display: 'inline-flex',
                                         alignItems: 'center',
@@ -736,8 +805,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                   </div>
                                 </div>
 
-                                {/* Rincian Cabang Master & Alamat Lengkap Real (Clean & Compact) */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.18rem' }}>
+                                {/* Rincian Cabang Master & Alamat Lengkap Real */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
                                   <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#212529' }}>
                                     {m['Sandi Cabang'] || m.Cabang || m.Sandi || '-'}
                                     {m['Nama Outlet'] && (
@@ -753,7 +822,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                       fontSize: '0.74rem',
                                       color: '#343a40',
                                       background: '#f8f9fa',
-                                      padding: '0.25rem 0.5rem',
+                                      padding: '0.22rem 0.5rem',
                                       borderRadius: '4px',
                                       border: '1px solid #edf0f2',
                                       marginTop: '0.15rem',
@@ -767,9 +836,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                   </div>
                                 </div>
                               </div>
-                            );
-                          })}
-                        </div>
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* Data Target Asli (Wilayah Target Dihapus, Teks Alamat Tampil Utuh) */}
