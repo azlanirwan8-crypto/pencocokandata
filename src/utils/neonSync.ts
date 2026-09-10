@@ -8,18 +8,34 @@ export interface NeonStatus {
 }
 
 /**
+ * Fast fetch helper with timeout to avoid network hanging
+ */
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 4500): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(timeoutId);
+    return res;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw err;
+  }
+}
+
+/**
  * Check if Vercel Neon serverless endpoint is available and connected
  */
 export async function checkNeonStatus(): Promise<NeonStatus> {
   try {
-    const res = await fetch('/api/status');
+    const res = await fetchWithTimeout('/api/status', {}, 3500);
     if (!res.ok) {
       return { connected: false, message: `HTTP ${res.status}` };
     }
     const data = await res.json();
     return data;
   } catch {
-    // Expected when running purely on localhost without Vercel dev server
+    // Expected when running purely on localhost without Vercel dev server or timeout
     return { connected: false, message: 'Endpoint /api/status tidak dapat diakses (mode lokal offline).' };
   }
 }
@@ -29,7 +45,7 @@ export async function checkNeonStatus(): Promise<NeonStatus> {
  */
 export async function loadMasterFromNeon(): Promise<{ rows: MasterRow[]; fileName: string } | null> {
   try {
-    const res = await fetch('/api/master');
+    const res = await fetchWithTimeout('/api/master', {}, 5000);
     if (!res.ok) return null;
     const json = await res.json();
     if (json.ok && json.data && Array.isArray(json.data.rows) && json.data.rows.length > 0) {
@@ -99,7 +115,7 @@ export interface SavedTargetPayload {
  */
 export async function loadTargetFromNeon(): Promise<SavedTargetPayload | null> {
   try {
-    const res = await fetch('/api/target');
+    const res = await fetchWithTimeout('/api/target', {}, 5000);
     if (!res.ok) return null;
     const json = await res.json();
     if (json.ok && json.data && Array.isArray(json.data.rows) && json.data.rows.length > 0) {

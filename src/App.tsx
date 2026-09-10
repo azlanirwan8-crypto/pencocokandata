@@ -97,101 +97,94 @@ export const App: React.FC = () => {
     return analyzeMasterHealth(masterRows, masterIndex);
   }, [masterRows, masterIndex]);
 
-  // Restore persisted data (Check Neon Postgres first, then Supabase, fallback to IndexedDB)
+  // Restore persisted data (Instant Cache-First + Parallel Cloud Revalidation)
   useEffect(() => {
     const restoreSavedData = async () => {
+      // -----------------------------------------------------------------------
+      // STEP 1: INSTANT LOCAL LOAD (< 15ms)
+      // Read local IndexedDB immediately in parallel so the UI is ready instantly
+      // -----------------------------------------------------------------------
       try {
-        let loadedMaster = false;
-
-        // 1. Check Vercel Neon Postgres
-        try {
-          const neonCheck = await checkNeonStatus();
-          if (neonCheck.connected) {
-            setIsNeonConnected(true);
-            const neonMaster = await loadMasterFromNeon();
-            if (neonMaster && neonMaster.rows && neonMaster.rows.length > 0) {
-              setMasterRows(neonMaster.rows);
-              // setMasterFileName(neonMaster.fileName || 'Master_Neon_Vercel.xlsx');
-              loadedMaster = true;
-            }
-          }
-        } catch (e) {
-          console.warn('Neon connection check skipped:', e);
-        }
-
-        // 2. Check Cloud Supabase if configured & not loaded
-        if (!loadedMaster && isSupabaseConfigured()) {
-          const cloudMaster = await loadMasterFromCloud();
-          if (cloudMaster && cloudMaster.rows && cloudMaster.rows.length > 0) {
-            setMasterRows(cloudMaster.rows);
-            // setMasterFileName(cloudMaster.fileName || 'Master_Cloud_Supabase.xlsx');
-            setIsCloudConnected(true);
-            loadedMaster = true;
-          }
-        }
-
-        // 3. Fallback to local IndexedDB
-        if (!loadedMaster) {
-          const savedMaster = await getItem<{ rows: MasterRow[]; fileName: string }>('master_data');
-          if (savedMaster && savedMaster.rows && savedMaster.rows.length > 0) {
-            setMasterRows(savedMaster.rows);
-            // setMasterFileName(savedMaster.fileName || '');
-          }
-        }
-
-        // 4. Restore Target & Match Data (Check Neon Postgres first, then Supabase, fallback to local IndexedDB)
-        let loadedTarget = false;
-
-        // A. Neon Postgres
-        try {
-          const neonTarget = await loadTargetFromNeon();
-          if (neonTarget && neonTarget.rows && neonTarget.rows.length > 0) {
-            setTargetRows(neonTarget.rows);
-            setTargetFileName(neonTarget.fileName || '');
-            setInitialTargetCount(neonTarget.initialCount || neonTarget.rows.length);
-            setMatchedDone(neonTarget.matchedDone || false);
-            loadedTarget = true;
-          }
-        } catch (e) {
-          console.warn('Neon target load skipped:', e);
-        }
-
-        // B. Cloud Supabase if configured & not loaded
-        if (!loadedTarget && isSupabaseConfigured()) {
-          try {
-            const cloudTarget = await loadTargetFromCloud();
-            if (cloudTarget && cloudTarget.rows && cloudTarget.rows.length > 0) {
-              setTargetRows(cloudTarget.rows);
-              setTargetFileName(cloudTarget.fileName || '');
-              setInitialTargetCount(cloudTarget.initialCount || cloudTarget.rows.length);
-              setMatchedDone(cloudTarget.matchedDone || false);
-              loadedTarget = true;
-            }
-          } catch (e) {
-            console.warn('Supabase target load skipped:', e);
-          }
-        }
-
-        // C. Fallback to local IndexedDB
-        if (!loadedTarget) {
-          const savedTarget = await getItem<{
+        const [savedMaster, savedTarget] = await Promise.all([
+          getItem<{ rows: MasterRow[]; fileName: string }>('master_data').catch(() => null),
+          getItem<{
             rows: TargetRow[];
             fileName: string;
             initialCount: number;
             matchedDone: boolean;
-          }>('target_data');
+          }>('target_data').catch(() => null),
+        ]);
 
-          if (savedTarget && savedTarget.rows && savedTarget.rows.length > 0) {
-            setTargetRows(savedTarget.rows);
-            setTargetFileName(savedTarget.fileName || '');
-            setInitialTargetCount(savedTarget.initialCount || savedTarget.rows.length);
-            setMatchedDone(savedTarget.matchedDone || false);
-          }
+        if (savedMaster && savedMaster.rows && savedMaster.rows.length > 0) {
+          setMasterRows(savedMaster.rows);
         }
 
+        if (savedTarget && savedTarget.rows && savedTarget.rows.length > 0) {
+          setTargetRows(savedTarget.rows);
+          setTargetFileName(savedTarget.fileName || '');
+          setInitialTargetCount(savedTarget.initialCount || savedTarget.rows.length);
+          setMatchedDone(savedTarget.matchedDone || false);
+        }
       } catch (err) {
-        console.warn('Gagal memulihkan data:', err);
+        console.warn('Local cache restore skipped:', err);
       }
+
+      // -----------------------------------------------------------------------
+      // STEP 2: PARALLEL BACKGROUND CLOUD SYNC (Non-blocking)
+      // Fetch latest updates from Neon Postgres and Supabase Cloud concurrently
+      // -----------------------------------------------------------------------
+      (async () => {
+        try {
+          // Check Neon status & load data in parallel
+          const [neonCheck, neonMaster, neonTarget] = await Promise.allSettled([
+            checkNeonStatus(),
+            loadMasterFromNeon(),
+            loadTargetFromNeon(),
+          ]);
+
+          let hasNeonMaster = false;
+          let hasNeonTarget = false;
+
+          if (neonCheck.status === 'fulfilled' && neonCheck.value.connected) {
+            setIsNeonConnected(true);
+          }
+
+          if (neonMaster.status === 'fulfilled' && neonMaster.value && neonMaster.value.rows.length > 0) {
+            setMasterRows(neonMaster.value.rows);
+            hasNeonMaster = true;
+          }
+
+          if (neonTarget.status === 'fulfilled' && neonTarget.value && neonTarget.value.rows.length > 0) {
+            setTargetRows(neonTarget.value.rows);
+            setTargetFileName(neonTarget.value.fileName || '');
+            setInitialTargetCount(neonTarget.value.initialCount || neonTarget.value.rows.length);
+            setMatchedDone(neonTarget.value.matchedDone || false);
+            hasNeonTarget = true;
+          }
+
+          // Fallback to Supabase Cloud if configured & not loaded from Neon
+          if ((!hasNeonMaster || !hasNeonTarget) && isSupabaseConfigured()) {
+            setIsCloudConnected(true);
+            const [cloudMaster, cloudTarget] = await Promise.allSettled([
+              !hasNeonMaster ? loadMasterFromCloud() : Promise.resolve(null),
+              !hasNeonTarget ? loadTargetFromCloud() : Promise.resolve(null),
+            ]);
+
+            if (cloudMaster.status === 'fulfilled' && cloudMaster.value && cloudMaster.value.rows.length > 0) {
+              setMasterRows(cloudMaster.value.rows);
+            }
+
+            if (cloudTarget.status === 'fulfilled' && cloudTarget.value && cloudTarget.value.rows.length > 0) {
+              setTargetRows(cloudTarget.value.rows);
+              setTargetFileName(cloudTarget.value.fileName || '');
+              setInitialTargetCount(cloudTarget.value.initialCount || cloudTarget.value.rows.length);
+              setMatchedDone(cloudTarget.value.matchedDone || false);
+            }
+          }
+        } catch (cloudErr) {
+          console.warn('Background cloud sync skipped:', cloudErr);
+        }
+      })();
     };
 
     restoreSavedData();
