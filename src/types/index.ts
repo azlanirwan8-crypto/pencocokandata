@@ -2,8 +2,9 @@
 
 export interface MasterRow {
   Wilayah: string;
-  Sandi: string;
-  Cabang: string;
+  'Sandi Cabang'?: string;
+  Sandi?: string;
+  Cabang?: string;
   'Branch Code': string;
   'Kode Cabang': string;
   'Nama Outlet': string;
@@ -16,13 +17,15 @@ export interface MasterRow {
   'Kode Dati II': string;
   Provinsi: string;
   Telp: string;
+  [key: string]: any;
 }
 
 export interface TargetRow {
   No: number | string;
   Wilayah: string;
-  Sandi: string;
-  Cabang: string;
+  'Sandi Cabang'?: string;
+  Sandi?: string;
+  Cabang?: string;
   'Branch Code': string;
   'Kode Cabang': string;
   'Nama Outlet': string;
@@ -43,6 +46,7 @@ export interface TargetRow {
   _isMatched?: boolean;
   _isPtenDiscrepancy?: boolean;
   _matchLevel?: 'level1' | 'level2' | 'none';
+  [key: string]: any;
 }
 
 export interface MasterHealth {

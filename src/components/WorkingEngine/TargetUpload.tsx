@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { UploadCloud, Download, RefreshCw, AlertCircle, CheckCircle2, Lock } from 'lucide-react';
 import type { TargetRow } from '../../types';
-import { parseExcelFile, validateHeaders, TARGET_COLUMNS, downloadTargetTemplate } from '../../utils/excel';
+import { parseExcelFile, validateTargetHeaders, downloadTargetTemplate } from '../../utils/excel';
 
 interface TargetUploadProps {
   onTargetLoaded: (rows: TargetRow[], fileName: string) => void;
@@ -26,11 +26,11 @@ export const TargetUpload: React.FC<TargetUploadProps> = ({
     try {
       const { data, headers } = await parseExcelFile<TargetRow>(file);
 
-      // Verifikasi kecocokan header 19 kolom
-      const validation = validateHeaders(headers, TARGET_COLUMNS as string[]);
+      // Verifikasi kecocokan header target (mendukung Sandi Cabang 1 kolom maupun terpisah)
+      const validation = validateTargetHeaders(headers);
       if (!validation.isValid) {
         setErrorMessage(
-          `Header file tidak sesuai spesifikasi 19 kolom target. Kolom hilang: [${validation.missing.join(', ')}]`
+          `Header file tidak sesuai spesifikasi kolom target. Kolom belum ditemukan: [${validation.missing.join(', ')}]`
         );
         return;
       }

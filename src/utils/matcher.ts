@@ -113,9 +113,12 @@ export function matchSingleRow(target: TargetRow, masterIndex: Map<string, Maste
       result._matchLevel = 'level2';
     }
 
-    // Auto-populate 7 atribut master
-    result.Sandi = matchedMaster.Sandi || '';
-    result.Cabang = matchedMaster.Cabang || '';
+    // Auto-populate 7 atribut master (mendukung Sandi Cabang 1 kolom maupun terpisah)
+    if (matchedMaster['Sandi Cabang']) {
+      result['Sandi Cabang'] = matchedMaster['Sandi Cabang'];
+    }
+    result.Sandi = matchedMaster.Sandi || matchedMaster['Sandi Cabang'] || '';
+    result.Cabang = matchedMaster.Cabang || matchedMaster['Sandi Cabang'] || '';
     result['Branch Code'] = matchedMaster['Branch Code'] || '';
     result['Kode Cabang'] = matchedMaster['Kode Cabang'] || '';
     result['Nama Outlet'] = matchedMaster['Nama Outlet'] || '';
@@ -125,6 +128,7 @@ export function matchSingleRow(target: TargetRow, masterIndex: Map<string, Maste
     result._isMatched = true;
   } else {
     // No Candidate (0 Match): Kolom 3 s.d. 9 dibiarkan kosong (blank). Data asli tetap utuh.
+    result['Sandi Cabang'] = '';
     result.Sandi = '';
     result.Cabang = '';
     result['Branch Code'] = '';

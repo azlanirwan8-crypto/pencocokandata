@@ -13,13 +13,14 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({ rows, totalInput
 
   const totalPages = Math.ceil(rows.length / pageSize) || 1;
   const paginatedRows = rows.slice((page - 1) * pageSize, page * pageSize);
+  const hasCombinedSandiCabang = rows.some(r => r['Sandi Cabang'] && (!r.Sandi || r.Sandi === r['Sandi Cabang']));
 
   return (
     <div className="glass-card" style={{ marginTop: '1.25rem' }}>
       <div className="section-header">
         <div>
           <h2 className="section-title" style={{ fontSize: '1.15rem' }}>
-            Pratinjau Data Target Operasional (19 Kolom)
+            Pratinjau Data Target Operasional
           </h2>
           <p className="section-subtitle">
             Menampilkan {rows.length.toLocaleString('id-ID')} baris data terfilter (dari {totalInputRows.toLocaleString('id-ID')} baris input awal).
@@ -35,9 +36,15 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({ rows, totalInput
               <th>Status Match</th>
               <th>CEK PTEN</th>
               <th>Wilayah</th>
-              {/* 7 Atribut Hasil Enrichment Master */}
-              <th style={{ color: '#60a5fa' }}>Sandi (Master)</th>
-              <th style={{ color: '#60a5fa' }}>Cabang (Master)</th>
+              {/* Atribut Hasil Enrichment Master */}
+              {hasCombinedSandiCabang ? (
+                <th style={{ color: '#60a5fa' }}>Sandi Cabang (Master)</th>
+              ) : (
+                <>
+                  <th style={{ color: '#60a5fa' }}>Sandi (Master)</th>
+                  <th style={{ color: '#60a5fa' }}>Cabang (Master)</th>
+                </>
+              )}
               <th style={{ color: '#60a5fa' }}>Branch Code (Master)</th>
               <th style={{ color: '#60a5fa' }}>Kode Cabang (Master)</th>
               <th style={{ color: '#60a5fa' }}>Nama Outlet (Master)</th>
@@ -64,7 +71,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({ rows, totalInput
               </tr>
             ) : (
               paginatedRows.map((r) => {
-                const isMatched = r._isMatched ?? (r.Sandi !== '');
+                const isMatched = r._isMatched ?? (r.Sandi !== '' || r['Sandi Cabang'] !== '');
                 const isPtenDiff = r['CEK KODE POS + PTEN'] === 'DIFFERENT';
 
                 return (
@@ -110,15 +117,25 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({ rows, totalInput
                     {/* Wilayah */}
                     <td><span style={{ color: '#cbd5e1' }}>{r.Wilayah}</span></td>
 
-                    {/* 7 Auto-populated Master Attributes */}
-                    <td className="code-cell" style={{ color: '#93c5fd' }}>
-                      {r.Sandi || <span style={{ color: 'var(--text-muted)' }}>-</span>}
-                    </td>
-                    <td>
-                      <strong style={{ color: isMatched ? '#ffffff' : 'var(--text-muted)' }}>
-                        {r.Cabang || '-'}
-                      </strong>
-                    </td>
+                    {/* Auto-populated Master Attributes */}
+                    {hasCombinedSandiCabang ? (
+                      <td>
+                        <strong style={{ color: isMatched ? '#ffffff' : 'var(--text-muted)' }}>
+                          {r['Sandi Cabang'] || r.Cabang || '-'}
+                        </strong>
+                      </td>
+                    ) : (
+                      <>
+                        <td className="code-cell" style={{ color: '#93c5fd' }}>
+                          {r.Sandi || <span style={{ color: 'var(--text-muted)' }}>-</span>}
+                        </td>
+                        <td>
+                          <strong style={{ color: isMatched ? '#ffffff' : 'var(--text-muted)' }}>
+                            {r.Cabang || '-'}
+                          </strong>
+                        </td>
+                      </>
+                    )}
                     <td className="code-cell">
                       {r['Branch Code'] || <span style={{ color: 'var(--text-muted)' }}>-</span>}
                     </td>

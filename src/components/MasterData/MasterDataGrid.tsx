@@ -11,12 +11,17 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
   const [page, setPage] = useState(1);
   const pageSize = 15;
 
+  const hasCombinedSandiCabang = useMemo(() => {
+    return masterRows.some(r => r['Sandi Cabang'] && (!r.Sandi || r.Sandi === r['Sandi Cabang']));
+  }, [masterRows]);
+
   const filteredRows = useMemo(() => {
     if (!searchTerm.trim()) return masterRows;
     const q = searchTerm.toLowerCase();
     return masterRows.filter((r) => {
       return (
         r.Wilayah?.toLowerCase().includes(q) ||
+        r['Sandi Cabang']?.toLowerCase().includes(q) ||
         r.Sandi?.toLowerCase().includes(q) ||
         r.Cabang?.toLowerCase().includes(q) ||
         r['Branch Code']?.toLowerCase().includes(q) ||
@@ -70,8 +75,14 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
             <tr>
               <th>No</th>
               <th>Wilayah</th>
-              <th>Sandi</th>
-              <th>Cabang</th>
+              {hasCombinedSandiCabang ? (
+                <th>Sandi Cabang</th>
+              ) : (
+                <>
+                  <th>Sandi</th>
+                  <th>Cabang</th>
+                </>
+              )}
               <th>Branch Code</th>
               <th>Kode Cabang</th>
               <th>Nama Outlet</th>
@@ -95,11 +106,17 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
               paginatedRows.map((r, idx) => {
                 const globalIndex = (page - 1) * pageSize + idx + 1;
                 return (
-                  <tr key={`${r['KODE POS']}-${r.Sandi}-${idx}`}>
+                  <tr key={`${r['KODE POS']}-${r.Sandi || r['Sandi Cabang']}-${idx}`}>
                     <td className="code-cell">{globalIndex}</td>
                     <td><span style={{ color: '#cbd5e1' }}>{r.Wilayah}</span></td>
-                    <td className="code-cell">{r.Sandi}</td>
-                    <td><strong style={{ color: 'var(--text-primary)' }}>{r.Cabang}</strong></td>
+                    {hasCombinedSandiCabang ? (
+                      <td><strong style={{ color: 'var(--text-primary)' }}>{r['Sandi Cabang'] || r.Cabang}</strong></td>
+                    ) : (
+                      <>
+                        <td className="code-cell">{r.Sandi}</td>
+                        <td><strong style={{ color: 'var(--text-primary)' }}>{r.Cabang}</strong></td>
+                      </>
+                    )}
                     <td className="code-cell">{r['Branch Code']}</td>
                     <td className="code-cell">{r['Kode Cabang']}</td>
                     <td>{r['Nama Outlet']}</td>

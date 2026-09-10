@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { UploadCloud, FileSpreadsheet, Download, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
 import type { MasterRow } from '../../types';
-import { parseExcelFile, validateHeaders, MASTER_COLUMNS, downloadMasterTemplate } from '../../utils/excel';
+import { parseExcelFile, validateMasterHeaders, downloadMasterTemplate } from '../../utils/excel';
 
 interface MasterUploadProps {
   onMasterLoaded: (rows: MasterRow[], fileName: string) => void;
@@ -28,11 +28,11 @@ export const MasterUpload: React.FC<MasterUploadProps> = ({
     try {
       const { data, headers } = await parseExcelFile<MasterRow>(file);
 
-      // Verifikasi kecocokan header 15 kolom
-      const validation = validateHeaders(headers, MASTER_COLUMNS as string[]);
+      // Verifikasi kecocokan header master (mendukung Sandi Cabang 1 kolom maupun Sandi & Cabang terpisah)
+      const validation = validateMasterHeaders(headers);
       if (!validation.isValid) {
         setErrorMessage(
-          `Header file tidak sesuai spesifikasi 15 kolom master. Kolom tidak ditemukan: [${validation.missing.join(', ')}]`
+          `Header berkas tidak sesuai spesifikasi master cabang. Kolom yang belum ditemukan: [${validation.missing.join(', ')}]`
         );
         return;
       }
