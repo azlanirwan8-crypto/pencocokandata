@@ -56,10 +56,12 @@ export const MasterUploadModal: React.FC<MasterUploadModalProps> = ({
 
       // Otomatis tutup modal setelah 1.2 detik jika sukses
       setTimeout(() => {
+        if (fileInputRef.current) fileInputRef.current.value = '';
         onClose();
         setSuccessMessage(null);
       }, 1200);
     } catch (err: any) {
+      if (fileInputRef.current) fileInputRef.current.value = '';
       setIsLoading(false);
       setErrorMessage(`Gagal membaca berkas: ${err?.message || 'Format Excel tidak valid'}`);
     }
@@ -74,6 +76,7 @@ export const MasterUploadModal: React.FC<MasterUploadModalProps> = ({
   };
 
   const handleClose = () => {
+    if (fileInputRef.current) fileInputRef.current.value = '';
     setErrorMessage(null);
     setSuccessMessage(null);
     setIsLoading(false);
