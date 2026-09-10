@@ -35,7 +35,6 @@ export const AuditLogTable: React.FC<AuditLogTableProps> = ({ logs }) => {
               <th>User Pengunggah</th>
               <th>Total Baris</th>
               <th>Matching Rate</th>
-              <th>PTEN Discrepancy</th>
               <th>Durasi Eksekusi</th>
               <th style={{ textAlign: 'center' }}>Aksi Unduh Ulang</th>
             </tr>
@@ -70,13 +69,6 @@ export const AuditLogTable: React.FC<AuditLogTableProps> = ({ logs }) => {
                     <td className="code-cell">{log.totalRows.toLocaleString('id-ID')}</td>
                     <td>
                       <span className="badge badge-match">{matchRate}% ({log.matchedCount})</span>
-                    </td>
-                    <td>
-                      {log.ptenDiscrepancyCount > 0 ? (
-                        <span className="badge badge-diff">{log.ptenDiscrepancyCount} Selisih</span>
-                      ) : (
-                        <span className="badge badge-match">0 Selisih</span>
-                      )}
                     </td>
                     <td style={{ fontFamily: 'var(--font-mono)', color: '#93c5fd' }}>
                       {log.durationMs} ms
