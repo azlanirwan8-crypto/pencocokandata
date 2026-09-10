@@ -509,11 +509,11 @@ export const App: React.FC = () => {
               <PtenDiscrepancyPanel targetRows={dashboardFilteredRows} />
             </div>
 
-            {/* Row 2: Radar Titik Anomali & Audit Log */}
-            <div className="dashboard-columns">
-              <RadarAnomalyTable unmatchedAreas={topUnmatchedAreas} />
-              <AuditLogTable logs={batchLogs} />
-            </div>
+            {/* Row 2: Radar Titik Anomali */}
+            <RadarAnomalyTable unmatchedAreas={topUnmatchedAreas} />
+
+            {/* Row 3: Audit Log & Riwayat Batch */}
+            <AuditLogTable logs={batchLogs} />
           </>
         )}
 
