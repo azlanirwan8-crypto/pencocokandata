@@ -11,7 +11,6 @@ import {
   Sparkles,
   CheckCircle2,
   Check,
-  Building2,
 } from 'lucide-react';
 import type { TargetRow, MasterRow } from '../../types';
 import {
@@ -463,132 +462,184 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
             </p>
           </div>
         ) : (
-          <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px' }}>
-          <table className="modern-table">
-            <thead>
-              <tr>
-                <th style={{ width: '60px', textAlign: 'center', background: '#f3f6f9', color: '#405189' }}>No</th>
-                <th style={{ minWidth: '160px', background: '#fff9f0', color: '#d97706' }}>Kandidat Rekomendasi Master</th>
-                <th style={{ minWidth: '140px', background: '#fff9f0', color: '#d97706' }}>Skor & Dasar Kedekatan</th>
-                <th style={{ minWidth: '100px', textAlign: 'center', background: '#fff9f0' }}>Aksi</th>
-                {/* Data Target Asli */}
-                <th style={{ color: '#878a99' }}>Wilayah Target</th>
-                <th style={{ color: '#878a99' }}>KODE POS Target</th>
-                <th style={{ color: '#878a99' }}>Kecamatan Target</th>
-                <th style={{ color: '#878a99' }}>Kelurahan Target</th>
-                <th style={{ color: '#878a99' }}>Dati II Target</th>
-                <th style={{ minWidth: '220px', color: '#878a99' }}>ALAMAT Target</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedRecs.length === 0 ? (
+          <>
+            {/* Banner Penjelasan Skor & Dasar Kedekatan */}
+            <div
+              style={{
+                marginBottom: '1rem',
+                padding: '0.9rem 1.1rem',
+                background: '#fffdf5',
+                border: '1px solid rgba(247, 184, 75, 0.4)',
+                borderRadius: '6px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.45rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Sparkles size={16} color="#d97706" />
+                  <strong style={{ fontSize: '0.84rem', color: '#92400e', fontWeight: 600 }}>
+                    Panduan Perhitungan Skor & Dasar Kedekatan ({`60% - 95%+`})
+                  </strong>
+                </div>
+                <span style={{ fontSize: '0.72rem', color: '#b45309', background: 'rgba(247, 184, 75, 0.18)', padding: '0.15rem 0.55rem', borderRadius: '4px', fontWeight: 600 }}>
+                  Algoritma Benchmark Radius Geografis 4 Komponen
+                </span>
+              </div>
+              <p style={{ fontSize: '0.76rem', color: '#78350f', margin: 0, lineHeight: 1.45 }}>
+                Persentase kemiripan dihitung secara objektif berdasarkan bobot kedekatan antara data cek operasional dengan cabang master terdekat:
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '0.5rem', marginTop: '0.2rem' }}>
+                <div style={{ background: '#ffffff', padding: '0.45rem 0.65rem', borderRadius: '4px', border: '1px solid #fde68a' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#b45309' }}>1. Kota / Dati II (Bobot 35%)</div>
+                  <div style={{ fontSize: '0.7rem', color: '#878a99', marginTop: '0.1rem' }}>Kesamaan Kabupaten / Kota Dati II</div>
+                </div>
+                <div style={{ background: '#ffffff', padding: '0.45rem 0.65rem', borderRadius: '4px', border: '1px solid #fde68a' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#b45309' }}>2. Kecamatan / Kelurahan (Bobot 35%)</div>
+                  <div style={{ fontSize: '0.7rem', color: '#878a99', marginTop: '0.1rem' }}>Kesamaan atau kedekatan nama kecamatan</div>
+                </div>
+                <div style={{ background: '#ffffff', padding: '0.45rem 0.65rem', borderRadius: '4px', border: '1px solid #fde68a' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#b45309' }}>3. Radius Kode Pos (Bobot 20%)</div>
+                  <div style={{ fontSize: '0.7rem', color: '#878a99', marginTop: '0.1rem' }}>Kesamaan 2-4 digit awal kode pos sekitar</div>
+                </div>
+                <div style={{ background: '#ffffff', padding: '0.45rem 0.65rem', borderRadius: '4px', border: '1px solid #fde68a' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#b45309' }}>4. Wilayah / Provinsi (Bobot 10%)</div>
+                  <div style={{ fontSize: '0.7rem', color: '#878a99', marginTop: '0.1rem' }}>Berada dalam satu regional provinsi</div>
+                </div>
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#92400e', marginTop: '0.2rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                <span>• <strong>60% - 70%</strong>: Kota/Dati II Cocok + 1 Provinsi + Kode Pos Zona Sama (Kecamatan tetangga).</span>
+                <span>• <strong>75% - 85%</strong>: Kota Cocok + Kecamatan Cocok + 1 Provinsi (Kecamatan identik).</span>
+                <span>• <strong>85% - 95%+</strong>: Kota Cocok + Kecamatan Cocok + Kode Pos Area Sama (3-4 digit identik).</span>
+              </div>
+            </div>
+
+            <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px' }}>
+            <table className="modern-table">
+              <thead>
                 <tr>
-                  <td colSpan={10} style={{ textAlign: 'center', padding: '3rem', color: '#878a99' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
-                      <CheckCircle2 size={32} color="#0ab39c" />
-                      <strong style={{ color: '#212529', fontSize: '0.95rem' }}>
-                        Tidak Ada Rekomendasi Tertunda
-                      </strong>
-                      <span style={{ fontSize: '0.8rem', color: '#878a99' }}>
-                        {unmatchedRows.length === 0
-                          ? 'Semua data target telah berhasil dicocokkan ke Data Master (Tab 1 & Tab 2 kosong).'
-                          : 'Tidak ada data tidak match yang cocok dengan filter pencarian saat ini.'}
-                      </span>
-                    </div>
-                  </td>
+                  <th style={{ width: '60px', textAlign: 'center', background: '#f3f6f9', color: '#405189' }}>No</th>
+                  <th style={{ minWidth: '160px', background: '#fff9f0', color: '#d97706' }}>Kandidat Rekomendasi Master</th>
+                  <th style={{ minWidth: '150px', background: '#fff9f0', color: '#d97706' }}>Skor & Dasar Kedekatan</th>
+                  <th style={{ minWidth: '100px', textAlign: 'center', background: '#fff9f0' }}>Aksi</th>
+                  {/* Data Target Asli */}
+                  <th style={{ color: '#878a99' }}>Wilayah Target</th>
+                  <th style={{ color: '#878a99' }}>KODE POS Target</th>
+                  <th style={{ color: '#878a99' }}>Kecamatan Target</th>
+                  <th style={{ color: '#878a99' }}>Kelurahan Target</th>
+                  <th style={{ color: '#878a99' }}>Dati II Target</th>
+                  <th style={{ minWidth: '220px', color: '#878a99' }}>ALAMAT Target</th>
+                  <th>Provinsi</th>
                 </tr>
-              ) : (
-                paginatedRecs.map((rec) => {
-                  const r = rec.targetRow;
-                  const m = rec.recommendedMaster;
-                  const badgeColor =
-                    rec.score >= 80 ? '#0ab39c' : rec.score >= 60 ? '#d97706' : '#405189';
-                  const badgeBg =
-                    rec.score >= 80
-                      ? 'rgba(10, 179, 156, 0.12)'
-                      : rec.score >= 60
-                      ? 'rgba(247, 184, 75, 0.15)'
-                      : 'rgba(64, 81, 137, 0.1)';
+              </thead>
+              <tbody>
+                {paginatedRecs.length === 0 ? (
+                  <tr>
+                    <td colSpan={11} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
+                      Tidak ada rekomendasi yang sesuai dengan filter pencarian.
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedRecs.map((rec, idx) => {
+                    const r = rec.targetRow;
+                    const m = rec.recommendedMaster;
+                    const globalIndex = (page - 1) * pageSize + idx + 1;
 
-                  return (
-                    <tr key={String(r.No)} style={{ background: '#ffffff' }}>
-                      <td className="code-cell" style={{ textAlign: 'center', color: '#405189' }}>
-                        {r.No}
-                      </td>
+                    // Badge color based on score
+                    const badgeBg =
+                      rec.score >= 80
+                        ? 'rgba(10, 179, 156, 0.12)'
+                        : rec.score >= 65
+                        ? 'rgba(247, 184, 75, 0.15)'
+                        : 'rgba(53, 119, 241, 0.1)';
+                    const badgeColor =
+                      rec.score >= 80 ? '#0ab39c' : rec.score >= 65 ? '#d97706' : '#3577f1';
 
-                      {/* Kandidat Rekomendasi Master */}
-                      <td style={{ background: '#fffdfa' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-                          <strong style={{ color: '#212529', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                            <Building2 size={13} color="#d97706" />
-                            <span>{m['Sandi Cabang'] || [m.Sandi, m.Cabang].filter(Boolean).join(' - ') || m.Cabang}</span>
-                          </strong>
-                          <span style={{ color: '#405189', fontWeight: 600, fontSize: '0.78rem' }}>
-                            {m['Nama Outlet']}
-                          </span>
-                          <span style={{ color: '#878a99', fontSize: '0.72rem' }}>
-                            Kode Pos Master: <strong>{m['KODE POS']}</strong> • {m.Kecamatan}, {m['Dati II']}
-                          </span>
-                        </div>
-                      </td>
+                    return (
+                      <tr key={`rec-${r.No}-${idx}`} style={{ background: '#fffdfa' }}>
+                        <td className="code-cell" style={{ textAlign: 'center', color: '#878a99' }}>
+                          {globalIndex}
+                        </td>
 
-                      {/* Skor & Dasar Kedekatan */}
-                      <td style={{ background: '#fffdfa' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                          <span
+                        {/* Kandidat Cabang Master yang Direkomendasikan */}
+                        <td style={{ background: '#fffdfa' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                            <strong style={{ color: '#212529', fontSize: '0.84rem' }}>
+                              {m['Sandi Cabang'] || m.Cabang || m.Sandi || '-'}
+                            </strong>
+                            <span style={{ fontSize: '0.74rem', color: '#405189', fontWeight: 500 }}>
+                              {m['Nama Outlet'] || '-'}
+                            </span>
+                            <span style={{ fontSize: '0.7rem', color: '#878a99' }}>
+                              Kode Pos Master: <strong>{m['KODE POS']}</strong> • {m.Kecamatan}, {m['Dati II']}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Skor & Dasar Kedekatan */}
+                        <td style={{ background: '#fffdfa' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.25rem',
+                                padding: '0.15rem 0.5rem',
+                                borderRadius: '4px',
+                                fontSize: '0.72rem',
+                                fontWeight: 700,
+                                color: badgeColor,
+                                background: badgeBg,
+                                width: 'fit-content',
+                              }}
+                            >
+                              <Sparkles size={11} /> Kemiripan {rec.score}%
+                            </span>
+                            <span style={{ fontSize: '0.72rem', color: '#212529', fontWeight: 500 }}>
+                              {rec.reason}
+                            </span>
+                            <span style={{ fontSize: '0.67rem', color: '#878a99' }}>
+                              {rec.score >= 80 ? 'Sangat Direkomendasikan' : rec.score >= 65 ? 'Radius Terdekat' : 'Alternatif Sekitar'}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Aksi Setujui per baris */}
+                        <td style={{ textAlign: 'center', background: '#fffdfa' }}>
+                          <button
+                            type="button"
+                            className="btn btn-outline btn-sm"
+                            onClick={() => onApproveRecommendation(r.No, m)}
                             style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '0.25rem',
-                              padding: '0.15rem 0.5rem',
-                              borderRadius: '4px',
                               fontSize: '0.72rem',
-                              fontWeight: 700,
-                              color: badgeColor,
-                              background: badgeBg,
-                              width: 'fit-content',
+                              padding: '0.25rem 0.55rem',
+                              color: '#0ab39c',
+                              borderColor: 'rgba(10, 179, 156, 0.3)',
                             }}
+                            title="Setujui rekomendasi untuk baris ini"
                           >
-                            <Sparkles size={11} /> Kemiripan {rec.score}%
-                          </span>
-                          <span style={{ fontSize: '0.72rem', color: '#878a99' }}>{rec.reason}</span>
-                        </div>
-                      </td>
+                            <Check size={12} /> Setujui
+                          </button>
+                        </td>
 
-                      {/* Aksi Setujui per baris */}
-                      <td style={{ textAlign: 'center', background: '#fffdfa' }}>
-                        <button
-                          type="button"
-                          className="btn btn-outline btn-sm"
-                          onClick={() => onApproveRecommendation(r.No, m)}
-                          style={{
-                            fontSize: '0.72rem',
-                            padding: '0.25rem 0.55rem',
-                            color: '#0ab39c',
-                            borderColor: 'rgba(10, 179, 156, 0.3)',
-                          }}
-                          title="Setujui rekomendasi untuk baris ini"
-                        >
-                          <Check size={12} /> Setujui
-                        </button>
-                      </td>
-
-                      {/* Data Target Asli */}
-                      <td><span style={{ color: '#495057' }}>{r.Wilayah || '-'}</span></td>
-                      <td className="code-cell" style={{ color: '#f06548', fontWeight: 700 }}>{r['KODE POS']}</td>
-                      <td>{r.Kecamatan || '-'}</td>
-                      <td>{r.Kelurahan || '-'}</td>
-                      <td>{r['Dati II'] || '-'}</td>
-                      <td style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.ALAMAT}>
-                        {r.ALAMAT || '-'}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                        {/* Data Target Asli */}
+                        <td><span style={{ color: '#495057' }}>{r.Wilayah || '-'}</span></td>
+                        <td className="code-cell" style={{ color: '#f06548', fontWeight: 700 }}>{r['KODE POS']}</td>
+                        <td>{r.Kecamatan || '-'}</td>
+                        <td>{r.Kelurahan || '-'}</td>
+                        <td>{r['Dati II'] || '-'}</td>
+                        <td style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.ALAMAT}>
+                          {r.ALAMAT || '-'}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
       )
     ) : (
         /* TAB 1 & TAB 3: DATA GRID BIASA (UNMATCHED vs MATCHED) */

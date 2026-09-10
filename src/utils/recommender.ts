@@ -187,10 +187,15 @@ export function findClosestMasterRecommendation(
       bestMaster = m;
 
       const reasons: string[] = [];
-      if (scoreDati >= 0.8) reasons.push(`Dati II Cocok (${m['Dati II']})`);
-      if (scoreKec >= 0.7) reasons.push(`Kecamatan Cocok (${m.Kecamatan})`);
-      else if (scorePostal >= 0.75) reasons.push(`Area Kode Pos Sama (${masterKp.slice(0, 3)}xx)`);
-      if (reasons.length === 0 && provMatch) reasons.push(`Satu Provinsi (${m.Provinsi})`);
+      const pctDati = Math.round(scoreDati * 35);
+      const pctKec = Math.round(scoreSubDistrict * 35);
+      const pctPostal = Math.round(scorePostal * 20);
+      const pctWil = Math.round(scoreWilayah * 10);
+
+      if (pctDati >= 25) reasons.push(`Dati II Cocok (+${pctDati}%)`);
+      if (pctKec >= 20) reasons.push(`Kecamatan Cocok (+${pctKec}%)`);
+      else if (pctPostal >= 10) reasons.push(`Radius Pos ${masterKp.slice(0, 3)}xx (+${pctPostal}%)`);
+      if (pctWil >= 7) reasons.push(`Provinsi (+${pctWil}%)`);
 
       bestReason = reasons.join(' • ') || 'Kedekatan Wilayah Operasional';
     }
