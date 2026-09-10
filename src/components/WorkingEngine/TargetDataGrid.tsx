@@ -11,6 +11,7 @@ import {
   Sparkles,
   CheckCircle2,
   Check,
+  HelpCircle,
 } from 'lucide-react';
 import type { TargetRow, MasterRow } from '../../types';
 import {
@@ -18,6 +19,7 @@ import {
   buildMasterProximityIndex,
   type RecommendationResult,
 } from '../../utils/recommender';
+import { ProximityGuideModal } from './ProximityGuideModal';
 
 interface TargetDataGridProps {
   rows: TargetRow[];
@@ -74,6 +76,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   // Recommendations state - LAZY evaluated so opening 'Data Cek' is 100% INSTANT!
   const [recommendations, setRecommendations] = useState<RecommendationResult[]>([]);
   const [isComputingRecs, setIsComputingRecs] = useState<boolean>(false);
+  const [isGuideModalOpen, setIsGuideModalOpen] = useState<boolean>(false);
 
   // Trigger recommendation calculation ONLY when Tab 2 is active
   useEffect(() => {
@@ -397,6 +400,30 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               <span>Setujui Semua Rekomendasi ({recommendations.length})</span>
             </button>
           )}
+
+          {/* Tombol Panduan Skor di Samping Button Setuju */}
+          {checkerTab === 'recommendation' && (
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => setIsGuideModalOpen(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                fontSize: '0.78rem',
+                padding: '0.32rem 0.75rem',
+                color: '#d97706',
+                borderColor: 'rgba(247, 184, 75, 0.45)',
+                background: '#fffdf5',
+              }}
+              id="btn-panduan-skor"
+              title="Buka panduan sederhana cara sistem menghitung skor kedekatan cabang"
+            >
+              <HelpCircle size={14} />
+              <span>Panduan Skor</span>
+            </button>
+          )}
         </div>
 
         {/* Input Search */}
@@ -462,67 +489,23 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
             </p>
           </div>
         ) : (
-          <>
-            {/* Banner Penjelasan Skor & Dasar Kedekatan */}
-            <div
-              style={{
-                marginBottom: '1rem',
-                padding: '0.9rem 1.1rem',
-                background: '#fffdf5',
-                border: '1px solid rgba(247, 184, 75, 0.4)',
-                borderRadius: '6px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.45rem',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <Sparkles size={16} color="#d97706" />
-                  <strong style={{ fontSize: '0.84rem', color: '#92400e', fontWeight: 600 }}>
-                    Panduan Perhitungan Skor & Dasar Kedekatan ({`60% - 95%+`})
-                  </strong>
-                </div>
-                <span style={{ fontSize: '0.72rem', color: '#b45309', background: 'rgba(247, 184, 75, 0.18)', padding: '0.15rem 0.55rem', borderRadius: '4px', fontWeight: 600 }}>
-                  Algoritma Benchmark Radius Geografis 4 Komponen
-                </span>
-              </div>
-              <p style={{ fontSize: '0.76rem', color: '#78350f', margin: 0, lineHeight: 1.45 }}>
-                Persentase kemiripan dihitung secara objektif berdasarkan bobot kedekatan antara data cek operasional dengan cabang master terdekat:
-              </p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '0.5rem', marginTop: '0.2rem' }}>
-                <div style={{ background: '#ffffff', padding: '0.45rem 0.65rem', borderRadius: '4px', border: '1px solid #fde68a' }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#b45309' }}>1. Kota / Dati II (Bobot 35%)</div>
-                  <div style={{ fontSize: '0.7rem', color: '#878a99', marginTop: '0.1rem' }}>Kesamaan Kabupaten / Kota Dati II</div>
-                </div>
-                <div style={{ background: '#ffffff', padding: '0.45rem 0.65rem', borderRadius: '4px', border: '1px solid #fde68a' }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#b45309' }}>2. Kecamatan / Kelurahan (Bobot 35%)</div>
-                  <div style={{ fontSize: '0.7rem', color: '#878a99', marginTop: '0.1rem' }}>Kesamaan atau kedekatan nama kecamatan</div>
-                </div>
-                <div style={{ background: '#ffffff', padding: '0.45rem 0.65rem', borderRadius: '4px', border: '1px solid #fde68a' }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#b45309' }}>3. Radius Kode Pos (Bobot 20%)</div>
-                  <div style={{ fontSize: '0.7rem', color: '#878a99', marginTop: '0.1rem' }}>Kesamaan 2-4 digit awal kode pos sekitar</div>
-                </div>
-                <div style={{ background: '#ffffff', padding: '0.45rem 0.65rem', borderRadius: '4px', border: '1px solid #fde68a' }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#b45309' }}>4. Wilayah / Provinsi (Bobot 10%)</div>
-                  <div style={{ fontSize: '0.7rem', color: '#878a99', marginTop: '0.1rem' }}>Berada dalam satu regional provinsi</div>
-                </div>
-              </div>
-              <div style={{ fontSize: '0.72rem', color: '#92400e', marginTop: '0.2rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                <span>• <strong>60% - 70%</strong>: Kota/Dati II Cocok + 1 Provinsi + Kode Pos Zona Sama (Kecamatan tetangga).</span>
-                <span>• <strong>75% - 85%</strong>: Kota Cocok + Kecamatan Cocok + 1 Provinsi (Kecamatan identik).</span>
-                <span>• <strong>85% - 95%+</strong>: Kota Cocok + Kecamatan Cocok + Kode Pos Area Sama (3-4 digit identik).</span>
-              </div>
-            </div>
-
-            <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px' }}>
-            <table className="modern-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '60px', textAlign: 'center', background: '#f3f6f9', color: '#405189' }}>No</th>
-                  <th style={{ minWidth: '160px', background: '#fff9f0', color: '#d97706' }}>Kandidat Rekomendasi Master</th>
-                  <th style={{ minWidth: '150px', background: '#fff9f0', color: '#d97706' }}>Skor & Dasar Kedekatan</th>
-                  <th style={{ minWidth: '100px', textAlign: 'center', background: '#fff9f0' }}>Aksi</th>
+          <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px' }}>
+          <table className="modern-table">
+            <thead>
+              <tr>
+                <th style={{ width: '60px', textAlign: 'center', background: '#f3f6f9', color: '#405189' }}>No</th>
+                <th style={{ minWidth: '160px', background: '#fff9f0', color: '#d97706' }}>Kandidat Rekomendasi Master</th>
+                <th style={{ minWidth: '150px', background: '#fff9f0', color: '#d97706' }}>
+                  <div
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}
+                    onClick={() => setIsGuideModalOpen(true)}
+                    title="Klik untuk melihat penjelasan cara hitung skor"
+                  >
+                    <span>Skor & Dasar Kedekatan</span>
+                    <HelpCircle size={13} color="#d97706" />
+                  </div>
+                </th>
+                <th style={{ minWidth: '100px', textAlign: 'center', background: '#fff9f0' }}>Aksi</th>
                   {/* Data Target Asli */}
                   <th style={{ color: '#878a99' }}>Wilayah Target</th>
                   <th style={{ color: '#878a99' }}>KODE POS Target</th>
@@ -639,9 +622,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               </tbody>
             </table>
           </div>
-        </>
-      )
-    ) : (
+        )
+      ) : (
         /* TAB 1 & TAB 3: DATA GRID BIASA (UNMATCHED vs MATCHED) */
         <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px' }}>
           <table className="modern-table">
@@ -836,6 +818,12 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Modal Panduan Skor Kedekatan untuk Pengguna Awam */}
+      <ProximityGuideModal
+        isOpen={isGuideModalOpen}
+        onClose={() => setIsGuideModalOpen(false)}
+      />
     </div>
   );
 };

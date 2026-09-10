@@ -192,12 +192,12 @@ export function findClosestMasterRecommendation(
       const pctPostal = Math.round(scorePostal * 20);
       const pctWil = Math.round(scoreWilayah * 10);
 
-      if (pctDati >= 25) reasons.push(`Dati II Cocok (+${pctDati}%)`);
+      if (pctDati >= 25) reasons.push(`Kota/Kab Cocok (+${pctDati}%)`);
       if (pctKec >= 20) reasons.push(`Kecamatan Cocok (+${pctKec}%)`);
-      else if (pctPostal >= 10) reasons.push(`Radius Pos ${masterKp.slice(0, 3)}xx (+${pctPostal}%)`);
-      if (pctWil >= 7) reasons.push(`Provinsi (+${pctWil}%)`);
+      else if (pctPostal >= 10) reasons.push(`Kode Pos Mirip (+${pctPostal}%)`);
+      if (pctWil >= 7) reasons.push(`Satu Provinsi (+${pctWil}%)`);
 
-      bestReason = reasons.join(' • ') || 'Kedekatan Wilayah Operasional';
+      bestReason = reasons.join(' • ') || 'Lokasi Terdekat Sekitar';
     }
   }
 
