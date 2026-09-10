@@ -646,13 +646,13 @@ export const App: React.FC = () => {
             <div
               className="glass-card"
               style={{
-                padding: '1rem 1.25rem',
+                padding: '0.65rem 1.15rem',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 flexWrap: 'wrap',
                 gap: '0.75rem',
-                marginBottom: '1.25rem',
+                marginBottom: '0',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -759,7 +759,7 @@ export const App: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="glass-card" style={{ marginTop: '1rem', padding: '1.25rem 1.5rem' }}>
+              <div className="glass-card" style={{ padding: '0.85rem 1.15rem' }}>
                 {/* Header Title inside Card Removed */}
 
 
@@ -868,13 +868,13 @@ export const App: React.FC = () => {
             <div
               className="glass-card"
               style={{
-                padding: '1rem 1.25rem',
+                padding: '0.65rem 1.15rem',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 flexWrap: 'wrap',
                 gap: '0.75rem',
-                marginBottom: '1.25rem',
+                marginBottom: '0',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
