@@ -20,18 +20,18 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
     const q = searchTerm.toLowerCase();
     return masterRows.filter((r) => {
       return (
-        r.Wilayah?.toLowerCase().includes(q) ||
-        r['Sandi Cabang']?.toLowerCase().includes(q) ||
-        r.Sandi?.toLowerCase().includes(q) ||
-        r.Cabang?.toLowerCase().includes(q) ||
-        r['Branch Code']?.toLowerCase().includes(q) ||
-        r['Kode Cabang']?.toLowerCase().includes(q) ||
-        r['Nama Outlet']?.toLowerCase().includes(q) ||
-        r['KODE POS']?.toLowerCase().includes(q) ||
-        r.Kecamatan?.toLowerCase().includes(q) ||
-        r.Kelurahan?.toLowerCase().includes(q) ||
-        r['Dati II']?.toLowerCase().includes(q) ||
-        r.ALAMAT?.toLowerCase().includes(q)
+        String(r.Wilayah || '').toLowerCase().includes(q) ||
+        String(r['Sandi Cabang'] || '').toLowerCase().includes(q) ||
+        String(r.Sandi || '').toLowerCase().includes(q) ||
+        String(r.Cabang || '').toLowerCase().includes(q) ||
+        String(r['Branch Code'] || '').toLowerCase().includes(q) ||
+        String(r['Kode Cabang'] || '').toLowerCase().includes(q) ||
+        String(r['Nama Outlet'] || '').toLowerCase().includes(q) ||
+        String(r['KODE POS'] || '').toLowerCase().includes(q) ||
+        String(r.Kecamatan || '').toLowerCase().includes(q) ||
+        String(r.Kelurahan || '').toLowerCase().includes(q) ||
+        String(r['Dati II'] || '').toLowerCase().includes(q) ||
+        String(r.ALAMAT || '').toLowerCase().includes(q)
       );
     });
   }, [masterRows, searchTerm]);
@@ -45,19 +45,19 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
   if (masterRows.length === 0) return null;
 
   return (
-    <div className="glass-card" style={{ marginTop: '1.25rem', padding: '1.25rem 1.5rem' }}>
-      {/* Table Header Bar */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
+    <div className="glass-card" style={{ marginTop: '1rem', padding: '1.25rem 1.5rem' }}>
+      {/* Table Header Bar khas Velzon */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.1rem' }}>
         <div>
-          <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#ffffff' }}>
+          <h3 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#212529', letterSpacing: '-0.01em' }}>
             Data Grid Master Cabang
           </h3>
-          <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+          <p style={{ fontSize: '0.78rem', color: '#878a99', marginTop: '0.15rem' }}>
             Menampilkan {filteredRows.length.toLocaleString('id-ID')} entri terfilter dari total {masterRows.length.toLocaleString('id-ID')} baris aktif.
           </p>
         </div>
 
-        {/* Clean Search Input */}
+        {/* Clean Velzon Search Input */}
         <div className="search-input-wrapper">
           <Search size={14} className="search-icon-pos" />
           <input
@@ -69,7 +69,7 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
               setSearchTerm(e.target.value);
               setPage(1);
             }}
-            style={{ width: '220px', paddingRight: searchTerm ? '2rem' : '0.85rem' }}
+            style={{ width: '240px', paddingRight: searchTerm ? '2rem' : '0.85rem' }}
           />
           {searchTerm && (
             <button
@@ -80,7 +80,7 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
                 right: '0.5rem',
                 background: 'transparent',
                 border: 'none',
-                color: 'var(--text-muted)',
+                color: '#878a99',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -93,7 +93,7 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
       </div>
 
       {/* Clean Table Container */}
-      <div className="table-container">
+      <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px' }}>
         <table className="modern-table">
           <thead>
             <tr>
@@ -111,7 +111,7 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
               <th>Branch Code</th>
               <th>Kode Cabang</th>
               <th>Status</th>
-              <th style={{ color: '#38bdf8' }}>KODE POS</th>
+              <th style={{ color: '#405189' }}>KODE POS</th>
               <th>Kecamatan</th>
               <th>Kelurahan</th>
               <th>Dati II</th>
@@ -122,7 +122,7 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
           <tbody>
             {paginatedRows.length === 0 ? (
               <tr>
-                <td colSpan={14} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
+                <td colSpan={14} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
                   Tidak ada data yang cocok dengan kata kunci "{searchTerm}".
                 </td>
               </tr>
@@ -130,30 +130,30 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
               paginatedRows.map((r, idx) => {
                 const globalIndex = (page - 1) * pageSize + idx + 1;
                 return (
-                  <tr key={`${r['KODE POS']}-${idx}`} style={{ transition: 'background-color 0.15s' }}>
-                    <td className="code-cell" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <tr key={`${r['KODE POS']}-${idx}`} style={{ background: idx % 2 === 0 ? '#fafbfe' : '#ffffff' }}>
+                    <td className="code-cell" style={{ textAlign: 'center', color: '#878a99' }}>
                       {globalIndex}
                     </td>
-                    <td><span style={{ color: '#cbd5e1' }}>{r.Wilayah || '-'}</span></td>
+                    <td><span style={{ color: '#495057' }}>{r.Wilayah || '-'}</span></td>
                     {hasCombinedSandiCabang ? (
                       <td>
-                        <strong style={{ color: '#ffffff', fontWeight: 600 }}>
+                        <strong style={{ color: '#212529', fontWeight: 600 }}>
                           {r['Sandi Cabang'] || r.Cabang || '-'}
                         </strong>
                       </td>
                     ) : (
                       <>
                         <td className="code-cell">{r.Sandi || '-'}</td>
-                        <td><strong style={{ color: '#ffffff' }}>{r.Cabang || '-'}</strong></td>
+                        <td><strong style={{ color: '#212529', fontWeight: 600 }}>{r.Cabang || '-'}</strong></td>
                       </>
                     )}
-                    <td style={{ color: '#93c5fd', fontWeight: 500 }}>{r['Nama Outlet'] || '-'}</td>
+                    <td style={{ color: '#405189', fontWeight: 500 }}>{r['Nama Outlet'] || '-'}</td>
                     <td className="code-cell">{r['Branch Code'] || '-'}</td>
                     <td className="code-cell">{r['Kode Cabang'] || '-'}</td>
                     <td>
                       <span className="badge badge-match">{r['Status Outlet'] || 'Aktif'}</span>
                     </td>
-                    <td className="code-cell" style={{ color: '#38bdf8', fontWeight: 700 }}>
+                    <td className="code-cell" style={{ color: '#405189', fontWeight: 700 }}>
                       {r['KODE POS']}
                     </td>
                     <td>{r.Kecamatan || '-'}</td>
@@ -162,7 +162,7 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
                     <td style={{ maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.ALAMAT}>
                       {r.ALAMAT || '-'}
                     </td>
-                    <td style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>{r.Telp || '-'}</td>
+                    <td style={{ color: '#878a99', fontSize: '0.78rem' }}>{r.Telp || '-'}</td>
                   </tr>
                 );
               })
@@ -173,7 +173,7 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
 
       {/* Clean Pagination Bar */}
       <div className="pagination-row" style={{ marginTop: '0.75rem', paddingTop: '0.5rem' }}>
-        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+        <div style={{ fontSize: '0.78rem', color: '#878a99' }}>
           Menampilkan {(page - 1) * pageSize + 1} - {Math.min(page * pageSize, filteredRows.length)} dari {filteredRows.length.toLocaleString('id-ID')} baris
         </div>
         <div className="pagination-controls">
@@ -186,7 +186,7 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
             <ChevronLeft size={13} />
             <span>Sebelumnya</span>
           </button>
-          <span style={{ padding: '0 0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>
+          <span style={{ padding: '0 0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: '#495057' }}>
             {page} / {totalPages}
           </span>
           <button

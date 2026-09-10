@@ -32,7 +32,7 @@ import {
 } from './utils/neonSync';
 import { SupabaseModal } from './components/SupabaseModal';
 import { PtenDiscrepancyPanel } from './components/Dashboard/PtenDiscrepancyPanel';
-import { Database, ShieldAlert, Filter, UploadCloud } from 'lucide-react';
+import { Database, ShieldAlert, Filter } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'master' | 'working'>('dashboard');
@@ -148,7 +148,7 @@ export const App: React.FC = () => {
   const wilayahList = useMemo(() => {
     const set = new Set<string>();
     targetRows.forEach((r) => {
-      if (r.Wilayah) set.add(r.Wilayah.trim());
+      if (r.Wilayah) set.add(String(r.Wilayah).trim());
     });
     return Array.from(set).sort();
   }, [targetRows]);
@@ -433,70 +433,28 @@ export const App: React.FC = () => {
           {/* MENU 1: DASHBOARD (EXECUTIVE OPERATIONAL ANALYST DASHBOARD) */}
           {activeTab === 'dashboard' && (
           <>
-            <div className="section-header" style={{ flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
-              <div>
-                <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span>Pusat Analisis & Monitoring Operasional Cabang</span>
-                  <span className="badge-version">Live Analytics</span>
-                </h2>
-                <p className="section-subtitle">
-                  Evaluasi performa pencocokan alamat, integritas referensi master cabang, dan selisih kode pos PTEN.
-                </p>
-              </div>
-
-              {/* Analyst Dashboard Toolbar Controls */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-                {wilayahList.length > 0 && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: '#ffffff', border: '1px solid var(--border-subtle)', padding: '0.25rem 0.6rem', borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-sm)' }}>
-                    <Filter size={13} color="#878a99" />
-                    <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Filter Wilayah:</span>
-                    <select
-                      value={dashboardWilayahFilter}
-                      onChange={(e) => setDashboardWilayahFilter(e.target.value)}
-                      className="filter-select"
-                      style={{ padding: '0.2rem 0.45rem', fontSize: '0.74rem', height: 'auto', border: 'none', background: 'transparent' }}
-                      id="dashboard-wilayah-filter"
-                    >
-                      <option value="ALL">Semua Wilayah ({targetRows.length})</option>
-                      {wilayahList.map((w) => (
-                        <option key={w} value={w}>{w}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {targetRows.length === 0 && (
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm"
-                    onClick={handleLoadSampleTarget}
-                    title="Muat data transaksi contoh untuk simulasi dashboard"
+            {/* Minimalist Regional Filter Toolbar if data exists */}
+            {wilayahList.length > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.25rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#ffffff', border: '1px solid var(--border-subtle)', padding: '0.3rem 0.75rem', borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-sm)' }}>
+                  <Filter size={13} color="#878a99" />
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Filter Wilayah:</span>
+                  <select
+                    value={dashboardWilayahFilter}
+                    onChange={(e) => setDashboardWilayahFilter(e.target.value)}
+                    className="filter-select"
+                    style={{ padding: '0.15rem 0.4rem', fontSize: '0.75rem', height: 'auto', border: 'none', background: 'transparent' }}
+                    id="dashboard-wilayah-filter"
                   >
-                    <span>Simulasi Data</span>
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  onClick={() => setActiveTab('master')}
-                >
-                  <Database size={13} />
-                  <span>Data Master ({masterRows.length})</span>
-                </button>
-
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  onClick={() => setActiveTab('working')}
-                >
-                  <UploadCloud size={13} />
-                  <span>{targetRows.length > 0 ? 'Buka Data Dicocokkan' : '+ Unggah Data Target'}</span>
-                </button>
+                    <option value="ALL">Semua Wilayah ({targetRows.length} Data)</option>
+                    {wilayahList.map((w) => (
+                      <option key={w} value={w}>{w}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* 6 Executive Analyst Metric Cards */}
             <MetricCards
               stats={dashboardStats}
               masterCount={masterRows.length}
@@ -527,69 +485,105 @@ export const App: React.FC = () => {
               masterFileName={masterFileName}
             />
 
-            {/* 2 Sub-Tabs for Menu Data Master */}
+            {/* 2 Sub-Tabs for Menu Data Master (Velzon nav-tabs-custom style) */}
             {masterRows.length > 0 && (
               <div
                 style={{
                   display: 'flex',
-                  gap: '0.6rem',
+                  gap: '0.5rem',
                   marginTop: '1.25rem',
-                  borderBottom: '1px solid var(--border-subtle)',
-                  paddingBottom: '0.85rem',
-                  flexWrap: 'wrap',
+                  borderBottom: '1px solid #e9ebec',
+                  paddingBottom: '0',
                 }}
               >
                 {/* Tab 1: Indikator Kesehatan Master */}
                 <button
                   type="button"
                   onClick={() => setMasterSubTab('health')}
-                  className={`btn ${masterSubTab === 'health' ? 'btn-primary' : 'btn-outline'}`}
                   style={{
-                    borderRadius: 'var(--radius-full)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.75rem 1.25rem',
                     fontSize: '0.84rem',
-                    padding: '0.55rem 1.15rem',
-                    background:
-                      masterSubTab === 'health'
-                        ? masterHealth.multiOutletCount > 0
-                          ? 'linear-gradient(135deg, #d97706, #b45309)'
-                          : 'linear-gradient(135deg, #059669, #047857)'
-                        : undefined,
-                    borderColor:
-                      masterHealth.multiOutletCount > 0
-                        ? 'rgba(245, 158, 11, 0.4)'
-                        : undefined,
-                    color:
-                      masterSubTab === 'health'
-                        ? '#ffffff'
-                        : masterHealth.multiOutletCount > 0
-                        ? '#fbbf24'
-                        : '#cbd5e1',
+                    fontWeight: masterSubTab === 'health' ? 600 : 500,
+                    color: masterSubTab === 'health' ? '#405189' : '#878a99',
+                    background: 'transparent',
+                    border: 'none',
+                    borderBottom: masterSubTab === 'health' ? '2px solid #405189' : '2px solid transparent',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    marginBottom: '-1px',
                   }}
                   id="tab-btn-master-health"
                 >
-                  <ShieldAlert size={15} />
-                  <span>
-                    Tab 1: Indikator Kesehatan Master
-                    {masterHealth.multiOutletCount > 0
-                      ? `: Terdeteksi ${masterHealth.multiOutletCount} Kode Pos Multi-Cabang`
-                      : ' (100% Optimal)'}
-                  </span>
+                  <ShieldAlert size={15} color={masterSubTab === 'health' ? '#405189' : '#878a99'} />
+                  <span>Tab 1: Indikator Kesehatan Master</span>
+                  {masterHealth.multiOutletCount > 0 ? (
+                    <span
+                      style={{
+                        padding: '0.15rem 0.55rem',
+                        borderRadius: '9999px',
+                        fontSize: '0.72rem',
+                        fontWeight: 600,
+                        background: 'rgba(247, 184, 75, 0.15)',
+                        color: '#d97706',
+                        border: '1px solid rgba(247, 184, 75, 0.3)',
+                      }}
+                    >
+                      {masterHealth.multiOutletCount} Kode Pos Multi-Cabang
+                    </span>
+                  ) : (
+                    <span
+                      style={{
+                        padding: '0.15rem 0.55rem',
+                        borderRadius: '9999px',
+                        fontSize: '0.72rem',
+                        fontWeight: 600,
+                        background: 'rgba(10, 179, 156, 0.12)',
+                        color: '#0ab39c',
+                      }}
+                    >
+                      100% Optimal
+                    </span>
+                  )}
                 </button>
 
                 {/* Tab 2: Data Grid Master Cabang */}
                 <button
                   type="button"
                   onClick={() => setMasterSubTab('grid')}
-                  className={`btn ${masterSubTab === 'grid' ? 'btn-primary' : 'btn-outline'}`}
                   style={{
-                    borderRadius: 'var(--radius-full)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.75rem 1.25rem',
                     fontSize: '0.84rem',
-                    padding: '0.55rem 1.15rem',
+                    fontWeight: masterSubTab === 'grid' ? 600 : 500,
+                    color: masterSubTab === 'grid' ? '#405189' : '#878a99',
+                    background: 'transparent',
+                    border: 'none',
+                    borderBottom: masterSubTab === 'grid' ? '2px solid #405189' : '2px solid transparent',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    marginBottom: '-1px',
                   }}
                   id="tab-btn-master-grid"
                 >
-                  <Database size={15} />
-                  <span>Tab 2: Data Grid Master Cabang ({masterRows.length.toLocaleString('id-ID')} Baris)</span>
+                  <Database size={15} color={masterSubTab === 'grid' ? '#405189' : '#878a99'} />
+                  <span>Tab 2: Data Grid Master Cabang</span>
+                  <span
+                    style={{
+                      padding: '0.15rem 0.55rem',
+                      borderRadius: '9999px',
+                      fontSize: '0.72rem',
+                      fontWeight: 600,
+                      background: 'rgba(64, 81, 137, 0.1)',
+                      color: '#405189',
+                    }}
+                  >
+                    {masterRows.length.toLocaleString('id-ID')} Baris
+                  </span>
                 </button>
               </div>
             )}

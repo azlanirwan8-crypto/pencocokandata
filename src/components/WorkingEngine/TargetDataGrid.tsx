@@ -16,23 +16,23 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({ rows, totalInput
   const hasCombinedSandiCabang = rows.some(r => r['Sandi Cabang'] && (!r.Sandi || r.Sandi === r['Sandi Cabang']));
 
   return (
-    <div className="glass-card" style={{ marginTop: '1.25rem' }}>
-      <div className="section-header">
+    <div className="glass-card" style={{ marginTop: '1rem', padding: '1.25rem 1.5rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.1rem' }}>
         <div>
-          <h2 className="section-title" style={{ fontSize: '1.15rem' }}>
+          <h2 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#212529', letterSpacing: '-0.01em' }}>
             Pratinjau Data Target Operasional
           </h2>
-          <p className="section-subtitle">
-            Menampilkan {rows.length.toLocaleString('id-ID')} baris data terfilter (dari {totalInputRows.toLocaleString('id-ID')} baris input awal).
+          <p style={{ fontSize: '0.78rem', color: '#878a99', marginTop: '0.15rem' }}>
+            Menampilkan {rows.length.toLocaleString('id-ID')} baris data terfilter (dari total {totalInputRows.toLocaleString('id-ID')} baris input awal).
           </p>
         </div>
       </div>
 
-      <div className="table-container" style={{ marginTop: '1rem' }}>
+      <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px' }}>
         <table className="modern-table">
           <thead>
             <tr>
-              <th style={{ background: '#f3f6f9', borderRight: '1px solid var(--border-subtle)', color: '#405189' }}>No (Kunci Urutan)</th>
+              <th style={{ width: '60px', textAlign: 'center', background: '#f3f6f9', borderRight: '1px solid #e9ebec', color: '#405189' }}>No</th>
               <th>Status Match</th>
               <th>CEK PTEN</th>
               <th>Wilayah</th>
@@ -65,7 +65,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({ rows, totalInput
           <tbody>
             {paginatedRows.length === 0 ? (
               <tr>
-                <td colSpan={20} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
+                <td colSpan={20} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
                   Tidak ada baris data yang cocok dengan kriteria filter saat ini.
                 </td>
               </tr>
@@ -83,10 +83,11 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({ rows, totalInput
                     <td
                       className="code-cell"
                       style={{
+                        textAlign: 'center',
                         background: '#ffffff',
                         fontWeight: 700,
                         color: '#405189',
-                        borderRight: '1px solid var(--border-subtle)',
+                        borderRight: '1px solid #e9ebec',
                       }}
                     >
                       {r.No}
@@ -110,67 +111,67 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({ rows, totalInput
                       ) : r['CEK KODE POS + PTEN'] === 'DIFFERENT' ? (
                         <span className="badge badge-diff">DIFFERENT</span>
                       ) : (
-                        <span style={{ color: 'var(--text-muted)' }}>-</span>
+                        <span style={{ color: '#878a99' }}>-</span>
                       )}
                     </td>
 
                     {/* Wilayah */}
-                    <td><span style={{ color: '#cbd5e1' }}>{r.Wilayah}</span></td>
+                    <td><span style={{ color: '#495057' }}>{r.Wilayah || '-'}</span></td>
 
                     {/* Auto-populated Master Attributes */}
                     {hasCombinedSandiCabang ? (
                       <td>
-                        <strong style={{ color: isMatched ? '#ffffff' : 'var(--text-muted)' }}>
+                        <strong style={{ color: isMatched ? '#212529' : '#878a99' }}>
                           {r['Sandi Cabang'] || r.Cabang || '-'}
                         </strong>
                       </td>
                     ) : (
                       <>
-                        <td className="code-cell" style={{ color: '#93c5fd' }}>
-                          {r.Sandi || <span style={{ color: 'var(--text-muted)' }}>-</span>}
+                        <td className="code-cell" style={{ color: '#405189' }}>
+                          {r.Sandi || <span style={{ color: '#878a99' }}>-</span>}
                         </td>
                         <td>
-                          <strong style={{ color: isMatched ? '#ffffff' : 'var(--text-muted)' }}>
+                          <strong style={{ color: isMatched ? '#212529' : '#878a99' }}>
                             {r.Cabang || '-'}
                           </strong>
                         </td>
                       </>
                     )}
                     <td className="code-cell">
-                      {r['Branch Code'] || <span style={{ color: 'var(--text-muted)' }}>-</span>}
+                      {r['Branch Code'] || <span style={{ color: '#878a99' }}>-</span>}
                     </td>
                     <td className="code-cell">
-                      {r['Kode Cabang'] || <span style={{ color: 'var(--text-muted)' }}>-</span>}
+                      {r['Kode Cabang'] || <span style={{ color: '#878a99' }}>-</span>}
                     </td>
-                    <td>{r['Nama Outlet'] || <span style={{ color: 'var(--text-muted)' }}>-</span>}</td>
+                    <td style={{ color: '#405189', fontWeight: 500 }}>{r['Nama Outlet'] || <span style={{ color: '#878a99' }}>-</span>}</td>
                     <td>
                       {r['Status Outlet'] ? (
                         <span className="badge badge-match">{r['Status Outlet']}</span>
                       ) : (
-                        <span style={{ color: 'var(--text-muted)' }}>-</span>
+                        <span style={{ color: '#878a99' }}>-</span>
                       )}
                     </td>
                     <td style={{ maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.ALAMAT}>
-                      {r.ALAMAT || <span style={{ color: 'var(--text-muted)' }}>-</span>}
+                      {r.ALAMAT || <span style={{ color: '#878a99' }}>-</span>}
                     </td>
 
                     {/* Target Data Asli */}
-                    <td className="code-cell" style={{ color: '#38bdf8' }}>{r['KODE POS']}</td>
-                    <td>{r.Kelurahan}</td>
-                    <td>{r.Kecamatan}</td>
-                    <td>{r['Dati II']}</td>
-                    <td className="code-cell">{r['Kode Dati II']}</td>
-                    <td>{r.Provinsi}</td>
-                    <td>{r['KOTA PTEN']}</td>
+                    <td className="code-cell" style={{ color: '#405189', fontWeight: 700 }}>{r['KODE POS']}</td>
+                    <td>{r.Kelurahan || '-'}</td>
+                    <td>{r.Kecamatan || '-'}</td>
+                    <td>{r['Dati II'] || '-'}</td>
+                    <td className="code-cell">{r['Kode Dati II'] || '-'}</td>
+                    <td>{r.Provinsi || '-'}</td>
+                    <td>{r['KOTA PTEN'] || '-'}</td>
                     <td
                       className="code-cell"
-                      style={{ color: isPtenDiff ? '#fb7185' : '#93c5fd' }}
+                      style={{ color: isPtenDiff ? '#f06548' : '#405189', fontWeight: isPtenDiff ? 700 : 600 }}
                     >
-                      {r['KODE POS PTEN']}
+                      {r['KODE POS PTEN'] || '-'}
                     </td>
                     <td>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        {r['SUMBER DATA']}
+                      <span style={{ fontSize: '0.75rem', color: '#878a99' }}>
+                        {r['SUMBER DATA'] || '-'}
                       </span>
                     </td>
                   </tr>
@@ -181,10 +182,10 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({ rows, totalInput
         </table>
       </div>
 
-      {/* Pagination Bar */}
-      <div className="pagination-row">
-        <div>
-          Menampilkan {(page - 1) * pageSize + 1} - {Math.min(page * pageSize, rows.length)} dari {rows.length} baris
+      {/* Clean Pagination Bar */}
+      <div className="pagination-row" style={{ marginTop: '0.75rem', paddingTop: '0.5rem' }}>
+        <div style={{ fontSize: '0.78rem', color: '#878a99' }}>
+          Menampilkan {(page - 1) * pageSize + 1} - {Math.min(page * pageSize, rows.length)} dari {rows.length.toLocaleString('id-ID')} baris
         </div>
         <div className="pagination-controls">
           <button
@@ -193,10 +194,10 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({ rows, totalInput
             disabled={page <= 1}
             onClick={() => setPage(p => Math.max(p - 1, 1))}
           >
-            <ChevronLeft size={14} />
+            <ChevronLeft size={13} />
             <span>Sebelumnya</span>
           </button>
-          <span style={{ padding: '0 0.5rem', fontFamily: 'var(--font-mono)' }}>
+          <span style={{ padding: '0 0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: '#495057' }}>
             Hal {page} / {totalPages}
           </span>
           <button
@@ -206,7 +207,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({ rows, totalInput
             onClick={() => setPage(p => Math.min(p + 1, totalPages))}
           >
             <span>Berikutnya</span>
-            <ChevronRight size={14} />
+            <ChevronRight size={13} />
           </button>
         </div>
       </div>

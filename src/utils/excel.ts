@@ -237,10 +237,25 @@ export async function parseExcelFile<T>(file: File): Promise<{ data: T[]; header
 
     reader.onload = (e) => {
       try {
-        const buffer = e.target?.result;
-        const workbook = XLSX.read(buffer, { type: 'binary', cellText: true, raw: false });
+        const buffer = e.target?.result as ArrayBuffer;
+        if (!buffer) {
+          throw new Error('Berkas tidak dapat dibaca (buffer kosong).');
+        }
+
+        // Gunakan Uint8Array dan type: 'array' untuk kompatibilitas 100% di semua browser & Vercel
+        const dataUint8 = new Uint8Array(buffer);
+        const workbook = XLSX.read(dataUint8, { type: 'array', cellText: true, raw: false });
+        
+        if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+          throw new Error('File Excel tidak memiliki lembar kerja (worksheet).');
+        }
+
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
+
+        if (!worksheet) {
+          throw new Error('Lembar kerja kosong atau tidak dapat diakses.');
+        }
 
         // Parse to 2D array first to inspect headers accurately
         const rawJson: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
@@ -249,17 +264,19 @@ export async function parseExcelFile<T>(file: File): Promise<{ data: T[]; header
           return;
         }
 
-        const rawHeaders = (rawJson[0] as any[]).map(c => String(c || '').trim()).filter(Boolean);
+        const rawHeaders = (rawJson[0] as any[]).map(c => String(c ?? '').trim()).filter(Boolean);
         
         // Parse rows to objects
         const rawRows: any[] = XLSX.utils.sheet_to_json(worksheet, { raw: false, defval: '' });
 
-        // Map every row keys to canonical names
+        // Map every row keys to canonical names and ensure ALL values are safe strings/primitives
         const standardizedRows = rawRows.map(row => {
           const item: Record<string, any> = {};
           for (const key of Object.keys(row)) {
             const canonicalKey = mapCanonicalHeader(key);
-            item[canonicalKey] = row[key];
+            const val = row[key];
+            // Sanitasi: pastikan string tidak null/undefined dan aman untuk operasi .toLowerCase() / .trim()
+            item[canonicalKey] = val !== null && val !== undefined ? String(val).trim() : '';
           }
 
           // Bidirectional sync for Sandi Cabang vs Sandi & Cabang
@@ -282,8 +299,9 @@ export async function parseExcelFile<T>(file: File): Promise<{ data: T[]; header
       }
     };
 
-    reader.onerror = (err) => reject(err);
-    reader.readAsBinaryString(file);
+    reader.onerror = (err) => reject(new Error('Gagal membaca berkas melalui FileReader: ' + (err || 'Unknown error')));
+    // Gunakan readAsArrayBuffer agar tidak corrupt binary data XLSX di browser
+    reader.readAsArrayBuffer(file);
   });
 }
 

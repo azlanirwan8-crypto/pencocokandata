@@ -28,24 +28,24 @@ export const MasterHealthCard: React.FC<MasterHealthCardProps> = ({ health }) =>
     return list;
   }, [health.multiOutletItems]);
 
-  // Search filter
+  // Search filter (Safe for any data types)
   const filteredDuplicates = useMemo(() => {
     if (!searchTerm.trim()) return allDuplicateRows;
     const q = searchTerm.toLowerCase();
     return allDuplicateRows.filter(({ kodePos, row }) => {
       return (
-        kodePos.includes(q) ||
-        row.Wilayah?.toLowerCase().includes(q) ||
-        row['Sandi Cabang']?.toLowerCase().includes(q) ||
-        row.Sandi?.toLowerCase().includes(q) ||
-        row.Cabang?.toLowerCase().includes(q) ||
-        row['Nama Outlet']?.toLowerCase().includes(q) ||
-        row['Branch Code']?.toLowerCase().includes(q) ||
-        row['Kode Cabang']?.toLowerCase().includes(q) ||
-        row.ALAMAT?.toLowerCase().includes(q) ||
-        row.Kelurahan?.toLowerCase().includes(q) ||
-        row.Kecamatan?.toLowerCase().includes(q) ||
-        row['Dati II']?.toLowerCase().includes(q)
+        String(kodePos || '').toLowerCase().includes(q) ||
+        String(row.Wilayah || '').toLowerCase().includes(q) ||
+        String(row['Sandi Cabang'] || '').toLowerCase().includes(q) ||
+        String(row.Sandi || '').toLowerCase().includes(q) ||
+        String(row.Cabang || '').toLowerCase().includes(q) ||
+        String(row['Nama Outlet'] || '').toLowerCase().includes(q) ||
+        String(row['Branch Code'] || '').toLowerCase().includes(q) ||
+        String(row['Kode Cabang'] || '').toLowerCase().includes(q) ||
+        String(row.ALAMAT || '').toLowerCase().includes(q) ||
+        String(row.Kelurahan || '').toLowerCase().includes(q) ||
+        String(row.Kecamatan || '').toLowerCase().includes(q) ||
+        String(row['Dati II'] || '').toLowerCase().includes(q)
       );
     });
   }, [allDuplicateRows, searchTerm]);
@@ -57,46 +57,38 @@ export const MasterHealthCard: React.FC<MasterHealthCardProps> = ({ health }) =>
   }, [filteredDuplicates, page, pageSize]);
 
   return (
-    <div style={{ marginTop: '0.5rem' }}>
+    <div style={{ marginTop: '1rem' }}>
       {health.multiOutletCount > 0 ? (
-        <div
-          style={{
-            background: 'rgba(17, 27, 49, 0.85)',
-            border: '1px solid rgba(245, 158, 11, 0.35)',
-            borderRadius: 'var(--radius-lg)',
-            padding: '1.25rem 1.5rem',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-          }}
-        >
-          {/* Header Banner */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
+        <div className="glass-card" style={{ padding: '1.25rem 1.5rem' }}>
+          {/* Header Banner khas Velzon */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.1rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               <div
                 style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: 'var(--radius-sm)',
-                  background: 'rgba(245, 158, 11, 0.15)',
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '50%',
+                  background: 'rgba(247, 184, 75, 0.15)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: '#fbbf24',
+                  color: '#d97706',
                   flexShrink: 0,
                 }}
               >
                 <ShieldAlert size={22} />
               </div>
               <div>
-                <strong style={{ color: '#fbbf24', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <strong style={{ color: '#212529', fontSize: '0.98rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   Indikator Kesehatan Master: Terdeteksi {health.multiOutletCount} Kode Pos Multi-Cabang ({allDuplicateRows.length} Baris Terlibat)
                 </strong>
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
-                  Berikut rincian seluruh kolom data cabang yang menggunakan kode pos sama untuk mitigasi dini dan acuan Level 2 Tie-Breaker.
+                <p style={{ fontSize: '0.78rem', color: '#878a99', marginTop: '0.15rem' }}>
+                  Rincian seluruh kolom cabang dengan kode pos ganda untuk mitigasi dini dan acuan Tie-Breaker Level 2.
                 </p>
               </div>
             </div>
 
-            {/* Search Input for multi-cabang */}
+            {/* Clean Velzon Search Input */}
             <div className="search-input-wrapper">
               <Search size={14} className="search-icon-pos" />
               <input
@@ -108,7 +100,7 @@ export const MasterHealthCard: React.FC<MasterHealthCardProps> = ({ health }) =>
                   setSearchTerm(e.target.value);
                   setPage(1);
                 }}
-                style={{ width: '240px', paddingRight: searchTerm ? '2rem' : '0.85rem' }}
+                style={{ width: '250px', paddingRight: searchTerm ? '2rem' : '0.85rem' }}
               />
               {searchTerm && (
                 <button
@@ -119,7 +111,7 @@ export const MasterHealthCard: React.FC<MasterHealthCardProps> = ({ health }) =>
                     right: '0.5rem',
                     background: 'transparent',
                     border: 'none',
-                    color: 'var(--text-muted)',
+                    color: '#878a99',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
@@ -131,12 +123,12 @@ export const MasterHealthCard: React.FC<MasterHealthCardProps> = ({ health }) =>
             </div>
           </div>
 
-          {/* Full Columns Table */}
-          <div className="table-container" style={{ border: '1px solid rgba(245, 158, 11, 0.2)', borderRadius: 'var(--radius-md)' }}>
+          {/* Clean Velzon Table */}
+          <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px' }}>
             <table className="modern-table">
               <thead>
-                <tr style={{ background: '#141e36' }}>
-                  <th style={{ color: '#fbbf24', background: '#192644', minWidth: '130px' }}>KODE POS</th>
+                <tr>
+                  <th style={{ minWidth: '130px', color: '#d97706' }}>KODE POS</th>
                   <th>Wilayah</th>
                   <th>Sandi Cabang</th>
                   <th>Nama Outlet</th>
@@ -154,7 +146,7 @@ export const MasterHealthCard: React.FC<MasterHealthCardProps> = ({ health }) =>
               <tbody>
                 {paginatedRows.length === 0 ? (
                   <tr>
-                    <td colSpan={13} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                    <td colSpan={13} style={{ textAlign: 'center', padding: '2rem', color: '#878a99' }}>
                       Tidak ada data multi-cabang yang cocok dengan "{searchTerm}".
                     </td>
                   </tr>
@@ -162,32 +154,30 @@ export const MasterHealthCard: React.FC<MasterHealthCardProps> = ({ health }) =>
                   paginatedRows.map(({ kodePos, row, indexInKp }, idx) => (
                     <tr
                       key={`${kodePos}-${row['Branch Code'] || row['Kode Cabang'] || idx}`}
-                      style={{
-                        background: idx % 2 === 0 ? 'rgba(245, 158, 11, 0.025)' : 'transparent',
-                      }}
+                      style={{ background: idx % 2 === 0 ? '#fafbfe' : '#ffffff' }}
                     >
                       <td
                         className="code-cell"
                         style={{
-                          fontWeight: 800,
-                          color: '#fbbf24',
-                          background: 'rgba(245, 158, 11, 0.07)',
-                          borderRight: '1px solid rgba(245, 158, 11, 0.2)',
+                          fontWeight: 700,
+                          color: '#d97706',
+                          background: 'rgba(247, 184, 75, 0.08)',
+                          borderRight: '1px solid #e9ebec',
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                          <MapPin size={13} color="#fbbf24" />
+                          <MapPin size={13} color="#d97706" />
                           <span>{kodePos}</span>
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>#{indexInKp}</span>
+                          <span style={{ fontSize: '0.7rem', color: '#878a99' }}>#{indexInKp}</span>
                         </div>
                       </td>
                       <td>{row.Wilayah || '-'}</td>
                       <td>
-                        <strong style={{ color: '#ffffff' }}>
+                        <strong style={{ color: '#212529' }}>
                           {row['Sandi Cabang'] || [row.Sandi, row.Cabang].filter(Boolean).join(' - ') || '-'}
                         </strong>
                       </td>
-                      <td style={{ color: '#93c5fd', fontWeight: 600 }}>{row['Nama Outlet'] || '-'}</td>
+                      <td style={{ color: '#405189', fontWeight: 600 }}>{row['Nama Outlet'] || '-'}</td>
                       <td className="code-cell">{row['Branch Code'] || '-'}</td>
                       <td className="code-cell">{row['Kode Cabang'] || '-'}</td>
                       <td>
@@ -200,7 +190,7 @@ export const MasterHealthCard: React.FC<MasterHealthCardProps> = ({ health }) =>
                       <td style={{ maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis' }} title={row.ALAMAT}>
                         {row.ALAMAT || '-'}
                       </td>
-                      <td style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>{row.Telp || '-'}</td>
+                      <td style={{ color: '#878a99', fontSize: '0.78rem' }}>{row.Telp || '-'}</td>
                     </tr>
                   ))
                 )}
@@ -208,9 +198,9 @@ export const MasterHealthCard: React.FC<MasterHealthCardProps> = ({ health }) =>
             </table>
           </div>
 
-          {/* Pagination Bar */}
+          {/* Clean Pagination Bar */}
           <div className="pagination-row" style={{ marginTop: '0.75rem', paddingTop: '0.5rem' }}>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: '0.78rem', color: '#878a99' }}>
               Menampilkan {(page - 1) * pageSize + 1} - {Math.min(page * pageSize, filteredDuplicates.length)} dari {filteredDuplicates.length.toLocaleString('id-ID')} baris
             </div>
             <div className="pagination-controls">
@@ -223,7 +213,7 @@ export const MasterHealthCard: React.FC<MasterHealthCardProps> = ({ health }) =>
                 <ChevronLeft size={13} />
                 <span>Sebelumnya</span>
               </button>
-              <span style={{ padding: '0 0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>
+              <span style={{ padding: '0 0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: '#495057' }}>
                 {page} / {totalPages}
               </span>
               <button
@@ -240,23 +230,35 @@ export const MasterHealthCard: React.FC<MasterHealthCardProps> = ({ health }) =>
         </div>
       ) : (
         <div
+          className="glass-card"
           style={{
-            background: 'rgba(16, 185, 129, 0.06)',
-            border: '1px solid rgba(16, 185, 129, 0.25)',
-            borderRadius: 'var(--radius-md)',
             padding: '1.25rem',
             display: 'flex',
             alignItems: 'center',
             gap: '0.85rem',
           }}
         >
-          <CheckCircle2 size={22} color="#10b981" style={{ flexShrink: 0 }} />
+          <div
+            style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              background: 'rgba(10, 179, 156, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#0ab39c',
+              flexShrink: 0,
+            }}
+          >
+            <CheckCircle2 size={22} />
+          </div>
           <div>
-            <strong style={{ color: '#34d399', fontSize: '0.92rem' }}>
-              Indikator Kesehatan Master Optimal (100% Unique Mapping)
+            <strong style={{ color: '#0ab39c', fontSize: '0.95rem' }}>
+              Kondisi Data Master 100% Sehat & Unik
             </strong>
-            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
-              Seluruh {health.uniqueKodePos.toLocaleString('id-ID')} kode pos terpetakan 1-to-1 secara presisi tanpa ada duplikasi kode pos multi-cabang.
+            <p style={{ fontSize: '0.78rem', color: '#878a99', marginTop: '0.1rem' }}>
+              Tidak terdeteksi kode pos multi-cabang. Setiap kode pos memetakan 1 cabang unik secara deterministik.
             </p>
           </div>
         </div>
