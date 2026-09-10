@@ -17,9 +17,11 @@ import type { MasterRow, TargetRow, BatchLog, MatchingStats, WilayahStat, Unmatc
 import { SAMPLE_MASTER_ROWS, SAMPLE_TARGET_ROWS } from './utils/sampleData';
 import { buildMasterIndex, analyzeMasterHealth, executeChunkMatching } from './utils/matcher';
 import { getItem, setItem, clearAllStorage } from './utils/storage';
+import { Database, ShieldAlert } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'master' | 'working'>('dashboard');
+  const [masterSubTab, setMasterSubTab] = useState<'health' | 'grid'>('health');
 
   // Master Data State (Clean state for real data upload)
   const [masterRows, setMasterRows] = useState<MasterRow[]>([]);
@@ -463,9 +465,79 @@ export const App: React.FC = () => {
               masterFileName={masterFileName}
             />
 
-            <MasterHealthCard health={masterHealth} />
+            {/* 2 Sub-Tabs for Menu Data Master */}
+            {masterRows.length > 0 && (
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '0.6rem',
+                  marginTop: '1.25rem',
+                  borderBottom: '1px solid var(--border-subtle)',
+                  paddingBottom: '0.85rem',
+                  flexWrap: 'wrap',
+                }}
+              >
+                {/* Tab 1: Indikator Kesehatan Master */}
+                <button
+                  type="button"
+                  onClick={() => setMasterSubTab('health')}
+                  className={`btn ${masterSubTab === 'health' ? 'btn-primary' : 'btn-outline'}`}
+                  style={{
+                    borderRadius: 'var(--radius-full)',
+                    fontSize: '0.84rem',
+                    padding: '0.55rem 1.15rem',
+                    background:
+                      masterSubTab === 'health'
+                        ? masterHealth.multiOutletCount > 0
+                          ? 'linear-gradient(135deg, #d97706, #b45309)'
+                          : 'linear-gradient(135deg, #059669, #047857)'
+                        : undefined,
+                    borderColor:
+                      masterHealth.multiOutletCount > 0
+                        ? 'rgba(245, 158, 11, 0.4)'
+                        : undefined,
+                    color:
+                      masterSubTab === 'health'
+                        ? '#ffffff'
+                        : masterHealth.multiOutletCount > 0
+                        ? '#fbbf24'
+                        : '#cbd5e1',
+                  }}
+                  id="tab-btn-master-health"
+                >
+                  <ShieldAlert size={15} />
+                  <span>
+                    Tab 1: Indikator Kesehatan Master
+                    {masterHealth.multiOutletCount > 0
+                      ? `: Terdeteksi ${masterHealth.multiOutletCount} Kode Pos Multi-Cabang`
+                      : ' (100% Optimal)'}
+                  </span>
+                </button>
 
-            <MasterDataGrid masterRows={masterRows} />
+                {/* Tab 2: Data Grid Master Cabang */}
+                <button
+                  type="button"
+                  onClick={() => setMasterSubTab('grid')}
+                  className={`btn ${masterSubTab === 'grid' ? 'btn-primary' : 'btn-outline'}`}
+                  style={{
+                    borderRadius: 'var(--radius-full)',
+                    fontSize: '0.84rem',
+                    padding: '0.55rem 1.15rem',
+                  }}
+                  id="tab-btn-master-grid"
+                >
+                  <Database size={15} />
+                  <span>Tab 2: Data Grid Master Cabang ({masterRows.length.toLocaleString('id-ID')} Baris)</span>
+                </button>
+              </div>
+            )}
+
+            {/* Sub-Tab Content */}
+            {masterSubTab === 'health' ? (
+              <MasterHealthCard health={masterHealth} />
+            ) : (
+              <MasterDataGrid masterRows={masterRows} />
+            )}
           </>
         )}
 

@@ -47,7 +47,7 @@ export function analyzeMasterHealth(masterRows: MasterRow[], index: Map<string, 
     totalRows: masterRows.length,
     uniqueKodePos: index.size,
     multiOutletCount,
-    multiOutletItems: multiOutletItems.slice(0, 50), // Top 50 multi-outlet warnings
+    multiOutletItems, // Include all multi-outlet items without truncation
   };
 }
 
