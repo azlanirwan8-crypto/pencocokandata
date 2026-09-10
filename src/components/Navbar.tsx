@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Database, Cpu, ShieldCheck, Trash2 } from 'lucide-react';
+import { LayoutDashboard, Database, Cpu, ShieldCheck, Trash2, Cloud, CloudCheck } from 'lucide-react';
 
 interface NavbarProps {
   activeTab: 'dashboard' | 'master' | 'working';
@@ -7,6 +7,8 @@ interface NavbarProps {
   masterCount: number;
   targetCount: number;
   onResetAll?: () => void;
+  onOpenSupabaseModal?: () => void;
+  isCloudConnected?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -15,6 +17,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   masterCount,
   targetCount,
   onResetAll,
+  onOpenSupabaseModal,
+  isCloudConnected,
 }) => {
   return (
     <header className="top-navbar">
@@ -66,18 +70,44 @@ export const Navbar: React.FC<NavbarProps> = ({
       </nav>
 
       <div className="nav-actions">
-        {(masterCount > 0 || targetCount > 0) && onResetAll && (
+        {/* Cloud DB Supabase Button */}
+        {onOpenSupabaseModal && (
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={onOpenSupabaseModal}
+            title={isCloudConnected ? 'Cloud Database Supabase Terhubung' : 'Hubungkan ke Cloud Database Supabase'}
+            style={{
+              borderColor: isCloudConnected ? 'rgba(16, 185, 129, 0.35)' : 'var(--border-subtle)',
+              color: isCloudConnected ? '#34d399' : '#cbd5e1',
+              fontSize: '0.78rem',
+            }}
+            id="btn-cloud-db-config"
+          >
+            {isCloudConnected ? <CloudCheck size={14} /> : <Cloud size={14} />}
+            <span>{isCloudConnected ? 'Cloud DB Aktif' : 'Cloud DB'}</span>
+          </button>
+        )}
+
+        {/* Reset Data Button (Always available) */}
+        {onResetAll && (
           <button
             type="button"
             className="btn btn-outline btn-sm"
             onClick={onResetAll}
-            title="Kosongkan data untuk mengunggah berkas baru"
-            style={{ color: '#fb7185', borderColor: 'rgba(244, 63, 94, 0.3)' }}
+            title="Kosongkan seluruh data untuk memulai proses baru"
+            style={{
+              color: '#fb7185',
+              borderColor: 'rgba(244, 63, 94, 0.35)',
+              fontSize: '0.78rem',
+            }}
+            id="btn-reset-data"
           >
             <Trash2 size={13} />
             <span>Reset Data</span>
           </button>
         )}
+
         <div className="status-pill" title="Arsitektur Anti-Stopper Chunk Stream Aktif">
           <span className="pulse-dot"></span>
           <ShieldCheck size={14} />

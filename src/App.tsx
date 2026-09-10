@@ -17,11 +17,20 @@ import type { MasterRow, TargetRow, BatchLog, MatchingStats, WilayahStat, Unmatc
 import { SAMPLE_MASTER_ROWS, SAMPLE_TARGET_ROWS } from './utils/sampleData';
 import { buildMasterIndex, analyzeMasterHealth, executeChunkMatching } from './utils/matcher';
 import { getItem, setItem, clearAllStorage } from './utils/storage';
+import {
+  isSupabaseConfigured,
+  saveMasterToCloud,
+  loadMasterFromCloud,
+  clearMasterFromCloud,
+} from './utils/supabase';
+import { SupabaseModal } from './components/SupabaseModal';
 import { Database, ShieldAlert } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'master' | 'working'>('dashboard');
   const [masterSubTab, setMasterSubTab] = useState<'health' | 'grid'>('health');
+  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
+  const [isCloudConnected, setIsCloudConnected] = useState<boolean>(isSupabaseConfigured());
 
   // Master Data State (Clean state for real data upload)
   const [masterRows, setMasterRows] = useState<MasterRow[]>([]);
@@ -57,14 +66,30 @@ export const App: React.FC = () => {
     return analyzeMasterHealth(masterRows, masterIndex);
   }, [masterRows, masterIndex]);
 
-  // Restore persisted data from IndexedDB on initial mount
+  // Restore persisted data (Check Cloud Supabase first, fallback to IndexedDB)
   useEffect(() => {
     const restoreSavedData = async () => {
       try {
-        const savedMaster = await getItem<{ rows: MasterRow[]; fileName: string }>('master_data');
-        if (savedMaster && savedMaster.rows && savedMaster.rows.length > 0) {
-          setMasterRows(savedMaster.rows);
-          setMasterFileName(savedMaster.fileName || '');
+        let loadedMaster = false;
+
+        // 1. Check Cloud Supabase if configured
+        if (isSupabaseConfigured()) {
+          const cloudMaster = await loadMasterFromCloud();
+          if (cloudMaster && cloudMaster.rows && cloudMaster.rows.length > 0) {
+            setMasterRows(cloudMaster.rows);
+            setMasterFileName(cloudMaster.fileName || 'Master_Cloud_Supabase.xlsx');
+            setIsCloudConnected(true);
+            loadedMaster = true;
+          }
+        }
+
+        // 2. Fallback to local IndexedDB
+        if (!loadedMaster) {
+          const savedMaster = await getItem<{ rows: MasterRow[]; fileName: string }>('master_data');
+          if (savedMaster && savedMaster.rows && savedMaster.rows.length > 0) {
+            setMasterRows(savedMaster.rows);
+            setMasterFileName(savedMaster.fileName || '');
+          }
         }
 
         const savedTarget = await getItem<{
@@ -86,7 +111,7 @@ export const App: React.FC = () => {
           setBatchLogs(savedLogs);
         }
       } catch (err) {
-        console.warn('Gagal memulihkan data dari penyimpanan lokal:', err);
+        console.warn('Gagal memulihkan data:', err);
       }
     };
 
@@ -280,10 +305,15 @@ export const App: React.FC = () => {
     setItem('master_data', { rows: SAMPLE_MASTER_ROWS, fileName: 'Master_Cabang_Nasional_2026.xlsx' });
   };
 
-  const handleMasterLoaded = (rows: MasterRow[], fileName: string) => {
+  const handleMasterLoaded = async (rows: MasterRow[], fileName: string) => {
     setMasterRows(rows);
     setMasterFileName(fileName);
     setItem('master_data', { rows, fileName });
+
+    // Sync to Supabase Cloud if configured
+    if (isSupabaseConfigured()) {
+      saveMasterToCloud(rows, fileName);
+    }
   };
 
   // Target Actions
@@ -325,7 +355,14 @@ export const App: React.FC = () => {
       setMatchedDone(false);
       setProgress(0);
       setBatchLogs([]);
+
+      // Clear local IndexedDB
       await clearAllStorage();
+
+      // Clear Cloud Supabase if configured
+      if (isSupabaseConfigured()) {
+        await clearMasterFromCloud();
+      }
     }
   };
 
@@ -337,6 +374,14 @@ export const App: React.FC = () => {
         masterCount={masterRows.length}
         targetCount={targetRows.length}
         onResetAll={handleResetAll}
+        onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
+        isCloudConnected={isCloudConnected}
+      />
+
+      <SupabaseModal
+        isOpen={isSupabaseModalOpen}
+        onClose={() => setIsSupabaseModalOpen(false)}
+        onConnectedChange={setIsCloudConnected}
       />
 
       <main className="main-wrapper">
