@@ -14,6 +14,7 @@ import {
   HelpCircle,
   Layers,
   Info,
+  Eye,
 } from 'lucide-react';
 import type { TargetRow, MasterRow } from '../../types';
 import {
@@ -485,6 +486,31 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               <span>Panduan Skor</span>
             </button>
           )}
+
+          {/* Tombol Tampilkan Semua Data di Toolbar */}
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={() => {
+              setPageSize((prev) => (prev === 'all' ? 15 : 'all'));
+              setPage(1);
+            }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              fontSize: '0.78rem',
+              padding: '0.32rem 0.75rem',
+              color: pageSize === 'all' ? '#0ab39c' : '#405189',
+              borderColor: pageSize === 'all' ? '#0ab39c' : '#ced4da',
+              background: pageSize === 'all' ? 'rgba(10, 179, 156, 0.08)' : '#ffffff',
+              fontWeight: 600,
+            }}
+            title="Tampilkan seluruh baris data tanpa batasan per halaman"
+          >
+            <Eye size={14} />
+            <span>{pageSize === 'all' ? 'Mode Halaman (15 Baris)' : 'Tampilkan Semua Record'}</span>
+          </button>
         </div>
 
         {/* Input Search */}
@@ -1302,6 +1328,58 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               >
                 <span>Berikutnya</span>
                 <ChevronRight size={13} />
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => {
+                  setPageSize('all');
+                  setPage(1);
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  fontSize: '0.75rem',
+                  padding: '0.24rem 0.65rem',
+                  color: '#405189',
+                  borderColor: '#ced4da',
+                  background: '#ffffff',
+                  fontWeight: 600,
+                  marginLeft: '0.5rem',
+                }}
+                title="Tampilkan seluruh data tanpa batasan per halaman"
+              >
+                <Eye size={13} />
+                <span>Tampilkan Semua Record</span>
+              </button>
+            </div>
+          )}
+
+          {pageSize === 'all' && (
+            <div className="pagination-controls" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => {
+                  setPageSize(15);
+                  setPage(1);
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  fontSize: '0.75rem',
+                  padding: '0.24rem 0.65rem',
+                  color: '#405189',
+                  borderColor: '#ced4da',
+                  background: '#ffffff',
+                  fontWeight: 600,
+                }}
+              >
+                <ChevronLeft size={13} />
+                <span>Kembali ke Mode Paginasi (15 per Hal)</span>
               </button>
             </div>
           )}
