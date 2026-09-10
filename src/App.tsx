@@ -598,6 +598,39 @@ export const App: React.FC = () => {
     });
   };
 
+  // Batalkan Persetujuan Rekomendasi (Revert) - Mengembalikan baris ke status belum cocok (unmatched)
+  const handleRevertRecommendation = (rowNo: number | string) => {
+    setTargetRows((prev) => {
+      const updated = prev.map((row) => {
+        if (row.No !== rowNo) return row;
+
+        return {
+          ...row,
+          _isMatched: false,
+          _matchLevel: 'none' as const,
+          'Sandi Cabang': '',
+          Sandi: '',
+          Cabang: '',
+          'Branch Code': '',
+          'Kode Cabang': '',
+          'Nama Outlet': '',
+          'Status Outlet': '',
+          _matchedAt: undefined,
+          _matchedBy: undefined,
+        };
+      });
+
+      persistTargetData({
+        rows: updated,
+        fileName: targetFileName,
+        initialCount: initialTargetCount,
+        matchedDone: true,
+      });
+
+      return updated;
+    });
+  };
+
   // Restore Session Snapshot (.json) - Memulihkan data Master, Target, dan Hasil Pencocokan
   const handleRestoreSnapshot = (snapshot: WorkspaceSnapshot) => {
     if (snapshot.masterData && Array.isArray(snapshot.masterData.rows)) {
@@ -1124,6 +1157,7 @@ export const App: React.FC = () => {
                   isProcessing={isProcessing}
                   canExecute={targetRows.length > 0 && masterRows.length > 0}
                   matchedDone={matchedDone}
+                  onRevertRecommendation={handleRevertRecommendation}
                 />
 
                 <ExportAction

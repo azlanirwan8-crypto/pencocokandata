@@ -15,6 +15,7 @@ import {
   Layers,
   Info,
   Eye,
+  SlidersHorizontal,
 } from 'lucide-react';
 import type { TargetRow, MasterRow } from '../../types';
 import {
@@ -26,6 +27,25 @@ import {
 import { ProximityGuideModal } from './ProximityGuideModal';
 import { CandidateDetailModal } from './CandidateDetailModal';
 import { formatWilayahName } from '../../utils/normalizer';
+
+export interface ColumnOption {
+  key: string;
+  label: string;
+}
+
+export const TOGGLEABLE_COLUMNS: ColumnOption[] = [
+  { key: 'Branch Code', label: 'Branch Code' },
+  { key: 'Kode Cabang', label: 'Kode Cabang' },
+  { key: 'Nama Outlet', label: 'Nama Outlet' },
+  { key: 'Status Outlet', label: 'Status Outlet' },
+  { key: 'ALAMAT', label: 'ALAMAT Master' },
+  { key: 'KODE POS', label: 'KODE POS Target' },
+  { key: 'Kelurahan', label: 'Kelurahan Target' },
+  { key: 'Kecamatan', label: 'Kecamatan Target' },
+  { key: 'Dati II', label: 'Dati II Target' },
+  { key: 'Kode Dati II', label: 'Kode Dati II Target' },
+  { key: 'Provinsi', label: 'Provinsi Target' },
+];
 
 interface TargetDataGridProps {
   rows: TargetRow[];
@@ -39,6 +59,7 @@ interface TargetDataGridProps {
   onExecuteMatching: () => void;
   onApproveAllRecommendations: (recommendations: RecommendationResult[]) => void;
   onApproveRecommendation: (rowNo: number | string, recommendedMaster: MasterRow) => void;
+  onRevertRecommendation?: (rowNo: number | string) => void;
   isProcessing: boolean;
   canExecute: boolean;
   matchedDone?: boolean;
@@ -56,6 +77,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   onExecuteMatching,
   onApproveAllRecommendations,
   onApproveRecommendation,
+  onRevertRecommendation,
   isProcessing,
   canExecute,
   matchedDone = false,
@@ -65,6 +87,36 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number | 'all'>(15);
   const effectivePageSize = useMemo(() => (pageSize === 'all' ? 999999 : pageSize), [pageSize]);
+
+  // Multi-Selection State for Recommendations Tab
+  const [selectedRowNos, setSelectedRowNos] = useState<Set<string | number>>(new Set());
+
+  // Column Visibility Toggle State (with localStorage persistence)
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem('target_grid_hidden_cols');
+      if (raw) return new Set(JSON.parse(raw));
+    } catch {}
+    return new Set();
+  });
+  const [isColDropdownOpen, setIsColDropdownOpen] = useState<boolean>(false);
+
+  const toggleCol = (key: string) => {
+    setHiddenCols((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      try {
+        localStorage.setItem('target_grid_hidden_cols', JSON.stringify(Array.from(next)));
+      } catch {}
+      return next;
+    });
+  };
+
+  // Reset multi-select when switching tabs, filtering wilayah, or searching
+  useEffect(() => {
+    setSelectedRowNos(new Set());
+  }, [checkerTab, searchTerm, selectedWilayah]);
 
   // Helper to determine if a row is clean / matched
   const isRowMatched = (r: TargetRow) => Boolean(r._isMatched) || Boolean(r.Sandi) || Boolean(r['Sandi Cabang']);
@@ -186,6 +238,66 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
 
   const hasCombinedSandiCabang = rows.some((r) => r['Sandi Cabang'] && (!r.Sandi || r.Sandi === r['Sandi Cabang']));
 
+  // Cek apakah seluruh baris rekomendasi di halaman saat ini sudah dicentang
+  const isAllCurrentPageSelected = useMemo(() => {
+    if (paginatedRecs.length === 0) return false;
+    return paginatedRecs.every((rec) => selectedRowNos.has(rec.targetRow.No));
+  }, [paginatedRecs, selectedRowNos]);
+
+  // Toggle centang semua di halaman saat ini
+  const toggleSelectAllCurrentPage = () => {
+    setSelectedRowNos((prev) => {
+      const next = new Set(prev);
+      if (isAllCurrentPageSelected) {
+        paginatedRecs.forEach((rec) => next.delete(rec.targetRow.No));
+      } else {
+        paginatedRecs.forEach((rec) => next.add(rec.targetRow.No));
+      }
+      return next;
+    });
+  };
+
+  // Toggle centang satu baris
+  const toggleSelectRow = (no: string | number) => {
+    setSelectedRowNos((prev) => {
+      const next = new Set(prev);
+      if (next.has(no)) next.delete(no);
+      else next.add(no);
+      return next;
+    });
+  };
+
+  // Setujui Rekomendasi Terpilih (Batch Selected Approval)
+  const handleApproveSelected = () => {
+    if (selectedRowNos.size === 0) return;
+    const selectedRecs: RecommendationResult[] = [];
+    recommendations.forEach((rec) => {
+      if (selectedRowNos.has(rec.targetRow.No)) {
+        const activeRank = activeCandidateByRow[rec.targetRow.No];
+        if (activeRank && rec.candidates) {
+          const chosen = rec.candidates.find((c) => c.rank === activeRank);
+          if (chosen) {
+            selectedRecs.push({
+              ...rec,
+              recommendedMaster: chosen.master,
+              score: chosen.score,
+              reason: chosen.reason,
+            });
+            return;
+          }
+        }
+        selectedRecs.push(rec);
+      }
+    });
+
+    onApproveAllRecommendations(selectedRecs);
+    setSelectedRowNos(new Set());
+    if (selectedRecs.length === recommendations.length) {
+      setCheckerTab('matched');
+      setPage(1);
+    }
+  };
+
   const handleApproveAll = () => {
     if (recommendations.length === 0) return;
     const effectiveRecs = recommendations.map((rec) => {
@@ -204,6 +316,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
       return rec;
     });
     onApproveAllRecommendations(effectiveRecs);
+    setSelectedRowNos(new Set());
     setRecommendations([]);
     // Pindah langsung ke Tab 3 (Data Match)
     setCheckerTab('matched');
@@ -466,6 +579,29 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
             </button>
           )}
 
+          {/* Action button in Tab 2: SETUJUI BARIS TERPILIH */}
+          {checkerTab === 'recommendation' && selectedRowNos.size > 0 && (
+            <button
+              type="button"
+              className="btn btn-success btn-sm"
+              onClick={handleApproveSelected}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                fontSize: '0.78rem',
+                padding: '0.32rem 0.85rem',
+                background: '#0ab39c',
+                borderColor: '#0ab39c',
+                fontWeight: 600,
+              }}
+              id="btn-setujui-terpilih"
+            >
+              <Check size={14} />
+              <span>Setujui {selectedRowNos.size} Baris Terpilih</span>
+            </button>
+          )}
+
           {/* Tombol Panduan Skor di Samping Button Setuju */}
           {checkerTab === 'recommendation' && (
             <button
@@ -514,6 +650,104 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
             <Eye size={14} />
             <span>{pageSize === 'all' ? 'Mode Halaman (15 Baris)' : 'Tampilkan Semua Record'}</span>
           </button>
+
+          {/* Dropdown Visibilitas Kolom */}
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => setIsColDropdownOpen(!isColDropdownOpen)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                fontSize: '0.78rem',
+                padding: '0.32rem 0.75rem',
+                color: '#495057',
+                borderColor: '#ced4da',
+                background: isColDropdownOpen ? '#f3f6f9' : '#ffffff',
+                fontWeight: 500,
+              }}
+              id="btn-toggle-columns"
+              title="Pilih kolom yang ingin ditampilkan atau disembunyikan"
+            >
+              <SlidersHorizontal size={13} />
+              <span>
+                Kolom {hiddenCols.size > 0 ? `(${TOGGLEABLE_COLUMNS.length - hiddenCols.size}/${TOGGLEABLE_COLUMNS.length})` : ''}
+              </span>
+            </button>
+
+            {isColDropdownOpen && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  marginTop: '0.35rem',
+                  background: '#ffffff',
+                  border: '1px solid #e9ebec',
+                  borderRadius: '6px',
+                  boxShadow: '0 5px 15px rgba(0, 0, 0, 0.12)',
+                  zIndex: 50,
+                  minWidth: '210px',
+                  padding: '0.5rem',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingBottom: '0.35rem',
+                    borderBottom: '1px solid #f3f6f9',
+                    marginBottom: '0.35rem',
+                  }}
+                >
+                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#495057' }}>Visibilitas Kolom</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHiddenCols(new Set());
+                      localStorage.removeItem('target_grid_hidden_cols');
+                    }}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      fontSize: '0.68rem',
+                      color: '#3577f1',
+                      cursor: 'pointer',
+                      padding: 0,
+                    }}
+                  >
+                    Reset Semua
+                  </button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', maxHeight: '220px', overflowY: 'auto' }}>
+                  {TOGGLEABLE_COLUMNS.map((col) => (
+                    <label
+                      key={col.key}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.45rem',
+                        fontSize: '0.74rem',
+                        color: '#495057',
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={!hiddenCols.has(col.key)}
+                        onChange={() => toggleCol(col.key)}
+                      />
+                      <span>{col.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Input Search */}
@@ -632,6 +866,29 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               <tr>
                 <th
                   style={{
+                    width: '36px',
+                    minWidth: '36px',
+                    maxWidth: '36px',
+                    textAlign: 'center',
+                    background: '#f3f6f9',
+                    position: 'sticky',
+                    left: 0,
+                    top: 0,
+                    zIndex: 21,
+                    borderRight: '1px solid #e9ebec',
+                    borderBottom: '1px solid #e9ebec',
+                  }}
+                  title="Pilih / Batalkan Semua di Halaman Ini"
+                >
+                  <input
+                    type="checkbox"
+                    checked={isAllCurrentPageSelected}
+                    onChange={toggleSelectAllCurrentPage}
+                    style={{ cursor: 'pointer' }}
+                  />
+                </th>
+                <th
+                  style={{
                     width: '44px',
                     minWidth: '44px',
                     maxWidth: '44px',
@@ -639,7 +896,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                     background: '#f3f6f9',
                     color: '#405189',
                     position: 'sticky',
-                    left: 0,
+                    left: '36px',
                     top: 0,
                     zIndex: 20,
                     borderRight: '1px solid #e9ebec',
@@ -656,7 +913,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                     background: '#fff9f0',
                     color: '#d97706',
                     position: 'sticky',
-                    left: '44px',
+                    left: '80px',
                     top: 0,
                     zIndex: 20,
                     boxShadow: '3px 0 6px -2px rgba(0, 0, 0, 0.06)',
@@ -678,7 +935,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
             <tbody>
               {paginatedRecs.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: '#878a99' }}>
+                  <td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: '#878a99' }}>
                     Tidak ada rekomendasi yang sesuai dengan filter pencarian.
                   </td>
                 </tr>
@@ -694,9 +951,33 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                     }
                   ];
                   const globalIndex = pageSize === 'all' ? idx + 1 : (page - 1) * effectivePageSize + idx + 1;
+                  const isRowChecked = selectedRowNos.has(r.No);
 
                   return (
-                    <tr key={`rec-${r.No}-${idx}`} style={{ background: '#fffdfa', verticalAlign: 'top' }}>
+                    <tr key={`rec-${r.No}-${idx}`} style={{ background: isRowChecked ? '#f0fdf4' : '#fffdfa', verticalAlign: 'top' }}>
+                      <td
+                        style={{
+                          width: '36px',
+                          minWidth: '36px',
+                          maxWidth: '36px',
+                          textAlign: 'center',
+                          paddingTop: '0.65rem',
+                          position: 'sticky',
+                          left: 0,
+                          zIndex: 6,
+                          background: isRowChecked ? '#f0fdf4' : '#fffdfa',
+                          borderRight: '1px solid #e9ebec',
+                          borderBottom: '1px solid #e9ebec',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isRowChecked}
+                          onChange={() => toggleSelectRow(r.No)}
+                          style={{ cursor: 'pointer' }}
+                        />
+                      </td>
+
                       <td
                         className="code-cell"
                         style={{
@@ -705,9 +986,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                           fontWeight: 700,
                           paddingTop: '0.6rem',
                           position: 'sticky',
-                          left: 0,
+                          left: '36px',
                           zIndex: 5,
-                          background: '#fffdfa',
+                          background: isRowChecked ? '#f0fdf4' : '#fffdfa',
                           borderRight: '1px solid #e9ebec',
                           borderBottom: '1px solid #e9ebec',
                         }}
@@ -718,10 +999,10 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                       {/* Multi-Kandidat Rekomendasi (Top 2 - 3 Opsi Asli Master dengan Segmented Pill Toggle) - FROZEN / STICKY */}
                       <td
                         style={{
-                          background: '#fffdfa',
+                          background: isRowChecked ? '#f0fdf4' : '#fffdfa',
                           padding: '0.45rem 0.55rem',
                           position: 'sticky',
-                          left: '44px',
+                          left: '80px',
                           zIndex: 5,
                           boxShadow: '3px 0 6px -2px rgba(0, 0, 0, 0.06)',
                           borderRight: '2px solid rgba(247, 184, 75, 0.45)',
@@ -1120,24 +1401,24 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                     <th style={{ color: '#405189' }}>Cabang (Master)</th>
                   </>
                 )}
-                <th style={{ color: '#405189' }}>Branch Code (Master)</th>
-                <th style={{ color: '#405189' }}>Kode Cabang (Master)</th>
-                <th style={{ color: '#405189' }}>Nama Outlet (Master)</th>
-                <th style={{ color: '#405189' }}>Status Outlet (Master)</th>
-                <th style={{ color: '#405189' }}>ALAMAT (Master)</th>
+                {!hiddenCols.has('Branch Code') && <th style={{ color: '#405189' }}>Branch Code (Master)</th>}
+                {!hiddenCols.has('Kode Cabang') && <th style={{ color: '#405189' }}>Kode Cabang (Master)</th>}
+                {!hiddenCols.has('Nama Outlet') && <th style={{ color: '#405189' }}>Nama Outlet (Master)</th>}
+                {!hiddenCols.has('Status Outlet') && <th style={{ color: '#405189' }}>Status Outlet (Master)</th>}
+                {!hiddenCols.has('ALAMAT') && <th style={{ color: '#405189' }}>ALAMAT (Master)</th>}
                 {/* Kolom Target Asli (Sampai Provinsi & PTEN) */}
-                <th>KODE POS</th>
-                <th>Kelurahan</th>
-                <th>Kecamatan</th>
-                <th>Dati II</th>
-                <th>Kode Dati II</th>
-                <th>Provinsi</th>
+                {!hiddenCols.has('KODE POS') && <th>KODE POS</th>}
+                {!hiddenCols.has('Kelurahan') && <th>Kelurahan</th>}
+                {!hiddenCols.has('Kecamatan') && <th>Kecamatan</th>}
+                {!hiddenCols.has('Dati II') && <th>Dati II</th>}
+                {!hiddenCols.has('Kode Dati II') && <th>Kode Dati II</th>}
+                {!hiddenCols.has('Provinsi') && <th>Provinsi</th>}
               </tr>
             </thead>
             <tbody>
               {paginatedRows.length === 0 ? (
                 <tr>
-                  <td colSpan={18} style={{ textAlign: 'center', padding: '3rem', color: '#878a99' }}>
+                  <td colSpan={18 - hiddenCols.size} style={{ textAlign: 'center', padding: '3rem', color: '#878a99' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
                       {checkerTab === 'upload' ? (
                         <>
@@ -1186,10 +1467,10 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                         {r.No}
                       </td>
 
-                      {/* Status Match Badge */}
+                      {/* Status Match Badge + Revert Action */}
                       <td>
                         {isMatched ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', alignItems: 'flex-start' }}>
                             <span
                               className={`badge ${
                                 r._matchLevel === 'recommendation'
@@ -1215,6 +1496,35 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                   minute: '2-digit',
                                 })}
                               </span>
+                            )}
+                            {/* Tombol Batalkan / Revert jika baris hasil persetujuan rekomendasi */}
+                            {onRevertRecommendation && r._matchLevel === 'recommendation' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (window.confirm(`Batalkan persetujuan rekomendasi baris #${r.No}? Baris ini akan dikembalikan ke tab Rekomendasi Data.`)) {
+                                    onRevertRecommendation(r.No);
+                                  }
+                                }}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.25rem',
+                                  padding: '0.12rem 0.42rem',
+                                  borderRadius: '4px',
+                                  border: '1px solid rgba(240, 101, 72, 0.4)',
+                                  background: '#fff5f4',
+                                  color: '#f06548',
+                                  fontSize: '0.66rem',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease',
+                                }}
+                                title="Batalkan status match rekomendasi dan kembalikan ke tab Rekomendasi Data"
+                              >
+                                <RotateCcw size={10} />
+                                <span>Batalkan</span>
+                              </button>
                             )}
                           </div>
                         ) : (
@@ -1244,31 +1554,41 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                           </td>
                         </>
                       )}
-                      <td className="code-cell">
-                        {r['Branch Code'] || <span style={{ color: '#878a99' }}>-</span>}
-                      </td>
-                      <td className="code-cell">
-                        {r['Kode Cabang'] || <span style={{ color: '#878a99' }}>-</span>}
-                      </td>
-                      <td style={{ color: '#405189', fontWeight: 500 }}>{r['Nama Outlet'] || <span style={{ color: '#878a99' }}>-</span>}</td>
-                      <td>
-                        {r['Status Outlet'] ? (
-                          <span className="badge badge-match">{r['Status Outlet']}</span>
-                        ) : (
-                          <span style={{ color: '#878a99' }}>-</span>
-                        )}
-                      </td>
-                      <td style={{ minWidth: '220px', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.4 }} title={r.ALAMAT}>
-                        {r.ALAMAT || <span style={{ color: '#878a99' }}>-</span>}
-                      </td>
+                      {!hiddenCols.has('Branch Code') && (
+                        <td className="code-cell">
+                          {r['Branch Code'] || <span style={{ color: '#878a99' }}>-</span>}
+                        </td>
+                      )}
+                      {!hiddenCols.has('Kode Cabang') && (
+                        <td className="code-cell">
+                          {r['Kode Cabang'] || <span style={{ color: '#878a99' }}>-</span>}
+                        </td>
+                      )}
+                      {!hiddenCols.has('Nama Outlet') && (
+                        <td style={{ color: '#405189', fontWeight: 500 }}>{r['Nama Outlet'] || <span style={{ color: '#878a99' }}>-</span>}</td>
+                      )}
+                      {!hiddenCols.has('Status Outlet') && (
+                        <td>
+                          {r['Status Outlet'] ? (
+                            <span className="badge badge-match">{r['Status Outlet']}</span>
+                          ) : (
+                            <span style={{ color: '#878a99' }}>-</span>
+                          )}
+                        </td>
+                      )}
+                      {!hiddenCols.has('ALAMAT') && (
+                        <td style={{ minWidth: '220px', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.4 }} title={r.ALAMAT}>
+                          {r.ALAMAT || <span style={{ color: '#878a99' }}>-</span>}
+                        </td>
+                      )}
 
                       {/* Target Data Asli (Sampai Provinsi & PTEN) */}
-                      <td className="code-cell" style={{ color: '#405189', fontWeight: 700 }}>{r['KODE POS']}</td>
-                      <td>{r.Kelurahan || '-'}</td>
-                      <td>{r.Kecamatan || '-'}</td>
-                      <td>{r['Dati II'] || '-'}</td>
-                      <td className="code-cell">{r['Kode Dati II'] || '-'}</td>
-                      <td>{r.Provinsi || '-'}</td>
+                      {!hiddenCols.has('KODE POS') && <td className="code-cell" style={{ color: '#405189', fontWeight: 700 }}>{r['KODE POS']}</td>}
+                      {!hiddenCols.has('Kelurahan') && <td>{r.Kelurahan || '-'}</td>}
+                      {!hiddenCols.has('Kecamatan') && <td>{r.Kecamatan || '-'}</td>}
+                      {!hiddenCols.has('Dati II') && <td>{r['Dati II'] || '-'}</td>}
+                      {!hiddenCols.has('Kode Dati II') && <td className="code-cell">{r['Kode Dati II'] || '-'}</td>}
+                      {!hiddenCols.has('Provinsi') && <td>{r.Provinsi || '-'}</td>}
                     </tr>
                   );
                 })
@@ -1325,9 +1645,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
             </div>
           </div>
 
-          {/* Tombol Navigasi Pagination */}
+          {/* Tombol Navigasi Pagination & Quick Jump */}
           {pageSize !== 'all' && totalPages > 1 && (
-            <div className="pagination-controls" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <div className="pagination-controls" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
               <button
                 type="button"
                 className="btn btn-outline btn-sm"
@@ -1337,7 +1657,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                 <ChevronLeft size={13} />
                 <span>Sebelumnya</span>
               </button>
-              <span style={{ padding: '0 0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: '#495057' }}>
+              <span style={{ padding: '0 0.4rem', fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: '#495057' }}>
                 Hal {page} / {totalPages}
               </span>
               <button
@@ -1349,6 +1669,53 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                 <span>Berikutnya</span>
                 <ChevronRight size={13} />
               </button>
+
+              {/* Quick Jump to Page */}
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                  fontSize: '0.75rem',
+                  color: '#495057',
+                  marginLeft: '0.4rem',
+                  paddingLeft: '0.4rem',
+                  borderLeft: '1px solid #ced4da',
+                }}
+              >
+                <span>Ke Hal:</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={totalPages}
+                  defaultValue={page}
+                  key={`jump-${page}`}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const val = parseInt((e.target as HTMLInputElement).value, 10);
+                      if (!isNaN(val) && val >= 1 && val <= totalPages) {
+                        setPage(val);
+                      }
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (!isNaN(val) && val >= 1 && val <= totalPages && val !== page) {
+                      setPage(val);
+                    }
+                  }}
+                  style={{
+                    width: '46px',
+                    padding: '0.18rem 0.3rem',
+                    textAlign: 'center',
+                    borderRadius: '4px',
+                    border: '1px solid #ced4da',
+                    fontSize: '0.75rem',
+                    outline: 'none',
+                  }}
+                  title="Ketik nomor halaman lalu tekan Enter"
+                />
+              </div>
 
               <button
                 type="button"
