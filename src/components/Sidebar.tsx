@@ -58,11 +58,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <Database size={18} />
             </div>
             <span className="nav-item-label">Data Master</span>
-            {masterCount > 0 && (
-              <span className="sidebar-badge badge-master">
-                {masterCount.toLocaleString('id-ID')}
-              </span>
-            )}
           </button>
 
           {/* 3. Data Cek */}
@@ -77,11 +72,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <FileCheck size={18} />
             </div>
             <span className="nav-item-label">Data Cek</span>
-            {targetCount > 0 && (
-              <span className="sidebar-badge badge-target">
-                {targetCount.toLocaleString('id-ID')}
-              </span>
-            )}
           </button>
         </nav>
       </div>
