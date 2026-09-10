@@ -87,19 +87,20 @@ export const Navbar: React.FC<NavbarProps> = ({
             }
             style={{
               borderColor: isNeonConnected
-                ? 'rgba(0, 223, 143, 0.4)'
+                ? 'rgba(10, 179, 156, 0.4)'
                 : isCloudConnected
-                ? 'rgba(16, 185, 129, 0.35)'
+                ? 'rgba(64, 81, 137, 0.35)'
                 : 'var(--border-subtle)',
-              color: isNeonConnected ? '#00df8f' : isCloudConnected ? '#34d399' : '#cbd5e1',
+              color: isNeonConnected ? '#0ab39c' : isCloudConnected ? '#405189' : '#495057',
+              backgroundColor: isNeonConnected ? 'rgba(10, 179, 156, 0.08)' : isCloudConnected ? 'rgba(64, 81, 137, 0.06)' : '#ffffff',
               fontSize: '0.78rem',
             }}
             id="btn-cloud-db-config"
           >
             {isNeonConnected ? (
-              <Zap size={14} color="#00df8f" />
+              <Zap size={14} color="#0ab39c" />
             ) : isCloudConnected ? (
-              <CloudCheck size={14} />
+              <CloudCheck size={14} color="#405189" />
             ) : (
               <Cloud size={14} />
             )}
@@ -121,13 +122,14 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={onResetAll}
             title="Kosongkan seluruh data untuk memulai proses baru"
             style={{
-              color: '#fb7185',
-              borderColor: 'rgba(244, 63, 94, 0.35)',
+              color: '#f06548',
+              borderColor: 'rgba(240, 101, 72, 0.25)',
+              backgroundColor: 'rgba(240, 101, 72, 0.06)',
               fontSize: '0.78rem',
             }}
             id="btn-reset-data"
           >
-            <Trash2 size={13} />
+            <Trash2 size={13} color="#f06548" />
             <span>Reset Data</span>
           </button>
         )}

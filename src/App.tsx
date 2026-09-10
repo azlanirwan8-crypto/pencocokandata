@@ -30,7 +30,8 @@ import {
   clearMasterFromNeon,
 } from './utils/neonSync';
 import { SupabaseModal } from './components/SupabaseModal';
-import { Database, ShieldAlert } from 'lucide-react';
+import { PtenDiscrepancyPanel } from './components/Dashboard/PtenDiscrepancyPanel';
+import { Database, ShieldAlert, Filter, UploadCloud } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'master' | 'working'>('dashboard');
@@ -57,6 +58,7 @@ export const App: React.FC = () => {
 
   // Filters State
   const [selectedWilayah, setSelectedWilayah] = useState<string>('ALL');
+  const [dashboardWilayahFilter, setDashboardWilayahFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<'all' | 'matched' | 'unmatched' | 'pten_diff'>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
 
@@ -187,12 +189,18 @@ export const App: React.FC = () => {
     });
   }, [targetRows, selectedWilayah, statusFilter, searchTerm]);
 
+  // Dashboard Filtered Rows by Wilayah
+  const dashboardFilteredRows = useMemo(() => {
+    if (dashboardWilayahFilter === 'ALL') return targetRows;
+    return targetRows.filter((r) => r.Wilayah === dashboardWilayahFilter);
+  }, [targetRows, dashboardWilayahFilter]);
+
   // Dashboard Aggregates & Metrics
   const dashboardStats: MatchingStats = useMemo(() => {
-    const totalProcessed = targetRows.length;
-    const matchedCount = targetRows.filter(r => r._isMatched ?? (r.Sandi !== '')).length;
+    const totalProcessed = dashboardFilteredRows.length;
+    const matchedCount = dashboardFilteredRows.filter(r => r._isMatched ?? (r.Sandi !== '')).length;
     const unmatchedCount = totalProcessed - matchedCount;
-    const ptenDiscrepancyCount = targetRows.filter(r => r['CEK KODE POS + PTEN'] === 'DIFFERENT').length;
+    const ptenDiscrepancyCount = dashboardFilteredRows.filter(r => r['CEK KODE POS + PTEN'] === 'DIFFERENT').length;
     const matchingRate = totalProcessed > 0 ? (matchedCount / totalProcessed) * 100 : 0;
     const ptenDiscrepancyRate = totalProcessed > 0 ? (ptenDiscrepancyCount / totalProcessed) * 100 : 0;
 
@@ -204,7 +212,7 @@ export const App: React.FC = () => {
       matchingRate,
       ptenDiscrepancyRate,
     };
-  }, [targetRows]);
+  }, [dashboardFilteredRows]);
 
   // Regional Stats for Widget Distribusi Wilayah
   const regionalStats: WilayahStat[] = useMemo(() => {
@@ -423,118 +431,90 @@ export const App: React.FC = () => {
       />
 
       <main className="main-wrapper">
-        {/* MENU 1: DASHBOARD */}
+        {/* MENU 1: DASHBOARD (EXECUTIVE OPERATIONAL ANALYST DASHBOARD) */}
         {activeTab === 'dashboard' && (
           <>
-            <div className="section-header">
+            <div className="section-header" style={{ flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
               <div>
-                <h2 className="section-title">Dashboard Pusat Monitoring & Analisis Kinerja</h2>
+                <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span>Pusat Analisis & Monitoring Operasional Cabang</span>
+                  <span className="badge-version">Live Analytics</span>
+                </h2>
                 <p className="section-subtitle">
-                  Pantau metrik kesehatan data operasional cabang, tingkat kecocokan master, dan selisih kode pos PTEN secara real-time.
+                  Evaluasi performa pencocokan alamat, integritas referensi master cabang, dan selisih kode pos PTEN.
                 </p>
               </div>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={() => setActiveTab('working')}
-              >
-                <span>Buka Working Engine</span>
-              </button>
-            </div>
 
-            {/* Onboarding Guide when no data loaded */}
-            {masterRows.length === 0 && targetRows.length === 0 && (
-              <div
-                className="glass-card"
-                style={{
-                  background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.1) 0%, rgba(16, 185, 129, 0.08) 100%)',
-                  border: '1px solid rgba(59, 130, 246, 0.3)',
-                  padding: '2rem',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '1.25rem',
-                }}
-              >
-                <div>
-                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#ffffff' }}>
-                    🚀 Siap Memproses Data Excel Riil Anda
-                  </h3>
-                  <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                    Sistem dalam kondisi bersih tanpa data dummy. Ikuti 3 alur mudah berikut untuk mengunggah dan mencocokkan data operasional cabang:
-                  </p>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
-                  {/* Step 1 */}
-                  <div style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '1.25rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '1rem' }}>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                        <span style={{ background: '#2563eb', color: '#fff', width: '26px', height: '26px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.85rem' }}>1</span>
-                        <strong style={{ color: '#fff', fontSize: '0.95rem' }}>Unggah File Data Master</strong>
-                      </div>
-                      <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                        Unggah berkas Excel referensi cabang <strong>(15 kolom)</strong> di Menu 2. Sistem otomatis mengindeks KODE POS ke memori (O(1)).
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-sm"
-                      onClick={() => setActiveTab('master')}
+              {/* Analyst Dashboard Toolbar Controls */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                {wilayahList.length > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: '#ffffff', border: '1px solid var(--border-subtle)', padding: '0.25rem 0.6rem', borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-sm)' }}>
+                    <Filter size={13} color="#878a99" />
+                    <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Filter Wilayah:</span>
+                    <select
+                      value={dashboardWilayahFilter}
+                      onChange={(e) => setDashboardWilayahFilter(e.target.value)}
+                      className="filter-select"
+                      style={{ padding: '0.2rem 0.45rem', fontSize: '0.74rem', height: 'auto', border: 'none', background: 'transparent' }}
+                      id="dashboard-wilayah-filter"
                     >
-                      Buka Menu Data Master &rarr;
-                    </button>
+                      <option value="ALL">Semua Wilayah ({targetRows.length})</option>
+                      {wilayahList.map((w) => (
+                        <option key={w} value={w}>{w}</option>
+                      ))}
+                    </select>
                   </div>
+                )}
 
-                  {/* Step 2 */}
-                  <div style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '1.25rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '1rem' }}>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                        <span style={{ background: '#10b981', color: '#fff', width: '26px', height: '26px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.85rem' }}>2</span>
-                        <strong style={{ color: '#fff', fontSize: '0.95rem' }}>Unggah File Target Dicek</strong>
-                      </div>
-                      <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                        Unggah berkas Excel transaksi operasional <strong>(19 kolom)</strong> di Menu 3. Jumlah baris N_in otomatis dikunci permanen.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn-outline btn-sm"
-                      onClick={() => setActiveTab('working')}
-                    >
-                      Buka Menu Working Engine &rarr;
-                    </button>
-                  </div>
+                {targetRows.length === 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={handleLoadSampleTarget}
+                    title="Muat data transaksi contoh untuk simulasi dashboard"
+                  >
+                    <span>Simulasi Data</span>
+                  </button>
+                )}
 
-                  {/* Step 3 */}
-                  <div style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '1.25rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '1rem' }}>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                        <span style={{ background: '#f59e0b', color: '#fff', width: '26px', height: '26px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.85rem' }}>3</span>
-                        <strong style={{ color: '#fff', fontSize: '0.95rem' }}>Cocokkan & Unduh Excel</strong>
-                      </div>
-                      <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                        Jalankan cascade matching non-blocking, validasi PTEN, filter wilayah, dan unduh hasil dengan kepastian integritas baris 100%.
-                      </p>
-                    </div>
-                    <div style={{ fontSize: '0.78rem', color: '#34d399', fontWeight: 600 }}>
-                      ⚡ Strict Row Integrity (N_in = N_out)
-                    </div>
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setActiveTab('master')}
+                >
+                  <Database size={13} />
+                  <span>Data Master ({masterRows.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => setActiveTab('working')}
+                >
+                  <UploadCloud size={13} />
+                  <span>{targetRows.length > 0 ? 'Buka Data Dicocokkan' : '+ Unggah Data Target'}</span>
+                </button>
               </div>
-            )}
-
-            {/* 4 Metric Cards */}
-            <MetricCards stats={dashboardStats} />
-
-            {/* 2-Column Analytics: Distribusi Wilayah & Radar Anomali */}
-            <div className="dashboard-columns" style={{ marginTop: '0.5rem' }}>
-              <WilayahChart stats={regionalStats} />
-              <RadarAnomalyTable unmatchedAreas={topUnmatchedAreas} />
             </div>
 
-            {/* Audit Log & Riwayat Batch */}
-            <AuditLogTable logs={batchLogs} />
+            {/* 6 Executive Analyst Metric Cards */}
+            <MetricCards
+              stats={dashboardStats}
+              masterCount={masterRows.length}
+              multiCabangCount={masterHealth.multiOutletCount}
+            />
+
+            {/* Row 1: Distribusi Wilayah & Matriks Kepatuhan PTEN */}
+            <div className="dashboard-columns">
+              <WilayahChart stats={regionalStats} />
+              <PtenDiscrepancyPanel targetRows={dashboardFilteredRows} />
+            </div>
+
+            {/* Row 2: Radar Titik Anomali & Audit Log */}
+            <div className="dashboard-columns">
+              <RadarAnomalyTable unmatchedAreas={topUnmatchedAreas} />
+              <AuditLogTable logs={batchLogs} />
+            </div>
           </>
         )}
 

@@ -93,10 +93,10 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
       </div>
 
       {/* Clean Table Container */}
-      <div className="table-container" style={{ border: '1px solid rgba(255, 255, 255, 0.06)', borderRadius: 'var(--radius-md)' }}>
+      <div className="table-container">
         <table className="modern-table">
           <thead>
-            <tr style={{ background: '#0b1122' }}>
+            <tr>
               <th style={{ width: '50px', textAlign: 'center' }}>No</th>
               <th>Wilayah</th>
               {hasCombinedSandiCabang ? (

@@ -32,24 +32,24 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({ rows, totalInput
         <table className="modern-table">
           <thead>
             <tr>
-              <th style={{ background: '#0a1020', borderRight: '1px solid var(--border-subtle)' }}>No (Kunci Urutan)</th>
+              <th style={{ background: '#f3f6f9', borderRight: '1px solid var(--border-subtle)', color: '#405189' }}>No (Kunci Urutan)</th>
               <th>Status Match</th>
               <th>CEK PTEN</th>
               <th>Wilayah</th>
               {/* Atribut Hasil Enrichment Master */}
               {hasCombinedSandiCabang ? (
-                <th style={{ color: '#60a5fa' }}>Sandi Cabang (Master)</th>
+                <th style={{ color: '#405189' }}>Sandi Cabang (Master)</th>
               ) : (
                 <>
-                  <th style={{ color: '#60a5fa' }}>Sandi (Master)</th>
-                  <th style={{ color: '#60a5fa' }}>Cabang (Master)</th>
+                  <th style={{ color: '#405189' }}>Sandi (Master)</th>
+                  <th style={{ color: '#405189' }}>Cabang (Master)</th>
                 </>
               )}
-              <th style={{ color: '#60a5fa' }}>Branch Code (Master)</th>
-              <th style={{ color: '#60a5fa' }}>Kode Cabang (Master)</th>
-              <th style={{ color: '#60a5fa' }}>Nama Outlet (Master)</th>
-              <th style={{ color: '#60a5fa' }}>Status Outlet (Master)</th>
-              <th style={{ color: '#60a5fa' }}>ALAMAT (Master)</th>
+              <th style={{ color: '#405189' }}>Branch Code (Master)</th>
+              <th style={{ color: '#405189' }}>Kode Cabang (Master)</th>
+              <th style={{ color: '#405189' }}>Nama Outlet (Master)</th>
+              <th style={{ color: '#405189' }}>Status Outlet (Master)</th>
+              <th style={{ color: '#405189' }}>ALAMAT (Master)</th>
               {/* Kolom Target Asli & Validasi */}
               <th>KODE POS</th>
               <th>Kelurahan</th>
@@ -83,9 +83,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({ rows, totalInput
                     <td
                       className="code-cell"
                       style={{
-                        background: '#0a1020',
-                        fontWeight: 800,
-                        color: '#60a5fa',
+                        background: '#ffffff',
+                        fontWeight: 700,
+                        color: '#405189',
                         borderRight: '1px solid var(--border-subtle)',
                       }}
                     >
