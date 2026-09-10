@@ -37,7 +37,8 @@ export function analyzeMasterHealth(masterRows: MasterRow[], index: Map<string, 
         kodePos,
         count: rows.length,
         kecamatan: rows[0].Kecamatan || '-',
-        outlets: rows.map(r => r['Nama Outlet'] || r.Cabang || 'Outlet'),
+        outlets: rows.map(r => r['Nama Outlet'] || r['Sandi Cabang'] || r.Cabang || 'Outlet'),
+        matchingMasterRows: rows,
       });
     }
   });

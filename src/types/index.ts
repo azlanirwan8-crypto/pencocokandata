@@ -58,6 +58,7 @@ export interface MasterHealth {
     count: number;
     kecamatan: string;
     outlets: string[];
+    matchingMasterRows: MasterRow[];
   }[];
 }
 

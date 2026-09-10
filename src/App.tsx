@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Navbar } from './components/Navbar';
 import { MetricCards } from './components/Dashboard/MetricCards';
 import { WilayahChart } from './components/Dashboard/WilayahChart';
@@ -16,7 +16,7 @@ import { ExportAction } from './components/WorkingEngine/ExportAction';
 import type { MasterRow, TargetRow, BatchLog, MatchingStats, WilayahStat, UnmatchedArea } from './types';
 import { SAMPLE_MASTER_ROWS, SAMPLE_TARGET_ROWS } from './utils/sampleData';
 import { buildMasterIndex, analyzeMasterHealth, executeChunkMatching } from './utils/matcher';
-import { ShieldCheck } from 'lucide-react';
+import { getItem, setItem, clearAllStorage } from './utils/storage';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'master' | 'working'>('dashboard');
@@ -54,6 +54,42 @@ export const App: React.FC = () => {
   const masterHealth = useMemo(() => {
     return analyzeMasterHealth(masterRows, masterIndex);
   }, [masterRows, masterIndex]);
+
+  // Restore persisted data from IndexedDB on initial mount
+  useEffect(() => {
+    const restoreSavedData = async () => {
+      try {
+        const savedMaster = await getItem<{ rows: MasterRow[]; fileName: string }>('master_data');
+        if (savedMaster && savedMaster.rows && savedMaster.rows.length > 0) {
+          setMasterRows(savedMaster.rows);
+          setMasterFileName(savedMaster.fileName || '');
+        }
+
+        const savedTarget = await getItem<{
+          rows: TargetRow[];
+          fileName: string;
+          initialCount: number;
+          matchedDone: boolean;
+        }>('target_data');
+
+        if (savedTarget && savedTarget.rows && savedTarget.rows.length > 0) {
+          setTargetRows(savedTarget.rows);
+          setTargetFileName(savedTarget.fileName || '');
+          setInitialTargetCount(savedTarget.initialCount || savedTarget.rows.length);
+          setMatchedDone(savedTarget.matchedDone || false);
+        }
+
+        const savedLogs = await getItem<BatchLog[]>('batch_logs');
+        if (savedLogs && savedLogs.length > 0) {
+          setBatchLogs(savedLogs);
+        }
+      } catch (err) {
+        console.warn('Gagal memulihkan data dari penyimpanan lokal:', err);
+      }
+    };
+
+    restoreSavedData();
+  }, []);
 
   // Compute Wilayah List from Target Data
   const wilayahList = useMemo(() => {
@@ -217,7 +253,18 @@ export const App: React.FC = () => {
         dataSnapshot: matchedData,
       };
 
-      setBatchLogs(prev => [newLog, ...prev]);
+      setBatchLogs(prev => {
+        const updated = [newLog, ...prev];
+        setItem('batch_logs', updated);
+        return updated;
+      });
+
+      setItem('target_data', {
+        rows: matchedData,
+        fileName: targetFileName,
+        initialCount: initialTargetCount,
+        matchedDone: true,
+      });
     } catch (err) {
       setIsProcessing(false);
       alert('Terjadi kesalahan saat memproses data: ' + err);
@@ -228,11 +275,13 @@ export const App: React.FC = () => {
   const handleLoadSampleMaster = () => {
     setMasterRows(SAMPLE_MASTER_ROWS);
     setMasterFileName('Master_Cabang_Nasional_2026.xlsx');
+    setItem('master_data', { rows: SAMPLE_MASTER_ROWS, fileName: 'Master_Cabang_Nasional_2026.xlsx' });
   };
 
   const handleMasterLoaded = (rows: MasterRow[], fileName: string) => {
     setMasterRows(rows);
     setMasterFileName(fileName);
+    setItem('master_data', { rows, fileName });
   };
 
   // Target Actions
@@ -242,6 +291,12 @@ export const App: React.FC = () => {
     setTargetFileName('Target_Operasional_Batch_01.xlsx');
     setMatchedDone(false);
     setProgress(0);
+    setItem('target_data', {
+      rows: SAMPLE_TARGET_ROWS,
+      fileName: 'Target_Operasional_Batch_01.xlsx',
+      initialCount: SAMPLE_TARGET_ROWS.length,
+      matchedDone: false,
+    });
   };
 
   const handleTargetLoaded = (rows: TargetRow[], fileName: string) => {
@@ -250,9 +305,15 @@ export const App: React.FC = () => {
     setTargetFileName(fileName);
     setMatchedDone(false);
     setProgress(0);
+    setItem('target_data', {
+      rows,
+      fileName,
+      initialCount: rows.length,
+      matchedDone: false,
+    });
   };
 
-  const handleResetAll = () => {
+  const handleResetAll = async () => {
     if (window.confirm('Kosongkan semua data (Master & Target) untuk memulai proses baru?')) {
       setMasterRows([]);
       setMasterFileName('');
@@ -262,6 +323,7 @@ export const App: React.FC = () => {
       setMatchedDone(false);
       setProgress(0);
       setBatchLogs([]);
+      await clearAllStorage();
     }
   };
 
@@ -276,24 +338,6 @@ export const App: React.FC = () => {
       />
 
       <main className="main-wrapper">
-        {/* ATURAN EMAS INTEGRITAS BARIS (ROW INTEGRITY RULE) */}
-        <div className="golden-rule-banner">
-          <div className="golden-rule-content">
-            <div className="golden-rule-icon">
-              <ShieldCheck size={24} />
-            </div>
-            <div>
-              <div className="golden-rule-title">ATURAN EMAS INTEGRITAS BARIS (ROW INTEGRITY RULE)</div>
-              <div className="golden-rule-desc">
-                Total baris berkas unduhan hasil pencocokan wajib persis sama dengan total baris berkas yang diunggah. Kolom No menjadi kunci penguncian permanen.
-              </div>
-            </div>
-          </div>
-          <div className="golden-formula" title="Integritas Baris Terjamin">
-            N_in = N_out ({targetRows.length.toLocaleString('id-ID')} Baris Terkunci)
-          </div>
-        </div>
-
         {/* MENU 1: DASHBOARD */}
         {activeTab === 'dashboard' && (
           <>

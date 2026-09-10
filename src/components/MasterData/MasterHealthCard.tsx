@@ -1,77 +1,168 @@
 import React, { useState } from 'react';
-import { ShieldAlert, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
-import type { MasterHealth } from '../../types';
+import { ShieldAlert, CheckCircle2, ChevronDown, ChevronUp, MapPin } from 'lucide-react';
+import type { MasterHealth, MasterRow } from '../../types';
 
 interface MasterHealthCardProps {
   health: MasterHealth;
 }
 
 export const MasterHealthCard: React.FC<MasterHealthCardProps> = ({ health }) => {
-  const [showDetails, setShowDetails] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
+
+  if (health.totalRows === 0) return null;
+
+  // Flatten all multi-outlet master rows
+  const allDuplicateRows: { kodePos: string; row: MasterRow; indexInKp: number }[] = [];
+  health.multiOutletItems.forEach((item) => {
+    (item.matchingMasterRows || []).forEach((r, idx) => {
+      allDuplicateRows.push({
+        kodePos: item.kodePos,
+        row: r,
+        indexInKp: idx + 1,
+      });
+    });
+  });
 
   return (
     <div style={{ marginTop: '1.25rem' }}>
       {health.multiOutletCount > 0 ? (
-        <div className="health-warning-banner">
-          <ShieldAlert size={22} color="#f59e0b" style={{ flexShrink: 0, marginTop: '2px' }} />
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+        <div
+          style={{
+            background: 'rgba(245, 158, 11, 0.06)',
+            border: '1px solid rgba(245, 158, 11, 0.3)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '1.25rem 1.5rem',
+          }}
+        >
+          {/* Header Banner */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'rgba(245, 158, 11, 0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fbbf24',
+                  flexShrink: 0,
+                }}
+              >
+                <ShieldAlert size={20} />
+              </div>
               <div>
-                <strong style={{ color: '#fbbf24', fontSize: '0.92rem' }}>
-                  Peringatan Indikator Kesehatan Master: Terdeteksi {health.multiOutletCount} Kode Pos Multi-Cabang
+                <strong style={{ color: '#fbbf24', fontSize: '0.95rem' }}>
+                  Indikator Kesehatan Master: Terdeteksi {health.multiOutletCount} Kode Pos Multi-Cabang ({allDuplicateRows.length} Baris Terlibat)
                 </strong>
-                <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-                  Terdapat {health.multiOutletCount} kode pos yang menampung lebih dari 1 outlet cabang. Sistem akan secara otomatis mengeksekusi <strong>Level 2 Tie-Breaker</strong> (resolusi bertingkat Kecamatan $\rightarrow$ Kelurahan $\rightarrow$ Dati II) untuk memastikan cabang yang terpilih 100% akurat.
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
+                  Berikut rincian seluruh kolom data cabang yang menggunakan kode pos yang sama untuk mempermudah pengecekan lokasi dan resolusi Level 2 Tie-Breaker.
                 </p>
               </div>
-
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                onClick={() => setShowDetails(!showDetails)}
-                style={{ fontSize: '0.78rem' }}
-              >
-                <span>{showDetails ? 'Tutup Detail' : 'Lihat Daftar Kode Pos Multi-Cabang'}</span>
-                {showDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              </button>
             </div>
 
-            {showDetails && (
-              <div style={{ marginTop: '1rem', background: 'rgba(0,0,0,0.25)', borderRadius: 'var(--radius-sm)', padding: '0.75rem', maxHeight: '200px', overflowY: 'auto' }}>
-                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#fbbf24', marginBottom: '0.5rem' }}>
-                  Daftar Kode Pos dengan Multi-Outlet:
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.5rem' }}>
-                  {health.multiOutletItems.map((item) => (
-                    <div key={item.kodePos} style={{ padding: '0.5rem 0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(255,255,255,0.05)', fontSize: '0.78rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontFamily: 'var(--font-mono)', color: '#93c5fd', fontWeight: 700 }}>
-                          KODE POS: {item.kodePos}
-                        </span>
-                        <span style={{ color: '#fbbf24', fontWeight: 600 }}>{item.count} Cabang</span>
-                      </div>
-                      <div style={{ color: 'var(--text-muted)', fontSize: '0.74rem', marginTop: '0.2rem' }}>
-                        Kecamatan: {item.kecamatan}
-                      </div>
-                      <div style={{ color: '#cbd5e1', fontSize: '0.74rem', marginTop: '0.2rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {item.outlets.join(' | ')}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => setIsExpanded(!isExpanded)}
+              style={{ fontSize: '0.78rem', color: '#fbbf24', borderColor: 'rgba(245, 158, 11, 0.3)' }}
+            >
+              <span>{isExpanded ? 'Sembunyikan Tabel Rincian' : 'Tampilkan Full Kolom'}</span>
+              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
           </div>
+
+          {/* Full Columns Table */}
+          {isExpanded && (
+            <div style={{ marginTop: '1.25rem' }}>
+              <div className="table-container" style={{ maxHeight: '360px', background: 'rgba(10, 15, 29, 0.85)' }}>
+                <table className="modern-table">
+                  <thead>
+                    <tr style={{ background: '#131d33' }}>
+                      <th style={{ color: '#fbbf24', background: '#17233d' }}>KODE POS</th>
+                      <th>Wilayah</th>
+                      <th>Sandi Cabang</th>
+                      <th>Nama Outlet</th>
+                      <th>Branch Code</th>
+                      <th>Kode Cabang</th>
+                      <th>ALAMAT</th>
+                      <th>Kelurahan</th>
+                      <th>Kecamatan</th>
+                      <th>Dati II</th>
+                      <th>Provinsi</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allDuplicateRows.map(({ kodePos, row, indexInKp }, idx) => (
+                      <tr
+                        key={`${kodePos}-${idx}`}
+                        style={{
+                          background: idx % 2 === 0 ? 'rgba(245, 158, 11, 0.03)' : 'transparent',
+                        }}
+                      >
+                        <td
+                          className="code-cell"
+                          style={{
+                            fontWeight: 800,
+                            color: '#fbbf24',
+                            background: 'rgba(245, 158, 11, 0.08)',
+                            borderRight: '1px solid rgba(245, 158, 11, 0.2)',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <MapPin size={13} color="#fbbf24" />
+                            <span>{kodePos}</span>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>#{indexInKp}</span>
+                          </div>
+                        </td>
+                        <td>{row.Wilayah || '-'}</td>
+                        <td>
+                          <strong style={{ color: '#ffffff' }}>
+                            {row['Sandi Cabang'] || [row.Sandi, row.Cabang].filter(Boolean).join(' - ') || '-'}
+                          </strong>
+                        </td>
+                        <td style={{ color: '#93c5fd', fontWeight: 600 }}>{row['Nama Outlet'] || '-'}</td>
+                        <td className="code-cell">{row['Branch Code'] || '-'}</td>
+                        <td className="code-cell">{row['Kode Cabang'] || '-'}</td>
+                        <td style={{ maxWidth: '320px', overflow: 'hidden', textOverflow: 'ellipsis' }} title={row.ALAMAT}>
+                          {row.ALAMAT || '-'}
+                        </td>
+                        <td>{row.Kelurahan || '-'}</td>
+                        <td>{row.Kecamatan || '-'}</td>
+                        <td>{row['Dati II'] || '-'}</td>
+                        <td>{row.Provinsi || '-'}</td>
+                        <td>
+                          <span className="badge badge-match">{row['Status Outlet'] || 'Aktif'}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
-        <div className="health-warning-banner success">
+        <div
+          style={{
+            background: 'rgba(16, 185, 129, 0.06)',
+            border: '1px solid rgba(16, 185, 129, 0.25)',
+            borderRadius: 'var(--radius-md)',
+            padding: '1rem 1.25rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.85rem',
+          }}
+        >
           <CheckCircle2 size={20} color="#10b981" style={{ flexShrink: 0 }} />
           <div>
             <strong style={{ color: '#34d399', fontSize: '0.88rem' }}>
               Indikator Kesehatan Master Optimal (100% Unique Mapping)
             </strong>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
-              Seluruh {health.uniqueKodePos} kode pos terpetakan 1-to-1 secara presisi tanpa ada kode pos bentrok.
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.1rem' }}>
+              Seluruh {health.uniqueKodePos} kode pos terpetakan 1-to-1 secara presisi tanpa ada duplikasi kode pos.
             </p>
           </div>
         </div>
