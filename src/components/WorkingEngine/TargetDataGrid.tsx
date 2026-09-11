@@ -138,7 +138,16 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   }, [rows]);
 
   // Scope Rekomendasi di Tab 2: 'unmatched' atau 'all' (Audit Seluruh Data)
-  const [recommendationScope, setRecommendationScope] = useState<'unmatched' | 'all'>('unmatched');
+  const [recommendationScope, setRecommendationScope] = useState<'unmatched' | 'all'>(() => {
+    return rows.some((r) => r._hasUserFilledData) ? 'all' : 'unmatched';
+  });
+
+  // Otomatis sinkronkan ke 'all' bila file Excel yang diunggah terdeteksi berisi data pengerjaan
+  useEffect(() => {
+    if (rows.some((r) => r._hasUserFilledData)) {
+      setRecommendationScope('all');
+    }
+  }, [rows]);
 
   // Menentukan baris target yang dievaluasi rekomendasinya di Tab 2
   const targetRecommendationRows = useMemo(() => {
@@ -213,35 +222,44 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
 
   const currentTabRecs = useMemo(() => {
     if (checkerTab !== 'recommendation') return [];
-    if (!searchTerm.trim()) return recommendations;
-    const q = searchTerm.toLowerCase();
-    return recommendations.filter((rec) => {
-      const r = rec.targetRow;
-      const m = rec.recommendedMaster;
-      const candsMatch = (rec.candidates || []).some((c) => {
-        const cm = c.master;
+    let list = recommendations;
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      list = recommendations.filter((rec) => {
+        const r = rec.targetRow;
+        const m = rec.recommendedMaster;
+        const candsMatch = (rec.candidates || []).some((c) => {
+          const cm = c.master;
+          return (
+            String(cm['Sandi Cabang'] || cm.Cabang || cm.Sandi || '').toLowerCase().includes(q) ||
+            String(cm['Nama Outlet'] || '').toLowerCase().includes(q) ||
+            String(cm.ALAMAT || '').toLowerCase().includes(q) ||
+            String(cm.Kecamatan || '').toLowerCase().includes(q) ||
+            String(cm['Dati II'] || '').toLowerCase().includes(q) ||
+            String(cm['KODE POS'] || '').toLowerCase().includes(q)
+          );
+        });
+
         return (
-          String(cm['Sandi Cabang'] || cm.Cabang || cm.Sandi || '').toLowerCase().includes(q) ||
-          String(cm['Nama Outlet'] || '').toLowerCase().includes(q) ||
-          String(cm.ALAMAT || '').toLowerCase().includes(q) ||
-          String(cm.Kecamatan || '').toLowerCase().includes(q) ||
-          String(cm['Dati II'] || '').toLowerCase().includes(q) ||
-          String(cm['KODE POS'] || '').toLowerCase().includes(q)
+          candsMatch ||
+          String(r.Wilayah || '').toLowerCase().includes(q) ||
+          String(r.ALAMAT || '').toLowerCase().includes(q) ||
+          String(r['KODE POS'] || '').toLowerCase().includes(q) ||
+          String(r.Kecamatan || '').toLowerCase().includes(q) ||
+          String(r.Kelurahan || '').toLowerCase().includes(q) ||
+          String(r['Dati II'] || '').toLowerCase().includes(q) ||
+          String(m['Sandi Cabang'] || m.Cabang || '').toLowerCase().includes(q) ||
+          String(m['Nama Outlet'] || '').toLowerCase().includes(q) ||
+          String(m.ALAMAT || '').toLowerCase().includes(q)
         );
       });
+    }
 
-      return (
-        candsMatch ||
-        String(r.Wilayah || '').toLowerCase().includes(q) ||
-        String(r.ALAMAT || '').toLowerCase().includes(q) ||
-        String(r['KODE POS'] || '').toLowerCase().includes(q) ||
-        String(r.Kecamatan || '').toLowerCase().includes(q) ||
-        String(r.Kelurahan || '').toLowerCase().includes(q) ||
-        String(r['Dati II'] || '').toLowerCase().includes(q) ||
-        String(m['Sandi Cabang'] || m.Cabang || '').toLowerCase().includes(q) ||
-        String(m['Nama Outlet'] || '').toLowerCase().includes(q) ||
-        String(m.ALAMAT || '').toLowerCase().includes(q)
-      );
+    // STRICT GUARANTEE: Urutan rekomendasi SELALU 100% mengikuti urutan baris Excel yang diupload!
+    return [...list].sort((a, b) => {
+      const idxA = Number(a.targetRow._excelRowIndex ?? a.targetRow.No) || 0;
+      const idxB = Number(b.targetRow._excelRowIndex ?? b.targetRow.No) || 0;
+      return idxA - idxB;
     });
   }, [checkerTab, recommendations, searchTerm]);
 
@@ -574,6 +592,24 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               >
                 Audit Seluruh Data Excel ({rows.length})
               </button>
+              <span
+                style={{
+                  fontSize: '0.69rem',
+                  color: '#0ab39c',
+                  background: 'rgba(10, 179, 156, 0.1)',
+                  border: '1px solid rgba(10, 179, 156, 0.25)',
+                  borderRadius: '4px',
+                  padding: '0.18rem 0.5rem',
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.25rem',
+                  marginLeft: '0.25rem',
+                }}
+                title="Urutan baris data rekomendasi dipatok 100% mengikuti urutan baris di berkas Excel Anda"
+              >
+                ✓ Urutan Patokan: Sesuai Excel
+              </span>
             </div>
           )}
           {/* Action button in Tab 1: PENCOCOKAN */}
@@ -1019,7 +1055,6 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                       rank: 1,
                     }
                   ];
-                  const globalIndex = pageSize === 'all' ? idx + 1 : (page - 1) * effectivePageSize + idx + 1;
                   const isRowChecked = selectedRowNos.has(r.No);
 
                   return (
@@ -1051,7 +1086,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                         className="code-cell"
                         style={{
                           textAlign: 'center',
-                          color: '#878a99',
+                          color: '#405189',
                           fontWeight: 700,
                           paddingTop: '0.6rem',
                           position: 'sticky',
@@ -1061,8 +1096,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                           borderRight: '1px solid #e9ebec',
                           borderBottom: '1px solid #e9ebec',
                         }}
+                        title={`Nomor Baris Excel: ${r.No}${r._excelRowIndex ? ` (Urutan Baris Excel #${r._excelRowIndex})` : ''}`}
                       >
-                        {globalIndex}
+                        {r.No}
                       </td>
 
                       {/* Multi-Kandidat Rekomendasi (Top 2 - 3 Opsi Asli Master dengan Segmented Pill Toggle) - FROZEN / STICKY */}

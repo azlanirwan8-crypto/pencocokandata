@@ -6,7 +6,7 @@ import { parseExcelFile, validateTargetHeaders, downloadTargetTemplate } from '.
 interface TargetUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onTargetLoaded: (rows: TargetRow[], fileName: string) => void;
+  onTargetLoaded: (rows: TargetRow[], fileName: string, mode?: 'replace' | 'append') => void;
   currentTargetCount: number;
 }
 
@@ -17,6 +17,7 @@ export const TargetUploadModal: React.FC<TargetUploadModalProps> = ({
   currentTargetCount,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadMode, setUploadMode] = useState<'replace' | 'append'>('replace');
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
@@ -64,7 +65,7 @@ export const TargetUploadModal: React.FC<TargetUploadModalProps> = ({
       setUploadStage('Menata nomor urut & validasi baris...');
       await new Promise((r) => setTimeout(r, 100));
 
-      // Pastikan kolom No terisi rapi & tangkap data yang sudah dikerjakan/diisi di Excel
+      // Pastikan urutan nomor baris persis sesuai data di Excel yang diunggah
       const sanitized = data.map((r, idx) => {
         const s = String(r.Sandi || '').trim();
         const c = String(r.Cabang || '').trim();
@@ -74,9 +75,13 @@ export const TargetUploadModal: React.FC<TargetUploadModalProps> = ({
           (s && s !== '-') || (c && c !== '-') || (sc && sc !== '-')
         );
 
+        // Pertahankan nomor urut asli dari Excel jika sudah ada, atau gunakan urutan baris Excel (1-based)
+        const originalNo = r.No !== undefined && String(r.No).trim() !== '' ? r.No : idx + 1;
+
         return {
           ...r,
-          No: r.No !== undefined && r.No !== '' ? r.No : currentTargetCount + idx + 1,
+          No: originalNo,
+          _excelRowIndex: idx + 1,
           _isMatched: false,
           _matchLevel: undefined,
           _originalFilledSandi: s,
@@ -91,7 +96,7 @@ export const TargetUploadModal: React.FC<TargetUploadModalProps> = ({
       setUploadStage('Menyimpan data target baru...');
       await new Promise((r) => setTimeout(r, 100));
 
-      onTargetLoaded(sanitized, file.name);
+      onTargetLoaded(sanitized, file.name, uploadMode);
 
       setUploadProgress(100);
       setUploadStage('Proses selesai!');
@@ -99,7 +104,9 @@ export const TargetUploadModal: React.FC<TargetUploadModalProps> = ({
 
       setIsLoading(false);
       setSuccessMessage(
-        `Berhasil menambahkan ${sanitized.length.toLocaleString('id-ID')} baris data target dari "${file.name}".`
+        uploadMode === 'replace'
+          ? `Berhasil memuat ${sanitized.length.toLocaleString('id-ID')} baris data target dari "${file.name}" (Urutan sesuai berkas Excel).`
+          : `Berhasil menambahkan ${sanitized.length.toLocaleString('id-ID')} baris data target dari "${file.name}".`
       );
 
       // Otomatis tutup modal setelah 1.5 detik jika sukses
@@ -214,7 +221,63 @@ export const TargetUploadModal: React.FC<TargetUploadModalProps> = ({
 
         {/* Modal Body */}
         <div style={{ padding: '1.25rem' }}>
-
+          {/* Mode Selector jika sudah ada data sebelumnya */}
+          {currentTargetCount > 0 && (
+            <div
+              style={{
+                marginBottom: '1rem',
+                padding: '0.65rem 0.85rem',
+                background: '#f8f9fa',
+                border: '1px solid #e9ebec',
+                borderRadius: '6px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.4rem',
+              }}
+            >
+              <div style={{ fontSize: '0.74rem', fontWeight: 600, color: '#495057' }}>
+                Mode Pengunggahan Berkas:
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setUploadMode('replace')}
+                  style={{
+                    flex: 1,
+                    padding: '0.4rem 0.6rem',
+                    fontSize: '0.74rem',
+                    fontWeight: uploadMode === 'replace' ? 700 : 500,
+                    border: uploadMode === 'replace' ? '1px solid #3577f1' : '1px solid #ced4da',
+                    background: uploadMode === 'replace' ? '#eef2ff' : '#ffffff',
+                    color: uploadMode === 'replace' ? '#3577f1' : '#495057',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  ✓ Ganti Seluruh Data (Mulai Baris 1 - Urut Excel)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUploadMode('append')}
+                  style={{
+                    flex: 1,
+                    padding: '0.4rem 0.6rem',
+                    fontSize: '0.74rem',
+                    fontWeight: uploadMode === 'append' ? 700 : 500,
+                    border: uploadMode === 'append' ? '1px solid #3577f1' : '1px solid #ced4da',
+                    background: uploadMode === 'append' ? '#eef2ff' : '#ffffff',
+                    color: uploadMode === 'append' ? '#3577f1' : '#495057',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  + Tambahkan ke Data yang Ada ({currentTargetCount})
+                </button>
+              </div>
+            </div>
+          )}
 
           <input
             ref={fileInputRef}

@@ -470,29 +470,46 @@ export const App: React.FC = () => {
     }
   };
 
-  // Target Actions (Appends new rows to existing target data)
-  const handleTargetLoaded = (newRows: TargetRow[], fileName: string) => {
+  // Target Actions (Uploads new rows with strict Excel order preservation)
+  const handleTargetLoaded = (
+    newRows: TargetRow[],
+    fileName: string,
+    mode: 'replace' | 'append' = 'replace'
+  ) => {
     setTargetRows((prev) => {
-      const startNo = prev.length;
-      const indexedNewRows = newRows.map((r, idx) => ({
-        ...r,
-        No: startNo + idx + 1,
-      }));
-      const combined = [...prev, ...indexedNewRows];
-      const combinedFileName = prev.length > 0 ? `${combined.length} Data Target (${fileName})` : fileName;
-      setTargetFileName(combinedFileName);
-      setInitialTargetCount(combined.length);
+      let finalRows: TargetRow[];
+      if (mode === 'append' && prev.length > 0) {
+        const startNo = prev.length;
+        const indexedNewRows = newRows.map((r, idx) => ({
+          ...r,
+          No: r.No !== undefined && String(r.No).trim() !== '' ? r.No : startNo + idx + 1,
+          _excelRowIndex: startNo + idx + 1,
+        }));
+        finalRows = [...prev, ...indexedNewRows];
+      } else {
+        // Mode Replace (default): Urutan 100% murni persis sesuai file Excel yang diunggah
+        finalRows = newRows.map((r, idx) => ({
+          ...r,
+          No: r.No !== undefined && String(r.No).trim() !== '' ? r.No : idx + 1,
+          _excelRowIndex: idx + 1,
+        }));
+      }
+
+      const finalFileName =
+        mode === 'append' && prev.length > 0 ? `${finalRows.length} Data Target (${fileName})` : fileName;
+      setTargetFileName(finalFileName);
+      setInitialTargetCount(finalRows.length);
       setMatchedDone(false);
       setProgress(0);
 
       persistTargetData({
-        rows: combined,
-        fileName: combinedFileName,
-        initialCount: combined.length,
+        rows: finalRows,
+        fileName: finalFileName,
+        initialCount: finalRows.length,
         matchedDone: false,
       });
 
-      return combined;
+      return finalRows;
     });
   };
 

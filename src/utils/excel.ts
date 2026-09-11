@@ -369,8 +369,12 @@ export function exportTargetToExcel(
     // =========================================================================
     // 2. JIKA DOWNLOAD SEMUA WILAYAH
     // Nama file excel: All wilayah.xlsx
-    // Di-group berdasarkan wilayah, tab sheet-nya W01, W02, dst.
+    // Sheet 1: Semua Data (Urutan Asli) -> urutan 100% patokan file Excel yang diunggah
+    // Sheet berikutnya: Di-group per wilayah (W01, W02, dst.)
     // =========================================================================
+    const allWorksheet = createTargetWorksheet(rows, exportColumns);
+    XLSX.utils.book_append_sheet(workbook, allWorksheet, 'Semua Data (Urutan Asli)');
+
     const groups = new Map<string, TargetRow[]>();
 
     rows.forEach((r) => {
@@ -383,7 +387,7 @@ export function exportTargetToExcel(
       arr.push(r);
     });
 
-    // Urutkan kode sheet (W01, W02, W03, dst)
+    // Urutkan kode sheet wilayah (W01, W02, W03, dst)
     const sortedSheetNames = Array.from(groups.keys()).sort((a, b) =>
       a.localeCompare(b, 'id', { numeric: true, sensitivity: 'base' })
     );
@@ -394,11 +398,6 @@ export function exportTargetToExcel(
       const worksheet = createTargetWorksheet(groupRows, exportColumns);
       XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
     });
-
-    if (sortedSheetNames.length === 0) {
-      const worksheet = createTargetWorksheet([], exportColumns);
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'W01');
-    }
 
     filename = 'All wilayah.xlsx';
   }

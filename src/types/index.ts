@@ -46,6 +46,7 @@ export interface TargetRow {
   _matchedBy?: string;
 
   // Audit flags for evaluating user-prefilled Excel data against system recommendations
+  _excelRowIndex?: number;
   _originalFilledSandi?: string;
   _originalFilledCabang?: string;
   _originalFilledSandiCabang?: string;

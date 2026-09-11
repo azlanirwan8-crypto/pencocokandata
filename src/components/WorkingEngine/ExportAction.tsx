@@ -37,17 +37,15 @@ export const ExportAction: React.FC<ExportActionProps> = ({
   const exportData = useMemo(() => {
     if (isAllChecked || selectedExportWilayah === 'ALL') {
       // KETIKA CEKLIST ALL:
-      // Seluruh data di-download dan DIURUTKAN BERDASARKAN WILAYAH (A-Z)
+      // Pertahankan 100% urutan asli persis sesuai berkas Excel yang diunggah
       const sorted = [...allTargetRows].sort((a, b) => {
-        const wA = String(a.Wilayah || '').trim();
-        const wB = String(b.Wilayah || '').trim();
-        const cmp = wA.localeCompare(wB, 'id', { numeric: true, sensitivity: 'base' });
-        if (cmp !== 0) return cmp;
-        return (Number(a.No) || 0) - (Number(b.No) || 0);
+        const idxA = Number(a._excelRowIndex ?? a.No) || 0;
+        const idxB = Number(b._excelRowIndex ?? b.No) || 0;
+        return idxA - idxB;
       });
       return {
         rows: sorted,
-        label: 'SEMUA_WILAYAH_URUT',
+        label: 'SEMUA_WILAYAH_URUT_EXCEL',
         isFiltered: false,
       };
     } else {
