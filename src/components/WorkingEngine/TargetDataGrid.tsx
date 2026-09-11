@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -17,8 +17,9 @@ import {
   Eye,
   SlidersHorizontal,
   ExternalLink,
+  Building2,
 } from 'lucide-react';
-import type { TargetRow, MasterRow } from '../../types';
+import type { TargetRow, MasterRow, WilayahSetting } from '../../types';
 import {
   generateRecommendationsProgressive,
   buildMasterProximityIndex,
@@ -27,7 +28,7 @@ import {
 } from '../../utils/recommender';
 import { ProximityGuideModal } from './ProximityGuideModal';
 import { CandidateDetailModal } from './CandidateDetailModal';
-import { formatWilayahName } from '../../utils/normalizer';
+import { formatWilayahName, extractWilayahFromBranchCode } from '../../utils/normalizer';
 
 export interface ColumnOption {
   key: string;
@@ -64,6 +65,7 @@ interface TargetDataGridProps {
   isProcessing: boolean;
   canExecute: boolean;
   matchedDone?: boolean;
+  wilayahSettings?: WilayahSetting[];
 }
 
 export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
@@ -82,6 +84,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   isProcessing,
   canExecute,
   matchedDone = false,
+  wilayahSettings = [],
 }) => {
   // 3 Sub-Tabs State: 'upload' | 'recommendation' | 'matched'
   const [checkerTab, setCheckerTab] = useState<'upload' | 'recommendation' | 'matched'>('upload');
@@ -178,18 +181,32 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   } | null>(null);
   const [activeCandidateByRow, setActiveCandidateByRow] = useState<Record<string | number, number>>({});
 
-  // Trigger recommendation calculation ONLY when Tab 2 is active and there are rows to analyze
+  // Fingerprint cache to prevent redundant calculation when switching tabs
+  const lastAnalyzedFingerprintRef = useRef<string>('');
+
+  // Trigger recommendation calculation ONLY when Tab 2 is active and data hasn't been evaluated
   useEffect(() => {
     if (checkerTab !== 'recommendation') {
-      setRecommendations([]);
+      // PRESERVE RECOMMENDATIONS IN MEMORY! DO NOT WIPE!
       return;
     }
     if (targetRecommendationRows.length === 0 || masterRows.length === 0) {
       setRecommendations([]);
+      lastAnalyzedFingerprintRef.current = '';
+      return;
+    }
+
+    // Dataset fingerprint (determines if target rows actually changed or if user just switched tabs)
+    const currentFingerprint = `${targetRecommendationRows.length}-${targetRecommendationRows[0]?.No || ''}-${targetRecommendationRows[targetRecommendationRows.length - 1]?.No || ''}-${masterRows.length}`;
+
+    // If we already have computed recommendations for this dataset, DO NOT recalculate! Instant 0ms display!
+    if (recommendations.length > 0 && lastAnalyzedFingerprintRef.current === currentFingerprint) {
       return;
     }
 
     setIsComputingRecs(true);
+    lastAnalyzedFingerprintRef.current = currentFingerprint;
+
     const cancelProgressive = generateRecommendationsProgressive(
       targetRecommendationRows,
       masterRows,
@@ -200,8 +217,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           setIsComputingRecs(false);
         }
       },
-      25,
-      100
+      30,
+      120
     );
 
     return () => {
@@ -312,6 +329,12 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     });
   };
 
+  // Setujui satu rekomendasi (Langsung update state rekomendasi lokal agar instan 0ms)
+  const handleApproveSingle = (rowNo: number | string, m: MasterRow) => {
+    setRecommendations((prev) => prev.filter((r) => r.targetRow.No !== rowNo));
+    onApproveRecommendation(rowNo, m);
+  };
+
   // Setujui Rekomendasi Terpilih (Batch Selected Approval)
   const handleApproveSelected = () => {
     if (selectedRowNos.size === 0) return;
@@ -336,6 +359,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     });
 
     onApproveAllRecommendations(selectedRecs);
+    setRecommendations((prev) => prev.filter((r) => !selectedRowNos.has(r.targetRow.No)));
     setSelectedRowNos(new Set());
     if (selectedRecs.length === recommendations.length) {
       setCheckerTab('matched');
@@ -1133,6 +1157,12 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                           const cardBorder = isTop1 ? '1px solid rgba(10, 179, 156, 0.35)' : '1px solid #e9ebec';
                           const cardBg = isTop1 ? '#ffffff' : '#fafafa';
 
+                          const candWilayahInfo = extractWilayahFromBranchCode(
+                            m['Branch Code'] || m['Kode Cabang'] || r['Branch Code'] || r['Kode Cabang'] || '',
+                            wilayahSettings,
+                            m.Wilayah || r.Wilayah || '-'
+                          );
+
                           return (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                               {/* Indikator Audit Rekomendasi vs Pilihan yang Sudah Diisi di Excel */}
@@ -1412,7 +1442,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                     <button
                                       type="button"
                                       className="btn btn-outline btn-sm"
-                                      onClick={() => onApproveRecommendation(r.No, m)}
+                                      onClick={() => handleApproveSingle(r.No, m)}
                                       style={{
                                         fontSize: '0.69rem',
                                         padding: '0.16rem 0.52rem',
@@ -1438,6 +1468,53 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                     >
                                       <Check size={11} /> Gunakan Cabang Ini
                                     </button>
+                                  </div>
+
+                                  {/* Branch Code & Wilayah Tag (Sesuai Setting Wilayah) */}
+                                  <div
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '0.35rem',
+                                      flexWrap: 'wrap',
+                                      margin: '0.12rem 0 0.22rem',
+                                    }}
+                                  >
+                                    {candWilayahInfo.branchCode ? (
+                                      <span
+                                        className="code-cell"
+                                        style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '0.25rem',
+                                          fontSize: '0.69rem',
+                                          background: '#f3f6f9',
+                                          color: '#405189',
+                                          padding: '0.08rem 0.4rem',
+                                          borderRadius: '3px',
+                                          border: '1px solid #e9ebec',
+                                          fontWeight: 600,
+                                        }}
+                                        title={`Kode Branch: ${candWilayahInfo.branchCode} (Digit ke-2 & 3: ${candWilayahInfo.kodeWilayah || '-'})`}
+                                      >
+                                        <Building2 size={10} /> Branch: <strong>{candWilayahInfo.branchCode}</strong>
+                                      </span>
+                                    ) : null}
+
+                                    <span
+                                      className="badge badge-match"
+                                      style={{
+                                        fontSize: '0.69rem',
+                                        padding: '0.08rem 0.45rem',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.2rem',
+                                      }}
+                                      title={`Wilayah hasil setting: ${candWilayahInfo.wilayahName}`}
+                                    >
+                                      <MapPin size={9} />
+                                      {candWilayahInfo.wilayahName}
+                                    </span>
                                   </div>
 
                                   {/* Alamat Lengkap Master Asli (Clean & Ringkas) */}
@@ -2058,7 +2135,11 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
         isOpen={Boolean(selectedCandidateDetail)}
         onClose={() => setSelectedCandidateDetail(null)}
         data={selectedCandidateDetail}
-        onApprove={onApproveRecommendation}
+        onApprove={(rowNo, m) => {
+          handleApproveSingle(rowNo, m);
+          setSelectedCandidateDetail(null);
+        }}
+        wilayahSettings={wilayahSettings}
       />
     </div>
   );

@@ -11,9 +11,10 @@ import {
   Info,
   ExternalLink,
 } from 'lucide-react';
-import type { TargetRow, MasterRow } from '../../types';
+import type { TargetRow, MasterRow, WilayahSetting } from '../../types';
 import type { CandidateOption } from '../../utils/recommender';
 import { calculateRealDistance, buildGoogleMapsDirectionsUrl } from '../../utils/geoDistance';
+import { extractWilayahFromBranchCode } from '../../utils/normalizer';
 
 interface CandidateDetailModalProps {
   isOpen: boolean;
@@ -23,6 +24,7 @@ interface CandidateDetailModalProps {
     candidate: CandidateOption;
   } | null;
   onApprove: (rowNo: number | string, master: MasterRow) => void;
+  wilayahSettings?: WilayahSetting[];
 }
 
 export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
@@ -30,6 +32,7 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
   onClose,
   data,
   onApprove,
+  wilayahSettings = [],
 }) => {
   if (!isOpen || !data) return null;
 
@@ -37,6 +40,12 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
   const m = cand.master;
   const isTop1 = cand.rank === 1;
   const themeColor = isTop1 ? '#0ab39c' : cand.rank === 2 ? '#d97706' : '#3577f1';
+
+  const candWilayahInfo = extractWilayahFromBranchCode(
+    m['Branch Code'] || m['Kode Cabang'] || r['Branch Code'] || r['Kode Cabang'] || '',
+    wilayahSettings,
+    m.Wilayah || r.Wilayah || '-'
+  );
 
   // Pembersihan teks untuk komparasi akurat
   const clean = (val: unknown) => String(val || '').trim().toUpperCase();
@@ -224,6 +233,44 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                   • {m['Nama Outlet']}
                 </span>
               )}
+            </div>
+
+            {/* Branch Code & Wilayah Tag */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap', marginTop: '0.35rem' }}>
+              {candWilayahInfo.branchCode && (
+                <span
+                  className="code-cell"
+                  style={{
+                    fontSize: '0.74rem',
+                    color: '#405189',
+                    background: 'rgba(64, 81, 137, 0.08)',
+                    border: '1px solid rgba(64, 81, 137, 0.2)',
+                    padding: '0.12rem 0.5rem',
+                    borderRadius: '4px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.25rem',
+                    fontWeight: 600,
+                  }}
+                  title={`Branch Code: ${candWilayahInfo.branchCode}`}
+                >
+                  <Building2 size={12} /> Branch: <strong>{candWilayahInfo.branchCode}</strong>
+                </span>
+              )}
+
+              <span
+                className="badge badge-match"
+                style={{
+                  fontSize: '0.74rem',
+                  padding: '0.12rem 0.55rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.25rem',
+                }}
+                title={`Wilayah ditentukan berdasarkan 2 digit kode branch: ${candWilayahInfo.wilayahName}`}
+              >
+                <MapPin size={11} /> {candWilayahInfo.wilayahName}
+              </span>
             </div>
           </div>
 

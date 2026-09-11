@@ -13,10 +13,10 @@ import { TargetDataGrid } from './components/WorkingEngine/TargetDataGrid';
 import { ExportAction } from './components/WorkingEngine/ExportAction';
 import { WilayahManager } from './components/WilayahData/WilayahManager';
 
-import type { MasterRow, TargetRow, MatchingStats, WilayahStat } from './types';
+import type { MasterRow, TargetRow, MatchingStats, WilayahStat, WilayahSetting } from './types';
 import type { RecommendationResult } from './utils/recommender';
 import { buildMasterIndex, analyzeMasterHealth, executeChunkMatching } from './utils/matcher';
-import { formatWilayahName } from './utils/normalizer';
+import { formatWilayahName, extractWilayahFromBranchCode } from './utils/normalizer';
 
 import { getItem, setItem } from './utils/storage';
 import {
@@ -36,6 +36,7 @@ import {
   loadTargetFromNeon,
   saveTargetToNeon,
   clearTargetFromNeon,
+  loadWilayahFromNeon,
 } from './utils/neonSync';
 import { SupabaseModal } from './components/SupabaseModal';
 import { SnapshotModal, type WorkspaceSnapshot } from './components/SnapshotModal';
@@ -77,6 +78,7 @@ export const App: React.FC = () => {
   const [targetRows, setTargetRows] = useState<TargetRow[]>([]);
   const [initialTargetCount, setInitialTargetCount] = useState<number>(0);
   const [targetFileName, setTargetFileName] = useState<string>('');
+  const [wilayahSettings, setWilayahSettings] = useState<WilayahSetting[]>([]);
 
   // Matching Execution State
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -109,7 +111,7 @@ export const App: React.FC = () => {
       // Read local IndexedDB immediately in parallel so the UI is ready instantly
       // -----------------------------------------------------------------------
       try {
-        const [savedMaster, savedTarget] = await Promise.all([
+        const [savedMaster, savedTarget, savedWilayah] = await Promise.all([
           getItem<{ rows: MasterRow[]; fileName: string }>('master_data').catch(() => null),
           getItem<{
             rows: TargetRow[];
@@ -117,6 +119,7 @@ export const App: React.FC = () => {
             initialCount: number;
             matchedDone: boolean;
           }>('target_data').catch(() => null),
+          getItem<WilayahSetting[]>('wilayah_settings').catch(() => null),
         ]);
 
         if (savedMaster && savedMaster.rows && savedMaster.rows.length > 0) {
@@ -129,6 +132,10 @@ export const App: React.FC = () => {
           setInitialTargetCount(savedTarget.initialCount || savedTarget.rows.length);
           setMatchedDone(savedTarget.matchedDone || false);
         }
+
+        if (savedWilayah && Array.isArray(savedWilayah) && savedWilayah.length > 0) {
+          setWilayahSettings(savedWilayah);
+        }
       } catch (err) {
         console.warn('Local cache restore skipped:', err);
       }
@@ -140,10 +147,11 @@ export const App: React.FC = () => {
       (async () => {
         try {
           // Check Neon status & load data in parallel
-          const [neonCheck, neonMaster, neonTarget] = await Promise.allSettled([
+          const [neonCheck, neonMaster, neonTarget, neonWilayah] = await Promise.allSettled([
             checkNeonStatus(),
             loadMasterFromNeon(),
             loadTargetFromNeon(),
+            loadWilayahFromNeon(),
           ]);
 
           let hasNeonMaster = false;
@@ -165,6 +173,11 @@ export const App: React.FC = () => {
             setInitialTargetCount(neonTarget.value.initialCount || neonTarget.value.rows.length);
             setMatchedDone(neonTarget.value.matchedDone || false);
             hasNeonTarget = true;
+          }
+
+          if (neonWilayah.status === 'fulfilled' && neonWilayah.value && neonWilayah.value.length > 0) {
+            setWilayahSettings(neonWilayah.value);
+            setItem('wilayah_settings', neonWilayah.value);
           }
 
           // Fallback to Supabase Cloud if configured & not loaded from Neon
@@ -362,7 +375,8 @@ export const App: React.FC = () => {
           setProcessedCount(processed);
           setDurationMs(Math.round(performance.now() - startTime));
         },
-        1200 // Chunk size
+        1200, // Chunk size
+        wilayahSettings
       );
 
       const endTime = performance.now();
@@ -583,6 +597,13 @@ export const App: React.FC = () => {
         const matchedMaster = recMap.get(row.No);
         if (!matchedMaster) return row;
 
+        const branchCode = matchedMaster['Branch Code'] || matchedMaster['Kode Cabang'] || '';
+        const resolved = extractWilayahFromBranchCode(
+          branchCode,
+          wilayahSettings,
+          matchedMaster.Wilayah || row.Wilayah || '-'
+        );
+
         return {
           ...row,
           _isMatched: true,
@@ -594,11 +615,12 @@ export const App: React.FC = () => {
             '',
           Sandi: matchedMaster.Sandi || matchedMaster['Sandi Cabang'] || '',
           Cabang: matchedMaster.Cabang || matchedMaster['Sandi Cabang'] || '',
-          'Branch Code': matchedMaster['Branch Code'] || '',
+          'Branch Code': branchCode,
           'Kode Cabang': matchedMaster['Kode Cabang'] || '',
           'Nama Outlet': matchedMaster['Nama Outlet'] || '',
           'Status Outlet': matchedMaster['Status Outlet'] || 'Aktif',
           ALAMAT: matchedMaster.ALAMAT || '',
+          Wilayah: resolved.wilayahName !== '-' ? resolved.wilayahName : (row.Wilayah || '-'),
           _matchedAt: new Date().toISOString(),
           _matchedBy: 'Operator (Approval)',
         };
@@ -621,6 +643,13 @@ export const App: React.FC = () => {
       const updated = prev.map((row) => {
         if (row.No !== rowNo) return row;
 
+        const branchCode = matchedMaster['Branch Code'] || matchedMaster['Kode Cabang'] || '';
+        const resolved = extractWilayahFromBranchCode(
+          branchCode,
+          wilayahSettings,
+          matchedMaster.Wilayah || row.Wilayah || '-'
+        );
+
         return {
           ...row,
           _isMatched: true,
@@ -632,11 +661,12 @@ export const App: React.FC = () => {
             '',
           Sandi: matchedMaster.Sandi || matchedMaster['Sandi Cabang'] || '',
           Cabang: matchedMaster.Cabang || matchedMaster['Sandi Cabang'] || '',
-          'Branch Code': matchedMaster['Branch Code'] || '',
+          'Branch Code': branchCode,
           'Kode Cabang': matchedMaster['Kode Cabang'] || '',
           'Nama Outlet': matchedMaster['Nama Outlet'] || '',
           'Status Outlet': matchedMaster['Status Outlet'] || 'Aktif',
           ALAMAT: matchedMaster.ALAMAT || '',
+          Wilayah: resolved.wilayahName !== '-' ? resolved.wilayahName : (row.Wilayah || '-'),
           _matchedAt: new Date().toISOString(),
           _matchedBy: 'Operator (Approval)',
         };
@@ -743,8 +773,7 @@ export const App: React.FC = () => {
 
         <main className="page-content">
           {/* MENU 1: DASHBOARD (EXECUTIVE OPERATIONAL ANALYST DASHBOARD) */}
-          {activeTab === 'dashboard' && (
-          <>
+          <div style={{ display: activeTab === 'dashboard' ? 'contents' : 'none' }}>
             {/* Toolbar Filter Wilayah Dashboard - Mengontrol seluruh metrik, grafik, dan anomali */}
             {wilayahList.length > 0 && (
               <div
@@ -843,12 +872,10 @@ export const App: React.FC = () => {
               regionalStats={regionalStats}
               selectedWilayah={dashboardWilayahFilter}
             />
-          </>
-        )}
+          </div>
 
-        {/* MENU 2: DATA MASTER (MANAJEMEN REFERENSI CABANG) */}
-        {activeTab === 'master' && (
-          <>
+          {/* MENU 2: DATA MASTER (MANAJEMEN REFERENSI CABANG) */}
+          <div style={{ display: activeTab === 'master' ? 'contents' : 'none' }}>
             {/* Top Action Card: Upload Button & Template & Reset */}
             <div
               className="glass-card"
@@ -1065,12 +1092,10 @@ export const App: React.FC = () => {
                 )}
               </div>
             )}
-          </>
-        )}
+          </div>
 
-        {/* MENU 3: DATA YANG AKAN DICOCOKAN (WORKING & EXECUTION ENGINE) */}
-        {activeTab === 'working' && (
-          <>
+          {/* MENU 3: DATA YANG AKAN DICOCOKAN (WORKING & EXECUTION ENGINE) */}
+          <div style={{ display: activeTab === 'working' ? 'contents' : 'none' }}>
             {/* Top Action Card: Upload Button & Template & Reset */}
             <div
               className="glass-card"
@@ -1234,6 +1259,7 @@ export const App: React.FC = () => {
                   canExecute={targetRows.length > 0 && masterRows.length > 0}
                   matchedDone={matchedDone}
                   onRevertRecommendation={handleRevertRecommendation}
+                  wilayahSettings={wilayahSettings}
                 />
 
                 <ExportAction
@@ -1244,13 +1270,18 @@ export const App: React.FC = () => {
                 />
               </>
             )}
-          </>
-        )}
+          </div>
 
-        {/* MENU 4: SETTING WILAYAH */}
-        {activeTab === 'wilayah' && (
-          <WilayahManager />
-        )}
+          {/* MENU 4: SETTING WILAYAH */}
+          <div style={{ display: activeTab === 'wilayah' ? 'contents' : 'none' }}>
+            <WilayahManager
+              initialSettings={wilayahSettings}
+              onSettingsSaved={(newSettings) => {
+                setWilayahSettings(newSettings);
+                setItem('wilayah_settings', newSettings);
+              }}
+            />
+          </div>
         </main>
       </div>
 

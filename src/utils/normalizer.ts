@@ -83,3 +83,43 @@ export function formatWilayahName(val: unknown): string {
   return `Wilayah ${str}`;
 }
 
+import type { WilayahSetting } from '../types';
+
+/**
+ * Extract 2nd and 3rd digit from Branch Code and resolve to Wilayah from settings
+ * Example: "60115601" -> digit 2 & 3 is "01" -> matches setting { kodeWilayah: "01", keterangan: "Wilayah 1" }
+ */
+export function extractWilayahFromBranchCode(
+  branchCode: unknown,
+  settings: WilayahSetting[] = [],
+  fallback = '-'
+): { branchCode: string; kodeWilayah: string; wilayahName: string; isMatched: boolean } {
+  const bc = String(branchCode || '').trim();
+  if (!bc) {
+    return { branchCode: '', kodeWilayah: '', wilayahName: fallback, isMatched: false };
+  }
+
+  if (bc.length >= 3) {
+    const code = bc.substring(1, 3);
+    const rule = settings.find(
+      (s) => s.kodeWilayah.trim().toUpperCase() === code.toUpperCase()
+    );
+    if (rule && rule.keterangan) {
+      return {
+        branchCode: bc,
+        kodeWilayah: rule.kodeWilayah,
+        wilayahName: rule.keterangan,
+        isMatched: true,
+      };
+    }
+    return {
+      branchCode: bc,
+      kodeWilayah: code,
+      wilayahName: fallback !== '-' ? fallback : `Wilayah ${code}`,
+      isMatched: false,
+    };
+  }
+
+  return { branchCode: bc, kodeWilayah: '', wilayahName: fallback, isMatched: false };
+}
+

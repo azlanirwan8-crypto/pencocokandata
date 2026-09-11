@@ -15,14 +15,28 @@ import {
 import type { WilayahSetting } from '../../types';
 import { loadWilayahFromNeon, saveWilayahToNeon } from '../../utils/neonSync';
 
-export const WilayahManager: React.FC = () => {
-  const [settings, setSettings] = useState<WilayahSetting[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+interface WilayahManagerProps {
+  initialSettings?: WilayahSetting[];
+  onSettingsSaved?: (newSettings: WilayahSetting[]) => void;
+}
+
+export const WilayahManager: React.FC<WilayahManagerProps> = ({
+  initialSettings,
+  onSettingsSaved,
+}) => {
+  const [settings, setSettings] = useState<WilayahSetting[]>(initialSettings || []);
+  const [isLoading, setIsLoading] = useState<boolean>(!initialSettings || initialSettings.length === 0);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    if (initialSettings && initialSettings.length > 0) {
+      setSettings(initialSettings);
+      setIsLoading(false);
+      return;
+    }
+
     const fetchSettings = async () => {
       setIsLoading(true);
       setError(null);
@@ -30,6 +44,7 @@ export const WilayahManager: React.FC = () => {
         const data = await loadWilayahFromNeon();
         if (data && Array.isArray(data)) {
           setSettings(data);
+          onSettingsSaved?.(data);
         } else {
           setSettings([]);
         }
@@ -42,7 +57,7 @@ export const WilayahManager: React.FC = () => {
     };
 
     fetchSettings();
-  }, []);
+  }, [initialSettings]);
 
   const handleAdd = () => {
     setSettings(prev => [...prev, { kodeWilayah: '', keterangan: '' }]);
@@ -91,6 +106,7 @@ export const WilayahManager: React.FC = () => {
     setIsSaving(false);
 
     if (success) {
+      onSettingsSaved?.(settings);
       setSuccessMsg('Data setting wilayah berhasil disimpan ke database cloud!');
       setTimeout(() => setSuccessMsg(null), 3500);
     } else {

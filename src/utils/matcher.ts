@@ -1,5 +1,5 @@
-import type { MasterRow, TargetRow, MasterHealth } from '../types';
-import { normalizeKodePos, textSimilarityScore } from './normalizer';
+import type { MasterRow, TargetRow, MasterHealth, WilayahSetting } from '../types';
+import { normalizeKodePos, textSimilarityScore, extractWilayahFromBranchCode } from './normalizer';
 
 /**
  * Build fast O(1) In-Memory Hash Map index keyed by 5-digit KODE POS
@@ -82,7 +82,11 @@ export function resolveLevel2TieBreaker(target: TargetRow, candidates: MasterRow
 /**
  * Match a single target row against Master index and validate PTEN
  */
-export function matchSingleRow(target: TargetRow, masterIndex: Map<string, MasterRow[]>): TargetRow {
+export function matchSingleRow(
+  target: TargetRow,
+  masterIndex: Map<string, MasterRow[]>,
+  wilayahSettings?: WilayahSetting[]
+): TargetRow {
   // Jika baris ini sudah berstatus MATCH (misal dari file sebelumnya atau sudah disetujui dari rekomendasi), pertahankan data bersihnya!
   if (target._isMatched && (target.Sandi || target['Sandi Cabang'] || target.Cabang)) {
     return target;
@@ -121,6 +125,16 @@ export function matchSingleRow(target: TargetRow, masterIndex: Map<string, Maste
     result['Status Outlet'] = matchedMaster['Status Outlet'] || '';
     result.ALAMAT = matchedMaster.ALAMAT || '';
 
+    // Pengayaan Otomatis Wilayah berdasarkan 2 digit kode branch (Setting Wilayah)
+    const resolvedWilayah = extractWilayahFromBranchCode(
+      matchedMaster['Branch Code'] || matchedMaster['Kode Cabang'] || result['Branch Code'] || result['Kode Cabang'] || '',
+      wilayahSettings,
+      matchedMaster.Wilayah || result.Wilayah || '-'
+    );
+    if (resolvedWilayah.wilayahName && resolvedWilayah.wilayahName !== '-') {
+      result.Wilayah = resolvedWilayah.wilayahName;
+    }
+
     result._isMatched = true;
     result._matchedAt = target._matchedAt || new Date().toISOString();
     result._matchedBy = target._matchedBy || 'System (Auto)';
@@ -151,7 +165,8 @@ export function executeChunkMatching(
   targetRows: TargetRow[],
   masterIndex: Map<string, MasterRow[]>,
   onProgress: (progress: number, processed: number, total: number) => void,
-  chunkSize = 1000
+  chunkSize = 1000,
+  wilayahSettings?: WilayahSetting[]
 ): Promise<TargetRow[]> {
   return new Promise((resolve) => {
     const total = targetRows.length;
@@ -168,7 +183,7 @@ export function executeChunkMatching(
       const end = Math.min(currentIndex + chunkSize, total);
 
       for (let i = currentIndex; i < end; i++) {
-        matchedResults[i] = matchSingleRow(targetRows[i], masterIndex);
+        matchedResults[i] = matchSingleRow(targetRows[i], masterIndex, wilayahSettings);
       }
 
       currentIndex = end;
