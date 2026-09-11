@@ -1176,15 +1176,18 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                           display: 'inline-flex',
                                           alignItems: 'center',
                                           gap: '0.2rem',
-                                          padding: '0.12rem 0.38rem',
+                                          height: '18px',
+                                          padding: '0 0.35rem',
                                           fontSize: '0.67rem',
                                           fontWeight: 600,
                                           color: '#2563eb',
                                           background: 'rgba(37, 99, 235, 0.08)',
                                           border: '1px solid rgba(37, 99, 235, 0.25)',
-                                          borderRadius: '4px',
+                                          borderRadius: '3px',
                                           textDecoration: 'none',
                                           cursor: 'pointer',
+                                          boxSizing: 'border-box',
+                                          lineHeight: '18px',
                                         }}
                                         title="Buka rute navigasi & cek jarak real di Google Maps langsung"
                                       >
@@ -1198,27 +1201,21 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                         display: 'inline-flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        width: '22px',
-                                        height: '22px',
-                                        borderRadius: '4px',
-                                        border: isTop1
-                                          ? '1px solid rgba(10, 179, 156, 0.4)'
-                                          : activeCand.rank === 2
-                                          ? '1px solid rgba(217, 119, 6, 0.4)'
-                                          : '1px solid rgba(53, 119, 241, 0.4)',
-                                        background: isTop1
-                                          ? 'rgba(10, 179, 156, 0.05)'
-                                          : activeCand.rank === 2
-                                          ? 'rgba(217, 119, 6, 0.05)'
-                                          : 'rgba(53, 119, 241, 0.05)',
-                                        color: badgeColor,
+                                        width: '18px',
+                                        height: '18px',
+                                        borderRadius: '3px',
+                                        border: '1px solid #d1d5db',
+                                        background: '#f8fafc',
+                                        color: '#64748b',
                                         cursor: 'pointer',
                                         transition: 'all 0.15s ease',
                                         flexShrink: 0,
+                                        boxSizing: 'border-box',
+                                        padding: 0,
                                       }}
                                       title="Lihat alasan penilaian skor & detail wilayah"
                                     >
-                                      <Info size={11} />
+                                      <Info size={10} />
                                     </button>
                                   </div>
                                 </div>
