@@ -1,11 +1,16 @@
 import type { TargetRow, MasterRow } from '../types';
 import { normalizeKodePos, cleanText, textSimilarityScore } from './normalizer';
+import { calculateRealDistance } from './geoDistance';
 
 export interface CandidateOption {
   master: MasterRow;
   score: number; // 0 - 100
   reason: string;
   rank: number; // 1 (Utama), 2 (Alternatif 1), 3 (Alternatif 2)
+  distanceKm?: number;
+  formattedDistance?: string;
+  distanceBasis?: string;
+  googleMapsUrl?: string;
 }
 
 export interface RecommendationResult {
@@ -14,6 +19,9 @@ export interface RecommendationResult {
   score: number; // 0 - 100
   reason: string;
   candidates: CandidateOption[];
+  distanceKm?: number;
+  formattedDistance?: string;
+  googleMapsUrl?: string;
 }
 
 export interface MasterProximityIndex {
@@ -298,12 +306,17 @@ export function findClosestMasterRecommendation(
   if (isAcehRegion(target)) {
     const kimBranch = index.kimBranch || findKimBranch(index.all);
     if (kimBranch) {
+      const kimDist = calculateRealDistance(target, kimBranch);
       const candidates: CandidateOption[] = [
         {
           master: kimBranch,
           score: 99,
           reason: 'Khusus Provinsi Aceh otomatis dilayani Cabang KIM',
           rank: 1,
+          distanceKm: kimDist.distanceKm,
+          formattedDistance: kimDist.formattedDistance,
+          distanceBasis: kimDist.basis,
+          googleMapsUrl: kimDist.googleMapsUrl,
         },
       ];
 
@@ -313,11 +326,16 @@ export function findClosestMasterRecommendation(
       for (const alt of sumutBranches) {
         if (rankCounter > 3) break;
         if (alt['Branch Code'] !== kimBranch['Branch Code']) {
+          const altDist = calculateRealDistance(target, alt);
           candidates.push({
             master: alt,
             score: 75,
             reason: `Alternatif Regional (${alt['Dati II'] || alt.Cabang})`,
             rank: rankCounter++,
+            distanceKm: altDist.distanceKm,
+            formattedDistance: altDist.formattedDistance,
+            distanceBasis: altDist.basis,
+            googleMapsUrl: altDist.googleMapsUrl,
           });
         }
       }
@@ -328,6 +346,9 @@ export function findClosestMasterRecommendation(
         score: 99,
         reason: candidates[0].reason,
         candidates,
+        distanceKm: candidates[0].distanceKm,
+        formattedDistance: candidates[0].formattedDistance,
+        googleMapsUrl: candidates[0].googleMapsUrl,
       };
     }
   }
@@ -382,12 +403,19 @@ export function findClosestMasterRecommendation(
   const topList = scored.slice(0, 3);
   if (topList.length === 0) return null;
 
-  const candidates: CandidateOption[] = topList.map((item, idx) => ({
-    master: item.master,
-    score: item.score,
-    reason: item.reason,
-    rank: idx + 1,
-  }));
+  const candidates: CandidateOption[] = topList.map((item, idx) => {
+    const distInfo = calculateRealDistance(target, item.master);
+    return {
+      master: item.master,
+      score: item.score,
+      reason: item.reason,
+      rank: idx + 1,
+      distanceKm: distInfo.distanceKm,
+      formattedDistance: distInfo.formattedDistance,
+      distanceBasis: distInfo.basis,
+      googleMapsUrl: distInfo.googleMapsUrl,
+    };
+  });
 
   return {
     targetRow: target,
@@ -395,7 +423,17 @@ export function findClosestMasterRecommendation(
     score: candidates[0].score,
     reason: candidates[0].reason,
     candidates,
+    distanceKm: candidates[0].distanceKm,
+    formattedDistance: candidates[0].formattedDistance,
+    googleMapsUrl: candidates[0].googleMapsUrl,
   };
+}
+
+/**
+ * Fast location memo key to avoid redundant evaluations
+ */
+function getTargetLocationKey(target: TargetRow): string {
+  return `${target.Wilayah || ''}|${normalizeKodePos(target['KODE POS'])}|${cleanText(target.Kecamatan)}|${cleanText(target.Kelurahan)}|${cleanText(target['Dati II'])}|${cleanText(target.ALAMAT).slice(0, 35)}`;
 }
 
 /**
@@ -410,14 +448,119 @@ export function generateRecommendationsForUnmatched(
 
   const index = prebuiltIndex || buildMasterProximityIndex(masterRows);
   const results: RecommendationResult[] = [];
+  const locationMemo = new Map<string, RecommendationResult | null>();
 
   for (let i = 0; i < unmatchedRows.length; i++) {
     const row = unmatchedRows[i];
+    const locKey = getTargetLocationKey(row);
+
+    if (locationMemo.has(locKey)) {
+      const cached = locationMemo.get(locKey);
+      if (cached) {
+        results.push({
+          ...cached,
+          targetRow: row,
+        });
+      }
+      continue;
+    }
+
     const rec = findClosestMasterRecommendation(row, index);
     if (rec) {
+      locationMemo.set(locKey, rec);
       results.push(rec);
+    } else {
+      locationMemo.set(locKey, null);
     }
   }
 
   return results;
+}
+
+/**
+ * Non-blocking progressive recommendation calculation with initial fast batch (< 15ms)
+ * and chunked background evaluation for smooth 60 FPS responsiveness.
+ */
+export function generateRecommendationsProgressive(
+  unmatchedRows: TargetRow[],
+  masterRows: MasterRow[],
+  index: MasterProximityIndex,
+  onBatch: (batch: RecommendationResult[], isDone: boolean, totalProcessed: number) => void,
+  initialBatchSize = 25,
+  chunkSize = 100
+): () => void {
+  let isCancelled = false;
+
+  if (unmatchedRows.length === 0 || masterRows.length === 0) {
+    onBatch([], true, 0);
+    return () => {};
+  }
+
+  const locationMemo = new Map<string, RecommendationResult | null>();
+  const allResults: RecommendationResult[] = [];
+
+  const processRow = (row: TargetRow): RecommendationResult | null => {
+    const locKey = getTargetLocationKey(row);
+    if (locationMemo.has(locKey)) {
+      const cached = locationMemo.get(locKey);
+      if (cached) {
+        return {
+          ...cached,
+          targetRow: row,
+        };
+      }
+      return null;
+    }
+
+    const rec = findClosestMasterRecommendation(row, index);
+    if (rec) {
+      locationMemo.set(locKey, rec);
+      return rec;
+    } else {
+      locationMemo.set(locKey, null);
+      return null;
+    }
+  };
+
+  // STEP 1: Process initial fast batch synchronously (< 15ms)
+  const firstBatchCount = Math.min(initialBatchSize, unmatchedRows.length);
+  for (let i = 0; i < firstBatchCount; i++) {
+    const res = processRow(unmatchedRows[i]);
+    if (res) allResults.push(res);
+  }
+
+  const isCompleteImmediately = firstBatchCount >= unmatchedRows.length;
+  onBatch([...allResults], isCompleteImmediately, firstBatchCount);
+
+  if (isCompleteImmediately) {
+    return () => {};
+  }
+
+  // STEP 2: Process remaining items in chunks asynchronously
+  let currentIndex = firstBatchCount;
+
+  const processNextChunk = () => {
+    if (isCancelled) return;
+
+    const chunkEnd = Math.min(currentIndex + chunkSize, unmatchedRows.length);
+    for (let i = currentIndex; i < chunkEnd; i++) {
+      const res = processRow(unmatchedRows[i]);
+      if (res) allResults.push(res);
+    }
+
+    currentIndex = chunkEnd;
+    const isDone = currentIndex >= unmatchedRows.length;
+    onBatch([...allResults], isDone, currentIndex);
+
+    if (!isDone && !isCancelled) {
+      setTimeout(processNextChunk, 0);
+    }
+  };
+
+  const timerId = setTimeout(processNextChunk, 0);
+
+  return () => {
+    isCancelled = true;
+    clearTimeout(timerId);
+  };
 }

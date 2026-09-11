@@ -16,10 +16,11 @@ import {
   Info,
   Eye,
   SlidersHorizontal,
+  ExternalLink,
 } from 'lucide-react';
 import type { TargetRow, MasterRow } from '../../types';
 import {
-  generateRecommendationsForUnmatched,
+  generateRecommendationsProgressive,
   buildMasterProximityIndex,
   type RecommendationResult,
   type CandidateOption,
@@ -163,14 +164,23 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     }
 
     setIsComputingRecs(true);
-    // Non-blocking asynchronous calculation
-    const timer = setTimeout(() => {
-      const recs = generateRecommendationsForUnmatched(unmatchedRows, masterRows, masterProximityIndex);
-      setRecommendations(recs);
-      setIsComputingRecs(false);
-    }, 40);
+    const cancelProgressive = generateRecommendationsProgressive(
+      unmatchedRows,
+      masterRows,
+      masterProximityIndex,
+      (recs) => {
+        setRecommendations(recs);
+        if (recs.length >= unmatchedRows.length) {
+          setIsComputingRecs(false);
+        }
+      },
+      25,
+      100
+    );
 
-    return () => clearTimeout(timer);
+    return () => {
+      cancelProgressive();
+    };
   }, [checkerTab, unmatchedRows, masterRows, masterProximityIndex]);
 
   // Determine current dataset based on active tab
@@ -1130,10 +1140,51 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                     >
                                       <Sparkles size={10} /> Skor {activeCand.score}%
                                     </span>
+                                    {activeCand.formattedDistance && (
+                                      <span
+                                        style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '0.18rem',
+                                          fontSize: '0.68rem',
+                                          fontWeight: 600,
+                                          color: '#0d9488',
+                                          background: 'rgba(13, 148, 136, 0.08)',
+                                          padding: '0.1rem 0.35rem',
+                                          borderRadius: '3px',
+                                          whiteSpace: 'nowrap',
+                                        }}
+                                        title={`Estimasi jarak fisik: ${activeCand.formattedDistance} (${activeCand.distanceBasis || 'Jarak darat'})`}
+                                      >
+                                        <MapPin size={10} /> {activeCand.formattedDistance}
+                                      </span>
+                                    )}
                                   </div>
 
                                   {/* Tombol Info (i) & Tombol Pilih Cabang Ini */}
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                                    {activeCand.googleMapsUrl && (
+                                      <a
+                                        href={activeCand.googleMapsUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="btn btn-ghost btn-sm"
+                                        style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '0.2rem',
+                                          padding: '0.18rem 0.4rem',
+                                          fontSize: '0.68rem',
+                                          color: '#2563eb',
+                                          background: 'rgba(37, 99, 235, 0.06)',
+                                          borderRadius: '4px',
+                                          textDecoration: 'none',
+                                        }}
+                                        title="Buka rute navigasi & cek jarak real di Google Maps langsung"
+                                      >
+                                        <ExternalLink size={11} /> Maps
+                                      </a>
+                                    )}
                                     <button
                                       type="button"
                                       onClick={() => setSelectedCandidateDetail({ targetRow: r, candidate: activeCand })}

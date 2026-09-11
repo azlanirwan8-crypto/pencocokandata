@@ -8,19 +8,34 @@ export interface NeonStatus {
 }
 
 /**
- * Fast fetch helper with timeout to avoid network hanging
+ * Fast fetch helper with timeout and exponential backoff retry to avoid network hiccups
  */
-async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 4500): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
-    clearTimeout(timeoutId);
-    return res;
-  } catch (err) {
-    clearTimeout(timeoutId);
-    throw err;
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit = {},
+  timeoutMs = 4500,
+  maxRetries = 2
+): Promise<Response> {
+  let lastError: any;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (res.ok || res.status < 500) {
+        return res;
+      }
+      lastError = new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      lastError = err;
+    }
+    if (attempt < maxRetries) {
+      // Exponential backoff: 800ms, 1600ms
+      await new Promise((r) => setTimeout(r, 800 * Math.pow(2, attempt)));
+    }
   }
+  throw lastError;
 }
 
 /**
@@ -28,7 +43,7 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
  */
 export async function checkNeonStatus(): Promise<NeonStatus> {
   try {
-    const res = await fetchWithTimeout('/api/status', {}, 3500);
+    const res = await fetchWithRetry('/api/status', {}, 3500, 1);
     if (!res.ok) {
       return { connected: false, message: `HTTP ${res.status}` };
     }
@@ -45,7 +60,7 @@ export async function checkNeonStatus(): Promise<NeonStatus> {
  */
 export async function loadMasterFromNeon(): Promise<{ rows: MasterRow[]; fileName: string } | null> {
   try {
-    const res = await fetchWithTimeout('/api/master', {}, 5000);
+    const res = await fetchWithRetry('/api/master', {}, 5000, 2);
     if (!res.ok) return null;
     const json = await res.json();
     if (json.ok && json.data && Array.isArray(json.data.rows) && json.data.rows.length > 0) {
@@ -66,17 +81,22 @@ export async function loadMasterFromNeon(): Promise<{ rows: MasterRow[]; fileNam
  */
 export async function saveMasterToNeon(rows: MasterRow[], fileName: string): Promise<boolean> {
   try {
-    const res = await fetch('/api/master', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    const res = await fetchWithRetry(
+      '/api/master',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fileName,
+          rows,
+          updatedAt: new Date().toISOString(),
+        }),
       },
-      body: JSON.stringify({
-        fileName,
-        rows,
-        updatedAt: new Date().toISOString(),
-      }),
-    });
+      6000,
+      2
+    );
     if (!res.ok) return false;
     const json = await res.json();
     return Boolean(json.ok);
@@ -115,7 +135,7 @@ export interface SavedTargetPayload {
  */
 export async function loadTargetFromNeon(): Promise<SavedTargetPayload | null> {
   try {
-    const res = await fetchWithTimeout('/api/target', {}, 5000);
+    const res = await fetchWithRetry('/api/target', {}, 5000, 2);
     if (!res.ok) return null;
     const json = await res.json();
     if (json.ok && json.data && Array.isArray(json.data.rows) && json.data.rows.length > 0) {
@@ -171,17 +191,22 @@ export function sanitizeTargetRowsForStorage(rows: TargetRow[]): TargetRow[] {
  */
 export async function saveTargetToNeon(payload: SavedTargetPayload): Promise<boolean> {
   try {
-    const res = await fetch('/api/target', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    const res = await fetchWithRetry(
+      '/api/target',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...payload,
+          rows: sanitizeTargetRowsForStorage(payload.rows),
+          updatedAt: new Date().toISOString(),
+        }),
       },
-      body: JSON.stringify({
-        ...payload,
-        rows: sanitizeTargetRowsForStorage(payload.rows),
-        updatedAt: new Date().toISOString(),
-      }),
-    });
+      6500,
+      2
+    );
     if (!res.ok) return false;
     const json = await res.json();
     return Boolean(json.ok);

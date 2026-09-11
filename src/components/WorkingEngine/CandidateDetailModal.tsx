@@ -9,9 +9,11 @@ import {
   Check,
   AlertTriangle,
   Info,
+  ExternalLink,
 } from 'lucide-react';
 import type { TargetRow, MasterRow } from '../../types';
 import type { CandidateOption } from '../../utils/recommender';
+import { calculateRealDistance, buildGoogleMapsDirectionsUrl } from '../../utils/geoDistance';
 
 interface CandidateDetailModalProps {
   isOpen: boolean;
@@ -241,6 +243,95 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
               <FileText size={15} />
               <span>Alasan Penilaian & Indikator Wilayah</span>
             </div>
+
+            {/* Box Bukti Jarak Nyata & Verifikasi Google Maps Langsung */}
+            {(() => {
+              const realDist =
+                cand.distanceKm !== undefined
+                  ? {
+                      distanceKm: cand.distanceKm,
+                      formattedDistance: cand.formattedDistance || `~${cand.distanceKm} km`,
+                      basis: cand.distanceBasis || 'Jarak Wilayah',
+                      googleMapsUrl: cand.googleMapsUrl || buildGoogleMapsDirectionsUrl(r, m),
+                    }
+                  : calculateRealDistance(r, m);
+
+              return (
+                <div
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(53, 119, 241, 0.06), rgba(10, 179, 156, 0.08))',
+                    border: '1px solid rgba(53, 119, 241, 0.25)',
+                    borderRadius: '6px',
+                    padding: '0.8rem 1rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '0.75rem',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                    <div
+                      style={{
+                        width: '38px',
+                        height: '38px',
+                        borderRadius: '50%',
+                        background: 'rgba(53, 119, 241, 0.12)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#3577f1',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <MapPin size={20} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                        <span>Estimasi Jarak Fisik Real:</span>
+                        <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '0.05rem 0.35rem', borderRadius: '3px', fontSize: '0.66rem' }}>
+                          Terverifikasi Geografis
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#1e293b' }}>
+                        {realDist.formattedDistance}{' '}
+                        <span style={{ fontSize: '0.73rem', fontWeight: 500, color: '#64748b' }}>
+                          • {realDist.basis}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tombol Google Maps Resmi */}
+                  <a
+                    href={realDist.googleMapsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.45rem',
+                      padding: '0.45rem 0.95rem',
+                      borderRadius: '5px',
+                      background: '#3577f1',
+                      color: '#ffffff',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      textDecoration: 'none',
+                      boxShadow: '0 2px 5px rgba(53, 119, 241, 0.3)',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      flexShrink: 0,
+                    }}
+                    title="Buka rute Google Maps resmi antara Target dan Cabang Master di tab baru"
+                  >
+                    <MapPin size={14} />
+                    <span>Cek Rute di Google Maps</span>
+                    <ExternalLink size={12} />
+                  </a>
+                </div>
+              );
+            })()}
 
             {/* Kotak Narasi Penjelasan */}
             <div

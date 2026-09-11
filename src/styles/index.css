@@ -1107,3 +1107,9 @@ body {
   border-color: rgba(10, 179, 156, 0.3);
   color: #07796a;
 }
+
+/* Table Performance Optimization (GPU & Content Visibility for Large Datasets) */
+.modern-table tbody tr {
+  content-visibility: auto;
+  contain-intrinsic-size: 42px;
+}
