@@ -28,7 +28,7 @@ import {
 } from '../../utils/recommender';
 import { ProximityGuideModal } from './ProximityGuideModal';
 import { CandidateDetailModal } from './CandidateDetailModal';
-import { formatWilayahName, extractWilayahFromBranchCode } from '../../utils/normalizer';
+import { formatWilayahName, extractWilayahFromBranchCode, cleanKelurahan, cleanKecamatan } from '../../utils/normalizer';
 
 export interface ColumnOption {
   key: string;
@@ -1715,6 +1715,72 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                     </span>
                                   </div>
 
+                                  {/* Info Kelurahan, Kecamatan & Kota Master + Indikator Kesesuaian */}
+                                  {(() => {
+                                    const isKelMatched = !!(r.Kelurahan && m.Kelurahan && cleanKelurahan(r.Kelurahan) === cleanKelurahan(m.Kelurahan));
+                                    const isKecMatched = !!(r.Kecamatan && m.Kecamatan && cleanKecamatan(r.Kecamatan) === cleanKecamatan(m.Kecamatan));
+
+                                    return (
+                                      <div
+                                        style={{
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '0.3rem',
+                                          fontSize: '0.69rem',
+                                          color: '#495057',
+                                          background: '#f8fafc',
+                                          padding: '0.18rem 0.45rem',
+                                          borderRadius: '4px',
+                                          border: '1px solid #e2e8f0',
+                                          margin: '0.1rem 0 0.15rem',
+                                          flexWrap: 'wrap',
+                                        }}
+                                      >
+                                        <span>
+                                          Kel: <strong style={{ color: isKelMatched ? '#059669' : '#1e293b' }}>{m.Kelurahan || '-'}</strong>
+                                        </span>
+                                        {isKelMatched && (
+                                          <span
+                                            style={{
+                                              fontSize: '0.6rem',
+                                              padding: '0.02rem 0.25rem',
+                                              borderRadius: '3px',
+                                              background: 'rgba(10, 179, 156, 0.12)',
+                                              color: '#059669',
+                                              fontWeight: 700,
+                                            }}
+                                            title="Kelurahan target dan master sama persis"
+                                          >
+                                            ✓ Kelurahan Sama
+                                          </span>
+                                        )}
+                                        <span style={{ color: '#cbd5e1' }}>•</span>
+                                        <span>
+                                          Kec: <strong style={{ color: isKecMatched ? '#2563eb' : '#1e293b' }}>{m.Kecamatan || '-'}</strong>
+                                        </span>
+                                        {isKecMatched && (
+                                          <span
+                                            style={{
+                                              fontSize: '0.6rem',
+                                              padding: '0.02rem 0.25rem',
+                                              borderRadius: '3px',
+                                              background: 'rgba(37, 99, 235, 0.1)',
+                                              color: '#2563eb',
+                                              fontWeight: 700,
+                                            }}
+                                            title="Kecamatan target dan master sama persis"
+                                          >
+                                            ✓ Kecamatan Sama
+                                          </span>
+                                        )}
+                                        <span style={{ color: '#cbd5e1' }}>•</span>
+                                        <span>
+                                          Kota/Kab: <strong style={{ color: '#1e293b' }}>{m['Dati II'] || '-'}</strong>
+                                        </span>
+                                      </div>
+                                    );
+                                  })()}
+
                                   {/* Alamat Lengkap Master Asli (Clean & Ringkas) */}
                                   <div
                                     style={{
@@ -1724,7 +1790,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                       padding: '0.18rem 0.45rem',
                                       borderRadius: '4px',
                                       border: '1px solid #edf0f2',
-                                      marginTop: '0.12rem',
+                                      marginTop: '0.05rem',
                                       whiteSpace: 'normal',
                                       wordBreak: 'break-word',
                                       lineHeight: 1.35,

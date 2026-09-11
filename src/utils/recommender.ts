@@ -293,16 +293,19 @@ function evaluateMasterCandidate(
       distance -= 10;
     }
 
-    if (kecMatch) {
+    // Pengecekan Kelurahan & Kecamatan secara mandiri dan sinergis:
+    if (kelMatch && kecMatch) {
+      score += 20; // Bonus maksimal satu kelurahan dan kecamatan
+      distance -= 600;
+      reason = `Satu Kelurahan (${m.Kelurahan || target.Kelurahan}) & Kecamatan • ${m['Dati II']}`;
+    } else if (kelMatch) {
+      score += 18;
+      distance -= 550;
+      reason = `Satu Kelurahan (${m.Kelurahan || target.Kelurahan}) • ${m['Dati II']}`;
+    } else if (kecMatch) {
       score += 12;
       distance -= 400;
-      if (kelMatch) {
-        score += 8;
-        distance -= 600;
-        reason = `Satu Kelurahan (${m.Kelurahan}) • ${m['Dati II']}`;
-      } else {
-        reason = `Satu Kecamatan (${m.Kecamatan}) • ${m['Dati II']}`;
-      }
+      reason = `Satu Kecamatan (${m.Kecamatan || target.Kecamatan}) • ${m['Dati II']}`;
     } else {
       if (postal3Match) {
         reason = `Satu Zona Pos (${m['KODE POS']}) • ${m['Dati II']}`;
@@ -310,6 +313,16 @@ function evaluateMasterCandidate(
         reason = `Kota/Kabupaten Sama (${m['Dati II']}) • Radius Terdekat`;
       }
     }
+  } else if (kelMatch) {
+    // Satu Kelurahan / Desa walau nama Dati II sedikit berbeda format
+    score = 82;
+    distance = postalDiff * 2 - 350;
+    reason = `Satu Kelurahan (${m.Kelurahan || target.Kelurahan}) • ${m['Dati II'] || m.Provinsi}`;
+  } else if (kecMatch) {
+    // Satu Kecamatan walau nama Dati II sedikit berbeda format
+    score = 70;
+    distance = postalDiff * 2 + 1000;
+    reason = `Satu Kecamatan (${m.Kecamatan || target.Kecamatan}) • ${m['Dati II'] || m.Provinsi}`;
   } else if (provMatch) {
     score = 58;
     distance = postalDiff * 2 + 5000;
@@ -317,12 +330,7 @@ function evaluateMasterCandidate(
       score += 4;
       distance -= 100;
     }
-    if (kecMatch) {
-      score += 10;
-      reason = `Satu Kecamatan (${m.Kecamatan}) • Beda Kota (${m['Dati II']})`;
-    } else {
-      reason = `Satu Provinsi (${m.Provinsi || target.Provinsi}) • Alternatif Terdekat`;
-    }
+    reason = `Satu Provinsi (${m.Provinsi || target.Provinsi}) • Alternatif Terdekat`;
   } else {
     // Berbeda Provinsi - dikenakan penalti berat untuk proteksi batas wilayah
     score = 40;
@@ -399,7 +407,15 @@ export function findClosestMasterRecommendation(
     }
   }
 
-  // Normalisasi Dati II & Provinsi untuk query indeks
+  // Normalisasi Kelurahan, Kecamatan, Dati II & Provinsi untuk query indeks
+  const targetKel = cleanKelurahan(target.Kelurahan);
+  const targetKelCore = stripAdminNoise(target.Kelurahan);
+  const targetKelRaw = cleanText(target.Kelurahan);
+
+  const targetKec = cleanKecamatan(target.Kecamatan);
+  const targetKecCore = stripAdminNoise(target.Kecamatan);
+  const targetKecRaw = cleanText(target.Kecamatan);
+
   const targetDati = cleanDati(target['Dati II']);
   const targetDatiCore = stripAdminNoise(target['Dati II']);
   const targetDatiRaw = cleanText(target['Dati II']);
@@ -408,6 +424,22 @@ export function findClosestMasterRecommendation(
 
   // Kumpulkan kandidat real dari master
   const rawPool: MasterRow[] = [];
+
+  // Prioritas 0: Cabang di KELURAHAN yang SAMA PERSIS (Jarak paling dekat < 1 km)
+  [targetKelCore, targetKel, targetKelRaw].filter(Boolean).forEach((kel) => {
+    if (index.byKelurahan.has(kel)) {
+      const list = index.byKelurahan.get(kel) || [];
+      rawPool.push(...list);
+    }
+  });
+
+  // Prioritas 0.5: Cabang di KECAMATAN yang SAMA PERSIS (Jarak 1 - 4 km)
+  [targetKecCore, targetKec, targetKecRaw].filter(Boolean).forEach((kec) => {
+    if (index.byKecamatan.has(kec)) {
+      const list = index.byKecamatan.get(kec) || [];
+      rawPool.push(...list);
+    }
+  });
 
   // Prioritas 1: Cabang di Dati II / Kota yang sama (mencakup "bondowoso", "kabupaten bondowoso", dan nama murni)
   if (targetDati && index.byDati.has(targetDati)) {

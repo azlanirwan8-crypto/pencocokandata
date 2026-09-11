@@ -85,6 +85,12 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
   } else if (kelMatch && kecMatch && datiMatch) {
     explanationTitle = 'Kecocokan Sangat Tinggi (Satu Kelurahan & Kecamatan)';
     explanationDescription = `Cabang master ini berada di kelurahan (${m.Kelurahan || r.Kelurahan}) dan kecamatan (${m.Kecamatan || r.Kecamatan}) yang sama persis dengan data target. Ini adalah titik pelayanan terdekat paling ideal.`;
+  } else if (kelMatch && (datiMatch || kecMatch)) {
+    explanationTitle = 'Kecocokan Sangat Tinggi (Satu Kelurahan)';
+    explanationDescription = `Cabang master ini berada di kelurahan (${m.Kelurahan || r.Kelurahan}) yang sama persis dengan data target, ${m['Dati II'] || r['Dati II']}. Ini adalah titik pelayanan terdekat paling ideal.`;
+  } else if (kelMatch) {
+    explanationTitle = 'Kecocokan Sangat Tinggi (Satu Kelurahan)';
+    explanationDescription = `Cabang master ini berada di kelurahan (${m.Kelurahan || r.Kelurahan}) yang sama persis dengan data target.`;
   } else if (kecMatch && datiMatch) {
     explanationTitle = 'Kecocokan Tinggi (Satu Kecamatan)';
     explanationDescription = `Cabang master ini berada di kecamatan yang sama (${m.Kecamatan || r.Kecamatan}), Kota/Kab. ${m['Dati II'] || r['Dati II']}. Karena belum ada cabang di kelurahan yang persis sama, sistem memilih cabang terdekat di tingkat kecamatan.`;
