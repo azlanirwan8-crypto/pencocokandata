@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx-js-style';
 import type { TargetRow, WilayahSetting } from '../types';
 import { SAMPLE_MASTER_ROWS, SAMPLE_TARGET_ROWS } from './sampleData';
 import { formatWilayahName } from './normalizer';
@@ -36,6 +36,11 @@ export const TARGET_COLUMNS_WITH_SANDI_CABANG: string[] = [
   'Dati II',
   'Kode Dati II',
   'Provinsi',
+  'KOTA PTEN',
+  'KODE POS PTEN',
+  'CEK KODE POS + PTEN',
+  'SUMBER DATA',
+  'CEK DUPLIKAT KODE POS',
 ];
 
 export const MASTER_COLUMNS_SEPARATE: string[] = [
@@ -72,6 +77,11 @@ export const TARGET_COLUMNS_SEPARATE: string[] = [
   'Dati II',
   'Kode Dati II',
   'Provinsi',
+  'KOTA PTEN',
+  'KODE POS PTEN',
+  'CEK KODE POS + PTEN',
+  'SUMBER DATA',
+  'CEK DUPLIKAT KODE POS',
 ];
 
 /**
@@ -311,7 +321,127 @@ export function formatWilayahCode(rawWilayah: string | number): string {
 }
 
 /**
- * Helper untuk membuat worksheet Excel dari baris TargetRow
+ * Gaya Header Excel Sesuai Warna Asli File Unggahan:
+ * - Biru (#366092): Kolom Master Cabang (No, Wilayah, Sandi Cabang, Branch Code, Kode Cabang, Nama Outlet, Status Outlet)
+ * - Oranye (#E97132): Kolom Dati II / Kota
+ * - Hijau (#47D359): Kolom Alamat & Lokasi Target (ALAMAT, KODE POS, Kelurahan, Kecamatan, Kode Dati II, Provinsi, Telp)
+ * - Kuning (#FFFF00): Kolom PTEN & Validasi (KOTA PTEN, KODE POS PTEN, CEK KODE POS + PTEN, SUMBER DATA, CEK DUPLIKAT KODE POS)
+ */
+export function getHeaderStyle(col: string) {
+  const norm = col.trim().toUpperCase();
+
+  // 1. Biru Navy (#366092) untuk Identitas Cabang / Master
+  if ([
+    'NO',
+    'WILAYAH',
+    'SANDI CABANG',
+    'SANDI',
+    'CABANG',
+    'BRANCH CODE',
+    'KODE CABANG',
+    'NAMA OUTLET',
+    'STATUS OUTLET',
+  ].includes(norm)) {
+    return {
+      fill: { fgColor: { rgb: '366092' } },
+      font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: 'FFFFFF' } },
+      alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+      border: {
+        top: { style: 'thin', color: { rgb: 'B0C4DE' } },
+        bottom: { style: 'medium', color: { rgb: '1C3B61' } },
+        left: { style: 'thin', color: { rgb: 'B0C4DE' } },
+        right: { style: 'thin', color: { rgb: 'B0C4DE' } },
+      },
+    };
+  }
+
+  // 2. Oranye (#E97132) khusus Dati II / Kota
+  if (norm === 'DATI II' || norm === 'KOTA') {
+    return {
+      fill: { fgColor: { rgb: 'E97132' } },
+      font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: 'FFFFFF' } },
+      alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+      border: {
+        top: { style: 'thin', color: { rgb: 'F4A460' } },
+        bottom: { style: 'medium', color: { rgb: 'A04000' } },
+        left: { style: 'thin', color: { rgb: 'F4A460' } },
+        right: { style: 'thin', color: { rgb: 'F4A460' } },
+      },
+    };
+  }
+
+  // 3. Hijau Cerah (#47D359) untuk Wilayah Administratif & Alamat Target
+  if ([
+    'ALAMAT',
+    'KODE POS',
+    'KELURAHAN',
+    'KECAMATAN',
+    'KODE DATI II',
+    'PROVINSI',
+    'TELP',
+  ].includes(norm)) {
+    return {
+      fill: { fgColor: { rgb: '47D359' } },
+      font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: 'FFFFFF' } },
+      alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+      border: {
+        top: { style: 'thin', color: { rgb: '98FB98' } },
+        bottom: { style: 'medium', color: { rgb: '2E8B57' } },
+        left: { style: 'thin', color: { rgb: '98FB98' } },
+        right: { style: 'thin', color: { rgb: '98FB98' } },
+      },
+    };
+  }
+
+  // 4. Kuning (#FFFF00) untuk Kolom PTEN & Verifikasi Integritas
+  return {
+    fill: { fgColor: { rgb: 'FFFF00' } },
+    font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: '000000' } },
+    alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+    border: {
+      top: { style: 'thin', color: { rgb: 'FFE4B5' } },
+      bottom: { style: 'medium', color: { rgb: 'B8860B' } },
+      left: { style: 'thin', color: { rgb: 'FFE4B5' } },
+      right: { style: 'thin', color: { rgb: 'FFE4B5' } },
+    },
+  };
+}
+
+/**
+ * Gaya Baris Data Excel Rapi dan Bersih
+ */
+export function getDataCellStyle(col: string) {
+  const norm = col.trim().toUpperCase();
+  const isCentered = [
+    'NO',
+    'WILAYAH',
+    'KODE CABANG',
+    'STATUS OUTLET',
+    'KODE POS',
+    'KODE DATI II',
+    'KODE POS PTEN',
+    'CEK KODE POS + PTEN',
+    'SUMBER DATA',
+    'CEK DUPLIKAT KODE POS',
+  ].includes(norm);
+
+  return {
+    font: { name: 'Calibri', sz: 10, color: { rgb: '212529' } },
+    alignment: {
+      horizontal: isCentered ? 'center' : 'left',
+      vertical: 'center',
+    },
+    border: {
+      top: { style: 'thin', color: { rgb: 'E9EBEC' } },
+      bottom: { style: 'thin', color: { rgb: 'E9EBEC' } },
+      left: { style: 'thin', color: { rgb: 'E9EBEC' } },
+      right: { style: 'thin', color: { rgb: 'E9EBEC' } },
+    },
+  };
+}
+
+/**
+ * Helper untuk membuat worksheet Excel dari baris TargetRow dengan pewarnaan asli
  */
 function createTargetWorksheet(rows: TargetRow[], exportColumns: string[]): XLSX.WorkSheet {
   const exportData = rows.map((r, idx) => {
@@ -328,13 +458,40 @@ function createTargetWorksheet(rows: TargetRow[], exportColumns: string[]): XLSX
 
   const worksheet = XLSX.utils.json_to_sheet(exportData, { header: exportColumns });
 
-  // Set friendly column widths
+  // Terapkan Styling Header Asli Sesuai Warna Unggahan
+  exportColumns.forEach((col, cIdx) => {
+    const headerRef = XLSX.utils.encode_cell({ r: 0, c: cIdx });
+    if (worksheet[headerRef]) {
+      worksheet[headerRef].s = getHeaderStyle(col);
+    }
+  });
+
+  // Terapkan Styling Baris Data (Border & Alignment Rapi)
+  const totalRows = rows.length;
+  for (let rIdx = 1; rIdx <= totalRows; rIdx++) {
+    exportColumns.forEach((col, cIdx) => {
+      const cellRef = XLSX.utils.encode_cell({ r: rIdx, c: cIdx });
+      if (worksheet[cellRef]) {
+        worksheet[cellRef].s = getDataCellStyle(col);
+      }
+    });
+  }
+
+  // Atur Tinggi Header agar Lega & Elegan
+  worksheet['!rows'] = [{ hpt: 26 }];
+
+  // Atur Lebar Kolom yang Ideal
   const colWidths = exportColumns.map((col) => {
-    if (col === 'No') return { wch: 6 };
-    if (col === 'ALAMAT') return { wch: 40 };
-    if (col === 'Cabang' || col === 'Nama Outlet' || col === 'Sandi Cabang') return { wch: 28 };
-    if (col === 'KODE POS') return { wch: 18 };
-    return { wch: 18 };
+    const norm = col.trim().toUpperCase();
+    if (norm === 'NO') return { wch: 8 };
+    if (norm === 'WILAYAH') return { wch: 14 };
+    if (norm === 'ALAMAT') return { wch: 45 };
+    if (norm === 'CABANG' || norm === 'NAMA OUTLET' || norm === 'SANDI CABANG') return { wch: 28 };
+    if (norm === 'KODE POS' || norm === 'KODE POS PTEN') return { wch: 15 };
+    if (norm === 'CEK KODE POS + PTEN') return { wch: 22 };
+    if (norm === 'SUMBER DATA') return { wch: 18 };
+    if (norm === 'CEK DUPLIKAT KODE POS') return { wch: 24 };
+    return { wch: Math.max(col.length + 3, 16) };
   });
   worksheet['!cols'] = colWidths;
 
@@ -432,6 +589,26 @@ export function downloadMasterTemplate(withSample = false) {
   const data = withSample ? SAMPLE_MASTER_ROWS : [];
   const worksheet = XLSX.utils.json_to_sheet(data, { header: MASTER_COLUMNS_WITH_SANDI_CABANG });
   
+  // Terapkan Gaya Header Asli
+  MASTER_COLUMNS_WITH_SANDI_CABANG.forEach((col, cIdx) => {
+    const headerRef = XLSX.utils.encode_cell({ r: 0, c: cIdx });
+    if (worksheet[headerRef]) {
+      worksheet[headerRef].s = getHeaderStyle(col);
+    }
+  });
+
+  if (withSample) {
+    for (let rIdx = 1; rIdx <= data.length; rIdx++) {
+      MASTER_COLUMNS_WITH_SANDI_CABANG.forEach((col, cIdx) => {
+        const cellRef = XLSX.utils.encode_cell({ r: rIdx, c: cIdx });
+        if (worksheet[cellRef]) {
+          worksheet[cellRef].s = getDataCellStyle(col);
+        }
+      });
+    }
+  }
+
+  worksheet['!rows'] = [{ hpt: 26 }];
   worksheet['!cols'] = MASTER_COLUMNS_WITH_SANDI_CABANG.map(col => ({ wch: Math.max(col.length + 3, 16) }));
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Master_Cabang');
@@ -447,6 +624,26 @@ export function downloadTargetTemplate(withSample = false) {
   const data = withSample ? SAMPLE_TARGET_ROWS : [];
   const worksheet = XLSX.utils.json_to_sheet(data, { header: TARGET_COLUMNS_WITH_SANDI_CABANG });
 
+  // Terapkan Gaya Header Asli
+  TARGET_COLUMNS_WITH_SANDI_CABANG.forEach((col, cIdx) => {
+    const headerRef = XLSX.utils.encode_cell({ r: 0, c: cIdx });
+    if (worksheet[headerRef]) {
+      worksheet[headerRef].s = getHeaderStyle(col);
+    }
+  });
+
+  if (withSample) {
+    for (let rIdx = 1; rIdx <= data.length; rIdx++) {
+      TARGET_COLUMNS_WITH_SANDI_CABANG.forEach((col, cIdx) => {
+        const cellRef = XLSX.utils.encode_cell({ r: rIdx, c: cIdx });
+        if (worksheet[cellRef]) {
+          worksheet[cellRef].s = getDataCellStyle(col);
+        }
+      });
+    }
+  }
+
+  worksheet['!rows'] = [{ hpt: 26 }];
   worksheet['!cols'] = TARGET_COLUMNS_WITH_SANDI_CABANG.map(col => ({ wch: Math.max(col.length + 3, 16) }));
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Data_Target_Dicocokan');

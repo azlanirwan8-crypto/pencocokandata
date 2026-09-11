@@ -154,6 +154,29 @@ export function matchSingleRow(
     result._matchLevel = 'none';
   }
 
+  // 4. Evaluasi Otomatis Integritas PTEN (KODE POS vs KODE POS PTEN)
+  const targetKpClean = normalizeKodePos(result['KODE POS']);
+  const ptenKpClean = normalizeKodePos(result['KODE POS PTEN']);
+  if (targetKpClean && ptenKpClean) {
+    if (targetKpClean === ptenKpClean) {
+      result['CEK KODE POS + PTEN'] = 'COCOK';
+    } else {
+      result['CEK KODE POS + PTEN'] = 'TIDAK COCOK';
+    }
+  } else if (!result['CEK KODE POS + PTEN']) {
+    result['CEK KODE POS + PTEN'] = '-';
+  }
+
+  // 5. Evaluasi Status Keberadaan di BNI (SUDAH ADA DI BNI vs BELUM ADA DI BNI)
+  if (!result['CEK DUPLIKAT KODE POS']) {
+    result['CEK DUPLIKAT KODE POS'] = result._isMatched ? 'SUDAH ADA DI BNI' : 'BELUM ADA DI BNI';
+  }
+
+  // 6. Evaluasi Sumber Data
+  if (!result['SUMBER DATA']) {
+    result['SUMBER DATA'] = result._isMatched ? 'BNI' : 'PTEN-TAMBAHAN';
+  }
+
   return result;
 }
 
