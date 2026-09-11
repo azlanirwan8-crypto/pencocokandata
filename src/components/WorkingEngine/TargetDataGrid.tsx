@@ -120,7 +120,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   }, [checkerTab, searchTerm, selectedWilayah]);
 
   // Helper to determine if a row is clean / matched
-  const isRowMatched = (r: TargetRow) => Boolean(r._isMatched) || Boolean(r.Sandi) || Boolean(r['Sandi Cabang']);
+  const isRowMatched = (r: TargetRow) => Boolean(r._isMatched);
 
   // Tab 3: Data Match (Data Bersih yang sudah cocok) - SELALU TERSEDIA jika ada data matched, tidak hilang saat upload baru
   const matchedRows = useMemo(() => {
@@ -137,6 +137,23 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     return rows.filter((r) => !isRowMatched(r) && r._matchLevel !== 'none');
   }, [rows]);
 
+  // Scope Rekomendasi di Tab 2: 'unmatched' atau 'all' (Audit Seluruh Data)
+  const [recommendationScope, setRecommendationScope] = useState<'unmatched' | 'all'>('unmatched');
+
+  // Menentukan baris target yang dievaluasi rekomendasinya di Tab 2
+  const targetRecommendationRows = useMemo(() => {
+    if (recommendationScope === 'all') {
+      return rows;
+    }
+    if (unmatchedRows.length > 0) {
+      return unmatchedRows;
+    }
+    if (pendingUploadRows.length > 0) {
+      return pendingUploadRows;
+    }
+    return rows;
+  }, [recommendationScope, unmatchedRows, pendingUploadRows, rows]);
+
   // Build Master Proximity Index once (O(1) bucket index)
   const masterProximityIndex = useMemo(() => {
     return buildMasterProximityIndex(masterRows);
@@ -152,25 +169,25 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   } | null>(null);
   const [activeCandidateByRow, setActiveCandidateByRow] = useState<Record<string | number, number>>({});
 
-  // Trigger recommendation calculation ONLY when Tab 2 is active and there are unmatched rows
+  // Trigger recommendation calculation ONLY when Tab 2 is active and there are rows to analyze
   useEffect(() => {
     if (checkerTab !== 'recommendation') {
       setRecommendations([]);
       return;
     }
-    if (unmatchedRows.length === 0 || masterRows.length === 0) {
+    if (targetRecommendationRows.length === 0 || masterRows.length === 0) {
       setRecommendations([]);
       return;
     }
 
     setIsComputingRecs(true);
     const cancelProgressive = generateRecommendationsProgressive(
-      unmatchedRows,
+      targetRecommendationRows,
       masterRows,
       masterProximityIndex,
       (recs) => {
         setRecommendations(recs);
-        if (recs.length >= unmatchedRows.length) {
+        if (recs.length >= targetRecommendationRows.length) {
           setIsComputingRecs(false);
         }
       },
@@ -181,7 +198,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     return () => {
       cancelProgressive();
     };
-  }, [checkerTab, unmatchedRows, masterRows, masterProximityIndex]);
+  }, [checkerTab, targetRecommendationRows, masterRows, masterProximityIndex]);
 
   // Determine current dataset based on active tab
   const currentTabRows = useMemo(() => {
@@ -441,15 +458,17 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               borderRadius: '9999px',
               fontSize: '0.67rem',
               fontWeight: 600,
-              background: (recommendations.length > 0 || unmatchedRows.length > 0) ? 'rgba(247, 184, 75, 0.15)' : '#f3f3f9',
-              color: (recommendations.length > 0 || unmatchedRows.length > 0) ? '#d97706' : '#878a99',
-              border: (recommendations.length > 0 || unmatchedRows.length > 0) ? '1px solid rgba(247, 184, 75, 0.3)' : '1px solid #e9ebec',
+              background: (recommendations.length > 0 || unmatchedRows.length > 0 || targetRecommendationRows.length > 0) ? 'rgba(247, 184, 75, 0.15)' : '#f3f3f9',
+              color: (recommendations.length > 0 || unmatchedRows.length > 0 || targetRecommendationRows.length > 0) ? '#d97706' : '#878a99',
+              border: (recommendations.length > 0 || unmatchedRows.length > 0 || targetRecommendationRows.length > 0) ? '1px solid rgba(247, 184, 75, 0.3)' : '1px solid #e9ebec',
             }}
           >
             {recommendations.length > 0
               ? `${recommendations.length.toLocaleString('id-ID')} Rekomendasi`
               : unmatchedRows.length > 0
               ? `${unmatchedRows.length.toLocaleString('id-ID')} Belum Cocok`
+              : targetRecommendationRows.length > 0
+              ? `${targetRecommendationRows.length.toLocaleString('id-ID')} Siap Dianalisa`
               : '0 Rekomendasi'}
           </span>
         </button>
@@ -499,7 +518,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
       {/* Filter & Search Toolbar (Integrated inside Card) */}
       {!(
         (checkerTab === 'upload' && pendingUploadRows.length === 0) ||
-        (checkerTab === 'recommendation' && unmatchedRows.length === 0 && recommendations.length === 0) ||
+        (checkerTab === 'recommendation' && targetRecommendationRows.length === 0 && recommendations.length === 0) ||
         (checkerTab === 'matched' && matchedRows.length === 0)
       ) && (
         <div
@@ -517,6 +536,46 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           }}
         >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {/* Toggle Scope Rekomendasi di Tab 2: Belum Cocok vs Audit Semua Data Target */}
+          {checkerTab === 'recommendation' && rows.length > 0 && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', background: '#e9ecef', borderRadius: '5px', padding: '2px', gap: '2px' }}>
+              <button
+                type="button"
+                onClick={() => { setRecommendationScope('unmatched'); setPage(1); }}
+                style={{
+                  border: 'none',
+                  background: recommendationScope === 'unmatched' ? '#ffffff' : 'transparent',
+                  color: recommendationScope === 'unmatched' ? '#212529' : '#6c757d',
+                  fontWeight: recommendationScope === 'unmatched' ? 700 : 500,
+                  fontSize: '0.72rem',
+                  padding: '0.2rem 0.6rem',
+                  borderRadius: '4px',
+                  boxShadow: recommendationScope === 'unmatched' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                Belum Cocok {unmatchedRows.length > 0 ? `(${unmatchedRows.length})` : ''}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setRecommendationScope('all'); setPage(1); }}
+                style={{
+                  border: 'none',
+                  background: recommendationScope === 'all' ? '#d97706' : 'transparent',
+                  color: recommendationScope === 'all' ? '#ffffff' : '#6c757d',
+                  fontWeight: recommendationScope === 'all' ? 700 : 500,
+                  fontSize: '0.72rem',
+                  padding: '0.2rem 0.6rem',
+                  borderRadius: '4px',
+                  boxShadow: recommendationScope === 'all' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                  cursor: 'pointer',
+                }}
+                title="Tampilkan rekomendasi untuk SELURUH baris data target (audit ulang data yang sudah Anda kerjakan di Excel)"
+              >
+                Audit Seluruh Data Excel ({rows.length})
+              </button>
+            </div>
+          )}
           {/* Action button in Tab 1: PENCOCOKAN */}
           {checkerTab === 'upload' && pendingUploadRows.length > 0 && (
             <button
@@ -805,7 +864,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
 
       {/* TAB 2: REKOMENDASI DATA (SMART PROXIMITY SUGGESTIONS) */}
       {checkerTab === 'recommendation' ? (
-        (unmatchedRows.length === 0 && recommendations.length === 0) ? (
+        (targetRecommendationRows.length === 0 && recommendations.length === 0) ? (
           <div
             style={{
               textAlign: 'center',

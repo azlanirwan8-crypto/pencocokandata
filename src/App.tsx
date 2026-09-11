@@ -276,7 +276,7 @@ export const App: React.FC = () => {
     let ptenUncheckedCount = 0;
 
     dashboardFilteredRows.forEach((r) => {
-      const isMatched = r._isMatched ?? (Boolean(r.Sandi) || Boolean(r['Sandi Cabang']) || Boolean(r.Cabang));
+      const isMatched = Boolean(r._isMatched);
       if (isMatched) {
         matchedCount++;
         if (r._matchLevel === 'recommendation') {

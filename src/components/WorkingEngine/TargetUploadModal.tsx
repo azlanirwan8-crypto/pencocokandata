@@ -77,6 +77,8 @@ export const TargetUploadModal: React.FC<TargetUploadModalProps> = ({
         return {
           ...r,
           No: r.No !== undefined && r.No !== '' ? r.No : currentTargetCount + idx + 1,
+          _isMatched: false,
+          _matchLevel: undefined,
           _originalFilledSandi: s,
           _originalFilledCabang: c,
           _originalFilledSandiCabang: sc,
