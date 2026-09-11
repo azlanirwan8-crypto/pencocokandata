@@ -232,14 +232,31 @@ export const App: React.FC = () => {
     setLastSyncedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
   };
 
-  // Compute Wilayah List from Target Data
+  // Compute Wilayah List from Target Data, Master Data, and Wilayah Settings
   const wilayahList = useMemo(() => {
     const set = new Set<string>();
-    targetRows.forEach((r) => {
-      if (r.Wilayah) set.add(String(r.Wilayah).trim());
+    // 1. Dari Wilayah Settings (Setting Wilayah)
+    wilayahSettings.forEach((s) => {
+      if (s.keterangan && s.keterangan.trim()) {
+        set.add(formatWilayahName(s.keterangan.trim()));
+      }
     });
-    return Array.from(set).sort();
-  }, [targetRows]);
+    // 2. Dari Data Target
+    targetRows.forEach((r) => {
+      if (r.Wilayah && String(r.Wilayah).trim()) {
+        set.add(formatWilayahName(String(r.Wilayah).trim()));
+      }
+    });
+    // 3. Dari Data Master
+    masterRows.forEach((m) => {
+      if (m.Wilayah && String(m.Wilayah).trim()) {
+        set.add(formatWilayahName(String(m.Wilayah).trim()));
+      }
+    });
+    return Array.from(set)
+      .filter((w) => w && w !== 'Tanpa Wilayah')
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+  }, [targetRows, masterRows, wilayahSettings]);
 
   // Filtered Target Rows (Optimized with early return for millions of records)
   const filteredTargetRows = useMemo(() => {
@@ -1244,7 +1261,7 @@ export const App: React.FC = () => {
                 )}
 
                 <TargetDataGrid
-                  rows={filteredTargetRows}
+                  rows={targetRows}
                   totalInputRows={initialTargetCount}
                   masterRows={masterRows}
                   wilayahList={wilayahList}

@@ -181,73 +181,213 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   } | null>(null);
   const [activeCandidateByRow, setActiveCandidateByRow] = useState<Record<string | number, number>>({});
 
-  // Fingerprint cache to prevent redundant calculation when switching tabs
+  // Fingerprint cache & background cancel ref to prevent redundant calculation
   const lastAnalyzedFingerprintRef = useRef<string>('');
+  const cancelProgressiveRef = useRef<(() => void) | null>(null);
 
-  // Trigger recommendation calculation ONLY when Tab 2 is active and data hasn't been evaluated
+  // Progressive rendering state for pageSize === 'all' (smooth 60 FPS, no freeze)
+  const [renderedLimit, setRenderedLimit] = useState<number>(60);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // Helper membandingkan kesesuaian wilayah (raw atau normalized "Wilayah 1" vs "1")
+  const isWilayahMatch = (val: unknown, selected: string): boolean => {
+    if (!selected || selected === 'ALL') return true;
+    if (!val) return false;
+    const s = String(val).trim();
+    if (!s) return false;
+    if (s.toLowerCase() === selected.toLowerCase()) return true;
+    const normA = formatWilayahName(s).toLowerCase();
+    const normB = formatWilayahName(selected).toLowerCase();
+    return normA === normB;
+  };
+
+  // Trigger recommendation calculation in BACKGROUND as soon as data is ready!
+  // Sesuai request: Tidak mengganggu UI, berjalan di latar belakang, dan tidak wipe saat pindah tab
   useEffect(() => {
-    if (checkerTab !== 'recommendation') {
-      // PRESERVE RECOMMENDATIONS IN MEMORY! DO NOT WIPE!
-      return;
-    }
     if (targetRecommendationRows.length === 0 || masterRows.length === 0) {
       setRecommendations([]);
       lastAnalyzedFingerprintRef.current = '';
+      setIsComputingRecs(false);
       return;
     }
 
-    // Dataset fingerprint (determines if target rows actually changed or if user just switched tabs)
+    // Dataset fingerprint
     const currentFingerprint = `${targetRecommendationRows.length}-${targetRecommendationRows[0]?.No || ''}-${targetRecommendationRows[targetRecommendationRows.length - 1]?.No || ''}-${masterRows.length}`;
 
-    // If we already have computed recommendations for this dataset, DO NOT recalculate! Instant 0ms display!
+    // Jika data sama persis, pertahankan rekomendasi di memori (0ms instant display)
     if (recommendations.length > 0 && lastAnalyzedFingerprintRef.current === currentFingerprint) {
       return;
+    }
+
+    if (cancelProgressiveRef.current) {
+      cancelProgressiveRef.current();
     }
 
     setIsComputingRecs(true);
     lastAnalyzedFingerprintRef.current = currentFingerprint;
 
-    const cancelProgressive = generateRecommendationsProgressive(
+    const cancel = generateRecommendationsProgressive(
       targetRecommendationRows,
       masterRows,
       masterProximityIndex,
-      (recs) => {
+      (recs, isDone) => {
         setRecommendations(recs);
-        if (recs.length >= targetRecommendationRows.length) {
+        if (isDone || recs.length >= targetRecommendationRows.length) {
           setIsComputingRecs(false);
         }
       },
-      30,
+      35,
       120
     );
 
-    return () => {
-      cancelProgressive();
-    };
-  }, [checkerTab, targetRecommendationRows, masterRows, masterProximityIndex]);
+    cancelProgressiveRef.current = cancel;
 
-  // Determine current dataset based on active tab
+    return () => {
+      // Tetap berjalan di background saat user pindah tab
+    };
+  }, [targetRecommendationRows, masterRows, masterProximityIndex]);
+
+  // Bersihkan worker hanya saat unmount
+  useEffect(() => {
+    return () => {
+      if (cancelProgressiveRef.current) {
+        cancelProgressiveRef.current();
+      }
+    };
+  }, []);
+
+  // Auto load more rows secara halus saat scroll mendekati bawah pada mode 'all'
+  useEffect(() => {
+    if (pageSize !== 'all') return;
+    const totalItems = checkerTab === 'recommendation' ? currentTabRecs.length : currentTabRows.length;
+    if (renderedLimit >= totalItems) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setRenderedLimit((prev) => Math.min(prev + 60, totalItems));
+        }
+      },
+      { rootMargin: '250px' }
+    );
+
+    const el = sentinelRef.current;
+    if (el) observer.observe(el);
+
+    return () => {
+      if (el) observer.unobserve(el);
+      observer.disconnect();
+    };
+  }, [pageSize, renderedLimit, checkerTab]);
+
+  // Reset rendered limit saat tab, filter, atau pencarian berganti
+  useEffect(() => {
+    setRenderedLimit(60);
+  }, [checkerTab, selectedWilayah, searchTerm, pageSize]);
+
+  // Determine current dataset based on active tab with search & wilayah filter
   const currentTabRows = useMemo(() => {
+    let source: TargetRow[] = [];
     if (checkerTab === 'upload') {
-      return pendingUploadRows;
+      source = pendingUploadRows;
+    } else if (checkerTab === 'matched') {
+      source = matchedRows;
+    } else {
+      return [];
     }
-    if (checkerTab === 'matched') {
-      return matchedRows;
+
+    // Filter by Wilayah
+    if (selectedWilayah !== 'ALL') {
+      source = source.filter((r) => isWilayahMatch(r.Wilayah, selectedWilayah));
     }
-    return []; // For recommendation tab, we use `recommendations` list directly
-  }, [checkerTab, pendingUploadRows, matchedRows]);
+
+    // Filter by Search Term
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      source = source.filter((r) => {
+        return (
+          String(r.No || '').toLowerCase().includes(q) ||
+          String(r.Wilayah || '').toLowerCase().includes(q) ||
+          String(r.Sandi || '').toLowerCase().includes(q) ||
+          String(r.Cabang || '').toLowerCase().includes(q) ||
+          String(r['Sandi Cabang'] || '').toLowerCase().includes(q) ||
+          String(r['Nama Outlet'] || '').toLowerCase().includes(q) ||
+          String(r.ALAMAT || '').toLowerCase().includes(q) ||
+          String(r['KODE POS'] || '').toLowerCase().includes(q) ||
+          String(r.Kecamatan || '').toLowerCase().includes(q) ||
+          String(r.Kelurahan || '').toLowerCase().includes(q) ||
+          String(r['Dati II'] || '').toLowerCase().includes(q)
+        );
+      });
+    }
+
+    return source;
+  }, [checkerTab, pendingUploadRows, matchedRows, selectedWilayah, searchTerm]);
 
   const currentTabRecs = useMemo(() => {
     if (checkerTab !== 'recommendation') return [];
     let list = recommendations;
+
+    // 1. FILTER BERDASARKAN WILAYAH
+    if (selectedWilayah !== 'ALL') {
+      list = list.filter((rec) => {
+        const r = rec.targetRow;
+        const m = rec.recommendedMaster;
+        const activeRank = activeCandidateByRow[r.No] || 1;
+        const activeCand = (rec.candidates || []).find((c) => c.rank === activeRank) || rec.candidates?.[0];
+        const candMaster = activeCand?.master || m;
+
+        // A. Wilayah dari Branch Code via setting wilayah (digit 2 & 3)
+        const candWil = extractWilayahFromBranchCode(
+          candMaster?.['Branch Code'] || candMaster?.['Kode Cabang'] || r?.['Branch Code'] || '',
+          wilayahSettings,
+          candMaster?.Wilayah || r?.Wilayah || '-'
+        );
+        if (candWil.wilayahName && isWilayahMatch(candWil.wilayahName, selectedWilayah)) {
+          return true;
+        }
+
+        // B. Wilayah dari Master Cabang
+        if (candMaster?.Wilayah && isWilayahMatch(candMaster.Wilayah, selectedWilayah)) {
+          return true;
+        }
+
+        // C. Wilayah dari Baris Target Excel
+        if (r?.Wilayah && isWilayahMatch(r.Wilayah, selectedWilayah)) {
+          return true;
+        }
+
+        // D. Wilayah dari opsi kandidat alternatif
+        if (
+          (rec.candidates || []).some((c) => {
+            const cWil = extractWilayahFromBranchCode(
+              c.master?.['Branch Code'] || c.master?.['Kode Cabang'] || '',
+              wilayahSettings,
+              c.master?.Wilayah || '-'
+            );
+            return (
+              (cWil.wilayahName && isWilayahMatch(cWil.wilayahName, selectedWilayah)) ||
+              (c.master?.Wilayah && isWilayahMatch(c.master.Wilayah, selectedWilayah))
+            );
+          })
+        ) {
+          return true;
+        }
+
+        return false;
+      });
+    }
+
+    // 2. FILTER BERDASARKAN SEARCH TERM
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
-      list = recommendations.filter((rec) => {
+      list = list.filter((rec) => {
         const r = rec.targetRow;
         const m = rec.recommendedMaster;
         const candsMatch = (rec.candidates || []).some((c) => {
           const cm = c.master;
           return (
+            String(cm['Branch Code'] || '').toLowerCase().includes(q) ||
             String(cm['Sandi Cabang'] || cm.Cabang || cm.Sandi || '').toLowerCase().includes(q) ||
             String(cm['Nama Outlet'] || '').toLowerCase().includes(q) ||
             String(cm.ALAMAT || '').toLowerCase().includes(q) ||
@@ -259,12 +399,15 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
 
         return (
           candsMatch ||
+          String(r.No || '').toLowerCase().includes(q) ||
+          String(r['Branch Code'] || '').toLowerCase().includes(q) ||
           String(r.Wilayah || '').toLowerCase().includes(q) ||
           String(r.ALAMAT || '').toLowerCase().includes(q) ||
           String(r['KODE POS'] || '').toLowerCase().includes(q) ||
           String(r.Kecamatan || '').toLowerCase().includes(q) ||
           String(r.Kelurahan || '').toLowerCase().includes(q) ||
           String(r['Dati II'] || '').toLowerCase().includes(q) ||
+          String(m['Branch Code'] || '').toLowerCase().includes(q) ||
           String(m['Sandi Cabang'] || m.Cabang || '').toLowerCase().includes(q) ||
           String(m['Nama Outlet'] || '').toLowerCase().includes(q) ||
           String(m.ALAMAT || '').toLowerCase().includes(q)
@@ -278,7 +421,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
       const idxB = Number(b.targetRow._excelRowIndex ?? b.targetRow.No) || 0;
       return idxA - idxB;
     });
-  }, [checkerTab, recommendations, searchTerm]);
+  }, [checkerTab, recommendations, selectedWilayah, searchTerm, activeCandidateByRow, wilayahSettings]);
 
   const totalPages = useMemo(() => {
     if (pageSize === 'all') return 1;
@@ -287,16 +430,16 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   }, [checkerTab, currentTabRecs.length, currentTabRows.length, pageSize, effectivePageSize]);
 
   const paginatedRows = useMemo(() => {
-    if (pageSize === 'all') return currentTabRows;
+    if (pageSize === 'all') return currentTabRows.slice(0, renderedLimit);
     const start = (page - 1) * effectivePageSize;
     return currentTabRows.slice(start, start + effectivePageSize);
-  }, [currentTabRows, page, pageSize, effectivePageSize]);
+  }, [currentTabRows, page, pageSize, effectivePageSize, renderedLimit]);
 
   const paginatedRecs = useMemo(() => {
-    if (pageSize === 'all') return currentTabRecs;
+    if (pageSize === 'all') return currentTabRecs.slice(0, renderedLimit);
     const start = (page - 1) * effectivePageSize;
     return currentTabRecs.slice(start, start + effectivePageSize);
-  }, [currentTabRecs, page, pageSize, effectivePageSize]);
+  }, [currentTabRecs, page, pageSize, effectivePageSize, renderedLimit]);
 
   const hasCombinedSandiCabang = rows.some((r) => r['Sandi Cabang'] && (!r.Sandi || r.Sandi === r['Sandi Cabang']));
 
@@ -505,7 +648,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               border: (recommendations.length > 0 || unmatchedRows.length > 0 || targetRecommendationRows.length > 0) ? '1px solid rgba(247, 184, 75, 0.3)' : '1px solid #e9ebec',
             }}
           >
-            {recommendations.length > 0
+            {isComputingRecs
+              ? `${recommendations.length.toLocaleString('id-ID')} Memproses...`
+              : recommendations.length > 0
               ? `${recommendations.length.toLocaleString('id-ID')} Rekomendasi`
               : unmatchedRows.length > 0
               ? `${unmatchedRows.length.toLocaleString('id-ID')} Belum Cocok`
@@ -557,7 +702,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
         </button>
       </div>
 
-      {/* Filter & Search Toolbar (Integrated inside Card) */}
+      {/* Filter & Search Toolbar (Integrated Clean Velzon Toolbar) */}
       {!(
         (checkerTab === 'upload' && pendingUploadRows.length === 0) ||
         (checkerTab === 'recommendation' && targetRecommendationRows.length === 0 && recommendations.length === 0) ||
@@ -570,352 +715,349 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
             justifyContent: 'space-between',
             flexWrap: 'wrap',
             gap: '0.6rem',
-            padding: '0.65rem 0.85rem',
-            background: '#f8f9fa',
+            padding: '0.6rem 0.85rem',
+            background: '#ffffff',
             border: '1px solid #e9ebec',
             borderRadius: '6px',
             marginBottom: '0.85rem',
           }}
         >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-          {/* Toggle Scope Rekomendasi di Tab 2: Belum Cocok vs Audit Semua Data Target */}
-          {checkerTab === 'recommendation' && rows.length > 0 && (
-            <div style={{ display: 'inline-flex', alignItems: 'center', background: '#e9ecef', borderRadius: '5px', padding: '2px', gap: '2px' }}>
-              <button
-                type="button"
-                onClick={() => { setRecommendationScope('unmatched'); setPage(1); }}
-                style={{
-                  border: 'none',
-                  background: recommendationScope === 'unmatched' ? '#ffffff' : 'transparent',
-                  color: recommendationScope === 'unmatched' ? '#212529' : '#6c757d',
-                  fontWeight: recommendationScope === 'unmatched' ? 700 : 500,
-                  fontSize: '0.72rem',
-                  padding: '0.2rem 0.6rem',
-                  borderRadius: '4px',
-                  boxShadow: recommendationScope === 'unmatched' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                Belum Cocok {unmatchedRows.length > 0 ? `(${unmatchedRows.length})` : ''}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setRecommendationScope('all'); setPage(1); }}
-                style={{
-                  border: 'none',
-                  background: recommendationScope === 'all' ? '#d97706' : 'transparent',
-                  color: recommendationScope === 'all' ? '#ffffff' : '#6c757d',
-                  fontWeight: recommendationScope === 'all' ? 700 : 500,
-                  fontSize: '0.72rem',
-                  padding: '0.2rem 0.6rem',
-                  borderRadius: '4px',
-                  boxShadow: recommendationScope === 'all' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
-                  cursor: 'pointer',
-                }}
-                title="Tampilkan rekomendasi untuk SELURUH baris data target (audit ulang data yang sudah Anda kerjakan di Excel)"
-              >
-                Audit Seluruh Data Excel ({rows.length})
-              </button>
-              <span
-                style={{
-                  fontSize: '0.69rem',
-                  color: '#0ab39c',
-                  background: 'rgba(10, 179, 156, 0.1)',
-                  border: '1px solid rgba(10, 179, 156, 0.25)',
-                  borderRadius: '4px',
-                  padding: '0.18rem 0.5rem',
-                  fontWeight: 600,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.25rem',
-                  marginLeft: '0.25rem',
-                }}
-                title="Urutan baris data rekomendasi dipatok 100% mengikuti urutan baris di berkas Excel Anda"
-              >
-                ✓ Urutan Patokan: Sesuai Excel
-              </span>
-            </div>
-          )}
-          {/* Action button in Tab 1: PENCOCOKAN */}
-          {checkerTab === 'upload' && pendingUploadRows.length > 0 && (
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={onExecuteMatching}
-              disabled={!canExecute || isProcessing}
-              id="btn-mulai-pencocokan"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.45rem',
-                fontSize: '0.78rem',
-                padding: '0.35rem 0.95rem',
-              }}
-            >
-              {isProcessing ? (
-                <>
-                  <RotateCcw size={14} className="pulse-dot" />
-                  <span>Memproses...</span>
-                </>
-              ) : (
-                <>
-                  <Play size={14} fill="currentColor" />
-                  <span>Pencocokan</span>
-                </>
-              )}
-            </button>
-          )}
-
-          {/* Dropdown Wilayah */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <MapPin size={14} color="#405189" />
-            <select
-              className="filter-select"
-              value={selectedWilayah}
-              onChange={(e) => {
-                onWilayahChange(e.target.value);
-                setPage(1);
-              }}
-              id="filter-select-wilayah"
-              style={{ padding: '0.3rem 0.65rem', fontSize: '0.78rem' }}
-            >
-              <option value="ALL">Semua Wilayah / Region ({wilayahList.length})</option>
-              {wilayahList.map((w) => (
-                <option key={w} value={w}>
-                  {formatWilayahName(w)}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Action button in Tab 2: SETUJUI SEMUA REKOMENDASI */}
-          {checkerTab === 'recommendation' && recommendations.length > 0 && (
-            <button
-              type="button"
-              className="btn btn-success btn-sm"
-              onClick={handleApproveAll}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.4rem',
-                fontSize: '0.78rem',
-                padding: '0.32rem 0.85rem',
-              }}
-              id="btn-setujui-semua-rekomendasi"
-            >
-              <Check size={14} />
-              <span>Setujui Semua Rekomendasi ({recommendations.length})</span>
-            </button>
-          )}
-
-          {/* Action button in Tab 2: SETUJUI BARIS TERPILIH */}
-          {checkerTab === 'recommendation' && selectedRowNos.size > 0 && (
-            <button
-              type="button"
-              className="btn btn-success btn-sm"
-              onClick={handleApproveSelected}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.4rem',
-                fontSize: '0.78rem',
-                padding: '0.32rem 0.85rem',
-                background: '#0ab39c',
-                borderColor: '#0ab39c',
-                fontWeight: 600,
-              }}
-              id="btn-setujui-terpilih"
-            >
-              <Check size={14} />
-              <span>Setujui {selectedRowNos.size} Baris Terpilih</span>
-            </button>
-          )}
-
-          {/* Tombol Panduan Skor di Samping Button Setuju */}
-          {checkerTab === 'recommendation' && (
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => setIsGuideModalOpen(true)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-                fontSize: '0.78rem',
-                padding: '0.32rem 0.75rem',
-                color: '#d97706',
-                borderColor: 'rgba(247, 184, 75, 0.45)',
-                background: '#fffdf5',
-              }}
-              id="btn-panduan-skor"
-              title="Buka panduan sederhana cara sistem menghitung skor kedekatan cabang"
-            >
-              <HelpCircle size={14} />
-              <span>Panduan Skor</span>
-            </button>
-          )}
-
-          {/* Tombol Tampilkan Semua Data di Toolbar */}
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            onClick={() => {
-              setPageSize((prev) => (prev === 'all' ? 15 : 'all'));
-              setPage(1);
-            }}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.35rem',
-              fontSize: '0.78rem',
-              padding: '0.32rem 0.75rem',
-              color: pageSize === 'all' ? '#0ab39c' : '#405189',
-              borderColor: pageSize === 'all' ? '#0ab39c' : '#ced4da',
-              background: pageSize === 'all' ? 'rgba(10, 179, 156, 0.08)' : '#ffffff',
-              fontWeight: 600,
-            }}
-            title="Tampilkan seluruh baris data tanpa batasan per halaman"
-          >
-            <Eye size={14} />
-            <span>{pageSize === 'all' ? 'Mode Halaman (15 Baris)' : 'Tampilkan Semua Record'}</span>
-          </button>
-
-          {/* Dropdown Visibilitas Kolom */}
-          <div style={{ position: 'relative' }}>
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => setIsColDropdownOpen(!isColDropdownOpen)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-                fontSize: '0.78rem',
-                padding: '0.32rem 0.75rem',
-                color: '#495057',
-                borderColor: '#ced4da',
-                background: isColDropdownOpen ? '#f3f6f9' : '#ffffff',
-                fontWeight: 500,
-              }}
-              id="btn-toggle-columns"
-              title="Pilih kolom yang ingin ditampilkan atau disembunyikan"
-            >
-              <SlidersHorizontal size={13} />
-              <span>
-                Kolom {hiddenCols.size > 0 ? `(${TOGGLEABLE_COLUMNS.length - hiddenCols.size}/${TOGGLEABLE_COLUMNS.length})` : ''}
-              </span>
-            </button>
-
-            {isColDropdownOpen && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  marginTop: '0.35rem',
-                  background: '#ffffff',
-                  border: '1px solid #e9ebec',
-                  borderRadius: '6px',
-                  boxShadow: '0 5px 15px rgba(0, 0, 0, 0.12)',
-                  zIndex: 50,
-                  minWidth: '210px',
-                  padding: '0.5rem',
-                }}
-              >
-                <div
+          {/* Sisi Kiri: Scope, Wilayah Filter, Aksi, & Kolom */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', flexWrap: 'wrap' }}>
+            {/* Toggle Scope Rekomendasi di Tab 2 */}
+            {checkerTab === 'recommendation' && rows.length > 0 && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', background: '#f3f6f9', border: '1px solid #e9ebec', borderRadius: '5px', padding: '2px', gap: '2px' }}>
+                <button
+                  type="button"
+                  onClick={() => { setRecommendationScope('unmatched'); setPage(1); setRenderedLimit(60); }}
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    paddingBottom: '0.35rem',
-                    borderBottom: '1px solid #f3f6f9',
-                    marginBottom: '0.35rem',
+                    border: 'none',
+                    background: recommendationScope === 'unmatched' ? '#ffffff' : 'transparent',
+                    color: recommendationScope === 'unmatched' ? '#212529' : '#6c757d',
+                    fontWeight: recommendationScope === 'unmatched' ? 700 : 500,
+                    fontSize: '0.72rem',
+                    padding: '0.22rem 0.55rem',
+                    borderRadius: '4px',
+                    boxShadow: recommendationScope === 'unmatched' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                    cursor: 'pointer',
                   }}
                 >
-                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#495057' }}>Visibilitas Kolom</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setHiddenCols(new Set());
-                      localStorage.removeItem('target_grid_hidden_cols');
-                    }}
-                    style={{
-                      border: 'none',
-                      background: 'transparent',
-                      fontSize: '0.68rem',
-                      color: '#3577f1',
-                      cursor: 'pointer',
-                      padding: 0,
-                    }}
-                  >
-                    Reset Semua
-                  </button>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', maxHeight: '220px', overflowY: 'auto' }}>
-                  {TOGGLEABLE_COLUMNS.map((col) => (
-                    <label
-                      key={col.key}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.45rem',
-                        fontSize: '0.74rem',
-                        color: '#495057',
-                        cursor: 'pointer',
-                        userSelect: 'none',
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={!hiddenCols.has(col.key)}
-                        onChange={() => toggleCol(col.key)}
-                      />
-                      <span>{col.label}</span>
-                    </label>
-                  ))}
-                </div>
+                  Belum Cocok {unmatchedRows.length > 0 ? `(${unmatchedRows.length.toLocaleString('id-ID')})` : ''}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setRecommendationScope('all'); setPage(1); setRenderedLimit(60); }}
+                  style={{
+                    border: 'none',
+                    background: recommendationScope === 'all' ? '#d97706' : 'transparent',
+                    color: recommendationScope === 'all' ? '#ffffff' : '#6c757d',
+                    fontWeight: recommendationScope === 'all' ? 700 : 500,
+                    fontSize: '0.72rem',
+                    padding: '0.22rem 0.55rem',
+                    borderRadius: '4px',
+                    boxShadow: recommendationScope === 'all' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                    cursor: 'pointer',
+                  }}
+                  title="Tampilkan rekomendasi untuk SELURUH baris data target"
+                >
+                  Audit Seluruh Data ({rows.length.toLocaleString('id-ID')})
+                </button>
               </div>
             )}
-          </div>
-        </div>
 
-        {/* Input Search */}
-        <div className="search-input-wrapper">
-          <Search size={14} className="search-icon-pos" />
-          <input
-            type="text"
-            className="search-input"
-            placeholder="Cari Sandi, Outlet, Alamat..."
-            value={searchTerm}
-            onChange={(e) => {
-              onSearchChange(e.target.value);
-              setPage(1);
-            }}
-            style={{ width: '240px', paddingRight: searchTerm ? '2rem' : '0.85rem' }}
-          />
-          {searchTerm && (
+            {/* Separator jika Tab Rekomendasi */}
+            {checkerTab === 'recommendation' && rows.length > 0 && (
+              <div style={{ width: '1px', height: '20px', background: '#e9ebec' }} />
+            )}
+
+            {/* Dropdown Filter Wilayah */}
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: '#f8f9fa', border: '1px solid #e9ebec', borderRadius: '5px', padding: '0.1rem 0.45rem' }}>
+              <MapPin size={13} color="#405189" />
+              <select
+                className="filter-select"
+                value={selectedWilayah}
+                onChange={(e) => {
+                  onWilayahChange(e.target.value);
+                  setPage(1);
+                  setRenderedLimit(60);
+                }}
+                id="filter-select-wilayah"
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  padding: '0.22rem 0.35rem',
+                  fontSize: '0.76rem',
+                  cursor: 'pointer',
+                  outline: 'none',
+                  fontWeight: selectedWilayah !== 'ALL' ? 700 : 500,
+                  color: selectedWilayah !== 'ALL' ? '#405189' : '#495057',
+                }}
+              >
+                <option value="ALL">Semua Wilayah ({wilayahList.length})</option>
+                {wilayahList.map((w) => (
+                  <option key={w} value={w}>
+                    {formatWilayahName(w)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Action button in Tab 1: PENCOCOKAN */}
+            {checkerTab === 'upload' && pendingUploadRows.length > 0 && (
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={onExecuteMatching}
+                disabled={!canExecute || isProcessing}
+                id="btn-mulai-pencocokan"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  fontSize: '0.77rem',
+                  padding: '0.3rem 0.85rem',
+                }}
+              >
+                {isProcessing ? (
+                  <>
+                    <RotateCcw size={13} className="pulse-dot" />
+                    <span>Memproses...</span>
+                  </>
+                ) : (
+                  <>
+                    <Play size={13} fill="currentColor" />
+                    <span>Pencocokan</span>
+                  </>
+                )}
+              </button>
+            )}
+
+            {/* Action button in Tab 2: SETUJUI SEMUA REKOMENDASI */}
+            {checkerTab === 'recommendation' && recommendations.length > 0 && (
+              <button
+                type="button"
+                className="btn btn-success btn-sm"
+                onClick={handleApproveAll}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  fontSize: '0.76rem',
+                  padding: '0.3rem 0.85rem',
+                }}
+                id="btn-setujui-semua-rekomendasi"
+              >
+                <Check size={13} />
+                <span>Setujui Semua ({recommendations.length.toLocaleString('id-ID')})</span>
+              </button>
+            )}
+
+            {/* Action button in Tab 2: SETUJUI BARIS TERPILIH */}
+            {checkerTab === 'recommendation' && selectedRowNos.size > 0 && (
+              <button
+                type="button"
+                className="btn btn-success btn-sm"
+                onClick={handleApproveSelected}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  fontSize: '0.76rem',
+                  padding: '0.3rem 0.85rem',
+                  background: '#0ab39c',
+                  borderColor: '#0ab39c',
+                  fontWeight: 600,
+                }}
+                id="btn-setujui-terpilih"
+              >
+                <Check size={13} />
+                <span>Setujui {selectedRowNos.size} Terpilih</span>
+              </button>
+            )}
+
+            {/* Tombol Panduan Skor */}
+            {checkerTab === 'recommendation' && (
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => setIsGuideModalOpen(true)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                  fontSize: '0.76rem',
+                  padding: '0.3rem 0.7rem',
+                  color: '#d97706',
+                  borderColor: 'rgba(247, 184, 75, 0.45)',
+                  background: '#fffdf5',
+                }}
+                id="btn-panduan-skor"
+                title="Buka panduan sederhana cara sistem menghitung skor kedekatan cabang"
+              >
+                <HelpCircle size={13} />
+                <span>Panduan Skor</span>
+              </button>
+            )}
+
+            {/* Dropdown Visibilitas Kolom */}
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => setIsColDropdownOpen(!isColDropdownOpen)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                  fontSize: '0.76rem',
+                  padding: '0.3rem 0.7rem',
+                  color: '#495057',
+                  borderColor: '#ced4da',
+                  background: isColDropdownOpen ? '#f3f6f9' : '#ffffff',
+                  fontWeight: 500,
+                }}
+                id="btn-toggle-columns"
+                title="Pilih kolom yang ingin ditampilkan atau disembunyikan"
+              >
+                <SlidersHorizontal size={13} />
+                <span>
+                  Kolom {hiddenCols.size > 0 ? `(${TOGGLEABLE_COLUMNS.length - hiddenCols.size}/${TOGGLEABLE_COLUMNS.length})` : ''}
+                </span>
+              </button>
+
+              {isColDropdownOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    marginTop: '0.35rem',
+                    background: '#ffffff',
+                    border: '1px solid #e9ebec',
+                    borderRadius: '6px',
+                    boxShadow: '0 5px 15px rgba(0, 0, 0, 0.12)',
+                    zIndex: 50,
+                    minWidth: '210px',
+                    padding: '0.5rem',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      paddingBottom: '0.35rem',
+                      borderBottom: '1px solid #f3f6f9',
+                      marginBottom: '0.35rem',
+                    }}
+                  >
+                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#495057' }}>Visibilitas Kolom</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHiddenCols(new Set());
+                        localStorage.removeItem('target_grid_hidden_cols');
+                      }}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        fontSize: '0.68rem',
+                        color: '#3577f1',
+                        cursor: 'pointer',
+                        padding: 0,
+                      }}
+                    >
+                      Reset Semua
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', maxHeight: '220px', overflowY: 'auto' }}>
+                    {TOGGLEABLE_COLUMNS.map((col) => (
+                      <label
+                        key={col.key}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.45rem',
+                          fontSize: '0.74rem',
+                          color: '#495057',
+                          cursor: 'pointer',
+                          userSelect: 'none',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!hiddenCols.has(col.key)}
+                          onChange={() => toggleCol(col.key)}
+                        />
+                        <span>{col.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Sisi Kanan: Tampilkan Semua Mode & Search */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {/* Tombol Tampilkan Semua Record / Mode Halaman */}
             <button
               type="button"
+              className="btn btn-outline btn-sm"
               onClick={() => {
-                onSearchChange('');
+                setPageSize((prev) => (prev === 'all' ? 15 : 'all'));
                 setPage(1);
+                setRenderedLimit(60);
               }}
               style={{
-                position: 'absolute',
-                right: '0.5rem',
-                background: 'transparent',
-                border: 'none',
-                color: '#878a99',
-                cursor: 'pointer',
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
+                gap: '0.35rem',
+                fontSize: '0.76rem',
+                padding: '0.3rem 0.75rem',
+                color: pageSize === 'all' ? '#0ab39c' : '#405189',
+                borderColor: pageSize === 'all' ? '#0ab39c' : '#ced4da',
+                background: pageSize === 'all' ? 'rgba(10, 179, 156, 0.08)' : '#ffffff',
+                fontWeight: 600,
               }}
+              title="Tampilkan seluruh baris data tanpa batasan per halaman"
             >
-              <X size={13} />
+              <Eye size={13} />
+              <span>{pageSize === 'all' ? 'Mode Paginasi (15 Baris)' : 'Tampilkan Semua Record'}</span>
             </button>
-          )}
+
+            {/* Input Search */}
+            <div className="search-input-wrapper">
+              <Search size={14} className="search-icon-pos" />
+              <input
+                type="text"
+                className="search-input"
+                placeholder="Cari Sandi, Outlet, Alamat..."
+                value={searchTerm}
+                onChange={(e) => {
+                  onSearchChange(e.target.value);
+                  setPage(1);
+                  setRenderedLimit(60);
+                }}
+                style={{ width: '220px', paddingRight: searchTerm ? '2rem' : '0.85rem' }}
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSearchChange('');
+                    setPage(1);
+                    setRenderedLimit(60);
+                  }}
+                  className="search-clear-btn"
+                  title="Hapus pencarian"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
       )}
 
       {/* =========================================================================
@@ -970,26 +1112,82 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               </button>
             )}
           </div>
-        ) : isComputingRecs ? (
-          <div
-            style={{
-              textAlign: 'center',
-              padding: '3.5rem 1.5rem',
-              background: '#ffffff',
-              borderRadius: '6px',
-              border: '1px solid #e9ebec',
-            }}
-          >
-            <RotateCcw size={28} className="pulse-dot" color="#3577f1" style={{ margin: '0 auto 0.85rem' }} />
-            <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#212529', margin: '0 0 0.35rem' }}>
-              Menganalisis Rekomendasi Cabang Terdekat...
-            </h4>
-            <p style={{ fontSize: '0.78rem', color: '#878a99', margin: 0 }}>
-              Mencocokkan {unmatchedRows.length.toLocaleString('id-ID')} data dengan indeks wilayah & kode pos
-            </p>
-          </div>
         ) : (
-          <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', overflowX: 'auto' }}>
+          <>
+            {/* Indikator Non-blocking Latar Belakang (Tidak menutup tabel) */}
+            {isComputingRecs && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '0.4rem 0.8rem',
+                  background: 'rgba(53, 119, 241, 0.06)',
+                  border: '1px solid rgba(53, 119, 241, 0.2)',
+                  borderRadius: '5px',
+                  marginBottom: '0.65rem',
+                  fontSize: '0.76rem',
+                  color: '#3577f1',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                  <RotateCcw size={13} className="pulse-dot" />
+                  <span>
+                    <strong>Menganalisis rekomendasi di latar belakang:</strong> {recommendations.length.toLocaleString('id-ID')} / {targetRecommendationRows.length.toLocaleString('id-ID')} data siap ({Math.min(100, Math.round((recommendations.length / Math.max(1, targetRecommendationRows.length)) * 100))}%)
+                  </span>
+                </div>
+                <span style={{ fontSize: '0.72rem', color: '#878a99' }}>Tabel tetap aktif & data terus bertambah</span>
+              </div>
+            )}
+
+            {/* Jika hasil filter wilayah / search kosong */}
+            {currentTabRecs.length === 0 && !isComputingRecs ? (
+              <div
+                style={{
+                  textAlign: 'center',
+                  padding: '2.5rem 1.5rem',
+                  background: '#ffffff',
+                  borderRadius: '6px',
+                  border: '1px solid #e9ebec',
+                }}
+              >
+                <div
+                  style={{
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '50%',
+                    background: '#f3f6f9',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    margin: '0 auto 0.5rem',
+                    color: '#878a99',
+                  }}
+                >
+                  <Search size={18} />
+                </div>
+                <h5 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#212529', margin: '0 0 0.25rem' }}>
+                  Tidak Ada Rekomendasi Sesuai Filter
+                </h5>
+                <p style={{ fontSize: '0.78rem', color: '#878a99', margin: '0 0 0.85rem' }}>
+                  Tidak ditemukan rekomendasi untuk wilayah "{selectedWilayah !== 'ALL' ? formatWilayahName(selectedWilayah) : ''}" {searchTerm ? `atau kata kunci "${searchTerm}"` : ''}.
+                </p>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => {
+                    onWilayahChange('ALL');
+                    onSearchChange('');
+                    setPage(1);
+                    setRenderedLimit(60);
+                  }}
+                  style={{ fontSize: '0.76rem', padding: '0.28rem 0.85rem' }}
+                >
+                  Reset Filter & Pencarian
+                </button>
+              </div>
+            ) : (
+              <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', overflowX: 'auto' }}>
           <table className="modern-table" style={{ width: '100%', minWidth: '1200px', borderCollapse: 'separate', borderSpacing: 0 }}>
             <thead>
               <tr>
@@ -1576,8 +1774,31 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               )}
             </tbody>
           </table>
+          {pageSize === 'all' && (
+            <div
+              ref={sentinelRef}
+              style={{
+                height: '38px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: '#f8f9fa',
+                borderTop: '1px solid #e9ebec',
+                fontSize: '0.74rem',
+                color: '#878a99',
+              }}
+            >
+              {renderedLimit < currentTabRecs.length ? (
+                <span>Memuat baris berikutnya... ({Math.min(renderedLimit, currentTabRecs.length).toLocaleString('id-ID')} / {currentTabRecs.length.toLocaleString('id-ID')})</span>
+              ) : (
+                <span>✓ Seluruh {currentTabRecs.length.toLocaleString('id-ID')} rekomendasi telah ditampilkan</span>
+              )}
+            </div>
+          )}
         </div>
-        )
+      )}
+    </>
+  )
       ) : checkerTab === 'upload' && pendingUploadRows.length === 0 ? (
         /* TAB 1: DATA SUDAH DI-ANALISA (POST-MATCHING STATE) */
         <div
@@ -1946,6 +2167,27 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               )}
             </tbody>
           </table>
+          {pageSize === 'all' && (
+            <div
+              ref={sentinelRef}
+              style={{
+                height: '38px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: '#f8f9fa',
+                borderTop: '1px solid #e9ebec',
+                fontSize: '0.74rem',
+                color: '#878a99',
+              }}
+            >
+              {renderedLimit < currentTabRows.length ? (
+                <span>Memuat baris berikutnya... ({Math.min(renderedLimit, currentTabRows.length).toLocaleString('id-ID')} / {currentTabRows.length.toLocaleString('id-ID')})</span>
+              ) : (
+                <span>✓ Seluruh {currentTabRows.length.toLocaleString('id-ID')} baris telah ditampilkan</span>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -1957,13 +2199,35 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
         <div className="pagination-row" style={{ marginTop: '0.75rem', paddingTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
           {/* Info Jumlah Data & Pilihan Tampilkan Semua Data */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-            <div style={{ fontSize: '0.78rem', color: '#878a99' }}>
-              Menampilkan{' '}
-              {pageSize === 'all'
-                ? `Semua ${checkerTab === 'recommendation' ? currentTabRecs.length.toLocaleString('id-ID') : currentTabRows.length.toLocaleString('id-ID')} data`
-                : checkerTab === 'recommendation'
-                ? `${(page - 1) * effectivePageSize + 1} - ${Math.min(page * effectivePageSize, currentTabRecs.length)} dari ${currentTabRecs.length.toLocaleString('id-ID')} rekomendasi`
-                : `${(page - 1) * effectivePageSize + 1} - ${Math.min(page * effectivePageSize, currentTabRows.length)} dari ${currentTabRows.length.toLocaleString('id-ID')} baris`}
+            <div style={{ fontSize: '0.78rem', color: '#878a99', display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+              <span>
+                Menampilkan{' '}
+                {pageSize === 'all'
+                  ? `${Math.min(renderedLimit, checkerTab === 'recommendation' ? currentTabRecs.length : currentTabRows.length).toLocaleString('id-ID')} dari ${checkerTab === 'recommendation' ? currentTabRecs.length.toLocaleString('id-ID') : currentTabRows.length.toLocaleString('id-ID')} data (Scroll otomatis)`
+                  : checkerTab === 'recommendation'
+                  ? `${(page - 1) * effectivePageSize + 1} - ${Math.min(page * effectivePageSize, currentTabRecs.length)} dari ${currentTabRecs.length.toLocaleString('id-ID')} rekomendasi`
+                  : `${(page - 1) * effectivePageSize + 1} - ${Math.min(page * effectivePageSize, currentTabRows.length)} dari ${currentTabRows.length.toLocaleString('id-ID')} baris`}
+              </span>
+              {pageSize === 'all' && renderedLimit < (checkerTab === 'recommendation' ? currentTabRecs.length : currentTabRows.length) && (
+                <div style={{ display: 'inline-flex', gap: '0.35rem' }}>
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={() => setRenderedLimit((prev) => Math.min(prev + 100, checkerTab === 'recommendation' ? currentTabRecs.length : currentTabRows.length))}
+                    style={{ fontSize: '0.71rem', padding: '0.12rem 0.45rem', height: '22px' }}
+                  >
+                    +100 Baris
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={() => setRenderedLimit(checkerTab === 'recommendation' ? currentTabRecs.length : currentTabRows.length)}
+                    style={{ fontSize: '0.71rem', padding: '0.12rem 0.45rem', height: '22px' }}
+                  >
+                    Muat Semua Sekaligus
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Dropdown Pilihan Jumlah Data / Tampilkan Semua Data */}
