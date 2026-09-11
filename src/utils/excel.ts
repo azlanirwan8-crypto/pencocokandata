@@ -36,11 +36,6 @@ export const TARGET_COLUMNS_WITH_SANDI_CABANG: string[] = [
   'Dati II',
   'Kode Dati II',
   'Provinsi',
-  'KOTA PTEN',
-  'KODE POS PTEN',
-  'CEK KODE POS + PTEN',
-  'SUMBER DATA',
-  'CEK DUPLIKAT KODE POS',
 ];
 
 export const MASTER_COLUMNS_SEPARATE: string[] = [
@@ -77,11 +72,6 @@ export const TARGET_COLUMNS_SEPARATE: string[] = [
   'Dati II',
   'Kode Dati II',
   'Provinsi',
-  'KOTA PTEN',
-  'KODE POS PTEN',
-  'CEK KODE POS + PTEN',
-  'SUMBER DATA',
-  'CEK DUPLIKAT KODE POS',
 ];
 
 /**
