@@ -44,6 +44,13 @@ export interface TargetRow {
   _matchLevel?: 'level1' | 'level2' | 'none' | 'recommendation';
   _matchedAt?: string;
   _matchedBy?: string;
+
+  // Audit flags for evaluating user-prefilled Excel data against system recommendations
+  _originalFilledSandi?: string;
+  _originalFilledCabang?: string;
+  _originalFilledSandiCabang?: string;
+  _originalFilledNamaOutlet?: string;
+  _hasUserFilledData?: boolean;
   [key: string]: any;
 }
 

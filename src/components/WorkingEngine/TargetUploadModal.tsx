@@ -64,11 +64,26 @@ export const TargetUploadModal: React.FC<TargetUploadModalProps> = ({
       setUploadStage('Menata nomor urut & validasi baris...');
       await new Promise((r) => setTimeout(r, 100));
 
-      // Pastikan kolom No terisi rapi
-      const sanitized = data.map((r, idx) => ({
-        ...r,
-        No: r.No !== undefined && r.No !== '' ? r.No : currentTargetCount + idx + 1,
-      }));
+      // Pastikan kolom No terisi rapi & tangkap data yang sudah dikerjakan/diisi di Excel
+      const sanitized = data.map((r, idx) => {
+        const s = String(r.Sandi || '').trim();
+        const c = String(r.Cabang || '').trim();
+        const sc = String(r['Sandi Cabang'] || '').trim();
+        const no = String(r['Nama Outlet'] || '').trim();
+        const hasFilled = Boolean(
+          (s && s !== '-') || (c && c !== '-') || (sc && sc !== '-')
+        );
+
+        return {
+          ...r,
+          No: r.No !== undefined && r.No !== '' ? r.No : currentTargetCount + idx + 1,
+          _originalFilledSandi: s,
+          _originalFilledCabang: c,
+          _originalFilledSandiCabang: sc,
+          _originalFilledNamaOutlet: no,
+          _hasUserFilledData: hasFilled,
+        };
+      });
 
       setUploadProgress(95);
       setUploadStage('Menyimpan data target baru...');

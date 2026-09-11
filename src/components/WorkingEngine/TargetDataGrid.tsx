@@ -1040,6 +1040,55 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
 
                           return (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                              {/* Indikator Audit Rekomendasi vs Pilihan yang Sudah Diisi di Excel */}
+                              {rec.userPrefilledAudit && rec.userPrefilledAudit.hasPrefilled && (
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.35rem',
+                                    padding: '0.2rem 0.45rem',
+                                    borderRadius: '4px',
+                                    fontSize: '0.68rem',
+                                    fontWeight: 600,
+                                    background:
+                                      rec.userPrefilledAudit.status === 'match_top1'
+                                        ? 'rgba(10, 179, 156, 0.08)'
+                                        : rec.userPrefilledAudit.status === 'match_top2' || rec.userPrefilledAudit.status === 'match_top3'
+                                        ? 'rgba(247, 184, 75, 0.12)'
+                                        : 'rgba(53, 119, 241, 0.08)',
+                                    color:
+                                      rec.userPrefilledAudit.status === 'match_top1'
+                                        ? '#07796a'
+                                        : rec.userPrefilledAudit.status === 'match_top2' || rec.userPrefilledAudit.status === 'match_top3'
+                                        ? '#925807'
+                                        : '#2563eb',
+                                    border:
+                                      rec.userPrefilledAudit.status === 'match_top1'
+                                        ? '1px solid rgba(10, 179, 156, 0.28)'
+                                        : rec.userPrefilledAudit.status === 'match_top2' || rec.userPrefilledAudit.status === 'match_top3'
+                                        ? '1px solid rgba(247, 184, 75, 0.35)'
+                                        : '1px solid rgba(53, 119, 241, 0.25)',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    boxSizing: 'border-box',
+                                  }}
+                                  title={`Di Excel terisi: "${rec.userPrefilledAudit.prefilledText}". ${rec.userPrefilledAudit.message}`}
+                                >
+                                  {rec.userPrefilledAudit.status === 'match_top1' ? (
+                                    <CheckCircle2 size={12} color="#0ab39c" style={{ flexShrink: 0 }} />
+                                  ) : rec.userPrefilledAudit.status === 'match_top2' || rec.userPrefilledAudit.status === 'match_top3' ? (
+                                    <AlertTriangle size={12} color="#d97706" style={{ flexShrink: 0 }} />
+                                  ) : (
+                                    <Info size={12} color="#3577f1" style={{ flexShrink: 0 }} />
+                                  )}
+                                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    Di Excel: <strong>"{rec.userPrefilledAudit.prefilledText}"</strong> → {rec.userPrefilledAudit.message}
+                                  </span>
+                                </div>
+                              )}
+
                               {/* Horizontal Segmented Pill Selector jika ada lebih dari 1 opsi */}
                               {candidates.length > 1 && (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'nowrap', overflowX: 'auto', paddingBottom: '0.1rem' }}>
@@ -1049,6 +1098,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                   {candidates.map((cand) => {
                                     const isSelected = cand.rank === activeCand.rank;
                                     const pillActiveBg = cand.rank === 1 ? '#0ab39c' : cand.rank === 2 ? '#d97706' : '#3577f1';
+                                    const isUserChoice = rec.userPrefilledAudit?.matchedRank === cand.rank;
 
                                     return (
                                       <button
@@ -1065,15 +1115,29 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                           fontWeight: isSelected ? 700 : 500,
                                           background: isSelected ? pillActiveBg : '#f3f6f9',
                                           color: isSelected ? '#ffffff' : '#495057',
-                                          border: isSelected ? `1px solid ${pillActiveBg}` : '1px solid #e9ebec',
+                                          border: isSelected ? `1px solid ${pillActiveBg}` : isUserChoice ? '1px dashed #d97706' : '1px solid #e9ebec',
                                           cursor: 'pointer',
                                           transition: 'all 0.15s ease',
                                           flexShrink: 0,
                                           whiteSpace: 'nowrap',
                                         }}
-                                        title={`Klik untuk melihat Pilihan ${cand.rank} (${cand.score}%)`}
+                                        title={`Klik untuk melihat Pilihan ${cand.rank} (${cand.score}%)${isUserChoice ? ' - Ini cabang yang Anda isi di Excel' : ''}`}
                                       >
                                         <span>{cand.rank === 1 ? 'Pilihan 1' : `Pilihan ${cand.rank}`}</span>
+                                        {isUserChoice && (
+                                          <span
+                                            style={{
+                                              fontSize: '0.58rem',
+                                              padding: '0.02rem 0.25rem',
+                                              borderRadius: '3px',
+                                              background: isSelected ? 'rgba(255,255,255,0.3)' : 'rgba(217, 119, 6, 0.15)',
+                                              color: isSelected ? '#ffffff' : '#925807',
+                                              fontWeight: 700,
+                                            }}
+                                          >
+                                            Pilihan Anda
+                                          </span>
+                                        )}
                                         <span
                                           style={{
                                             fontSize: '0.65rem',
@@ -1570,6 +1634,31 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                 ? 'MATCH (L2 TIE)'
                                 : 'MATCH (L1)'}
                             </span>
+
+                            {/* Audit Kesesuaian dengan Isi Awal Excel */}
+                            {r._hasUserFilledData && (
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.61rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                {(() => {
+                                  const uSandi = String(r._originalFilledSandi || '').trim().toLowerCase();
+                                  const uCabang = String(r._originalFilledCabang || '').trim().toLowerCase();
+                                  const mSandi = String(r.Sandi || '').trim().toLowerCase();
+                                  const mCabang = String(r.Cabang || '').trim().toLowerCase();
+                                  const isAgree =
+                                    (uSandi && mSandi && uSandi === mSandi) ||
+                                    (uCabang && mCabang && (uCabang === mCabang || mCabang.includes(uCabang) || uCabang.includes(mCabang)));
+
+                                  return isAgree ? (
+                                    <span style={{ color: '#059669', background: 'rgba(5, 150, 105, 0.08)', padding: '0.04rem 0.25rem', borderRadius: '2px' }} title="Pencocokan sistem sesuai dengan cabang yang Anda isi di file Excel">
+                                      ✓ Sesuai Excel Anda
+                                    </span>
+                                  ) : (
+                                    <span style={{ color: '#d97706', background: 'rgba(217, 119, 6, 0.08)', padding: '0.04rem 0.25rem', borderRadius: '2px' }} title={`Di Excel Anda isi: ${r._originalFilledCabang || r._originalFilledSandi || r._originalFilledSandiCabang}`}>
+                                      ⚠️ Beda dr Excel
+                                    </span>
+                                  );
+                                })()}
+                              </div>
+                            )}
 
                             {/* Baris 2: Timestamp dan Tombol Batalkan Berdampingan Sejajar */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', whiteSpace: 'nowrap' }}>

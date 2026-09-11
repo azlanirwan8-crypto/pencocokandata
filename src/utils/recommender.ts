@@ -13,6 +13,15 @@ export interface CandidateOption {
   googleMapsUrl?: string;
 }
 
+export interface UserPrefilledAudit {
+  hasPrefilled: boolean;
+  prefilledText: string;
+  matchedRank: number | null; // 1 (Top 1), 2 (Top 2), 3 (Top 3), > 3, or null (not found)
+  matchedCandidate?: CandidateOption;
+  status: 'match_top1' | 'match_top2' | 'match_top3' | 'match_other' | 'not_found';
+  message: string;
+}
+
 export interface RecommendationResult {
   targetRow: TargetRow;
   recommendedMaster: MasterRow;
@@ -22,6 +31,7 @@ export interface RecommendationResult {
   distanceKm?: number;
   formattedDistance?: string;
   googleMapsUrl?: string;
+  userPrefilledAudit?: UserPrefilledAudit;
 }
 
 export interface MasterProximityIndex {
@@ -340,6 +350,8 @@ export function findClosestMasterRecommendation(
         }
       }
 
+      const userPrefilledAudit = evaluateUserPrefilledAudit(target, candidates);
+
       return {
         targetRow: target,
         recommendedMaster: kimBranch,
@@ -349,6 +361,7 @@ export function findClosestMasterRecommendation(
         distanceKm: candidates[0].distanceKm,
         formattedDistance: candidates[0].formattedDistance,
         googleMapsUrl: candidates[0].googleMapsUrl,
+        userPrefilledAudit,
       };
     }
   }
@@ -417,6 +430,8 @@ export function findClosestMasterRecommendation(
     };
   });
 
+  const userPrefilledAudit = evaluateUserPrefilledAudit(target, candidates, scored);
+
   return {
     targetRow: target,
     recommendedMaster: candidates[0].master,
@@ -426,6 +441,118 @@ export function findClosestMasterRecommendation(
     distanceKm: candidates[0].distanceKm,
     formattedDistance: candidates[0].formattedDistance,
     googleMapsUrl: candidates[0].googleMapsUrl,
+    userPrefilledAudit,
+  };
+}
+
+/**
+ * Evaluasi data cabang yang sudah diisi di Excel oleh user terhadap rekomendasi sistem
+ */
+export function evaluateUserPrefilledAudit(
+  target: TargetRow,
+  candidates: CandidateOption[],
+  allMasterScored?: { master: MasterRow; score: number; distance: number; reason: string }[]
+): UserPrefilledAudit | undefined {
+  const prefilledSandi = String(target._originalFilledSandi || target.Sandi || '').trim();
+  const prefilledCabang = String(target._originalFilledCabang || target.Cabang || '').trim();
+  const prefilledSandiCabang = String(target._originalFilledSandiCabang || target['Sandi Cabang'] || '').trim();
+  const prefilledOutlet = String(target._originalFilledNamaOutlet || target['Nama Outlet'] || '').trim();
+
+  // Jika user tidak mengisi atribut master sama sekali
+  if (!prefilledSandi && !prefilledCabang && !prefilledSandiCabang && !prefilledOutlet) {
+    return undefined;
+  }
+  if (
+    (prefilledSandi === '-' || !prefilledSandi) &&
+    (prefilledCabang === '-' || !prefilledCabang) &&
+    (prefilledSandiCabang === '-' || !prefilledSandiCabang)
+  ) {
+    return undefined;
+  }
+
+  const prefilledDisplay =
+    prefilledSandiCabang ||
+    [prefilledSandi, prefilledCabang].filter(Boolean).join(' - ') ||
+    prefilledCabang ||
+    prefilledSandi ||
+    prefilledOutlet;
+
+  const isMatchMaster = (m: MasterRow): boolean => {
+    const mSandi = cleanText(String(m.Sandi || ''));
+    const mCabang = cleanText(String(m.Cabang || ''));
+    const mSandiCabang = cleanText(String(m['Sandi Cabang'] || ''));
+    const mOutlet = cleanText(String(m['Nama Outlet'] || ''));
+    const mBranchCode = cleanText(String(m['Branch Code'] || m['Kode Cabang'] || ''));
+
+    const uSandi = cleanText(prefilledSandi);
+    const uCabang = cleanText(prefilledCabang);
+    const uSandiCabang = cleanText(prefilledSandiCabang);
+    const uOutlet = cleanText(prefilledOutlet);
+
+    if (uSandi && mSandi && uSandi === mSandi) return true;
+    if (uSandi && mBranchCode && uSandi === mBranchCode) return true;
+    if (uCabang && mCabang && (uCabang === mCabang || mCabang.includes(uCabang) || uCabang.includes(mCabang))) return true;
+    if (uSandiCabang && (uSandiCabang === mSandiCabang || (mSandi && uSandiCabang.includes(mSandi)) || (mCabang && uSandiCabang.includes(mCabang)))) return true;
+    if (uOutlet && mOutlet && (uOutlet === mOutlet || mOutlet.includes(uOutlet))) return true;
+
+    return false;
+  };
+
+  // 1. Cek pada kandidat rekomendasi Top 3
+  for (const cand of candidates) {
+    if (isMatchMaster(cand.master)) {
+      if (cand.rank === 1) {
+        return {
+          hasPrefilled: true,
+          prefilledText: prefilledDisplay,
+          matchedRank: 1,
+          matchedCandidate: cand,
+          status: 'match_top1',
+          message: `Sesuai Rekomendasi 1 (Utama) • Skor ${cand.score}%`,
+        };
+      } else if (cand.rank === 2) {
+        return {
+          hasPrefilled: true,
+          prefilledText: prefilledDisplay,
+          matchedRank: 2,
+          matchedCandidate: cand,
+          status: 'match_top2',
+          message: `Masuk di Rekomendasi 2 (Alternatif) • Skor ${cand.score}%`,
+        };
+      } else if (cand.rank === 3) {
+        return {
+          hasPrefilled: true,
+          prefilledText: prefilledDisplay,
+          matchedRank: 3,
+          matchedCandidate: cand,
+          status: 'match_top3',
+          message: `Masuk di Rekomendasi 3 (Alternatif) • Skor ${cand.score}%`,
+        };
+      }
+    }
+  }
+
+  // 2. Cek apakah ada di master list terurut di luar Top 3
+  if (allMasterScored && allMasterScored.length > 0) {
+    const idx = allMasterScored.findIndex((s) => isMatchMaster(s.master));
+    if (idx >= 0) {
+      const foundRank = idx + 1;
+      return {
+        hasPrefilled: true,
+        prefilledText: prefilledDisplay,
+        matchedRank: foundRank,
+        status: 'match_other',
+        message: `Pilihan di Excel Anda berada di Peringkat #${foundRank} sistem (Di luar Top 3 terdekat)`,
+      };
+    }
+  }
+
+  return {
+    hasPrefilled: true,
+    prefilledText: prefilledDisplay,
+    matchedRank: null,
+    status: 'not_found',
+    message: `Pilihan di Excel "${prefilledDisplay}" tidak terdaftar di Data Master`,
   };
 }
 
@@ -457,9 +584,11 @@ export function generateRecommendationsForUnmatched(
     if (locationMemo.has(locKey)) {
       const cached = locationMemo.get(locKey);
       if (cached) {
+        const rowAudit = evaluateUserPrefilledAudit(row, cached.candidates);
         results.push({
           ...cached,
           targetRow: row,
+          userPrefilledAudit: rowAudit,
         });
       }
       continue;
@@ -504,9 +633,11 @@ export function generateRecommendationsProgressive(
     if (locationMemo.has(locKey)) {
       const cached = locationMemo.get(locKey);
       if (cached) {
+        const rowAudit = evaluateUserPrefilledAudit(row, cached.candidates);
         return {
           ...cached,
           targetRow: row,
+          userPrefilledAudit: rowAudit,
         };
       }
       return null;

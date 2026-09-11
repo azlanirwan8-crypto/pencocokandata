@@ -515,6 +515,43 @@ export const App: React.FC = () => {
     }
   };
 
+  // Reset Hasil Pencocokan: Mengembalikan status data target ke kondisi awal upload tanpa menghapus berkas
+  const handleResetMatchingResults = () => {
+    if (
+      window.confirm(
+        'Kembalikan data target ke status awal upload (sebelum dicocokkan)?\nHasil pencocokan akan di-reset sehingga Anda dapat meninjau rekomendasi kembali atau mencocokkan ulang. Berkas dan data yang Anda isi di Excel tetap aman.'
+      )
+    ) {
+      setTargetRows((prev) => {
+        const restored = prev.map((r) => ({
+          ...r,
+          _isMatched: false,
+          _matchLevel: 'none' as const,
+          _matchedAt: undefined,
+          _matchedBy: undefined,
+          // Pulihkan data awal yang diisi user di file Excel jika ada
+          Sandi: r._originalFilledSandi || '',
+          Cabang: r._originalFilledCabang || '',
+          'Sandi Cabang': r._originalFilledSandiCabang || '',
+          'Nama Outlet': r._originalFilledNamaOutlet || '',
+        }));
+
+        setMatchedDone(false);
+        setProgress(0);
+        setProcessedCount(0);
+
+        persistTargetData({
+          rows: restored,
+          fileName: targetFileName,
+          initialCount: initialTargetCount,
+          matchedDone: false,
+        });
+
+        return restored;
+      });
+    }
+  };
+
   // Setujui Semua Rekomendasi: Mengisi atribut master ke baris target yang cocok, pindah ke matched, tab 1 & 2 kosong
   const handleApproveAllRecommendations = (recs: RecommendationResult[]) => {
     if (recs.length === 0) return;
@@ -1063,12 +1100,33 @@ export const App: React.FC = () => {
                   <span>Upload Data Cek</span>
                 </button>
 
+                {/* Reset Hasil Match: Hanya muncul jika proses pencocokan sudah selesai */}
+                {matchedDone && targetRows.length > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={handleResetMatchingResults}
+                    title="Kembalikan status data target ke kondisi awal upload untuk mencocokkan ulang tanpa menghapus berkas"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.3rem',
+                      color: '#405189',
+                      borderColor: 'rgba(64, 81, 137, 0.3)',
+                      padding: '0.3rem 0.7rem',
+                    }}
+                  >
+                    <RotateCcw size={12} />
+                    <span>Reset Hasil Match</span>
+                  </button>
+                )}
+
                 {targetRows.length > 0 && (
                   <button
                     type="button"
                     className="btn btn-outline btn-sm"
                     onClick={handleResetTarget}
-                    title="Kosongkan data target operasional"
+                    title="Kosongkan seluruh data target operasional"
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -1079,7 +1137,7 @@ export const App: React.FC = () => {
                     }}
                   >
                     <RotateCcw size={12} />
-                    <span>Reset Data Cek</span>
+                    <span>Kosongkan Data Cek</span>
                   </button>
                 )}
               </div>
