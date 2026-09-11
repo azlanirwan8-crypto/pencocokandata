@@ -29,8 +29,84 @@ export function cleanText(val: unknown): string {
 }
 
 /**
+ * Normalisasi nama Dati II / Kabupaten / Kota:
+ * Menghapus prefix seperti 'kabupaten', 'kab.', 'kab', 'kota madya', 'kotamadya', 'kota', 'kodya', 'dati ii', 'dati 2', 'adm.', 'administrasi'
+ * Contoh: "KABUPATEN BONDOWOSO" -> "bondowoso"
+ *         "KAB. BONDOWOSO" -> "bondowoso"
+ *         "BONDOWOSO" -> "bondowoso"
+ *         "KOTA ADM. JAKARTA SELATAN" -> "jakarta selatan"
+ */
+export function cleanDati(val: unknown): string {
+  if (val === null || val === undefined) return '';
+  let s = cleanText(val);
+  if (!s) return '';
+
+  s = s
+    .replace(/\b(dati\s*2|dati\s*ii|dati)\b/gi, '')
+    .replace(/\b(kota\s*madya|kotamadya|kodya)\b/gi, '')
+    .replace(/\b(kabupaten|kab)\b/gi, '')
+    .replace(/\b(kota)\b/gi, '')
+    .replace(/\b(adm|administrasi)\b/gi, '')
+    .replace(/[\s\-_/\\,.]+/g, ' ')
+    .trim();
+
+  return s;
+}
+
+/**
+ * Normalisasi nama Kecamatan:
+ * Menghapus prefix 'kecamatan', 'kec.', 'kec', 'distrik'
+ */
+export function cleanKecamatan(val: unknown): string {
+  if (val === null || val === undefined) return '';
+  let s = cleanText(val);
+  if (!s) return '';
+
+  s = s
+    .replace(/\b(kecamatan|kec|distrik)\b/gi, '')
+    .replace(/[\s\-_/\\,.]+/g, ' ')
+    .trim();
+
+  return s;
+}
+
+/**
+ * Normalisasi nama Kelurahan / Desa:
+ * Menghapus prefix 'kelurahan', 'kel.', 'kel', 'desa', 'ds.', 'ds', 'kampung', 'nagari'
+ */
+export function cleanKelurahan(val: unknown): string {
+  if (val === null || val === undefined) return '';
+  let s = cleanText(val);
+  if (!s) return '';
+
+  s = s
+    .replace(/\b(kelurahan|kel|desa|ds|kampung|nagari)\b/gi, '')
+    .replace(/[\s\-_/\\,.]+/g, ' ')
+    .trim();
+
+  return s;
+}
+
+/**
+ * Normalisasi nama Provinsi:
+ * Menghapus prefix 'provinsi', 'prov.', 'prov', 'daerah istimewa', 'd.i.', 'di', 'dki'
+ */
+export function cleanProvinsi(val: unknown): string {
+  if (val === null || val === undefined) return '';
+  let s = cleanText(val);
+  if (!s) return '';
+
+  s = s
+    .replace(/\b(provinsi|prov|daerah\s*istimewa|d\.?i\.?|dki)\b/gi, '')
+    .replace(/[\s\-_/\\,.]+/g, ' ')
+    .trim();
+
+  return s;
+}
+
+/**
  * Compute similarity score between two Indonesian administrative texts (0.0 to 1.0)
- * Uses exact match, token overlap, and substring inclusion
+ * Uses exact match, administrative normalization (Dati II, Kec, Kel, Prov), token overlap, and substring inclusion
  */
 export function textSimilarityScore(a: string, b: string): number {
   const s1 = cleanText(a);
@@ -39,18 +115,46 @@ export function textSimilarityScore(a: string, b: string): number {
   if (!s1 || !s2) return 0;
   if (s1 === s2) return 1.0;
 
+  // Cek normalisasi Dati II (contoh: "KABUPATEN BONDOWOSO" vs "BONDOWOSO" -> 1.0)
+  const d1 = cleanDati(s1);
+  const d2 = cleanDati(s2);
+  if (d1 && d2 && d1 === d2) return 1.0;
+
+  // Cek normalisasi Kecamatan
+  const kec1 = cleanKecamatan(s1);
+  const kec2 = cleanKecamatan(s2);
+  if (kec1 && kec2 && kec1 === kec2) return 1.0;
+
+  // Cek normalisasi Kelurahan
+  const kel1 = cleanKelurahan(s1);
+  const kel2 = cleanKelurahan(s2);
+  if (kel1 && kel2 && kel1 === kel2) return 1.0;
+
+  // Cek normalisasi Provinsi
+  const p1 = cleanProvinsi(s1);
+  const p2 = cleanProvinsi(s2);
+  if (p1 && p2 && p1 === p2) return 1.0;
+
   // Substring inclusion bonus
-  if (s1.includes(s2) || s2.includes(s1)) {
-    const minLen = Math.min(s1.length, s2.length);
-    const maxLen = Math.max(s1.length, s2.length);
-    return 0.75 + 0.25 * (minLen / maxLen);
+  if (s1.includes(s2) || s2.includes(s1) || (d1 && d2 && (d1.includes(d2) || d2.includes(d1)))) {
+    const minLen = Math.min(d1.length || s1.length, d2.length || s2.length);
+    const maxLen = Math.max(d1.length || s1.length, d2.length || s2.length);
+    return 0.85 + 0.15 * (minLen / Math.max(1, maxLen));
   }
 
   // Token overlap (e.g. "Kec. Kebayoran Baru" vs "Kebayoran Baru")
-  const tokens1 = new Set(s1.split(' ').filter(t => t.length > 2));
-  const tokens2 = new Set(s2.split(' ').filter(t => t.length > 2));
+  const stopWords = new Set(['kabupaten', 'kab', 'kota', 'kecamatan', 'kec', 'kelurahan', 'kel', 'desa', 'ds', 'provinsi', 'prov']);
+  const tokens1 = new Set(s1.split(' ').filter(t => t.length > 2 && !stopWords.has(t)));
+  const tokens2 = new Set(s2.split(' ').filter(t => t.length > 2 && !stopWords.has(t)));
 
-  if (tokens1.size === 0 || tokens2.size === 0) return 0;
+  if (tokens1.size === 0 || tokens2.size === 0) {
+    const rawTokens1 = new Set(s1.split(' ').filter(t => t.length > 2));
+    const rawTokens2 = new Set(s2.split(' ').filter(t => t.length > 2));
+    if (rawTokens1.size === 0 || rawTokens2.size === 0) return 0;
+    let m = 0;
+    for (const t of rawTokens1) if (rawTokens2.has(t)) m++;
+    return m / new Set([...rawTokens1, ...rawTokens2]).size;
+  }
 
   let matches = 0;
   for (const token of tokens1) {

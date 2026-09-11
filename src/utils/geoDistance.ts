@@ -1,7 +1,7 @@
 // Utility for Real-World Geographic Distance Calculation & Google Maps Integration
 // Menghitung estimasi jarak fisik nyata (Kilometer) dan menyediakan rute Google Maps resmi
 
-import { cleanText, normalizeKodePos } from './normalizer';
+import { cleanText, cleanDati, cleanKecamatan, cleanKelurahan, normalizeKodePos } from './normalizer';
 import type { TargetRow, MasterRow } from '../types';
 
 /**
@@ -65,6 +65,35 @@ const CITY_COORDINATES: Record<string, GeoCoord> = {
   'KOTA MADIUN': { lat: -7.6298, lon: 111.5239 },
   'KAB. JEMBER': { lat: -8.1724, lon: 113.6995 },
   'KAB. BANYUWANGI': { lat: -8.2192, lon: 114.3691 },
+  'BONDOWOSO': { lat: -7.9133, lon: 113.8214 },
+  'KAB. BONDOWOSO': { lat: -7.9133, lon: 113.8214 },
+  'SITUBONDO': { lat: -7.7061, lon: 114.0048 },
+  'KAB. SITUBONDO': { lat: -7.7061, lon: 114.0048 },
+  'PROBOLINGGO': { lat: -7.7543, lon: 113.2159 },
+  'KAB. PROBOLINGGO': { lat: -7.7543, lon: 113.2159 },
+  'KOTA PROBOLINGGO': { lat: -7.7543, lon: 113.2159 },
+  'LUMAJANG': { lat: -8.1333, lon: 113.2222 },
+  'KAB. LUMAJANG': { lat: -8.1333, lon: 113.2222 },
+  'PASURUAN': { lat: -7.6453, lon: 112.9075 },
+  'KAB. PASURUAN': { lat: -7.6453, lon: 112.9075 },
+  'KOTA PASURUAN': { lat: -7.6453, lon: 112.9075 },
+  'MOJOKERTO': { lat: -7.4726, lon: 112.4381 },
+  'JOMBANG': { lat: -7.5458, lon: 112.2331 },
+  'BLITAR': { lat: -8.0983, lon: 112.1681 },
+  'TULUNGAGUNG': { lat: -8.0667, lon: 111.9000 },
+  'TRENGGALEK': { lat: -8.0500, lon: 111.7167 },
+  'NGANJUK': { lat: -7.6056, lon: 111.9039 },
+  'MAGETAN': { lat: -7.6539, lon: 111.3281 },
+  'NGAWI': { lat: -7.4042, lon: 111.4456 },
+  'BOJONEGORO': { lat: -7.1500, lon: 111.8819 },
+  'TUBAN': { lat: -6.8972, lon: 112.0647 },
+  'LAMONGAN': { lat: -7.1283, lon: 112.4131 },
+  'BANGKALAN': { lat: -7.0306, lon: 112.7486 },
+  'SAMPANG': { lat: -7.1872, lon: 113.2394 },
+  'PAMEKASAN': { lat: -7.1611, lon: 113.4739 },
+  'SUMENEP': { lat: -7.0167, lon: 113.8667 },
+  'PACITAN': { lat: -8.2069, lon: 111.0939 },
+  'PONOROGO': { lat: -7.8681, lon: 111.4622 },
 
   // SUMATERA
   'KOTA MEDAN': { lat: 3.5952, lon: 98.6722 },
@@ -127,9 +156,17 @@ export function calculateHaversineDistanceKm(
  * Temukan koordinat kota dari nama Dati II / Wilayah
  */
 function findCityCoord(cityName: string): GeoCoord | null {
+  if (!cityName) return null;
+  const clean = cleanDati(cityName).toUpperCase();
   const norm = cleanText(cityName).toUpperCase();
   for (const [key, coord] of Object.entries(CITY_COORDINATES)) {
-    if (norm.includes(key) || key.includes(norm)) {
+    const cleanKey = cleanDati(key).toUpperCase();
+    if (
+      clean === cleanKey ||
+      norm.includes(key) ||
+      key.includes(norm) ||
+      (clean.length >= 4 && (cleanKey.includes(clean) || clean.includes(cleanKey)))
+    ) {
       return coord;
     }
   }
@@ -178,17 +215,32 @@ export function buildGoogleMapsDirectionsUrl(target: TargetRow, master: MasterRo
  * Hitung Estimasi Jarak Realistis (Kilometer Nyata) Antara Data Target dan Cabang Master
  */
 export function calculateRealDistance(target: TargetRow, master: MasterRow): RealDistanceInfo {
-  const targetDati = cleanText(target['Dati II']);
-  const masterDati = cleanText(master['Dati II']);
-  const datiMatch = !!(targetDati && masterDati && (targetDati.includes(masterDati) || masterDati.includes(targetDati)));
+  const targetDatiRaw = cleanText(target['Dati II']);
+  const masterDatiRaw = cleanText(master['Dati II']);
+  const targetDatiClean = cleanDati(target['Dati II']);
+  const masterDatiClean = cleanDati(master['Dati II']);
+  const datiMatch = !!(
+    (targetDatiClean && masterDatiClean && targetDatiClean === masterDatiClean) ||
+    (targetDatiRaw && masterDatiRaw && (targetDatiRaw.includes(masterDatiRaw) || masterDatiRaw.includes(targetDatiRaw)))
+  );
 
-  const targetKec = cleanText(target.Kecamatan);
-  const masterKec = cleanText(master.Kecamatan);
-  const kecMatch = !!(targetKec && masterKec && (targetKec.includes(masterKec) || masterKec.includes(targetKec)));
+  const targetKecRaw = cleanText(target.Kecamatan);
+  const masterKecRaw = cleanText(master.Kecamatan);
+  const targetKecClean = cleanKecamatan(target.Kecamatan);
+  const masterKecClean = cleanKecamatan(master.Kecamatan);
+  const kecMatch = !!(
+    (targetKecClean && masterKecClean && targetKecClean === masterKecClean) ||
+    (targetKecRaw && masterKecRaw && (targetKecRaw.includes(masterKecRaw) || masterKecRaw.includes(targetKecRaw)))
+  );
 
-  const targetKel = cleanText(target.Kelurahan);
-  const masterKel = cleanText(master.Kelurahan);
-  const kelMatch = !!(targetKel && masterKel && (targetKel.includes(masterKel) || masterKel.includes(targetKel)));
+  const targetKelRaw = cleanText(target.Kelurahan);
+  const masterKelRaw = cleanText(master.Kelurahan);
+  const targetKelClean = cleanKelurahan(target.Kelurahan);
+  const masterKelClean = cleanKelurahan(master.Kelurahan);
+  const kelMatch = !!(
+    (targetKelClean && masterKelClean && targetKelClean === masterKelClean) ||
+    (targetKelRaw && masterKelRaw && (targetKelRaw.includes(masterKelRaw) || masterKelRaw.includes(targetKelRaw)))
+  );
 
   const targetPos = normalizeKodePos(target['KODE POS']);
   const masterPos = normalizeKodePos(master['KODE POS']);

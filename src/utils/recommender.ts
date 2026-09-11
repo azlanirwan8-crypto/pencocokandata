@@ -1,5 +1,13 @@
 import type { TargetRow, MasterRow } from '../types';
-import { normalizeKodePos, cleanText, textSimilarityScore } from './normalizer';
+import {
+  normalizeKodePos,
+  cleanText,
+  cleanDati,
+  cleanKecamatan,
+  cleanKelurahan,
+  cleanProvinsi,
+  textSimilarityScore,
+} from './normalizer';
 import { calculateRealDistance } from './geoDistance';
 
 export interface CandidateOption {
@@ -126,27 +134,29 @@ export function buildMasterProximityIndex(masterRows: MasterRow[]): MasterProxim
       }
     }
 
-    // Indeks Kelurahan
-    const kel = cleanText(m.Kelurahan);
-    if (kel) {
-      let arr = byKelurahan.get(kel);
+    // Indeks Kelurahan (Simpan varian nama bersih dan nama asli)
+    const rawKel = cleanText(m.Kelurahan);
+    const normKel = cleanKelurahan(m.Kelurahan);
+    [normKel, rawKel].filter(Boolean).forEach((k) => {
+      let arr = byKelurahan.get(k);
       if (!arr) {
         arr = [];
-        byKelurahan.set(kel, arr);
+        byKelurahan.set(k, arr);
       }
-      if (arr.length < 30) arr.push(m);
-    }
+      if (arr.length < 30 && !arr.includes(m)) arr.push(m);
+    });
 
-    // Indeks Kecamatan
-    const kec = cleanText(m.Kecamatan);
-    if (kec) {
-      let arr = byKecamatan.get(kec);
+    // Indeks Kecamatan (Simpan varian nama bersih dan nama asli)
+    const rawKec = cleanText(m.Kecamatan);
+    const normKec = cleanKecamatan(m.Kecamatan);
+    [normKec, rawKec].filter(Boolean).forEach((k) => {
+      let arr = byKecamatan.get(k);
       if (!arr) {
         arr = [];
-        byKecamatan.set(kec, arr);
+        byKecamatan.set(k, arr);
       }
-      if (arr.length < 30) arr.push(m);
-    }
+      if (arr.length < 30 && !arr.includes(m)) arr.push(m);
+    });
 
     // Indeks Kode Pos
     const kp = normalizeKodePos(m['KODE POS']);
@@ -157,7 +167,7 @@ export function buildMasterProximityIndex(masterRows: MasterRow[]): MasterProxim
         arr3 = [];
         byPostal3.set(p3, arr3);
       }
-      if (arr3.length < 30) arr3.push(m);
+      if (arr3.length < 30 && !arr3.includes(m)) arr3.push(m);
 
       const p2 = kp.slice(0, 2);
       let arr2 = byPostal2.get(p2);
@@ -165,30 +175,33 @@ export function buildMasterProximityIndex(masterRows: MasterRow[]): MasterProxim
         arr2 = [];
         byPostal2.set(p2, arr2);
       }
-      if (arr2.length < 30) arr2.push(m);
+      if (arr2.length < 30 && !arr2.includes(m)) arr2.push(m);
     }
 
-    // Indeks Dati II
-    const dati = cleanText(m['Dati II']);
-    if (dati) {
-      let arrD = byDati.get(dati);
+    // Indeks Dati II (Simpan varian nama bersih tanpa prefix 'kabupaten'/'kota' dan nama asli)
+    // Contoh: "KABUPATEN BONDOWOSO" -> diindeks sebagai "bondowoso" dan "kabupaten bondowoso"
+    const rawDati = cleanText(m['Dati II']);
+    const normDati = cleanDati(m['Dati II']);
+    [normDati, rawDati].filter(Boolean).forEach((d) => {
+      let arrD = byDati.get(d);
       if (!arrD) {
         arrD = [];
-        byDati.set(dati, arrD);
+        byDati.set(d, arrD);
       }
-      if (arrD.length < 30) arrD.push(m);
-    }
+      if (arrD.length < 50 && !arrD.includes(m)) arrD.push(m);
+    });
 
     // Indeks Provinsi
-    const prov = cleanText(m.Provinsi);
-    if (prov) {
-      let arrP = byProv.get(prov);
+    const rawProv = cleanText(m.Provinsi);
+    const normProv = cleanProvinsi(m.Provinsi);
+    [normProv, rawProv].filter(Boolean).forEach((p) => {
+      let arrP = byProv.get(p);
       if (!arrP) {
         arrP = [];
-        byProv.set(prov, arrP);
+        byProv.set(p, arrP);
       }
-      if (arrP.length < 30) arrP.push(m);
-    }
+      if (arrP.length < 50 && !arrP.includes(m)) arrP.push(m);
+    });
   }
 
   return {
@@ -220,25 +233,26 @@ function evaluateMasterCandidate(
   const postal3Match = targetKpStr.length >= 3 && masterKpStr.length >= 3 && targetKpStr.substring(0, 3) === masterKpStr.substring(0, 3);
   const postal2Match = targetKpStr.length >= 2 && masterKpStr.length >= 2 && targetKpStr.substring(0, 2) === masterKpStr.substring(0, 2);
 
-  const targetKel = cleanText(target.Kelurahan);
-  const masterKel = cleanText(m.Kelurahan);
-  const kelSim = textSimilarityScore(targetKel, masterKel);
-  const kelMatch = kelSim > 0.75;
+  const targetKel = cleanKelurahan(target.Kelurahan);
+  const masterKel = cleanKelurahan(m.Kelurahan);
+  const kelSim = textSimilarityScore(target.Kelurahan || '', m.Kelurahan || '');
+  const kelMatch = kelSim > 0.75 || (targetKel && masterKel && targetKel === masterKel);
 
-  const targetKec = cleanText(target.Kecamatan);
-  const masterKec = cleanText(m.Kecamatan);
-  const kecSim = textSimilarityScore(targetKec, masterKec);
-  const kecMatch = kecSim > 0.75;
+  const targetKec = cleanKecamatan(target.Kecamatan);
+  const masterKec = cleanKecamatan(m.Kecamatan);
+  const kecSim = textSimilarityScore(target.Kecamatan || '', m.Kecamatan || '');
+  const kecMatch = kecSim > 0.75 || (targetKec && masterKec && targetKec === masterKec);
 
-  const targetDati = cleanText(target['Dati II']);
-  const masterDati = cleanText(m['Dati II']);
-  const datiSim = textSimilarityScore(targetDati, masterDati);
-  const datiMatch = datiSim > 0.75;
+  // Normalisasi Dati II: "KABUPATEN BONDOWOSO" vs "BONDOWOSO" diakui sama persis (100% Match)
+  const targetDati = cleanDati(target['Dati II']);
+  const masterDati = cleanDati(m['Dati II']);
+  const datiSim = textSimilarityScore(target['Dati II'] || '', m['Dati II'] || '');
+  const datiMatch = datiSim > 0.75 || (targetDati && masterDati && targetDati === masterDati);
 
-  const targetProv = cleanText(target.Provinsi);
-  const masterProv = cleanText(m.Provinsi);
-  const provSim = textSimilarityScore(targetProv, masterProv);
-  const provMatch = provSim > 0.75;
+  const targetProv = cleanProvinsi(target.Provinsi);
+  const masterProv = cleanProvinsi(m.Provinsi);
+  const provSim = textSimilarityScore(target.Provinsi || '', m.Provinsi || '');
+  const provMatch = provSim > 0.75 || (targetProv && masterProv && targetProv === masterProv);
 
   const addrSim = textSimilarityScore(cleanText(target.ALAMAT), cleanText(m.ALAMAT));
 
@@ -366,22 +380,35 @@ export function findClosestMasterRecommendation(
     }
   }
 
-  const targetDati = cleanText(target['Dati II']);
-  const targetProv = cleanText(target.Provinsi);
+  // Normalisasi Dati II & Provinsi untuk query indeks
+  const targetDati = cleanDati(target['Dati II']);
+  const targetDatiRaw = cleanText(target['Dati II']);
+  const targetProv = cleanProvinsi(target.Provinsi);
+  const targetProvRaw = cleanText(target.Provinsi);
 
   // Kumpulkan kandidat real dari master
   const rawPool: MasterRow[] = [];
 
-  // Prioritas 1: Cabang di Dati II / Kota yang sama
+  // Prioritas 1: Cabang di Dati II / Kota yang sama (mencakup "bondowoso" dan "kabupaten bondowoso")
   if (targetDati && index.byDati.has(targetDati)) {
     const list = index.byDati.get(targetDati) || [];
     rawPool.push(...list);
   }
+  if (targetDatiRaw && targetDatiRaw !== targetDati && index.byDati.has(targetDatiRaw)) {
+    const list = index.byDati.get(targetDatiRaw) || [];
+    rawPool.push(...list);
+  }
 
   // Prioritas 2: Jika cabang di Dati II kurang dari 3, tambahkan dari Provinsi yang sama
-  if (rawPool.length < 5 && targetProv && index.byProv.has(targetProv)) {
-    const provList = index.byProv.get(targetProv) || [];
-    rawPool.push(...provList);
+  if (rawPool.length < 5) {
+    if (targetProv && index.byProv.has(targetProv)) {
+      const provList = index.byProv.get(targetProv) || [];
+      rawPool.push(...provList);
+    }
+    if (targetProvRaw && targetProvRaw !== targetProv && index.byProv.has(targetProvRaw)) {
+      const provList = index.byProv.get(targetProvRaw) || [];
+      rawPool.push(...provList);
+    }
   }
 
   // Prioritas 3: Fallback hanya jika di provinsi pun tidak ada
