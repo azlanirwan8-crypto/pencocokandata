@@ -7,6 +7,7 @@ import {
   cleanKelurahan,
   cleanProvinsi,
   textSimilarityScore,
+  hasDirectionalConflict,
 } from './normalizer';
 import { calculateRealDistance } from './geoDistance';
 
@@ -236,18 +237,22 @@ function evaluateMasterCandidate(
   const targetKel = cleanKelurahan(target.Kelurahan);
   const masterKel = cleanKelurahan(m.Kelurahan);
   const kelSim = textSimilarityScore(target.Kelurahan || '', m.Kelurahan || '');
-  const kelMatch = kelSim > 0.75 || (targetKel && masterKel && targetKel === masterKel);
+  const kelMatch = !hasDirectionalConflict(target.Kelurahan || '', m.Kelurahan || '') &&
+    (kelSim > 0.75 || (targetKel && masterKel && targetKel === masterKel));
 
   const targetKec = cleanKecamatan(target.Kecamatan);
   const masterKec = cleanKecamatan(m.Kecamatan);
   const kecSim = textSimilarityScore(target.Kecamatan || '', m.Kecamatan || '');
-  const kecMatch = kecSim > 0.75 || (targetKec && masterKec && targetKec === masterKec);
+  const kecMatch = !hasDirectionalConflict(target.Kecamatan || '', m.Kecamatan || '') &&
+    (kecSim > 0.75 || (targetKec && masterKec && targetKec === masterKec));
 
   // Normalisasi Dati II: "KABUPATEN BONDOWOSO" vs "BONDOWOSO" diakui sama persis (100% Match)
+  // Diproteksi agar arah (utara/selatan/barat/timur) tidak saling tertukar
   const targetDati = cleanDati(target['Dati II']);
   const masterDati = cleanDati(m['Dati II']);
   const datiSim = textSimilarityScore(target['Dati II'] || '', m['Dati II'] || '');
-  const datiMatch = datiSim > 0.75 || (targetDati && masterDati && targetDati === masterDati);
+  const datiMatch = !hasDirectionalConflict(target['Dati II'] || '', m['Dati II'] || '') &&
+    (datiSim > 0.75 || (targetDati && masterDati && targetDati === masterDati));
 
   const targetProv = cleanProvinsi(target.Provinsi);
   const masterProv = cleanProvinsi(m.Provinsi);
@@ -273,6 +278,16 @@ function evaluateMasterCandidate(
 
     if (postalDiff <= 3) score += 3;
     else if (postalDiff <= 10) score += 2;
+
+    // Bonus keselarasan entitas (Kota vs Kab) untuk tie-breaker (misal target "Kota Bogor" vs "Kabupaten Bogor")
+    const targetIsKota = /\bkota\b/i.test(target['Dati II'] || '');
+    const masterIsKota = /\bkota\b/i.test(m['Dati II'] || '');
+    const targetIsKab = /\b(kabupaten|kab)\b/i.test(target['Dati II'] || '');
+    const masterIsKab = /\b(kabupaten|kab)\b/i.test(m['Dati II'] || '');
+    if ((targetIsKota && masterIsKota) || (targetIsKab && masterIsKab)) {
+      score += 1;
+      distance -= 10;
+    }
 
     if (kecMatch) {
       score += 12;
@@ -399,6 +414,22 @@ export function findClosestMasterRecommendation(
     rawPool.push(...list);
   }
 
+  // Fallback pencarian Dati II dengan pemindaian menyeluruh jika lookup langsung belum menemukan kandidat
+  if (rawPool.length === 0 && targetDati) {
+    for (const [key, list] of index.byDati.entries()) {
+      const cleanKey = cleanDati(key);
+      if (
+        cleanKey === targetDati ||
+        (!hasDirectionalConflict(key, targetDati) && (
+          (cleanKey.length >= 4 && targetDati.length >= 4 && (cleanKey.includes(targetDati) || targetDati.includes(cleanKey))) ||
+          textSimilarityScore(key, targetDati) >= 0.8
+        ))
+      ) {
+        rawPool.push(...list);
+      }
+    }
+  }
+
   // Prioritas 2: Jika cabang di Dati II kurang dari 3, tambahkan dari Provinsi yang sama
   if (rawPool.length < 5) {
     if (targetProv && index.byProv.has(targetProv)) {
@@ -408,6 +439,16 @@ export function findClosestMasterRecommendation(
     if (targetProvRaw && targetProvRaw !== targetProv && index.byProv.has(targetProvRaw)) {
       const provList = index.byProv.get(targetProvRaw) || [];
       rawPool.push(...provList);
+    }
+
+    // Fallback provinsi dengan pemindaian menyeluruh jika lookup langsung belum menemukan kandidat
+    if (rawPool.length < 5 && targetProv) {
+      for (const [pKey, pList] of index.byProv.entries()) {
+        const cleanPKey = cleanProvinsi(pKey);
+        if (cleanPKey === targetProv || textSimilarityScore(pKey, targetProv) >= 0.8) {
+          rawPool.push(...pList);
+        }
+      }
     }
   }
 

@@ -1,7 +1,7 @@
 // Utility for Real-World Geographic Distance Calculation & Google Maps Integration
 // Menghitung estimasi jarak fisik nyata (Kilometer) dan menyediakan rute Google Maps resmi
 
-import { cleanText, cleanDati, cleanKecamatan, cleanKelurahan, normalizeKodePos } from './normalizer';
+import { cleanText, cleanDati, cleanKecamatan, cleanKelurahan, normalizeKodePos, hasDirectionalConflict } from './normalizer';
 import type { TargetRow, MasterRow } from '../types';
 
 /**
@@ -165,7 +165,7 @@ function findCityCoord(cityName: string): GeoCoord | null {
       clean === cleanKey ||
       norm.includes(key) ||
       key.includes(norm) ||
-      (clean.length >= 4 && (cleanKey.includes(clean) || clean.includes(cleanKey)))
+      (!hasDirectionalConflict(cityName, key) && (clean.length >= 4 && (cleanKey.includes(clean) || clean.includes(cleanKey))))
     ) {
       return coord;
     }
@@ -219,7 +219,8 @@ export function calculateRealDistance(target: TargetRow, master: MasterRow): Rea
   const masterDatiRaw = cleanText(master['Dati II']);
   const targetDatiClean = cleanDati(target['Dati II']);
   const masterDatiClean = cleanDati(master['Dati II']);
-  const datiMatch = !!(
+  const datiConflict = hasDirectionalConflict(target['Dati II'] || '', master['Dati II'] || '');
+  const datiMatch = !datiConflict && !!(
     (targetDatiClean && masterDatiClean && targetDatiClean === masterDatiClean) ||
     (targetDatiRaw && masterDatiRaw && (targetDatiRaw.includes(masterDatiRaw) || masterDatiRaw.includes(targetDatiRaw)))
   );
@@ -228,7 +229,8 @@ export function calculateRealDistance(target: TargetRow, master: MasterRow): Rea
   const masterKecRaw = cleanText(master.Kecamatan);
   const targetKecClean = cleanKecamatan(target.Kecamatan);
   const masterKecClean = cleanKecamatan(master.Kecamatan);
-  const kecMatch = !!(
+  const kecConflict = hasDirectionalConflict(target.Kecamatan || '', master.Kecamatan || '');
+  const kecMatch = !kecConflict && !!(
     (targetKecClean && masterKecClean && targetKecClean === masterKecClean) ||
     (targetKecRaw && masterKecRaw && (targetKecRaw.includes(masterKecRaw) || masterKecRaw.includes(targetKecRaw)))
   );
@@ -237,7 +239,8 @@ export function calculateRealDistance(target: TargetRow, master: MasterRow): Rea
   const masterKelRaw = cleanText(master.Kelurahan);
   const targetKelClean = cleanKelurahan(target.Kelurahan);
   const masterKelClean = cleanKelurahan(master.Kelurahan);
-  const kelMatch = !!(
+  const kelConflict = hasDirectionalConflict(target.Kelurahan || '', master.Kelurahan || '');
+  const kelMatch = !kelConflict && !!(
     (targetKelClean && masterKelClean && targetKelClean === masterKelClean) ||
     (targetKelRaw && masterKelRaw && (targetKelRaw.includes(masterKelRaw) || masterKelRaw.includes(targetKelRaw)))
   );
