@@ -917,9 +917,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                 </th>
                 <th
                   style={{
-                    minWidth: '385px',
-                    maxWidth: '385px',
-                    width: '385px',
+                    minWidth: '420px',
+                    maxWidth: '420px',
+                    width: '420px',
                     background: '#fff9f0',
                     color: '#d97706',
                     position: 'sticky',
@@ -1017,9 +1017,10 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                           boxShadow: '3px 0 6px -2px rgba(0, 0, 0, 0.06)',
                           borderRight: '2px solid rgba(247, 184, 75, 0.45)',
                           borderBottom: '1px solid #e9ebec',
-                          minWidth: '385px',
-                          maxWidth: '385px',
-                          width: '385px',
+                          minWidth: '420px',
+                          maxWidth: '420px',
+                          width: '420px',
+                          boxSizing: 'border-box',
                         }}
                       >
                         {(() => {
@@ -1096,29 +1097,32 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                 style={{
                                   border: cardBorder,
                                   borderRadius: '6px',
-                                  padding: '0.42rem 0.62rem',
+                                  padding: '0.45rem 0.6rem',
                                   background: cardBg,
                                   boxShadow: isTop1 ? '0 1px 2px rgba(10, 179, 156, 0.08)' : 'none',
+                                  overflow: 'hidden',
+                                  boxSizing: 'border-box',
                                 }}
                               >
-                                {/* Header Opsi: Badge Pilihan + Skor + Tombol (i) & Tombol Pilih Cabang Ini (WAJIB 1 BARIS) */}
+                                {/* Header Opsi: Badge Pilihan + Skor + Jarak & Action Quick Links (Maps + Info) */}
                                 <div
                                   style={{
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'space-between',
                                     flexWrap: 'nowrap',
-                                    gap: '0.4rem',
-                                    marginBottom: '0.25rem',
+                                    gap: '0.35rem',
+                                    marginBottom: '0.3rem',
                                     width: '100%',
                                   }}
                                 >
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                                  {/* Kiri: Pilihan + Skor + Jarak Fisik */}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
                                     <span
                                       style={{
-                                        padding: '0.1rem 0.4rem',
+                                        padding: '0.1rem 0.38rem',
                                         borderRadius: '3px',
-                                        fontSize: '0.68rem',
+                                        fontSize: '0.67rem',
                                         fontWeight: 700,
                                         background: badgeBg,
                                         color: badgeColor,
@@ -1131,8 +1135,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                       style={{
                                         display: 'inline-flex',
                                         alignItems: 'center',
-                                        gap: '0.18rem',
-                                        fontSize: '0.68rem',
+                                        gap: '0.15rem',
+                                        fontSize: '0.67rem',
                                         fontWeight: 600,
                                         color: badgeColor,
                                         whiteSpace: 'nowrap',
@@ -1145,44 +1149,46 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                         style={{
                                           display: 'inline-flex',
                                           alignItems: 'center',
-                                          gap: '0.18rem',
-                                          fontSize: '0.68rem',
+                                          gap: '0.15rem',
+                                          fontSize: '0.67rem',
                                           fontWeight: 600,
                                           color: '#0d9488',
                                           background: 'rgba(13, 148, 136, 0.08)',
-                                          padding: '0.1rem 0.35rem',
+                                          padding: '0.08rem 0.32rem',
                                           borderRadius: '3px',
                                           whiteSpace: 'nowrap',
                                         }}
                                         title={`Estimasi jarak fisik: ${activeCand.formattedDistance} (${activeCand.distanceBasis || 'Jarak darat'})`}
                                       >
-                                        <MapPin size={10} /> {activeCand.formattedDistance}
+                                        <MapPin size={9} /> {activeCand.formattedDistance}
                                       </span>
                                     )}
                                   </div>
 
-                                  {/* Tombol Info (i) & Tombol Pilih Cabang Ini */}
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                                  {/* Kanan: Tombol Maps & Tombol Info (i) */}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
                                     {activeCand.googleMapsUrl && (
                                       <a
                                         href={activeCand.googleMapsUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="btn btn-ghost btn-sm"
                                         style={{
                                           display: 'inline-flex',
                                           alignItems: 'center',
                                           gap: '0.2rem',
-                                          padding: '0.18rem 0.4rem',
-                                          fontSize: '0.68rem',
+                                          padding: '0.12rem 0.38rem',
+                                          fontSize: '0.67rem',
+                                          fontWeight: 600,
                                           color: '#2563eb',
-                                          background: 'rgba(37, 99, 235, 0.06)',
+                                          background: 'rgba(37, 99, 235, 0.08)',
+                                          border: '1px solid rgba(37, 99, 235, 0.25)',
                                           borderRadius: '4px',
                                           textDecoration: 'none',
+                                          cursor: 'pointer',
                                         }}
                                         title="Buka rute navigasi & cek jarak real di Google Maps langsung"
                                       >
-                                        <ExternalLink size={11} /> Maps
+                                        <ExternalLink size={10} /> Maps
                                       </a>
                                     )}
                                     <button
@@ -1192,8 +1198,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                         display: 'inline-flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        width: '24px',
-                                        height: '24px',
+                                        width: '22px',
+                                        height: '22px',
                                         borderRadius: '4px',
                                         border: isTop1
                                           ? '1px solid rgba(10, 179, 156, 0.4)'
@@ -1212,16 +1218,48 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                       }}
                                       title="Lihat alasan penilaian skor & detail wilayah"
                                     >
-                                      <Info size={12} />
+                                      <Info size={11} />
                                     </button>
+                                  </div>
+                                </div>
 
+                                {/* Baris Cabang Master + Tombol Utama Gunakan Cabang Ini */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.12rem' }}>
+                                  <div
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      gap: '0.4rem',
+                                      marginBottom: '0.1rem',
+                                    }}
+                                  >
+                                    <div
+                                      style={{
+                                        fontSize: '0.81rem',
+                                        fontWeight: 600,
+                                        color: '#212529',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                      }}
+                                    >
+                                      {m['Sandi Cabang'] || m.Cabang || m.Sandi || '-'}
+                                      {m['Nama Outlet'] && (
+                                        <span style={{ fontSize: '0.73rem', color: '#405189', fontWeight: 500, marginLeft: '0.35rem' }}>
+                                          • {m['Nama Outlet']}
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {/* Tombol Gunakan Cabang Ini (Kompak & Pas di Baris Cabang) */}
                                     <button
                                       type="button"
                                       className="btn btn-outline btn-sm"
                                       onClick={() => onApproveRecommendation(r.No, m)}
                                       style={{
-                                        fontSize: '0.7rem',
-                                        padding: '0.18rem 0.55rem',
+                                        fontSize: '0.69rem',
+                                        padding: '0.16rem 0.52rem',
                                         color: badgeColor,
                                         borderColor: isTop1
                                           ? 'rgba(10, 179, 156, 0.45)'
@@ -1236,23 +1274,14 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                         fontWeight: 600,
                                         whiteSpace: 'nowrap',
                                         flexShrink: 0,
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.2rem',
                                       }}
                                       title="Pilih dan setujui cabang master ini"
                                     >
                                       <Check size={11} /> Gunakan Cabang Ini
                                     </button>
-                                  </div>
-                                </div>
-
-                                {/* Rincian Cabang Master & Alamat Lengkap Real */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.12rem' }}>
-                                  <div style={{ fontSize: '0.81rem', fontWeight: 600, color: '#212529' }}>
-                                    {m['Sandi Cabang'] || m.Cabang || m.Sandi || '-'}
-                                    {m['Nama Outlet'] && (
-                                      <span style={{ fontSize: '0.73rem', color: '#405189', fontWeight: 500, marginLeft: '0.35rem' }}>
-                                        • {m['Nama Outlet']}
-                                      </span>
-                                    )}
                                   </div>
 
                                   {/* Alamat Lengkap Master Asli (Clean & Ringkas) */}
