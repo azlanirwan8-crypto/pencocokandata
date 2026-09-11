@@ -64,15 +64,49 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
     return map;
   }, [allTargetRows]);
 
+  // Sorting state for table (Default: urut berdasarkan Wilayah W1, W2, W3... secara natural)
+  const [sortField, setSortField] = useState<'wilayah' | 'matched' | 'total' | 'rate'>('wilayah');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const toggleSort = (field: 'wilayah' | 'matched' | 'total' | 'rate') => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection(field === 'wilayah' ? 'asc' : 'desc');
+    }
+  };
+
   // Filter regional stats based on selected Wilayah filter in Dashboard
   const displayedRegions = useMemo(() => {
     let list = [...regionalStats];
     if (selectedWilayah && selectedWilayah !== 'ALL') {
       list = list.filter((s) => String(s.wilayah).trim() === String(selectedWilayah).trim());
     }
-    // Urutkan dari total data terbanyak
-    return list.sort((a, b) => b.total - a.total);
-  }, [regionalStats, selectedWilayah]);
+
+    return list.sort((a, b) => {
+      let cmp = 0;
+      if (sortField === 'wilayah') {
+        const nameA = formatWilayahName(a.wilayah);
+        const nameB = formatWilayahName(b.wilayah);
+        cmp = nameA.localeCompare(nameB, 'id', { numeric: true, sensitivity: 'base' });
+      } else if (sortField === 'matched') {
+        const countA = (matchedByWilayah.get(a.wilayah) || []).length;
+        const countB = (matchedByWilayah.get(b.wilayah) || []).length;
+        cmp = countA - countB;
+      } else if (sortField === 'total') {
+        cmp = a.total - b.total;
+      } else if (sortField === 'rate') {
+        const countA = (matchedByWilayah.get(a.wilayah) || []).length;
+        const countB = (matchedByWilayah.get(b.wilayah) || []).length;
+        const rateA = a.total > 0 ? (countA / a.total) * 100 : 0;
+        const rateB = b.total > 0 ? (countB / b.total) * 100 : 0;
+        cmp = rateA - rateB;
+      }
+
+      return sortDirection === 'asc' ? cmp : -cmp;
+    });
+  }, [regionalStats, selectedWilayah, sortField, sortDirection, matchedByWilayah]);
 
   // Handler: Download Excel per Wilayah
   const handleDownloadExcel = (wilayahKey: string) => {
@@ -340,10 +374,54 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
           <thead>
             <tr>
               <th style={{ width: '48px', textAlign: 'center', background: '#f3f6f9', color: '#405189' }}>No</th>
-              <th style={{ minWidth: '160px', color: '#405189' }}>Wilayah Operasional</th>
-              <th style={{ minWidth: '140px', textAlign: 'center', color: '#405189' }}>Data Match (Bersih)</th>
-              <th style={{ minWidth: '120px', textAlign: 'center', color: '#405189' }}>Total Target</th>
-              <th style={{ minWidth: '180px', color: '#405189' }}>Tingkat Keberhasilan</th>
+              <th
+                onClick={() => toggleSort('wilayah')}
+                style={{ minWidth: '160px', color: '#405189', cursor: 'pointer', userSelect: 'none' }}
+                title="Klik untuk mengurutkan berdasarkan Wilayah"
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                  Wilayah Operasional
+                  <span style={{ fontSize: '0.75rem', color: sortField === 'wilayah' ? '#405189' : '#adb5bd' }}>
+                    {sortField === 'wilayah' ? (sortDirection === 'asc' ? '▲' : '▼') : '⇅'}
+                  </span>
+                </span>
+              </th>
+              <th
+                onClick={() => toggleSort('matched')}
+                style={{ minWidth: '140px', textAlign: 'center', color: '#405189', cursor: 'pointer', userSelect: 'none' }}
+                title="Klik untuk mengurutkan berdasarkan Data Match"
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+                  Data Match (Bersih)
+                  <span style={{ fontSize: '0.75rem', color: sortField === 'matched' ? '#405189' : '#adb5bd' }}>
+                    {sortField === 'matched' ? (sortDirection === 'asc' ? '▲' : '▼') : '⇅'}
+                  </span>
+                </span>
+              </th>
+              <th
+                onClick={() => toggleSort('total')}
+                style={{ minWidth: '120px', textAlign: 'center', color: '#405189', cursor: 'pointer', userSelect: 'none' }}
+                title="Klik untuk mengurutkan berdasarkan Total Target"
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+                  Total Target
+                  <span style={{ fontSize: '0.75rem', color: sortField === 'total' ? '#405189' : '#adb5bd' }}>
+                    {sortField === 'total' ? (sortDirection === 'asc' ? '▲' : '▼') : '⇅'}
+                  </span>
+                </span>
+              </th>
+              <th
+                onClick={() => toggleSort('rate')}
+                style={{ minWidth: '180px', color: '#405189', cursor: 'pointer', userSelect: 'none' }}
+                title="Klik untuk mengurutkan berdasarkan Tingkat Keberhasilan"
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                  Tingkat Keberhasilan
+                  <span style={{ fontSize: '0.75rem', color: sortField === 'rate' ? '#405189' : '#adb5bd' }}>
+                    {sortField === 'rate' ? (sortDirection === 'asc' ? '▲' : '▼') : '⇅'}
+                  </span>
+                </span>
+              </th>
               <th style={{ minWidth: '130px', textAlign: 'center', color: '#405189' }}>Status</th>
               <th style={{ minWidth: '180px', textAlign: 'center', color: '#405189' }}>Aksi Unduh Laporan</th>
             </tr>

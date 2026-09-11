@@ -19,7 +19,11 @@ export const RegionalAnalyticsCharts: React.FC<RegionalAnalyticsChartsProps> = (
   // Filter ketat: jika difilter, hanya tampilkan wilayah yang dipilih
   const displayedStats = React.useMemo(() => {
     if (!selectedWilayah || selectedWilayah === 'ALL') {
-      return [...stats].sort((a, b) => b.total - a.total);
+      return [...stats].sort((a, b) => {
+        const nameA = formatWilayahName(a.wilayah);
+        const nameB = formatWilayahName(b.wilayah);
+        return nameA.localeCompare(nameB, 'id', { numeric: true, sensitivity: 'base' });
+      });
     }
     return stats.filter((s) => String(s.wilayah).trim() === String(selectedWilayah).trim());
   }, [stats, selectedWilayah]);

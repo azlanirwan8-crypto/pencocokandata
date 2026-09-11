@@ -365,13 +365,19 @@ export const App: React.FC = () => {
       map.set(rawW, current);
     });
 
-    return Array.from(map.entries()).map(([wilayah, data]) => ({
-      wilayah,
-      total: data.total,
-      matched: data.matched,
-      unmatched: data.unmatched,
-      rate: data.total > 0 ? (data.matched / data.total) * 100 : 0,
-    }));
+    return Array.from(map.entries())
+      .map(([wilayah, data]) => ({
+        wilayah,
+        total: data.total,
+        matched: data.matched,
+        unmatched: data.unmatched,
+        rate: data.total > 0 ? (data.matched / data.total) * 100 : 0,
+      }))
+      .sort((a, b) => {
+        const nameA = formatWilayahName(a.wilayah);
+        const nameB = formatWilayahName(b.wilayah);
+        return nameA.localeCompare(nameB, 'id', { numeric: true, sensitivity: 'base' });
+      });
   }, [dashboardFilteredRows, dashboardWilayahFilter]);
 
   // Execution Trigger
