@@ -11,6 +11,7 @@ import { TargetUploadModal } from './components/WorkingEngine/TargetUploadModal'
 import { ProgressBar } from './components/WorkingEngine/ProgressBar';
 import { TargetDataGrid } from './components/WorkingEngine/TargetDataGrid';
 import { ExportAction } from './components/WorkingEngine/ExportAction';
+import { WilayahManager } from './components/WilayahData/WilayahManager';
 
 import type { MasterRow, TargetRow, MatchingStats, WilayahStat } from './types';
 import type { RecommendationResult } from './utils/recommender';
@@ -41,7 +42,7 @@ import { SnapshotModal, type WorkspaceSnapshot } from './components/SnapshotModa
 import { Database, ShieldAlert, Filter, UploadCloud, RotateCcw, Layers } from 'lucide-react';
 
 export const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'master' | 'working'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'master' | 'working' | 'wilayah'>('dashboard');
   const [masterSubTab, setMasterSubTab] = useState<'health' | 'grid'>('health');
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
   const [isSnapshotModalOpen, setIsSnapshotModalOpen] = useState<boolean>(false);
@@ -1244,6 +1245,11 @@ export const App: React.FC = () => {
               </>
             )}
           </>
+        )}
+
+        {/* MENU 4: SETTING WILAYAH */}
+        {activeTab === 'wilayah' && (
+          <WilayahManager />
         )}
         </main>
       </div>

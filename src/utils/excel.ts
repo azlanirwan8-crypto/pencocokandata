@@ -1,7 +1,8 @@
 import * as XLSX from 'xlsx';
-import type { TargetRow } from '../types';
+import type { TargetRow, WilayahSetting } from '../types';
 import { SAMPLE_MASTER_ROWS, SAMPLE_TARGET_ROWS } from './sampleData';
 import { formatWilayahName } from './normalizer';
+import { loadWilayahFromNeon } from './neonSync';
 
 export const MASTER_COLUMNS_WITH_SANDI_CABANG: string[] = [
   'Wilayah',
@@ -192,7 +193,10 @@ export function validateTargetHeaders(fileHeaders: string[]): { isValid: boolean
  * Parse an Excel file (.xlsx, .xls, .csv) into array of objects and headers
  * Standardizes headers into canonical column names automatically
  */
-export async function parseExcelFile<T>(file: File): Promise<{ data: T[]; headers: string[] }> {
+export async function parseExcelFile<T>(file: File, wilayahSettings?: WilayahSetting[]): Promise<{ data: T[]; headers: string[] }> {
+  // Ambil data wilayah jika tidak di-pass dari luar
+  const wSettings = wilayahSettings || await loadWilayahFromNeon() || [];
+
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
@@ -246,6 +250,16 @@ export async function parseExcelFile<T>(file: File): Promise<{ data: T[]; header
             if (!item.Sandi) item.Sandi = item['Sandi Cabang'];
           } else if (item.Sandi || item.Cabang) {
             item['Sandi Cabang'] = [item.Sandi, item.Cabang].filter(Boolean).join(' - ');
+          }
+
+          // Wilayah Mapping based on 2nd and 3rd digit of Branch Code
+          const branchCode = item['Branch Code'] || item['Kode Cabang'] || '';
+          if (branchCode && branchCode.length >= 3 && wSettings.length > 0) {
+            const digit2and3 = branchCode.substring(1, 3);
+            const matchedWilayah = wSettings.find(w => w.kodeWilayah === digit2and3);
+            if (matchedWilayah) {
+              item['Wilayah'] = matchedWilayah.keterangan;
+            }
           }
 
           return item;

@@ -1,9 +1,9 @@
 import React from 'react';
-import { LayoutDashboard, Database, FileCheck, Layers } from 'lucide-react';
+import { LayoutDashboard, Database, FileCheck, Layers, Map } from 'lucide-react';
 
 interface SidebarProps {
-  activeTab: 'dashboard' | 'master' | 'working';
-  setActiveTab: (tab: 'dashboard' | 'master' | 'working') => void;
+  activeTab: 'dashboard' | 'master' | 'working' | 'wilayah';
+  setActiveTab: (tab: 'dashboard' | 'master' | 'working' | 'wilayah') => void;
   isCollapsed: boolean;
 }
 
@@ -68,6 +68,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <FileCheck size={18} />
             </div>
             <span className="nav-item-label">Data Cek</span>
+          </button>
+          {/* 4. Setting Wilayah */}
+          <button
+            type="button"
+            className={`sidebar-nav-item ${activeTab === 'wilayah' ? 'active' : ''}`}
+            onClick={() => setActiveTab('wilayah')}
+            id="sidebar-btn-wilayah"
+            title="Setting Wilayah"
+          >
+            <div className="nav-item-icon">
+              <Map size={18} />
+            </div>
+            <span className="nav-item-label">Setting Wilayah</span>
           </button>
         </nav>
       </div>

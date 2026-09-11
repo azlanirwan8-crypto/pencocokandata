@@ -1,4 +1,4 @@
-import type { MasterRow, TargetRow } from '../types';
+import type { MasterRow, TargetRow, WilayahSetting } from '../types';
 
 export interface NeonStatus {
   connected: boolean;
@@ -229,6 +229,50 @@ export async function clearTargetFromNeon(): Promise<boolean> {
     return Boolean(json.ok);
   } catch (err) {
     console.warn('Neon target delete error:', err);
+    return false;
+  }
+}
+
+/**
+ * Load Wilayah Settings from Neon DB via /api/wilayah
+ */
+export async function loadWilayahFromNeon(): Promise<WilayahSetting[] | null> {
+  try {
+    const res = await fetchWithRetry('/api/wilayah', {}, 5000, 2);
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json.ok && json.data && Array.isArray(json.data)) {
+      return json.data;
+    }
+    return null;
+  } catch (err) {
+    console.warn('Neon wilayah load error:', err);
+    return null;
+  }
+}
+
+/**
+ * Save Wilayah Settings to Neon DB via /api/wilayah
+ */
+export async function saveWilayahToNeon(settings: WilayahSetting[]): Promise<boolean> {
+  try {
+    const res = await fetchWithRetry(
+      '/api/wilayah',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(settings),
+      },
+      6000,
+      2
+    );
+    if (!res.ok) return false;
+    const json = await res.json();
+    return Boolean(json.ok);
+  } catch (err) {
+    console.warn('Neon wilayah save error:', err);
     return false;
   }
 }

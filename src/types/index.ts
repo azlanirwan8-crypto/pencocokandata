@@ -20,6 +20,11 @@ export interface MasterRow {
   [key: string]: any;
 }
 
+export interface WilayahSetting {
+  kodeWilayah: string;
+  keterangan: string;
+}
+
 export interface TargetRow {
   No: number | string;
   Wilayah: string;
