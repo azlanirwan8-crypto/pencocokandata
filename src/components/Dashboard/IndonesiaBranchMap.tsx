@@ -23,9 +23,10 @@ import {
   clusterMasterRowsForMap,
   INDONESIA_REGIONS,
   createCurvedArcPoints,
-  resolveTargetRowCoordinates,
-  clampToInland,
-  FOREIGN_LAND_MASKS,
+  resolveTargetOriginCoordinates,
+  clampToIndonesia,
+  isAcehTargetRow,
+  groupTargetOriginsForMap,
   type PlottedBranchPin
 } from '../../utils/geoCoder';
 
@@ -100,12 +101,12 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const arcsLayerRef = useRef<L.LayerGroup | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
-  const foreignMaskLayerRef = useRef<L.LayerGroup | null>(null);
+
 
   const [activeRegion, setActiveRegion] = useState<keyof typeof INDONESIA_REGIONS>('ALL');
   const [displayScope, setDisplayScope] = useState<DisplayScope>('ALL');
   const [tileProvider, setTileProvider] = useState<TileProvider>('google');
-  const [lockIndonesiaOnly, setLockIndonesiaOnly] = useState(true);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedPin, setSelectedPin] = useState<PlottedBranchPin | null>(null);
@@ -115,6 +116,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   const [showCurvedArcs, setShowCurvedArcs] = useState(true);
   const [showMatchedModal, setShowMatchedModal] = useState(false);
   const [modalSearchTerm, setModalSearchTerm] = useState('');
+  const [trackingMode, setTrackingMode] = useState<'none' | 'aceh_kim'>('none');
 
   // 1. Group & Cluster master rows into pins and correlate with Matched target rows
   const allPins = useMemo(() => {
@@ -192,8 +194,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         });
 
         if (matchingTarget) {
-          const origin = resolveTargetRowCoordinates(matchingTarget);
-          const [oLat, oLng] = clampToInland(origin.lat, origin.lng);
+          const origin = resolveTargetOriginCoordinates(matchingTarget);
+          const [oLat, oLng] = clampToIndonesia(origin.lat, origin.lng);
           const originCity = matchingTarget['Dati II'] || origin.city || 'Aceh';
           const originKp = matchingTarget['KODE POS'] || '';
           items.push({
@@ -245,7 +247,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     );
     const kp = String(selectedPin.kodePos || '').replace(/\D/g, '').trim();
 
-    return targetRows.filter((t) => {
+    const attached = targetRows.filter((t) => {
       if (!t._isMatched) return false;
       const tSandi = String(t['Sandi Cabang'] || t.Sandi || t.Cabang || '').trim();
       const tBranchCode = String(t['Branch Code'] || t['Kode Cabang'] || '').trim();
@@ -259,42 +261,20 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         (kp && tKp && kp === tKp)
       );
     });
-  }, [selectedPin, targetRows]);
 
-  // Dedicated Aceh Detection (Kodepos 23xxx/24xxx & Aceh target records served by Cabang KIM)
+    if (trackingMode === 'aceh_kim') {
+      return attached.filter((t) => isAcehTargetRow(t));
+    }
+    return attached;
+  }, [selectedPin, targetRows, trackingMode]);
+
+  // Dedicated Aceh Detection — administrative fields only (kode pos / Dati II / provinsi)
   const acehTargetMatches = useMemo(() => {
-    return targetRows.filter((t) => {
-      if (!t._isMatched) return false;
-      const kp = String(t['KODE POS'] || '').trim();
-      const prov = String(t.Provinsi || '').toLowerCase();
-      const dati = String(t['Dati II'] || '').toLowerCase();
-      const alamat = String(t.ALAMAT || '').toLowerCase();
-
-      return (
-        kp.startsWith('23') ||
-        kp.startsWith('24') ||
-        prov.includes('aceh') ||
-        dati.includes('aceh') ||
-        alamat.includes('aceh')
-      );
-    });
+    return targetRows.filter((t) => t._isMatched && isAcehTargetRow(t));
   }, [targetRows]);
 
   const acehTotalTargetCount = useMemo(() => {
-    return targetRows.filter((t) => {
-      const kp = String(t['KODE POS'] || '').trim();
-      const prov = String(t.Provinsi || '').toLowerCase();
-      const dati = String(t['Dati II'] || '').toLowerCase();
-      const alamat = String(t.ALAMAT || '').toLowerCase();
-
-      return (
-        kp.startsWith('23') ||
-        kp.startsWith('24') ||
-        prov.includes('aceh') ||
-        dati.includes('aceh') ||
-        alamat.includes('aceh')
-      );
-    }).length;
+    return targetRows.filter((t) => isAcehTargetRow(t)).length;
   }, [targetRows]);
 
   // Filtered rows inside the Matched Detail Modal
@@ -330,10 +310,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       const map = L.map(mapContainerRef.current, {
         center: INDONESIA_REGIONS.ALL.center,
         zoom: 5,
-        minZoom: 5,                  // Strict lock: cannot zoom out beyond Indonesian archipelago
+        minZoom: 3,                  // Allow zooming out to see world map
         maxZoom: 18,                 // High detail zoom to street level
-        maxBounds: indonesiaBounds,  // Strict lock on Indonesia
-        maxBoundsViscosity: 1.0,     // 100% rigid boundary: impossible to pan outside Indonesia
         zoomControl: true,
         scrollWheelZoom: true,
         preferCanvas: true,          // GPU Canvas for zero lag
@@ -346,9 +324,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       const tileLayer = getMapTileLayer('google', indonesiaBounds).addTo(map);
       tileLayerRef.current = tileLayer;
 
-      // Layer for masking foreign countries (Malaysia, Singapore, Brunei, Philippines, Australia, PNG, Timor-Leste)
-      const foreignMaskLayer = L.layerGroup().addTo(map);
-      foreignMaskLayerRef.current = foreignMaskLayer;
+
 
       const markersLayer = L.layerGroup().addTo(map);
       const arcsLayer = L.layerGroup().addTo(map);
@@ -380,55 +356,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     tileLayerRef.current = newLayer;
   };
 
-  // Render & Update Foreign Country Masks (Covering Malaysia, Singapore, Brunei, Philippines, Australia, PNG, Timor-Leste)
-  useEffect(() => {
-    const maskLayer = foreignMaskLayerRef.current;
-    if (!maskLayer) return;
 
-    maskLayer.clearLayers();
-
-    if (!lockIndonesiaOnly) return;
-
-    const isSatellite = tileProvider === 'google_hybrid';
-    const maskFillColor = isSatellite ? '#0b1329' : '#f8fafc';
-    const maskBorderColor = isSatellite ? '#1e293b' : '#cbd5e1';
-    const maskFillOpacity = isSatellite ? 0.94 : 0.92;
-
-    FOREIGN_LAND_MASKS.forEach((mask) => {
-      const polygon = L.polygon(mask.coords, {
-        fillColor: maskFillColor,
-        fillOpacity: maskFillOpacity,
-        color: maskBorderColor,
-        weight: 1.5,
-        interactive: true,
-      });
-
-      polygon.bindTooltip(
-        `<div style="font-size:11px;font-weight:600;color:${isSatellite ? '#94a3b8' : '#64748b'};padding:2px 4px;">
-          🚫 ${mask.name}<br/>
-          <span style="font-size:10px;color:${isSatellite ? '#64748b' : '#94a3b8'};">Di luar jangkauan operasional BNI</span>
-        </div>`,
-        { sticky: true }
-      );
-
-      maskLayer.addLayer(polygon);
-    });
-  }, [lockIndonesiaOnly, tileProvider]);
-
-  // Synchronize dynamic Map constraints based on lockIndonesiaOnly
-  useEffect(() => {
-    const map = mapInstanceRef.current;
-    if (!map) return;
-    if (lockIndonesiaOnly) {
-      map.setMaxBounds(indonesiaBounds);
-      map.setMinZoom(5);
-      if (map.getZoom() < 5) {
-        map.setZoom(5);
-      }
-    } else {
-      map.setMinZoom(3);
-    }
-  }, [lockIndonesiaOnly, indonesiaBounds]);
 
   // 8. Render CircleMarkers on GPU Canvas with Live Matched Data Correlation
   useEffect(() => {
@@ -503,6 +431,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
       // Click to select, fly to pin, and open drawer
       marker.on('click', () => {
+        setTrackingMode('none');
         setSelectedPin(pin);
         setActiveBranchIndex(0);
       });
@@ -519,7 +448,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     }
   }, [filteredPins, selectedPin, displayScope, selectedWilayah]);
 
-  // 9. Render Realistic Curved Arcs (Garis Melengkung Match) from Source Records to Destination Branch
+  // 9. Render arcs from real administrative origin points → selected branch (no unbounded fan-out)
   useEffect(() => {
     const map = mapInstanceRef.current;
     const arcsLayer = arcsLayerRef.current;
@@ -531,88 +460,67 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       return;
     }
 
-    // Group matched target rows by distinct origin locations (up to 20 representative clusters)
-    const destCoords: [number, number] = clampToInland(selectedPin.lat, selectedPin.lng);
-    const originGroups = new Map<string, { lat: number; lng: number; rows: TargetRow[] }>();
+    const destCoords: [number, number] = clampToIndonesia(selectedPin.lat, selectedPin.lng);
+    const isIsolated = displayScope === 'SELECTED_ONLY' || trackingMode === 'aceh_kim';
+    const originGroups = groupTargetOriginsForMap(selectedMatchedRows);
+    const visibleGroups = isIsolated ? originGroups : originGroups.slice(0, 24);
+    const allArcEndpoints: [number, number][] = [destCoords];
 
-    selectedMatchedRows.forEach((r) => {
-      const origin = resolveTargetRowCoordinates(r);
-      const [originLat, originLng] = clampToInland(origin.lat, origin.lng);
-
-      // Check distance between target data real origin and destination branch
-      const dLat = originLat - destCoords[0];
-      const dLng = originLng - destCoords[1];
+    visibleGroups.forEach((group, gIdx) => {
+      const startCoords: [number, number] = clampToIndonesia(group.lat, group.lng);
+      const dLat = startCoords[0] - destCoords[0];
+      const dLng = startCoords[1] - destCoords[1];
       const dist = Math.sqrt(dLat * dLat + dLng * dLng);
+      const isOnSite = dist < 0.001;
+      const count = group.rows.length;
+      const firstRow = group.rows[0];
 
-      // If origin coordinates are identical or on-site to the branch pin (dist < 0.001),
-      // do NOT create artificial fan-out loops into the ocean/sea!
-      if (dist < 0.001) {
-        return;
+      if (!isOnSite) {
+        const curveDirection = gIdx % 2 === 0 ? 0.1 : -0.08;
+        const arcPoints = createCurvedArcPoints(startCoords, destCoords, curveDirection, 22);
+        if (arcPoints.length > 0) {
+          const curvedPolyline = L.polyline(arcPoints, {
+            color: '#0ab39c',
+            weight: Math.min(2 + Math.log10(count + 1), 4),
+            opacity: 0.82,
+            className: 'bni-flow-arc',
+          });
+          curvedPolyline.bindTooltip(
+            `<div style="font-size:11px;font-weight:600;color:#0f766e;">
+              ${count.toLocaleString('id-ID')} data dari ${group.label}<br/>
+              <span style="font-size:10px;color:#64748b;">➔ ${selectedPin.primaryOutletName}</span>
+            </div>`,
+            { sticky: true }
+          );
+          arcsLayer.addLayer(curvedPolyline);
+        }
+        allArcEndpoints.push(startCoords);
       }
 
-      const key = `${originLat.toFixed(3)}_${originLng.toFixed(3)}`;
-      if (!originGroups.has(key)) {
-        originGroups.set(key, { lat: originLat, lng: originLng, rows: [] });
-      }
-      originGroups.get(key)!.rows.push(r);
-    });
-
-    // Limit to top 20 arc groups for maximum smoothness & 60fps performance
-    const topOrigins = Array.from(originGroups.values()).slice(0, 20);
-
-    topOrigins.forEach((group, gIdx) => {
-      const startCoords: [number, number] = [group.lat, group.lng];
-
-      // Subtle, sleek curve curvature
-      const curveDirection = gIdx % 2 === 0 ? 0.15 : -0.12;
-      const arcPoints = createCurvedArcPoints(startCoords, destCoords, curveDirection, 24);
-
-      // Curved Trajectory Line
-      const curvedPolyline = L.polyline(arcPoints, {
-        color: '#0ab39c',
-        weight: 2.8,
-        opacity: 0.85,
-        className: 'bni-flow-arc',
-      });
-
-      curvedPolyline.bindTooltip(
-        `<div style="font-size:11px;font-weight:600;color:#0f766e;">
-          Alur ${group.rows.length} Data Target ➔ ${selectedPin.primaryOutletName}
-        </div>`,
-        { sticky: true }
-      );
-
-      arcsLayer.addLayer(curvedPolyline);
-
-      // Source Origin Point (Pulsing Dot)
-      const originDot = L.circleMarker(startCoords, {
-        radius: 4.5,
-        fillColor: '#38bdf8',
+      const originDot = L.circleMarker(isOnSite ? destCoords : startCoords, {
+        radius: isOnSite ? 4 : Math.min(5 + Math.log10(count + 1) * 2, 9),
+        fillColor: isOnSite ? '#a78bfa' : '#38bdf8',
         color: '#ffffff',
         weight: 1.8,
         fillOpacity: 0.95,
       });
-
-      const firstRow = group.rows[0];
       originDot.bindTooltip(
         `<div style="font-size:11px;padding:2px 4px;">
-          <strong style="color:#0284c7;">📍 Titik Sumber Target (${group.rows.length} Data)</strong>
-          <div style="color:#334155;margin-top:2px;">${firstRow['Nama Outlet'] || firstRow.ALAMAT || 'Data Target'}</div>
-          <div style="color:#64748b;font-size:10px;">${firstRow.Kecamatan || ''} ${firstRow['Dati II'] || ''} (📮 ${firstRow['KODE POS'] || '-'})</div>
+          <strong style="color:#0284c7;">📍 ${group.label}</strong>
+          <div style="color:#334155;margin-top:2px;">${count.toLocaleString('id-ID')} data target</div>
+          <div style="color:#64748b;font-size:10px;">📮 ${firstRow['KODE POS'] || '-'} · ${firstRow.Kecamatan || ''}</div>
         </div>`,
         { direction: 'top' }
       );
-
       arcsLayer.addLayer(originDot);
     });
 
-    // Fit bounds around the selected pin and its incoming arcs
-    if (displayScope === 'SELECTED_ONLY' && topOrigins.length > 0) {
-      const allArcCoords = [destCoords, ...topOrigins.map((o) => [o.lat, o.lng] as [number, number])];
-      const arcBounds = L.latLngBounds(allArcCoords);
-      map.fitBounds(arcBounds, { padding: [60, 60], maxZoom: 14 });
+    if (isIsolated && allArcEndpoints.length > 1) {
+      const arcBounds = L.latLngBounds(allArcEndpoints);
+      map.fitBounds(arcBounds, { padding: [70, 70], maxZoom: 9 });
     }
-  }, [selectedPin, showCurvedArcs, selectedMatchedRows, displayScope]);
+  }, [selectedPin, showCurvedArcs, selectedMatchedRows, displayScope, trackingMode]);
+
 
   // Handle Quick Island Navigation
   const handleJumpRegion = (regionKey: keyof typeof INDONESIA_REGIONS) => {
@@ -627,11 +535,45 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     }
   };
 
+  const findKimPin = (pins: PlottedBranchPin[]): PlottedBranchPin | undefined => {
+    const scorePin = (p: PlottedBranchPin): number => {
+      const text = [
+        p.primaryOutletName,
+        ...p.branches.map((b) => `${b['Nama Outlet'] || ''} ${b.Cabang || ''} ${b['Sandi Cabang'] || ''} ${b['Branch Code'] || ''}`),
+      ]
+        .join(' ')
+        .toUpperCase();
+      if (/\bKIM\b/.test(text) || text.includes(' KIM')) return 3;
+      if (text.includes('KIM')) return 2;
+      return 0;
+    };
+    return [...pins]
+      .map((p) => ({ p, score: scorePin(p) }))
+      .filter((x) => x.score >= 2)
+      .sort((a, b) => b.score - a.score)[0]?.p;
+  };
+
+  const startAcehKimTracking = () => {
+    const kimPin = findKimPin(allPins);
+    if (!kimPin) {
+      alert('Cabang KIM tidak ditemukan di master data cabang.');
+      return;
+    }
+    setTrackingMode('aceh_kim');
+    setDisplayScope('SELECTED_ONLY');
+    setShowCurvedArcs(true);
+    setSelectedPin(kimPin);
+    setActiveBranchIndex(0);
+    setSearchQuery(kimPin.primaryOutletName);
+    setShowSuggestions(false);
+  };
+
   // Select a suggestion pin (supports frame fitting for remote links like Aceh -> KIM)
   const handleSelectSuggestion = (item: SearchSuggestionItem | PlottedBranchPin) => {
     const pin = 'pin' in item ? item.pin : item;
     const sourceCoords = 'sourceCoords' in item ? item.sourceCoords : undefined;
 
+    setTrackingMode('none');
     setSelectedPin(pin);
     setActiveBranchIndex(0);
     setShowSuggestions(false);
@@ -850,29 +792,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
         {/* Right side: Tile Provider Switcher & Search Bar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-          {/* Lock Indonesia Only Toggle Button */}
-          <button
-            type="button"
-            onClick={() => setLockIndonesiaOnly(!lockIndonesiaOnly)}
-            title={lockIndonesiaOnly ? 'Peta dikunci 100% khusus wilayah Indonesia (negara tetangga ditutup)' : 'Kunci wilayah Indonesia dinonaktifkan'}
-            style={{
-              fontSize: '0.68rem',
-              fontWeight: 700,
-              padding: '0.2rem 0.55rem',
-              borderRadius: '4px',
-              border: lockIndonesiaOnly ? '1px solid #0ab39c' : '1px solid #ced4da',
-              background: lockIndonesiaOnly ? '#ecfdf5' : '#ffffff',
-              color: lockIndonesiaOnly ? '#059669' : '#6c757d',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            <ShieldCheck size={12} color={lockIndonesiaOnly ? '#059669' : '#878a99'} />
-            <span>{lockIndonesiaOnly ? '🇮🇩 Kunci Indonesia Saja' : '🔓 Buka Kunci Negara Lain'}</span>
-          </button>
+
 
           {/* Tile Layer Toggle */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', background: '#f8f9fa', padding: '0.15rem 0.3rem', borderRadius: '5px', border: '1px solid #e9ebec' }}>
@@ -1078,7 +998,10 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
           <button
             type="button"
-            onClick={() => setDisplayScope('ALL')}
+            onClick={() => {
+              setTrackingMode('none');
+              setDisplayScope('ALL');
+            }}
             style={{
               fontSize: '0.71rem',
               fontWeight: 600,
@@ -1097,6 +1020,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
             type="button"
             onClick={() => {
               if (selectedPin) {
+                setTrackingMode('none');
                 setDisplayScope('SELECTED_ONLY');
               } else {
                 alert('Silakan klik salah satu titik cabang pada peta terlebih dahulu untuk mengisolasi tampilannya.');
@@ -1119,7 +1043,10 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
           <button
             type="button"
-            onClick={() => setDisplayScope('MATCHED_ONLY')}
+            onClick={() => {
+              setTrackingMode('none');
+              setDisplayScope('MATCHED_ONLY');
+            }}
             style={{
               fontSize: '0.71rem',
               fontWeight: 600,
@@ -1136,7 +1063,10 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
           <button
             type="button"
-            onClick={() => setDisplayScope('MULTI_ONLY')}
+            onClick={() => {
+              setTrackingMode('none');
+              setDisplayScope('MULTI_ONLY');
+            }}
             style={{
               fontSize: '0.71rem',
               fontWeight: 600,
@@ -1154,41 +1084,22 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           {acehTargetMatches.length > 0 && (
             <button
               type="button"
-              onClick={() => {
-                const kimPin =
-                  allPins.find(
-                    (p) =>
-                      p.primaryOutletName.toUpperCase().includes('KIM') ||
-                      p.branches.some((b) =>
-                        String(b.Cabang || b['Nama Outlet'] || b['Branch Code'] || '').toUpperCase().includes('KIM')
-                      )
-                  ) || allPins.find((p) => p.wilayah === 'W01' || p.dati2.toUpperCase().includes('MEDAN'));
-
-                if (kimPin) {
-                  handleSelectSuggestion({
-                    pin: kimPin,
-                    serviceNote: `Melayani ${acehTargetMatches.length} Data Aceh`,
-                    sourceCoords: [5.5530, 95.3220],
-                  });
-                } else {
-                  alert('Cabang KIM tidak ditemukan di master data cabang.');
-                }
-              }}
+              onClick={startAcehKimTracking}
               style={{
                 fontSize: '0.71rem',
                 fontWeight: 700,
                 padding: '0.22rem 0.6rem',
                 borderRadius: '4px',
-                border: '1px solid #0891b2',
-                background: '#ecfeff',
-                color: '#0e7490',
+                border: trackingMode === 'aceh_kim' ? '1px solid #0e7490' : '1px solid #0891b2',
+                background: trackingMode === 'aceh_kim' ? '#0e7490' : '#ecfeff',
+                color: trackingMode === 'aceh_kim' ? '#ffffff' : '#0e7490',
                 cursor: 'pointer',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '4px',
                 boxShadow: '0 1px 2px rgba(8,145,178,0.1)',
               }}
-              title="Klik untuk melacak alur trajektori data kodepos Aceh yang diarahkan ke Cabang KIM"
+              title="Hanya titik asal Aceh (kabupaten/kota) ke Cabang KIM Medan"
             >
               <span>🕌</span> Lacak Alur Aceh ➔ KIM ({acehTargetMatches.length} Data)
             </button>
@@ -1253,6 +1164,32 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         {/* Leaflet Hardware Canvas Map */}
         <div className="bni-map-container" style={{ position: 'relative' }}>
           <div ref={mapContainerRef} style={{ width: '100%', height: '530px', borderRadius: '6px' }} />
+
+          {trackingMode === 'aceh_kim' && (
+            <div
+              style={{
+                position: 'absolute',
+                top: '12px',
+                left: '12px',
+                right: '12px',
+                zIndex: 1000,
+                background: 'rgba(236, 254, 255, 0.96)',
+                border: '1px solid #67e8f9',
+                borderRadius: '6px',
+                padding: '0.45rem 0.7rem',
+                fontSize: '0.72rem',
+                color: '#0e7490',
+                fontWeight: 600,
+                boxShadow: '0 2px 8px rgba(8,145,178,0.12)',
+              }}
+            >
+              Mode lacak Aceh: {selectedMatchedRows.length.toLocaleString('id-ID')} data Aceh
+              {' → '}
+              {groupTargetOriginsForMap(selectedMatchedRows).length} titik kabupaten/kota
+              {' → '}
+              Cabang KIM Medan. Titik mengikuti Dati II / kecamatan / kode pos asal, bukan alamat cabang.
+            </div>
+          )}
 
           {/* Floating Minimalist Legend */}
           <div
@@ -1341,6 +1278,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                   type="button"
                   onClick={() => {
                     setSelectedPin(null);
+                    setTrackingMode('none');
                     if (displayScope === 'SELECTED_ONLY') {
                       setDisplayScope('ALL');
                     }
@@ -1383,12 +1321,16 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                     <CheckCircle size={16} color={selectedPin.matchedCount > 0 ? '#0ab39c' : '#64748b'} />
                     <div>
                       <div style={{ fontSize: '0.74rem', fontWeight: 700, color: selectedPin.matchedCount > 0 ? '#0ab39c' : '#475569' }}>
-                        {selectedPin.matchedCount > 0
+                        {trackingMode === 'aceh_kim'
+                          ? `ALUR ACEH: ${selectedMatchedRows.length.toLocaleString('id-ID')} DATA → KIM`
+                          : selectedPin.matchedCount > 0
                           ? `TERKORELASI: ${selectedPin.matchedCount.toLocaleString('id-ID')} DATA MATCHED`
                           : 'Belum Ada Transaksi Cocok'}
                       </div>
                       <div style={{ fontSize: '0.67rem', color: '#64748b' }}>
-                        {selectedPin.matchedCount > 0
+                        {trackingMode === 'aceh_kim'
+                          ? `${groupTargetOriginsForMap(selectedMatchedRows).length} titik kabupaten/kota Aceh`
+                          : selectedPin.matchedCount > 0
                           ? 'Klik untuk melihat daftar data cocok & garis lengkung'
                           : 'Monitoring aktivitas data target pada cabang ini'}
                       </div>
@@ -1419,7 +1361,14 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
               <div style={{ marginBottom: '0.75rem', display: 'flex', gap: '0.35rem' }}>
                 <button
                   type="button"
-                  onClick={() => setDisplayScope(displayScope === 'SELECTED_ONLY' ? 'ALL' : 'SELECTED_ONLY')}
+                  onClick={() => {
+                    if (displayScope === 'SELECTED_ONLY') {
+                      setTrackingMode('none');
+                      setDisplayScope('ALL');
+                    } else {
+                      setDisplayScope('SELECTED_ONLY');
+                    }
+                  }}
                   style={{
                     flex: 1,
                     display: 'flex',

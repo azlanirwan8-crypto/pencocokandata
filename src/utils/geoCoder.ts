@@ -143,6 +143,47 @@ const POSTAL_PREFIX_MAP: Record<string, { lat: number; lng: number; city: string
   '99': { lat: -2.5380, lng: 140.7020, city: 'Jayapura / Sorong / Manokwari / Merauke / Timika', province: 'Papua' },
 };
 
+// 2b. Aceh 3-digit postal centroids — keeps origin dots on the correct kabupaten, not one Banda Aceh pile
+const ACEH_POSTAL3_MAP: Record<string, { lat: number; lng: number; city: string }> = {
+  '231': { lat: 5.5530, lng: 95.3220, city: 'Banda Aceh' },
+  '232': { lat: 5.3800, lng: 95.5200, city: 'Aceh Besar / Aceh Jaya' },
+  '233': { lat: 5.3800, lng: 95.9600, city: 'Pidie' },
+  '236': { lat: 4.1400, lng: 96.1300, city: 'Aceh Barat' },
+  '237': { lat: 3.2500, lng: 97.1800, city: 'Aceh Selatan' },
+  '238': { lat: 2.6400, lng: 98.0000, city: 'Subulussalam / Aceh Singkil' },
+  '241': { lat: 4.6300, lng: 96.8400, city: 'Aceh Tengah' },
+  '242': { lat: 3.9600, lng: 97.3500, city: 'Gayo Lues' },
+  '243': { lat: 5.1800, lng: 97.1400, city: 'Lhokseumawe / Bireuen' },
+  '244': { lat: 4.4700, lng: 97.9700, city: 'Langsa / Aceh Timur' },
+  '245': { lat: 4.2600, lng: 98.0500, city: 'Aceh Tamiang' },
+  '246': { lat: 3.4800, lng: 97.8000, city: 'Aceh Tenggara' },
+};
+
+const ACEH_LOCATION_KEYWORDS = [
+  'banda aceh',
+  'aceh besar',
+  'aceh utara',
+  'aceh timur',
+  'aceh barat',
+  'aceh selatan',
+  'aceh tengah',
+  'aceh tenggara',
+  'lhokseumawe',
+  'langsa',
+  'sabang',
+  'subulussalam',
+  'pidie',
+  'bireuen',
+  'bener meriah',
+  'gayo lues',
+  'aceh singkil',
+  'simeulue',
+  'aceh tamiang',
+  'nagan raya',
+  'aceh jaya',
+  'aceh barat daya',
+];
+
 // 3. Known Major Cities / Dati II Centroids
 const DATI2_MAP: Record<string, { lat: number; lng: number; province: string }> = {
   // Jabodetabek
@@ -820,25 +861,130 @@ export function clusterMasterRowsForMap(
 }
 
 /**
- * Resolves coordinates for a TargetRow
+ * True if the TARGET's own administrative fields are in Aceh.
+ * Ignores Nama Outlet / ALAMAT because matching overwrites those with the KIM/Medan branch.
  */
+export function isAcehTargetRow(row: TargetRow | MasterRow | Record<string, unknown>): boolean {
+  const kp = String(row['KODE POS'] || '').replace(/\D/g, '');
+  const prov = String(row.Provinsi || '').toLowerCase();
+  const dati = String(row['Dati II'] || '').toLowerCase();
+  const kec = String(row.Kecamatan || '').toLowerCase();
+  const kel = String(row.Kelurahan || '').toLowerCase();
+
+  if (kp.startsWith('23') || kp.startsWith('24')) return true;
+  if (prov.includes('aceh') || prov.includes('nad') || prov.includes('nanggroe')) return true;
+  if (dati.includes('aceh')) return true;
+  return ACEH_LOCATION_KEYWORDS.some((k) => dati.includes(k) || kec.includes(k) || kel.includes(k));
+}
+
+/**
+ * Origin of a target record = where the data physically comes from.
+ * Uses only administrative fields (kode pos, kelurahan, kecamatan, Dati II, provinsi).
+ * Never uses Nama Outlet / ALAMAT — those are overwritten with the matched branch (e.g. KIM Medan).
+ */
+export function resolveTargetOriginCoordinates(row: TargetRow): GeoLocation {
+  const rawKodePos = String(row['KODE POS'] || '').replace(/\D/g, '').trim();
+  const rawDati2 = cleanDati2(String(row['Dati II'] || row['Kode Dati II'] || ''));
+  const rawKecamatan = String(row.Kecamatan || '').toUpperCase().trim();
+  const rawKelurahan = String(row.Kelurahan || '').toUpperCase().trim();
+  const rawProv = String(row.Provinsi || '').toUpperCase().trim();
+  const adminText = `${rawKelurahan} ${rawKecamatan} ${rawDati2} ${rawProv}`;
+
+  for (const [districtKey, distData] of Object.entries(CITY_DISTRICTS_MAP)) {
+    const escaped = districtKey.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const regex = new RegExp(`(?:^|[\\s,./-])${escaped}(?:$|[\\s,./-])`, 'i');
+    if (regex.test(adminText)) {
+      const [cLat, cLng] = clampToIndonesia(distData.lat, distData.lng);
+      return {
+        lat: cLat,
+        lng: cLng,
+        city: distData.city,
+        province: distData.province,
+        source: 'district_map',
+      };
+    }
+  }
+
+  if (rawDati2) {
+    if (DATI2_MAP[rawDati2]) {
+      const d = DATI2_MAP[rawDati2];
+      const [cLat, cLng] = clampToIndonesia(d.lat, d.lng);
+      return { lat: cLat, lng: cLng, city: rawDati2, province: d.province, source: 'dati2' };
+    }
+    for (const [key, d] of Object.entries(DATI2_MAP)) {
+      if (rawDati2.includes(key) || key.includes(rawDati2)) {
+        const [cLat, cLng] = clampToIndonesia(d.lat, d.lng);
+        return { lat: cLat, lng: cLng, city: key, province: d.province, source: 'dati2' };
+      }
+    }
+  }
+
+  if (rawKodePos.length >= 3 && ACEH_POSTAL3_MAP[rawKodePos.slice(0, 3)]) {
+    const z = ACEH_POSTAL3_MAP[rawKodePos.slice(0, 3)];
+    const [cLat, cLng] = clampToIndonesia(z.lat, z.lng);
+    return { lat: cLat, lng: cLng, city: z.city, province: 'Aceh', source: 'postal_prefix' };
+  }
+
+  if (rawKodePos.length >= 2 && POSTAL_PREFIX_MAP[rawKodePos.slice(0, 2)]) {
+    const base = POSTAL_PREFIX_MAP[rawKodePos.slice(0, 2)];
+    const [cLat, cLng] = clampToIndonesia(base.lat, base.lng);
+    return { lat: cLat, lng: cLng, city: base.city, province: base.province, source: 'postal_prefix' };
+  }
+
+  if (isAcehTargetRow(row)) {
+    const [cLat, cLng] = clampToIndonesia(5.553, 95.322);
+    return { lat: cLat, lng: cLng, city: 'Banda Aceh', province: 'Aceh', source: 'postal_prefix' };
+  }
+
+  const wCode = extractWCode(String(row.Wilayah || ''));
+  if (wCode && WILAYAH_CENTROID_MAP[wCode]) {
+    const w = WILAYAH_CENTROID_MAP[wCode];
+    const [cLat, cLng] = clampToIndonesia(w.lat, w.lng);
+    return { lat: cLat, lng: cLng, city: w.regionName, source: 'wilayah_centroid' };
+  }
+
+  const [cLat, cLng] = clampToIndonesia(-6.1754, 106.8272);
+  return { lat: cLat, lng: cLng, city: 'Jakarta Pusat', province: 'DKI Jakarta', source: 'wilayah_centroid' };
+}
+
 export function resolveTargetRowCoordinates(row: TargetRow): GeoLocation {
-  const pseudoMaster: MasterRow = {
-    Wilayah: String(row.Wilayah || ''),
-    'Branch Code': String(row['Branch Code'] || row['Kode Cabang'] || ''),
-    'Kode Cabang': String(row['Kode Cabang'] || ''),
-    'Nama Outlet': String(row['Nama Outlet'] || ''),
-    'Status Outlet': String(row['Status Outlet'] || ''),
-    ALAMAT: String(row.ALAMAT || ''),
-    'KODE POS': String(row['KODE POS'] || ''),
-    Kelurahan: String(row.Kelurahan || ''),
-    Kecamatan: String(row.Kecamatan || ''),
-    'Dati II': String(row['Dati II'] || ''),
-    'Kode Dati II': String(row['Kode Dati II'] || ''),
-    Provinsi: String(row.Provinsi || ''),
-    Telp: '',
-  };
-  return resolveBranchCoordinates(pseudoMaster);
+  return resolveTargetOriginCoordinates(row);
+}
+
+export interface TargetOriginGroup {
+  lat: number;
+  lng: number;
+  label: string;
+  rows: TargetRow[];
+}
+
+/**
+ * Collapse many matched rows into one origin point per real administrative location.
+ * 296 Aceh records in the same kabupaten become 1 titik, not 296 fake offsets.
+ */
+export function groupTargetOriginsForMap(rows: TargetRow[]): TargetOriginGroup[] {
+  const groups = new Map<string, TargetOriginGroup>();
+
+  for (const row of rows) {
+    const origin = resolveTargetOriginCoordinates(row);
+    const [lat, lng] = clampToIndonesia(origin.lat, origin.lng);
+    const dati = String(row['Dati II'] || origin.city || '').trim();
+    const kec = String(row.Kecamatan || '').trim();
+    const kp3 = String(row['KODE POS'] || '').replace(/\D/g, '').slice(0, 3);
+    const key = `${dati.toUpperCase()}|${kec.toUpperCase()}|${kp3}|${lat.toFixed(2)}|${lng.toFixed(2)}`;
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        lat,
+        lng,
+        label: [kec, dati].filter(Boolean).join(', ') || origin.city || 'Titik Asal',
+        rows: [],
+      });
+    }
+    groups.get(key)!.rows.push(row);
+  }
+
+  return Array.from(groups.values()).sort((a, b) => b.rows.length - a.rows.length);
 }
 
 /**
@@ -851,8 +997,8 @@ export function createCurvedArcPoints(
   curveOffset: number = 0.15,
   numPoints: number = 24
 ): [number, number][] {
-  const [lat1, lng1] = clampToInland(start[0], start[1]);
-  const [lat2, lng2] = clampToInland(end[0], end[1]);
+  const [lat1, lng1] = clampToIndonesia(start[0], start[1]);
+  const [lat2, lng2] = clampToIndonesia(end[0], end[1]);
 
   const midLat = (lat1 + lat2) / 2;
   const midLng = (lng1 + lng2) / 2;
@@ -866,21 +1012,23 @@ export function createCurvedArcPoints(
     return [];
   }
 
-  // Normal vector perpendicular to chord
+  // Cap bow so long corridors (Aceh → Medan) stay over Sumatera, not Malaysia / Sulawesi
+  const capped = Math.min(Math.abs(curveOffset), dist > 2 ? 0.08 : 0.15);
+  const signedOffset = curveOffset < 0 ? -capped : capped;
+  const arcHeight = Math.min(Math.max(dist * Math.abs(signedOffset), 0.004), 0.32);
+
   const normLat = -dLng / dist;
   const normLng = dLat / dist;
 
-  const arcHeight = Math.max(dist * curveOffset, 0.004);
-  let controlLat = midLat + normLat * arcHeight;
-  let controlLng = midLng + normLng * arcHeight;
+  let controlLat = midLat + normLat * arcHeight * Math.sign(signedOffset || 1);
+  let controlLng = midLng + normLng * arcHeight * Math.sign(signedOffset || 1);
 
-  // Test whether control point bows toward water; if so, flip normal vector to bend inland!
-  const [clampedLat, clampedLng] = clampToInland(controlLat, controlLng);
-  if (clampedLat !== controlLat || clampedLng !== controlLng) {
-    controlLng = midLng - normLng * arcHeight;
-    controlLat = midLat - normLat * arcHeight;
+  const [clampedLat, clampedLng] = clampToIndonesia(controlLat, controlLng);
+  if (clampedLat !== controlLat || clampedLng !== controlLng || isForeignLand(controlLat, controlLng)) {
+    controlLng = midLng - normLng * arcHeight * Math.sign(signedOffset || 1);
+    controlLat = midLat - normLat * arcHeight * Math.sign(signedOffset || 1);
   }
-  [controlLat, controlLng] = clampToInland(controlLat, controlLng);
+  [controlLat, controlLng] = clampToIndonesia(controlLat, controlLng);
 
   const points: [number, number][] = [];
   for (let i = 0; i <= numPoints; i++) {
@@ -888,7 +1036,7 @@ export function createCurvedArcPoints(
     const oneMinusT = 1 - t;
     const lat = oneMinusT * oneMinusT * lat1 + 2 * oneMinusT * t * controlLat + t * t * lat2;
     const lng = oneMinusT * oneMinusT * lng1 + 2 * oneMinusT * t * controlLng + t * t * lng2;
-    points.push(clampToInland(lat, lng));
+    points.push(clampToIndonesia(lat, lng));
   }
 
   return points;
@@ -987,3 +1135,40 @@ export const FOREIGN_LAND_MASKS: ForeignLandMask[] = [
     ],
   },
 ];
+
+function pointInRing(lat: number, lng: number, ring: [number, number][]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const yi = ring[i][0];
+    const xi = ring[i][1];
+    const yj = ring[j][0];
+    const xj = ring[j][1];
+    const intersect = yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / ((yj - yi) || 1e-12) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+export function isForeignLand(lat: number, lng: number): boolean {
+  return FOREIGN_LAND_MASKS.some((mask) => pointInRing(lat, lng, mask.coords));
+}
+
+export function clampToIndonesia(lat: number, lng: number): [number, number] {
+  let [cLat, cLng] = clampToInland(lat, lng);
+  cLat = Math.min(6.15, Math.max(-11.0, cLat));
+  cLng = Math.min(141.0, Math.max(94.9, cLng));
+
+  if (isForeignLand(cLat, cLng)) {
+    const idLat = -2.5;
+    const idLng = 118.0;
+    for (let step = 0; step < 8 && isForeignLand(cLat, cLng); step++) {
+      cLat += (idLat - cLat) * 0.35;
+      cLng += (idLng - cLng) * 0.35;
+    }
+    if (isForeignLand(cLat, cLng)) {
+      return clampToInland(-2.5, 118.0);
+    }
+  }
+
+  return [Number(cLat.toFixed(6)), Number(cLng.toFixed(6))];
+}
