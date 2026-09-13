@@ -550,3 +550,73 @@ export function clusterMasterRowsForMap(
 
   return pins;
 }
+
+/**
+ * Resolves coordinates for a TargetRow
+ */
+export function resolveTargetRowCoordinates(row: TargetRow): GeoLocation {
+  const pseudoMaster: MasterRow = {
+    Wilayah: String(row.Wilayah || ''),
+    'Branch Code': String(row['Branch Code'] || row['Kode Cabang'] || ''),
+    'Kode Cabang': String(row['Kode Cabang'] || ''),
+    'Nama Outlet': String(row['Nama Outlet'] || ''),
+    'Status Outlet': String(row['Status Outlet'] || ''),
+    ALAMAT: String(row.ALAMAT || ''),
+    'KODE POS': String(row['KODE POS'] || ''),
+    Kelurahan: String(row.Kelurahan || ''),
+    Kecamatan: String(row.Kecamatan || ''),
+    'Dati II': String(row['Dati II'] || ''),
+    'Kode Dati II': String(row['Kode Dati II'] || ''),
+    Provinsi: String(row.Provinsi || ''),
+    Telp: '',
+  };
+  return resolveBranchCoordinates(pseudoMaster);
+}
+
+/**
+ * Computes sampled points along a quadratic Bezier curve to render
+ * smooth, realistic arc trajectories between source data and matched destination branch.
+ */
+export function createCurvedArcPoints(
+  start: [number, number],
+  end: [number, number],
+  curveOffset: number = 0.25,
+  numPoints: number = 24
+): [number, number][] {
+  const [lat1, lng1] = start;
+  const [lat2, lng2] = end;
+
+  const midLat = (lat1 + lat2) / 2;
+  const midLng = (lng1 + lng2) / 2;
+
+  const dLat = lat2 - lat1;
+  const dLng = lng2 - lng1;
+  const dist = Math.sqrt(dLat * dLat + dLng * dLng);
+
+  if (dist < 0.0001) {
+    const points: [number, number][] = [];
+    for (let i = 0; i <= numPoints; i++) {
+      const angle = (i / numPoints) * 2 * Math.PI;
+      points.push([lat1 + Math.sin(angle) * 0.003, lng1 + Math.cos(angle) * 0.003]);
+    }
+    return points;
+  }
+
+  const normLat = -dLng / dist;
+  const normLng = dLat / dist;
+
+  const arcHeight = Math.max(dist * curveOffset, 0.008);
+  const controlLat = midLat + normLat * arcHeight;
+  const controlLng = midLng + normLng * arcHeight;
+
+  const points: [number, number][] = [];
+  for (let i = 0; i <= numPoints; i++) {
+    const t = i / numPoints;
+    const oneMinusT = 1 - t;
+    const lat = oneMinusT * oneMinusT * lat1 + 2 * oneMinusT * t * controlLat + t * t * lat2;
+    const lng = oneMinusT * oneMinusT * lng1 + 2 * oneMinusT * t * controlLng + t * t * lng2;
+    points.push([lat, lng]);
+  }
+
+  return points;
+}

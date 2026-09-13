@@ -881,6 +881,10 @@ export const App: React.FC = () => {
               targetRows={targetRows}
               selectedWilayah={dashboardWilayahFilter}
               onNavigateToMaster={() => setActiveTab('master')}
+              onNavigateToEngine={(searchFilter) => {
+                setActiveTab('working');
+                if (searchFilter) setSearchTerm(searchFilter);
+              }}
             />
 
             {/* Visual Analisis: Dekomposisi Donut Chart & Kinerja Wilayah */}

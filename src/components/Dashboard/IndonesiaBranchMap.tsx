@@ -11,12 +11,18 @@ import {
   Filter,
   CheckCircle,
   Eye,
-  Globe
+  Globe,
+  Share2,
+  X,
+  Radio,
+  FileSpreadsheet
 } from 'lucide-react';
 import type { MasterRow, TargetRow } from '../../types';
 import {
   clusterMasterRowsForMap,
   INDONESIA_REGIONS,
+  createCurvedArcPoints,
+  resolveTargetRowCoordinates,
   type PlottedBranchPin
 } from '../../utils/geoCoder';
 
@@ -25,9 +31,10 @@ interface IndonesiaBranchMapProps {
   targetRows?: TargetRow[];
   selectedWilayah?: string;
   onNavigateToMaster?: () => void;
+  onNavigateToEngine?: (searchFilter?: string) => void;
 }
 
-type MapModeFilter = 'ALL' | 'MATCHED_ONLY' | 'MULTI_ONLY' | 'KC' | 'KCP';
+type DisplayScope = 'ALL' | 'SELECTED_ONLY' | 'MATCHED_ONLY' | 'MULTI_ONLY';
 type TileProvider = 'esri' | 'osm';
 
 export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
@@ -35,53 +42,46 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   targetRows = [],
   selectedWilayah = 'ALL',
   onNavigateToMaster,
+  onNavigateToEngine,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const canvasRendererRef = useRef<L.Canvas | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
+  const arcsLayerRef = useRef<L.LayerGroup | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
 
   const [activeRegion, setActiveRegion] = useState<keyof typeof INDONESIA_REGIONS>('ALL');
-  const [mapMode, setMapMode] = useState<MapModeFilter>('ALL');
+  const [displayScope, setDisplayScope] = useState<DisplayScope>('ALL');
   const [tileProvider, setTileProvider] = useState<TileProvider>('esri');
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedPin, setSelectedPin] = useState<PlottedBranchPin | null>(null);
   const [activeBranchIndex, setActiveBranchIndex] = useState(0);
 
+  // Toggle for Curved Arcs and Matched Detail Modal
+  const [showCurvedArcs, setShowCurvedArcs] = useState(true);
+  const [showMatchedModal, setShowMatchedModal] = useState(false);
+  const [modalSearchTerm, setModalSearchTerm] = useState('');
+
   // 1. Group & Cluster master rows into pins and correlate with Matched target rows
   const allPins = useMemo(() => {
     return clusterMasterRowsForMap(masterRows, selectedWilayah, targetRows);
   }, [masterRows, selectedWilayah, targetRows]);
 
-  // 2. Filter pins based on Collaboration & Activity Mode
+  // 2. Filter pins based on Display Scope (Semua vs Hanya Terpilih vs Matched vs Multi)
   const filteredPins = useMemo(() => {
-    if (mapMode === 'ALL') return allPins;
-    if (mapMode === 'MATCHED_ONLY') {
+    if (displayScope === 'SELECTED_ONLY') {
+      return selectedPin ? [selectedPin] : allPins.slice(0, 1);
+    }
+    if (displayScope === 'MATCHED_ONLY') {
       return allPins.filter((p) => p.matchedCount > 0);
     }
-    if (mapMode === 'MULTI_ONLY') {
+    if (displayScope === 'MULTI_ONLY') {
       return allPins.filter((p) => p.branchCount > 1);
     }
-    if (mapMode === 'KC') {
-      return allPins.filter((p) =>
-        p.branches.some((b) => {
-          const status = String(b['Status Outlet'] || b['Nama Outlet'] || '').toUpperCase();
-          return status.includes(' KC ') || status.startsWith('KC ') || status === 'KC';
-        })
-      );
-    }
-    if (mapMode === 'KCP') {
-      return allPins.filter((p) =>
-        p.branches.some((b) => {
-          const status = String(b['Status Outlet'] || b['Nama Outlet'] || '').toUpperCase();
-          return status.includes('KCP');
-        })
-      );
-    }
     return allPins;
-  }, [allPins, mapMode]);
+  }, [allPins, displayScope, selectedPin]);
 
   // 3. Search suggestions (top matches)
   const searchSuggestions = useMemo(() => {
@@ -107,7 +107,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     return matches;
   }, [allPins, searchQuery]);
 
-  // Map Summary Statistics (Including Matched Collaboration)
+  // Map Summary Statistics
   const stats = useMemo(() => {
     const totalBranches = allPins.reduce((acc, p) => acc + p.branchCount, 0);
     const multiOutletPins = allPins.filter((p) => p.branchCount > 1).length;
@@ -124,15 +124,56 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     };
   }, [allPins, filteredPins]);
 
-  // 4. Strict geographical bounds for Indonesia (Sabang / Aceh to Merauke / Papua)
+  // 4. Find all Matched Target Rows associated with the currently selected branch
+  const selectedMatchedRows = useMemo(() => {
+    if (!selectedPin || targetRows.length === 0) return [];
+    const sandiSet = new Set(
+      selectedPin.branches
+        .map((b) => String(b['Sandi Cabang'] || b.Sandi || b['Kode Cabang'] || '').trim())
+        .filter(Boolean)
+    );
+    const outletNameSet = new Set(
+      selectedPin.branches.map((b) => String(b['Nama Outlet'] || '').toLowerCase().trim()).filter(Boolean)
+    );
+    const kp = String(selectedPin.kodePos || '').replace(/\D/g, '').trim();
+
+    return targetRows.filter((t) => {
+      if (!t._isMatched) return false;
+      const tSandi = String(t['Sandi Cabang'] || t.Sandi || t.Cabang || '').trim();
+      const tName = String(t['Nama Outlet'] || '').toLowerCase().trim();
+      const tKp = String(t['KODE POS'] || '').replace(/\D/g, '').trim();
+
+      return (
+        (tSandi && sandiSet.has(tSandi)) ||
+        (tName && outletNameSet.has(tName)) ||
+        (kp && tKp && kp === tKp)
+      );
+    });
+  }, [selectedPin, targetRows]);
+
+  // Filtered rows inside the Matched Detail Modal
+  const filteredModalRows = useMemo(() => {
+    if (!modalSearchTerm.trim()) return selectedMatchedRows;
+    const q = modalSearchTerm.toLowerCase().trim();
+    return selectedMatchedRows.filter(
+      (r) =>
+        String(r.No || '').includes(q) ||
+        String(r['Nama Outlet'] || '').toLowerCase().includes(q) ||
+        String(r.ALAMAT || '').toLowerCase().includes(q) ||
+        String(r.Kecamatan || '').toLowerCase().includes(q) ||
+        String(r['KODE POS'] || '').includes(q)
+    );
+  }, [selectedMatchedRows, modalSearchTerm]);
+
+  // 5. Strict geographical bounds for Indonesia (Sabang / Aceh to Merauke / Papua)
   const indonesiaBounds = useMemo(() => {
     return L.latLngBounds(
-      L.latLng(-11.5, 94.0), // West & South: Ample room covering all of Aceh & Sabang
+      L.latLng(-11.5, 93.0), // West & South: Ample room covering all of Aceh & Sabang
       L.latLng(7.0, 141.5)   // North & East: Ample room covering Miangas & Papua
     );
   }, []);
 
-  // 5. Initialize Leaflet Map
+  // 6. Initialize Leaflet Map
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
@@ -167,8 +208,11 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       tileLayerRef.current = tileLayer;
 
       const markersLayer = L.layerGroup().addTo(map);
+      const arcsLayer = L.layerGroup().addTo(map);
+
       mapInstanceRef.current = map;
       markersLayerRef.current = markersLayer;
+      arcsLayerRef.current = arcsLayer;
     }
 
     return () => {
@@ -179,7 +223,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     };
   }, [indonesiaBounds]);
 
-  // 6. Handle Tile Provider Switch (Esri vs OSM - Both 100% Watermark-Free)
+  // 7. Handle Tile Provider Switch (Esri vs OSM - Both 100% Watermark-Free)
   const handleSwitchTile = (provider: TileProvider) => {
     setTileProvider(provider);
     const map = mapInstanceRef.current;
@@ -207,7 +251,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     tileLayerRef.current = newLayer;
   };
 
-  // 7. Render CircleMarkers on GPU Canvas with Live Matched Data Correlation
+  // 8. Render CircleMarkers on GPU Canvas with Live Matched Data Correlation
   useEffect(() => {
     const map = mapInstanceRef.current;
     const markersLayer = markersLayerRef.current;
@@ -219,16 +263,22 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     filteredPins.forEach((pin) => {
       const isMulti = pin.branchCount > 1;
       const hasMatch = pin.matchedCount > 0;
+      const isSelected = selectedPin?.id === pin.id;
 
       // Color coding:
-      // 1. Multi-outlet: Vibrant Orange / Coral (#f06548)
-      // 2. Active with Matched records: Vibrant Teal / Emerald (#0ab39c)
-      // 3. Standby (Master active, no target matches yet): Slate / Steel Blue (#6366f1)
+      // - Selected Pin: Glowing Golden Amber / Cyan Halo
+      // - Multi-outlet: Vibrant Orange / Coral (#f06548)
+      // - Active with Matched records: Vibrant Teal / Emerald (#0ab39c)
+      // - Standby: Slate / Steel Blue (#6366f1)
       let fillColor = '#6366f1';
       let strokeColor = '#ffffff';
       let radius = 5.5;
 
-      if (isMulti) {
+      if (isSelected) {
+        fillColor = '#f59e0b';
+        strokeColor = '#ffffff';
+        radius = 10;
+      } else if (isMulti) {
         fillColor = '#f06548';
         radius = 8.5;
       } else if (hasMatch) {
@@ -244,12 +294,12 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         radius,
         fillColor,
         color: strokeColor,
-        weight: isMulti ? 2.5 : 1.8,
+        weight: isSelected ? 3.5 : (isMulti ? 2.5 : 1.8),
         opacity: 1,
-        fillOpacity: hasMatch ? 0.95 : 0.85,
+        fillOpacity: isSelected ? 1 : (hasMatch ? 0.95 : 0.85),
       });
 
-      // Instant lightweight hover tooltip with Matched Collaboration data
+      // Instant lightweight hover tooltip
       const tooltipContent = `
         <div style="font-family:inherit;font-size:11.5px;padding:3px 5px;line-height:1.4;">
           <div style="font-weight:700;color:#212529;display:flex;align-items:center;gap:4px;">
@@ -259,7 +309,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
             ${pin.dati2} &bull; <strong style="color:#405189;">📮 ${pin.kodePos}</strong>
           </div>
           ${hasMatch ? `<div style="color:#0ab39c;font-weight:700;font-size:11px;margin-top:3px;display:flex;align-items:center;gap:4px;">
-            <span>✓</span> <strong>${pin.matchedCount.toLocaleString('id-ID')} Data Matched</strong>
+            <span>✓</span> <strong>${pin.matchedCount.toLocaleString('id-ID')} Data Matched (Klik untuk Garis Lengkung)</strong>
           </div>` : ''}
           ${isMulti ? `<div style="color:#f06548;font-weight:700;font-size:10.5px;margin-top:2px;">⚠️ ${pin.branchCount} Cabang di Titik ini</div>` : ''}
         </div>
@@ -272,7 +322,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         className: 'bni-map-fast-tooltip',
       });
 
-      // Click to select & open drawer
+      // Click to select, fly to pin, and open drawer
       marker.on('click', () => {
         setSelectedPin(pin);
         setActiveBranchIndex(0);
@@ -281,12 +331,110 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       markersLayer.addLayer(marker);
     });
 
-    // Auto-fit if specific wilayah is selected
-    if (selectedWilayah !== 'ALL' && filteredPins.length > 0) {
+    // Auto-fit if specific wilayah or single selected pin
+    if (displayScope === 'SELECTED_ONLY' && selectedPin) {
+      map.flyTo([selectedPin.lat, selectedPin.lng], 13, { duration: 0.9 });
+    } else if (selectedWilayah !== 'ALL' && filteredPins.length > 0) {
       const bounds = L.latLngBounds(filteredPins.map((p) => [p.lat, p.lng]));
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
     }
-  }, [filteredPins, selectedWilayah]);
+  }, [filteredPins, selectedPin, displayScope, selectedWilayah]);
+
+  // 9. Render Realistic Curved Arcs (Garis Melengkung Match) from Source Records to Destination Branch
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const arcsLayer = arcsLayerRef.current;
+    if (!map || !arcsLayer) return;
+
+    arcsLayer.clearLayers();
+
+    if (!selectedPin || !showCurvedArcs || selectedMatchedRows.length === 0) {
+      return;
+    }
+
+    // Group matched target rows by distinct origin locations (up to 20 representative clusters)
+    const destCoords: [number, number] = [selectedPin.lat, selectedPin.lng];
+    const originGroups = new Map<string, { lat: number; lng: number; rows: TargetRow[] }>();
+
+    selectedMatchedRows.forEach((r, idx) => {
+      const origin = resolveTargetRowCoordinates(r);
+      let originLat = origin.lat;
+      let originLng = origin.lng;
+
+      // If origin coordinates are identical to branch pin (e.g. same postal code),
+      // create radial fan-out so trajectories flow from realistic surrounding client/transaction points
+      const dLat = Math.abs(originLat - destCoords[0]);
+      const dLng = Math.abs(originLng - destCoords[1]);
+      if (dLat < 0.0005 && dLng < 0.0005) {
+        const angle = (idx % 12) * (Math.PI / 6);
+        const radiusDist = 0.015 + ((idx % 4) * 0.008); // ~1.5km - 3km fan-out
+        originLat = destCoords[0] + Math.sin(angle) * radiusDist;
+        originLng = destCoords[1] + Math.cos(angle) * radiusDist;
+      }
+
+      const key = `${originLat.toFixed(3)}_${originLng.toFixed(3)}`;
+      if (!originGroups.has(key)) {
+        originGroups.set(key, { lat: originLat, lng: originLng, rows: [] });
+      }
+      originGroups.get(key)!.rows.push(r);
+    });
+
+    // Limit to top 20 arc groups for maximum smoothness & 60fps performance
+    const topOrigins = Array.from(originGroups.values()).slice(0, 20);
+
+    topOrigins.forEach((group, gIdx) => {
+      const startCoords: [number, number] = [group.lat, group.lng];
+
+      // Alternate curve curvature direction slightly for organic, realistic flight trajectory appearance
+      const curveDirection = gIdx % 2 === 0 ? 0.28 : -0.22;
+      const arcPoints = createCurvedArcPoints(startCoords, destCoords, curveDirection, 24);
+
+      // Curved Trajectory Line
+      const curvedPolyline = L.polyline(arcPoints, {
+        color: '#0ab39c',
+        weight: 2.8,
+        opacity: 0.85,
+        className: 'bni-flow-arc',
+      });
+
+      curvedPolyline.bindTooltip(
+        `<div style="font-size:11px;font-weight:600;color:#0f766e;">
+          Alur ${group.rows.length} Data Target ➔ ${selectedPin.primaryOutletName}
+        </div>`,
+        { sticky: true }
+      );
+
+      arcsLayer.addLayer(curvedPolyline);
+
+      // Source Origin Point (Pulsing Dot)
+      const originDot = L.circleMarker(startCoords, {
+        radius: 4.5,
+        fillColor: '#38bdf8',
+        color: '#ffffff',
+        weight: 1.8,
+        fillOpacity: 0.95,
+      });
+
+      const firstRow = group.rows[0];
+      originDot.bindTooltip(
+        `<div style="font-size:11px;padding:2px 4px;">
+          <strong style="color:#0284c7;">📍 Titik Sumber Target (${group.rows.length} Data)</strong>
+          <div style="color:#334155;margin-top:2px;">${firstRow['Nama Outlet'] || firstRow.ALAMAT || 'Data Target'}</div>
+          <div style="color:#64748b;font-size:10px;">${firstRow.Kecamatan || ''} ${firstRow['Dati II'] || ''} (📮 ${firstRow['KODE POS'] || '-'})</div>
+        </div>`,
+        { direction: 'top' }
+      );
+
+      arcsLayer.addLayer(originDot);
+    });
+
+    // Fit bounds around the selected pin and its incoming arcs
+    if (displayScope === 'SELECTED_ONLY' && topOrigins.length > 0) {
+      const allArcCoords = [destCoords, ...topOrigins.map((o) => [o.lat, o.lng] as [number, number])];
+      const arcBounds = L.latLngBounds(allArcCoords);
+      map.fitBounds(arcBounds, { padding: [60, 60], maxZoom: 14 });
+    }
+  }, [selectedPin, showCurvedArcs, selectedMatchedRows, displayScope]);
 
   // Handle Quick Island Navigation
   const handleJumpRegion = (regionKey: keyof typeof INDONESIA_REGIONS) => {
@@ -412,7 +560,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           </div>
         </div>
 
-        {/* Real-Time Stats Counters (Master + Matched Data) */}
+        {/* Real-Time Stats Counters */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
           <div
             style={{
@@ -470,7 +618,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         </div>
       </div>
 
-      {/* Control Bar 1: Island Navigation & Search Autocomplete */}
+      {/* Control Bar 1: Island Navigation, Tile Provider, and Search */}
       <div
         style={{
           display: 'flex',
@@ -514,7 +662,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
         {/* Right side: Tile Provider Switcher & Search Bar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-          {/* Tile Layer Style Toggle (Clean Esri vs OSM - Zero Watermark) */}
+          {/* Tile Layer Toggle */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', background: '#f8f9fa', padding: '0.15rem 0.3rem', borderRadius: '4px', border: '1px solid #e9ebec' }}>
             <Globe size={12} color="#878a99" style={{ marginLeft: '0.2rem' }} />
             <button
@@ -530,7 +678,6 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 color: tileProvider === 'esri' ? '#ffffff' : '#6c757d',
                 cursor: 'pointer',
               }}
-              title="Esri World Street Map (Bersih, Tajam, Tanpa Watermark)"
             >
               Esri Street
             </button>
@@ -547,7 +694,6 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 color: tileProvider === 'osm' ? '#ffffff' : '#6c757d',
                 cursor: 'pointer',
               }}
-              title="OpenStreetMap Standard (Tanpa Watermark)"
             >
               OSM
             </button>
@@ -647,57 +793,126 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         </div>
       </div>
 
-      {/* Control Bar 2: Collaboration & Activity Filter Mode */}
+      {/* Control Bar 2: Filter Mode (Semua vs Hanya Terpilih vs Matched vs Multi) & Garis Melengkung Switcher */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '0.4rem',
+          justifyContent: 'space-between',
+          gap: '0.5rem',
           flexWrap: 'wrap',
           marginBottom: '0.75rem',
-          padding: '0.35rem 0.6rem',
+          padding: '0.4rem 0.65rem',
           background: '#f8f9fa',
           borderRadius: '6px',
           border: '1px solid #eef0f2',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginRight: '0.3rem' }}>
-          <Filter size={12} color="#878a99" />
-          <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#6c757d' }}>Filter Data:</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginRight: '0.3rem' }}>
+            <Filter size={13} color="#878a99" />
+            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#495057' }}>Filter Tampilan:</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setDisplayScope('ALL')}
+            style={{
+              fontSize: '0.71rem',
+              fontWeight: 600,
+              padding: '0.22rem 0.55rem',
+              borderRadius: '4px',
+              border: displayScope === 'ALL' ? '1px solid #405189' : '1px solid #ced4da',
+              background: displayScope === 'ALL' ? '#405189' : '#ffffff',
+              color: displayScope === 'ALL' ? '#ffffff' : '#495057',
+              cursor: 'pointer',
+            }}
+          >
+            🌐 Semua Titik ({allPins.length})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (selectedPin) {
+                setDisplayScope('SELECTED_ONLY');
+              } else {
+                alert('Silakan klik salah satu titik cabang pada peta terlebih dahulu untuk mengisolasi tampilannya.');
+              }
+            }}
+            style={{
+              fontSize: '0.71rem',
+              fontWeight: 600,
+              padding: '0.22rem 0.55rem',
+              borderRadius: '4px',
+              border: displayScope === 'SELECTED_ONLY' ? '1px solid #f59e0b' : '1px solid #ced4da',
+              background: displayScope === 'SELECTED_ONLY' ? '#f59e0b' : '#ffffff',
+              color: displayScope === 'SELECTED_ONLY' ? '#ffffff' : (selectedPin ? '#b45309' : '#878a99'),
+              cursor: selectedPin ? 'pointer' : 'default',
+            }}
+            title="Hanya menampilkan titik cabang yang sedang dipilih dan garis koneksi match-nya"
+          >
+            🎯 Hanya Titik Terpilih Saja {selectedPin ? `(${selectedPin.primaryOutletName.slice(0, 16)}...)` : ''}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setDisplayScope('MATCHED_ONLY')}
+            style={{
+              fontSize: '0.71rem',
+              fontWeight: 600,
+              padding: '0.22rem 0.55rem',
+              borderRadius: '4px',
+              border: displayScope === 'MATCHED_ONLY' ? '1px solid #0ab39c' : '1px solid #ced4da',
+              background: displayScope === 'MATCHED_ONLY' ? '#0ab39c' : '#ffffff',
+              color: displayScope === 'MATCHED_ONLY' ? '#ffffff' : '#0ab39c',
+              cursor: 'pointer',
+            }}
+          >
+            ✓ Hanya Titik Matched ({stats.pinsWithMatchCount})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setDisplayScope('MULTI_ONLY')}
+            style={{
+              fontSize: '0.71rem',
+              fontWeight: 600,
+              padding: '0.22rem 0.55rem',
+              borderRadius: '4px',
+              border: displayScope === 'MULTI_ONLY' ? '1px solid #f06548' : '1px solid #ced4da',
+              background: displayScope === 'MULTI_ONLY' ? '#f06548' : '#ffffff',
+              color: displayScope === 'MULTI_ONLY' ? '#ffffff' : '#f06548',
+              cursor: 'pointer',
+            }}
+          >
+            ⚠️ Multi-Outlet Saja ({stats.multiOutletPins})
+          </button>
         </div>
 
-        {[
-          { id: 'ALL', label: `Semua Cabang (${allPins.length})` },
-          { id: 'MATCHED_ONLY', label: `🎯 Hanya Ber-Data Matched (${stats.pinsWithMatchCount})` },
-          { id: 'MULTI_ONLY', label: `⚠️ Multi-Outlet Saja (${stats.multiOutletPins})` },
-          { id: 'KC', label: 'KC' },
-          { id: 'KCP', label: 'KCP' },
-        ].map((f) => {
-          const isActive = mapMode === f.id;
-          return (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setMapMode(f.id as MapModeFilter)}
-              style={{
-                fontSize: '0.7rem',
-                fontWeight: 600,
-                padding: '0.2rem 0.55rem',
-                borderRadius: '4px',
-                border: isActive ? '1px solid #0ab39c' : '1px solid #ced4da',
-                background: isActive ? '#0ab39c' : '#ffffff',
-                color: isActive ? '#ffffff' : '#495057',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {f.label}
-            </button>
-          );
-        })}
-
-        <div style={{ marginLeft: 'auto', fontSize: '0.7rem', color: '#878a99' }}>
-          Menampilkan <strong style={{ color: '#212529' }}>{filteredPins.length.toLocaleString('id-ID')}</strong> titik cabang
+        {/* Toggle Garis Melengkung Match */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <button
+            type="button"
+            onClick={() => setShowCurvedArcs(!showCurvedArcs)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              fontSize: '0.71rem',
+              fontWeight: 600,
+              padding: '0.24rem 0.6rem',
+              borderRadius: '4px',
+              border: showCurvedArcs ? '1px solid rgba(10, 179, 156, 0.4)' : '1px solid #ced4da',
+              background: showCurvedArcs ? 'rgba(10, 179, 156, 0.12)' : '#ffffff',
+              color: showCurvedArcs ? '#0ab39c' : '#878a99',
+              cursor: 'pointer',
+            }}
+            title="Aktifkan garis melengkung trajektori data match yang terhubung ke cabang terpilih"
+          >
+            <Share2 size={12} />
+            <span>Garis Lengkung Match: {showCurvedArcs ? 'Aktif' : 'Nonaktif'}</span>
+          </button>
         </div>
       </div>
 
@@ -712,7 +927,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       >
         {/* Leaflet Hardware Canvas Map */}
         <div className="bni-map-container" style={{ position: 'relative' }}>
-          <div ref={mapContainerRef} style={{ width: '100%', height: '520px', borderRadius: '6px' }} />
+          <div ref={mapContainerRef} style={{ width: '100%', height: '530px', borderRadius: '6px' }} />
 
           {/* Floating Minimalist Legend */}
           <div
@@ -742,8 +957,12 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
               <span style={{ color: '#495057', fontWeight: 600 }}>Cabang Master</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#f06548', display: 'inline-block', border: '2px solid #fff' }} />
+              <span style={{ width: '11px', height: '11px', borderRadius: '50%', background: '#f06548', display: 'inline-block', border: '2px solid #fff' }} />
               <span style={{ color: '#495057', fontWeight: 600 }}>Multi-Cabang (&gt;1)</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <span style={{ width: '14px', height: '3px', background: '#0ab39c', display: 'inline-block', borderRadius: '2px' }} />
+              <span style={{ color: '#0ab39c', fontWeight: 600 }}>Garis Lengkung Match</span>
             </div>
           </div>
         </div>
@@ -795,7 +1014,12 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 </div>
                 <button
                   type="button"
-                  onClick={() => setSelectedPin(null)}
+                  onClick={() => {
+                    setSelectedPin(null);
+                    if (displayScope === 'SELECTED_ONLY') {
+                      setDisplayScope('ALL');
+                    }
+                  }}
                   style={{
                     background: 'none',
                     border: 'none',
@@ -810,32 +1034,110 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 </button>
               </div>
 
-              {/* Matched Data Collaboration Highlight Box */}
+              {/* Matched Data Collaboration Highlight Box (INTERACTIVE CLICKABLE) */}
               <div
+                onClick={() => {
+                  if (selectedMatchedRows.length > 0) {
+                    setShowMatchedModal(true);
+                  }
+                }}
                 style={{
                   background: selectedPin.matchedCount > 0 ? 'rgba(10, 179, 156, 0.08)' : '#f1f5f9',
                   border: `1px solid ${selectedPin.matchedCount > 0 ? 'rgba(10, 179, 156, 0.3)' : '#cbd5e1'}`,
                   borderRadius: '6px',
-                  padding: '0.5rem 0.65rem',
+                  padding: '0.55rem 0.75rem',
                   marginBottom: '0.75rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
+                  cursor: selectedPin.matchedCount > 0 ? 'pointer' : 'default',
+                  transition: 'all 0.15s ease',
+                  boxShadow: selectedPin.matchedCount > 0 ? '0 1px 3px rgba(10, 179, 156, 0.1)' : 'none',
                 }}
+                title={selectedPin.matchedCount > 0 ? 'Klik untuk melihat rincian 180 data matched di cabang ini' : ''}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                  <CheckCircle size={15} color={selectedPin.matchedCount > 0 ? '#0ab39c' : '#64748b'} />
-                  <div>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: selectedPin.matchedCount > 0 ? '#0ab39c' : '#475569' }}>
-                      {selectedPin.matchedCount > 0
-                        ? `TERKORELASI: ${selectedPin.matchedCount.toLocaleString('id-ID')} DATA MATCHED`
-                        : 'Belum Ada Transaksi Cocok'}
-                    </div>
-                    <div style={{ fontSize: '0.67rem', color: '#64748b' }}>
-                      Monitoring aktivitas data target pada cabang ini
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <CheckCircle size={16} color={selectedPin.matchedCount > 0 ? '#0ab39c' : '#64748b'} />
+                    <div>
+                      <div style={{ fontSize: '0.74rem', fontWeight: 700, color: selectedPin.matchedCount > 0 ? '#0ab39c' : '#475569' }}>
+                        {selectedPin.matchedCount > 0
+                          ? `TERKORELASI: ${selectedPin.matchedCount.toLocaleString('id-ID')} DATA MATCHED`
+                          : 'Belum Ada Transaksi Cocok'}
+                      </div>
+                      <div style={{ fontSize: '0.67rem', color: '#64748b' }}>
+                        {selectedPin.matchedCount > 0
+                          ? 'Klik untuk melihat daftar data cocok & garis lengkung'
+                          : 'Monitoring aktivitas data target pada cabang ini'}
+                      </div>
                     </div>
                   </div>
+                  {selectedPin.matchedCount > 0 && (
+                    <span
+                      style={{
+                        fontSize: '0.68rem',
+                        fontWeight: 700,
+                        background: '#0ab39c',
+                        color: '#ffffff',
+                        padding: '0.15rem 0.45rem',
+                        borderRadius: '4px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.2rem',
+                      }}
+                    >
+                      <span>Lihat Data</span>
+                      <ChevronRight size={12} />
+                    </span>
+                  )}
                 </div>
+              </div>
+
+              {/* Isolate Selected Pin View Switcher */}
+              <div style={{ marginBottom: '0.75rem', display: 'flex', gap: '0.35rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setDisplayScope(displayScope === 'SELECTED_ONLY' ? 'ALL' : 'SELECTED_ONLY')}
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.3rem',
+                    padding: '0.32rem 0.5rem',
+                    fontSize: '0.71rem',
+                    fontWeight: 600,
+                    borderRadius: '4px',
+                    border: displayScope === 'SELECTED_ONLY' ? '1px solid #f59e0b' : '1px solid #ced4da',
+                    background: displayScope === 'SELECTED_ONLY' ? '#f59e0b' : '#ffffff',
+                    color: displayScope === 'SELECTED_ONLY' ? '#ffffff' : '#495057',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Radio size={12} />
+                  <span>{displayScope === 'SELECTED_ONLY' ? 'Sedang Diisolasi' : 'Isolasi Titik Ini Saja'}</span>
+                </button>
+
+                {selectedPin.matchedCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowMatchedModal(true)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.25rem',
+                      padding: '0.32rem 0.55rem',
+                      fontSize: '0.71rem',
+                      fontWeight: 600,
+                      borderRadius: '4px',
+                      border: '1px solid rgba(10, 179, 156, 0.4)',
+                      background: 'rgba(10, 179, 156, 0.1)',
+                      color: '#0ab39c',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <FileSpreadsheet size={12} />
+                    <span>Rincian</span>
+                  </button>
+                )}
               </div>
 
               {/* Multi-Branch Switcher if > 1 branch */}
@@ -990,6 +1292,212 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           </div>
         )}
       </div>
+
+      {/* MODAL RINCIAN DATA MATCHED UNTUK CABANG INI ("DATA INI SAYA BISA LIHAT DI MANA YA") */}
+      {showMatchedModal && selectedPin && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(33, 37, 41, 0.55)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '1rem',
+          }}
+          onClick={() => setShowMatchedModal(false)}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '8px',
+              maxWidth: '820px',
+              width: '100%',
+              maxHeight: '85vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              border: '1px solid #e2e8f0',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: '1rem 1.25rem',
+                borderBottom: '1px solid #eef0f2',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: '#fafbfc',
+                borderRadius: '8px 8px 0 0',
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <CheckCircle size={18} color="#0ab39c" />
+                  <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: '#212529' }}>
+                    Daftar {selectedMatchedRows.length} Data Target Matched ➔ {selectedPin.primaryOutletName}
+                  </h4>
+                </div>
+                <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.75rem', color: '#878a99' }}>
+                  Cabang BNI {selectedPin.wilayah} | Kode Pos: <strong>{selectedPin.kodePos}</strong> | {selectedPin.dati2}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowMatchedModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '1.25rem',
+                  color: '#878a99',
+                  cursor: 'pointer',
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Toolbar: Search & Action Button */}
+            <div
+              style={{
+                padding: '0.75rem 1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '0.75rem',
+                borderBottom: '1px solid #eef0f2',
+                background: '#ffffff',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div className="search-input-wrapper" style={{ width: '260px' }}>
+                <Search size={13} className="search-icon-pos" />
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder="Cari dalam data cocok ini..."
+                  value={modalSearchTerm}
+                  onChange={(e) => setModalSearchTerm(e.target.value)}
+                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem 0.35rem 1.85rem' }}
+                />
+              </div>
+
+              {onNavigateToEngine && (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setShowMatchedModal(false);
+                    const s = currentBranch?.['Sandi Cabang'] || currentBranch?.Sandi || selectedPin.kodePos;
+                    onNavigateToEngine(s);
+                  }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    fontSize: '0.75rem',
+                    padding: '0.35rem 0.8rem',
+                  }}
+                >
+                  <Eye size={13} />
+                  <span>Saring & Buka di Tab Data Cek</span>
+                </button>
+              )}
+            </div>
+
+            {/* Modal Table Body */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem 1.25rem', maxHeight: '420px' }}>
+              <table className="modern-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: '45px', textAlign: 'center', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>No</th>
+                    <th style={{ minWidth: '160px', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Nama Outlet Target</th>
+                    <th style={{ minWidth: '220px', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Alamat Lengkap Target</th>
+                    <th style={{ minWidth: '110px', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Kecamatan</th>
+                    <th style={{ minWidth: '85px', textAlign: 'center', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Kode Pos</th>
+                    <th style={{ minWidth: '100px', textAlign: 'center', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Metode Match</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredModalRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '2rem 1rem', color: '#878a99' }}>
+                        Tidak ada record yang sesuai dengan pencarian "{modalSearchTerm}".
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredModalRows.map((row, idx) => (
+                      <tr key={idx}>
+                        <td style={{ textAlign: 'center', color: '#878a99', fontWeight: 600 }}>{row.No || idx + 1}</td>
+                        <td style={{ fontWeight: 600, color: '#212529' }}>{row['Nama Outlet']}</td>
+                        <td style={{ color: '#495057' }}>{row.ALAMAT || '-'}</td>
+                        <td style={{ color: '#6c757d' }}>{row.Kecamatan || row['Dati II'] || '-'}</td>
+                        <td style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#405189' }}>
+                          {row['KODE POS'] || '-'}
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <span
+                            style={{
+                              fontSize: '0.68rem',
+                              fontWeight: 700,
+                              background: row._matchLevel === 'level1'
+                                ? 'rgba(10, 179, 156, 0.12)'
+                                : row._matchLevel === 'level2'
+                                ? 'rgba(53, 119, 241, 0.12)'
+                                : 'rgba(247, 184, 75, 0.15)',
+                              color: row._matchLevel === 'level1'
+                                ? '#0ab39c'
+                                : row._matchLevel === 'level2'
+                                ? '#3577f1'
+                                : '#d97706',
+                              padding: '0.1rem 0.4rem',
+                              borderRadius: '3px',
+                            }}
+                          >
+                            {row._matchLevel === 'level1' ? 'Level 1 (Sandi)' : row._matchLevel === 'level2' ? 'Level 2 (Nama/Alamat)' : 'Rekomendasi'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Modal Footer */}
+            <div
+              style={{
+                padding: '0.75rem 1.25rem',
+                borderTop: '1px solid #eef0f2',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: '#fafbfc',
+                borderRadius: '0 0 8px 8px',
+                fontSize: '0.75rem',
+                color: '#878a99',
+              }}
+            >
+              <div>
+                Menampilkan <strong style={{ color: '#212529' }}>{filteredModalRows.length}</strong> dari total {selectedMatchedRows.length} record cocok
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setShowMatchedModal(false)}
+                style={{ padding: '0.3rem 0.75rem', fontSize: '0.75rem' }}
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
