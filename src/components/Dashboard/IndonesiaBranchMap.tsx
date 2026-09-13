@@ -353,9 +353,6 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     return targetRows.filter((t) => t._isMatched && isAcehTargetRow(t));
   }, [targetRows]);
 
-  const acehTotalTargetCount = useMemo(() => {
-    return targetRows.filter((t) => isAcehTargetRow(t)).length;
-  }, [targetRows]);
 
   // Filtered rows inside the Matched Detail Modal
   const filteredModalRows = useMemo(() => {
@@ -390,15 +387,15 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       const map = L.map(mapContainerRef.current, {
         center: INDONESIA_REGIONS.ALL.center,
         zoom: 5,
-        minZoom: 3,                  // Allow zooming out to see world map
-        maxZoom: 18,                 // High detail zoom to street level
+        minZoom: 2,                  // Allow zooming out freely
+        maxZoom: 18,
         zoomControl: true,
         scrollWheelZoom: true,
-        preferCanvas: true,          // GPU Canvas for zero lag
+        preferCanvas: true,
       });
 
-      // Fit bounds immediately on load so Aceh and Papua are completely visible
-      map.fitBounds(indonesiaBounds, { padding: [15, 15] });
+      // Fit Indonesia bounds on load
+      map.fitBounds(indonesiaBounds, { padding: [20, 20] });
 
       // Ultra-clean, fast tile layer (Default: Google Maps Roadmap)
       const tileLayer = getMapTileLayer('google', indonesiaBounds).addTo(map);
@@ -849,454 +846,284 @@ if (showAllMatchMarkers) {
         </div>
       </div>
 
-      {/* Control Bar 1: Island Navigation, Tile Provider, and Search */}
+      {/* Unified Single-Row Control Toolbar */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
+          gap: '0.5rem',
+          marginBottom: '0.65rem',
+          padding: '0.4rem 0.6rem',
+          background: '#f8f9fa',
+          borderRadius: '7px',
+          border: '1px solid #eef0f2',
           flexWrap: 'wrap',
-          gap: '0.65rem',
-          marginBottom: '0.6rem',
         }}
       >
-        {/* Island Navigation Pills (Aceh Included) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '0.71rem', fontWeight: 600, color: '#878a99', marginRight: '0.15rem' }}>
-            Pulau:
-          </span>
-          {(Object.keys(INDONESIA_REGIONS) as Array<keyof typeof INDONESIA_REGIONS>).map((key) => {
-            const isActive = activeRegion === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => handleJumpRegion(key)}
-                style={{
-                  fontSize: '0.71rem',
-                  fontWeight: 600,
-                  padding: '0.24rem 0.55rem',
-                  borderRadius: '4px',
-                  border: isActive ? '1px solid #405189' : '1px solid #e9ebec',
-                  background: isActive ? '#405189' : '#f8f9fa',
-                  color: isActive ? '#ffffff' : '#495057',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {INDONESIA_REGIONS[key].name}
-              </button>
-            );
-          })}
+        {/* 1. Island / Region Dropdown */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+          <Compass size={13} color="#878a99" />
+          <select
+            value={activeRegion}
+            onChange={(e) => handleJumpRegion(e.target.value as keyof typeof INDONESIA_REGIONS)}
+            style={{
+              fontSize: '0.73rem',
+              fontWeight: 600,
+              padding: '0.25rem 0.5rem',
+              borderRadius: '5px',
+              border: '1px solid #ced4da',
+              background: '#ffffff',
+              color: '#405189',
+              cursor: 'pointer',
+              outline: 'none',
+              minWidth: '140px',
+            }}
+          >
+            {(Object.keys(INDONESIA_REGIONS) as Array<keyof typeof INDONESIA_REGIONS>).map((key) => (
+              <option key={key} value={key}>{INDONESIA_REGIONS[key].name}</option>
+            ))}
+          </select>
         </div>
 
-        {/* Right side: Tile Provider Switcher & Search Bar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <div style={{ width: '1px', height: '20px', background: '#dee2e6', flexShrink: 0 }} />
 
-          {/* Google Maps API Key Config Button */}
+        {/* 2. Tile / Map Style Dropdown */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+          <Globe size={13} color="#878a99" />
+          <select
+            value={tileProvider}
+            onChange={(e) => handleSwitchTile(e.target.value as TileProvider)}
+            style={{
+              fontSize: '0.73rem',
+              fontWeight: 600,
+              padding: '0.25rem 0.5rem',
+              borderRadius: '5px',
+              border: '1px solid #ced4da',
+              background: '#ffffff',
+              color: '#212529',
+              cursor: 'pointer',
+              outline: 'none',
+              minWidth: '130px',
+            }}
+          >
+            <option value="google">🗺️ Google Maps</option>
+            <option value="google_hybrid">🛰️ Satelit</option>
+            <option value="esri">🌐 Esri Street</option>
+            <option value="osm">📍 OpenStreetMap</option>
+          </select>
+        </div>
+
+        <div style={{ width: '1px', height: '20px', background: '#dee2e6', flexShrink: 0 }} />
+
+        {/* 3. Display Filter Dropdown */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+          <Filter size={13} color="#878a99" />
+          <select
+            value={displayScope}
+            onChange={(e) => {
+              const val = e.target.value as DisplayScope;
+              setTrackingMode('none');
+              if (val === 'SELECTED_ONLY' && !selectedPin) {
+                alert('Klik salah satu titik cabang di peta terlebih dahulu.');
+                return;
+              }
+              setDisplayScope(val);
+            }}
+            style={{
+              fontSize: '0.73rem',
+              fontWeight: 600,
+              padding: '0.25rem 0.5rem',
+              borderRadius: '5px',
+              border: '1px solid #ced4da',
+              background: '#ffffff',
+              color: '#212529',
+              cursor: 'pointer',
+              outline: 'none',
+              minWidth: '155px',
+            }}
+          >
+            <option value="ALL">🌐 Semua Titik ({allPins.length})</option>
+            <option value="SELECTED_ONLY">🎯 Titik Terpilih</option>
+            <option value="MATCHED_ONLY">✓ Hanya Matched ({stats.pinsWithMatchCount})</option>
+            <option value="MULTI_ONLY">⚠️ Multi-Outlet ({stats.multiOutletPins})</option>
+          </select>
+        </div>
+
+        <div style={{ width: '1px', height: '20px', background: '#dee2e6', flexShrink: 0 }} />
+
+        {/* 4. Curved Arcs Toggle */}
+        <button
+          type="button"
+          onClick={() => setShowCurvedArcs(!showCurvedArcs)}
+          title="Toggle garis lengkung data matched"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            fontSize: '0.73rem',
+            fontWeight: 600,
+            padding: '0.25rem 0.55rem',
+            borderRadius: '5px',
+            border: showCurvedArcs ? '1px solid #0ab39c' : '1px solid #ced4da',
+            background: showCurvedArcs ? 'rgba(10,179,156,0.1)' : '#ffffff',
+            color: showCurvedArcs ? '#0ab39c' : '#6c757d',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <Share2 size={12} />
+          <span>Garis Match</span>
+        </button>
+
+        {/* 5. Aceh Tracking (conditional) */}
+        {acehTargetMatches.length > 0 && (
           <button
             type="button"
-            onClick={() => {
-              setApiKeyInput(googleApiKey);
-              setShowApiKeyModal(true);
-            }}
-            title="Konfigurasi Google Maps Geocoding API Key untuk verifikasi koordinat 100% presisi"
+            onClick={startAcehKimTracking}
+            title={`Lacak ${acehTargetMatches.length} data Aceh ke cabang KIM`}
             style={{
-              fontSize: '0.68rem',
-              fontWeight: 600,
-              padding: '0.22rem 0.55rem',
-              borderRadius: '4px',
-              border: googleApiKey ? '1px solid #10b981' : '1px solid #e2e8f0',
-              background: googleApiKey ? 'rgba(16, 185, 129, 0.1)' : '#f8fafc',
-              color: googleApiKey ? '#059669' : '#475569',
-              cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: '4px',
-              transition: 'all 0.15s ease',
+              fontSize: '0.73rem',
+              fontWeight: 700,
+              padding: '0.25rem 0.55rem',
+              borderRadius: '5px',
+              border: trackingMode === 'aceh_kim' ? '1px solid #0e7490' : '1px solid #0891b2',
+              background: trackingMode === 'aceh_kim' ? '#0e7490' : '#ecfeff',
+              color: trackingMode === 'aceh_kim' ? '#ffffff' : '#0e7490',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
             }}
           >
-            <Key size={12} color={googleApiKey ? '#059669' : '#64748b'} />
-            <span>{googleApiKey ? 'Google API: Aktif' : 'Google API Key'}</span>
+            <span>🕌</span><span>Aceh→KIM ({acehTargetMatches.length})</span>
           </button>
+        )}
 
-          {/* Tile Layer Toggle */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', background: '#f8f9fa', padding: '0.15rem 0.3rem', borderRadius: '5px', border: '1px solid #e9ebec' }}>
-            <Globe size={12} color="#878a99" style={{ marginLeft: '0.2rem', marginRight: '0.1rem' }} />
-            <button
-              type="button"
-              onClick={() => handleSwitchTile('google')}
-              title="Peta Standar Google Maps (Ringan, Rapih, Cepat)"
-              style={{
-                fontSize: '0.68rem',
-                fontWeight: 600,
-                padding: '0.18rem 0.45rem',
-                border: 'none',
-                borderRadius: '3px',
-                background: tileProvider === 'google' ? '#0ab39c' : 'transparent',
-                color: tileProvider === 'google' ? '#ffffff' : '#6c757d',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '3px',
-              }}
-            >
-              <span>🗺️</span> Google Maps
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSwitchTile('google_hybrid')}
-              title="Google Maps Satelit Hybrid"
-              style={{
-                fontSize: '0.68rem',
-                fontWeight: 600,
-                padding: '0.18rem 0.45rem',
-                border: 'none',
-                borderRadius: '3px',
-                background: tileProvider === 'google_hybrid' ? '#0ab39c' : 'transparent',
-                color: tileProvider === 'google_hybrid' ? '#ffffff' : '#6c757d',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '3px',
-              }}
-            >
-              <span>🛰️</span> Satelit
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSwitchTile('esri')}
-              title="Esri World Street Map"
-              style={{
-                fontSize: '0.68rem',
-                fontWeight: 600,
-                padding: '0.18rem 0.45rem',
-                border: 'none',
-                borderRadius: '3px',
-                background: tileProvider === 'esri' ? '#405189' : 'transparent',
-                color: tileProvider === 'esri' ? '#ffffff' : '#6c757d',
-                cursor: 'pointer',
-              }}
-            >
-              Esri
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSwitchTile('osm')}
-              title="OpenStreetMap"
-              style={{
-                fontSize: '0.68rem',
-                fontWeight: 600,
-                padding: '0.18rem 0.45rem',
-                border: 'none',
-                borderRadius: '3px',
-                background: tileProvider === 'osm' ? '#405189' : 'transparent',
-                color: tileProvider === 'osm' ? '#ffffff' : '#6c757d',
-                cursor: 'pointer',
-              }}
-            >
-              OSM
-            </button>
-                      <button
-              type="button"
-              onClick={() => setShowAllMatchMarkers((prev) => !prev)}
-              title="Toggle All Match Markers"
-              style={{
-                fontSize: '0.68rem',
-                fontWeight: 600,
-                padding: '0.18rem 0.45rem',
-                border: 'none',
-                borderRadius: '3px',
-                background: showAllMatchMarkers ? '#405189' : 'transparent',
-                color: showAllMatchMarkers ? '#ffffff' : '#6c757d',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '3px',
-              }}
-            >
-              All
-            </button>
-          </div>
+        {/* Spacer */}
+        <div style={{ flex: 1 }} />
 
-          {/* Search Input with Instant Autocomplete */}
-          <div style={{ position: 'relative', minWidth: '260px' }}>
-            <form onSubmit={handleSearchSubmit} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <div className="search-input-wrapper" style={{ flex: 1 }}>
-                <Search size={13} className="search-icon-pos" />
-                <input
-                  type="text"
-                  className="search-input"
-                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem 0.3rem 1.85rem', width: '100%' }}
-                  placeholder="Cari Kota, Outlet, atau Kode Pos..."
-                  value={searchQuery}
-                  onFocus={() => setShowSuggestions(true)}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setShowSuggestions(true);
-                  }}
-                />
-              </div>
-              <button
-                type="submit"
-                className="btn btn-primary"
-                style={{
-                  padding: '0.3rem 0.75rem',
-                  fontSize: '0.73rem',
-                  whiteSpace: 'nowrap',
-                  borderRadius: '4px',
+        {/* 6. Search Bar */}
+        <div style={{ position: 'relative', minWidth: '220px' }}>
+          <form onSubmit={handleSearchSubmit} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+            <div className="search-input-wrapper" style={{ flex: 1 }}>
+              <Search size={13} className="search-icon-pos" />
+              <input
+                type="text"
+                className="search-input"
+                style={{ fontSize: '0.73rem', padding: '0.26rem 0.6rem 0.26rem 1.85rem', width: '100%' }}
+                placeholder="Cari kota, outlet, kode pos..."
+                value={searchQuery}
+                onFocus={() => setShowSuggestions(true)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setShowSuggestions(true);
                 }}
-              >
-                Lacak
-              </button>
-            </form>
+              />
+            </div>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              style={{ padding: '0.26rem 0.65rem', fontSize: '0.73rem', whiteSpace: 'nowrap', borderRadius: '5px' }}
+            >
+              Lacak
+            </button>
+          </form>
 
-            {/* Autocomplete Dropdown List */}
-            {showSuggestions && searchSuggestions.length > 0 && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  right: 0,
-                  marginTop: '4px',
-                  background: '#ffffff',
-                  border: '1px solid #e9ebec',
-                  borderRadius: '6px',
-                  boxShadow: '0 6px 16px rgba(0,0,0,0.12)',
-                  zIndex: 1050,
-                  maxHeight: '220px',
-                  overflowY: 'auto',
-                }}
-              >
-                {searchSuggestions.map((sug, sIdx) => {
-                  const p = sug.pin;
-                  return (
-                    <div
-                      key={`${p.id}_${sIdx}`}
-                      onClick={() => handleSelectSuggestion(sug)}
-                      style={{
-                        padding: '0.45rem 0.75rem',
-                        borderBottom: '1px solid #f3f3f9',
-                        cursor: 'pointer',
-                        fontSize: '0.75rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = '#f8f9fa')}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = '#ffffff')}
-                    >
-                      <div>
-                        <strong style={{ color: '#212529', display: 'block' }}>{p.primaryOutletName}</strong>
-                        <span style={{ color: '#878a99', fontSize: '0.7rem' }}>
-                          {p.dati2} &bull; 📮 {p.kodePos}
-                        </span>
-                        {sug.serviceNote && (
-                          <div style={{ color: '#0891b2', fontSize: '0.68rem', fontWeight: 600, marginTop: '2px' }}>
-                            ✦ {sug.serviceNote}
-                          </div>
-                        )}
-                      </div>
-                      {p.matchedCount > 0 && (
-                        <span
-                          style={{
-                            background: 'rgba(10, 179, 156, 0.1)',
-                            color: '#0ab39c',
-                            padding: '0.1rem 0.4rem',
-                            borderRadius: '4px',
-                            fontSize: '0.68rem',
-                            fontWeight: 700,
-                          }}
-                        >
-                          ✓ {p.matchedCount} Cocok
-                        </span>
+          {/* Autocomplete Dropdown */}
+          {showSuggestions && searchSuggestions.length > 0 && (
+            <div
+              style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                marginTop: '4px',
+                background: '#ffffff',
+                border: '1px solid #e9ebec',
+                borderRadius: '6px',
+                boxShadow: '0 6px 16px rgba(0,0,0,0.12)',
+                zIndex: 1050,
+                maxHeight: '220px',
+                overflowY: 'auto',
+              }}
+            >
+              {searchSuggestions.map((sug, sIdx) => {
+                const p = sug.pin;
+                return (
+                  <div
+                    key={`${p.id}_${sIdx}`}
+                    onClick={() => handleSelectSuggestion(sug)}
+                    style={{
+                      padding: '0.45rem 0.75rem',
+                      borderBottom: '1px solid #f3f3f9',
+                      cursor: 'pointer',
+                      fontSize: '0.75rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#f8f9fa')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = '#ffffff')}
+                  >
+                    <div>
+                      <strong style={{ color: '#212529', display: 'block' }}>{p.primaryOutletName}</strong>
+                      <span style={{ color: '#878a99', fontSize: '0.7rem' }}>
+                        {p.dati2} &bull; 📮 {p.kodePos}
+                      </span>
+                      {sug.serviceNote && (
+                        <div style={{ color: '#0891b2', fontSize: '0.68rem', fontWeight: 600, marginTop: '2px' }}>
+                          ✦ {sug.serviceNote}
+                        </div>
                       )}
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Control Bar 2: Filter Mode (Semua vs Hanya Terpilih vs Matched vs Multi) & Garis Melengkung Switcher */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '0.5rem',
-          flexWrap: 'wrap',
-          marginBottom: '0.75rem',
-          padding: '0.4rem 0.65rem',
-          background: '#f8f9fa',
-          borderRadius: '6px',
-          border: '1px solid #eef0f2',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginRight: '0.3rem' }}>
-            <Filter size={13} color="#878a99" />
-            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#495057' }}>Filter Tampilan:</span>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              setTrackingMode('none');
-              setDisplayScope('ALL');
-            }}
-            style={{
-              fontSize: '0.71rem',
-              fontWeight: 600,
-              padding: '0.22rem 0.55rem',
-              borderRadius: '4px',
-              border: displayScope === 'ALL' ? '1px solid #405189' : '1px solid #ced4da',
-              background: displayScope === 'ALL' ? '#405189' : '#ffffff',
-              color: displayScope === 'ALL' ? '#ffffff' : '#495057',
-              cursor: 'pointer',
-            }}
-          >
-            🌐 Semua Titik ({allPins.length})
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              if (selectedPin) {
-                setTrackingMode('none');
-                setDisplayScope('SELECTED_ONLY');
-              } else {
-                alert('Silakan klik salah satu titik cabang pada peta terlebih dahulu untuk mengisolasi tampilannya.');
-              }
-            }}
-            style={{
-              fontSize: '0.71rem',
-              fontWeight: 600,
-              padding: '0.22rem 0.55rem',
-              borderRadius: '4px',
-              border: displayScope === 'SELECTED_ONLY' ? '1px solid #f59e0b' : '1px solid #ced4da',
-              background: displayScope === 'SELECTED_ONLY' ? '#f59e0b' : '#ffffff',
-              color: displayScope === 'SELECTED_ONLY' ? '#ffffff' : (selectedPin ? '#b45309' : '#878a99'),
-              cursor: selectedPin ? 'pointer' : 'default',
-            }}
-            title="Hanya menampilkan titik cabang yang sedang dipilih dan garis koneksi match-nya"
-          >
-            🎯 Hanya Titik Terpilih Saja {selectedPin ? `(${selectedPin.primaryOutletName.slice(0, 16)}...)` : ''}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setTrackingMode('none');
-              setDisplayScope('MATCHED_ONLY');
-            }}
-            style={{
-              fontSize: '0.71rem',
-              fontWeight: 600,
-              padding: '0.22rem 0.55rem',
-              borderRadius: '4px',
-              border: displayScope === 'MATCHED_ONLY' ? '1px solid #0ab39c' : '1px solid #ced4da',
-              background: displayScope === 'MATCHED_ONLY' ? '#0ab39c' : '#ffffff',
-              color: displayScope === 'MATCHED_ONLY' ? '#ffffff' : '#0ab39c',
-              cursor: 'pointer',
-            }}
-          >
-            ✓ Hanya Titik Matched ({stats.pinsWithMatchCount})
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setTrackingMode('none');
-              setDisplayScope('MULTI_ONLY');
-            }}
-            style={{
-              fontSize: '0.71rem',
-              fontWeight: 600,
-              padding: '0.22rem 0.55rem',
-              borderRadius: '4px',
-              border: displayScope === 'MULTI_ONLY' ? '1px solid #f06548' : '1px solid #ced4da',
-              background: displayScope === 'MULTI_ONLY' ? '#f06548' : '#ffffff',
-              color: displayScope === 'MULTI_ONLY' ? '#ffffff' : '#f06548',
-              cursor: 'pointer',
-            }}
-          >
-            ⚠️ Multi-Outlet Saja ({stats.multiOutletPins})
-          </button>
-          {/* Dedicated Aceh Tracking Button if Aceh data exists */}
-          {acehTargetMatches.length > 0 && (
-            <button
-              type="button"
-              onClick={startAcehKimTracking}
-              style={{
-                fontSize: '0.71rem',
-                fontWeight: 700,
-                padding: '0.22rem 0.6rem',
-                borderRadius: '4px',
-                border: trackingMode === 'aceh_kim' ? '1px solid #0e7490' : '1px solid #0891b2',
-                background: trackingMode === 'aceh_kim' ? '#0e7490' : '#ecfeff',
-                color: trackingMode === 'aceh_kim' ? '#ffffff' : '#0e7490',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                boxShadow: '0 1px 2px rgba(8,145,178,0.1)',
-              }}
-              title="Hanya titik asal Aceh (kabupaten/kota) ke Cabang KIM Medan"
-            >
-              <span>🕌</span> Lacak Alur Aceh ➔ KIM ({acehTargetMatches.length} Data)
-            </button>
-          )}
-
-          {acehTargetMatches.length === 0 && acehTotalTargetCount > 0 && (
-            <span
-              style={{
-                fontSize: '0.7rem',
-                fontWeight: 600,
-                padding: '0.2rem 0.5rem',
-                borderRadius: '4px',
-                border: '1px solid #fed7aa',
-                background: '#fff7ed',
-                color: '#c2410c',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}
-              title="Data Aceh terdeteksi tapi masih berada di tab Rekomendasi"
-            >
-              <span>ℹ️</span> {acehTotalTargetCount} Data Aceh (Di tab Rekomendasi ➔ Cabang KIM)
-            </span>
+                    {p.matchedCount > 0 && (
+                      <span
+                        style={{
+                          background: 'rgba(10, 179, 156, 0.1)',
+                          color: '#0ab39c',
+                          padding: '0.1rem 0.4rem',
+                          borderRadius: '4px',
+                          fontSize: '0.68rem',
+                          fontWeight: 700,
+                        }}
+                      >
+                        ✓ {p.matchedCount} Cocok
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
 
-        {/* Toggle Garis Melengkung Match */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <button
-            type="button"
-            onClick={() => setShowCurvedArcs(!showCurvedArcs)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.35rem',
-              fontSize: '0.71rem',
-              fontWeight: 600,
-              padding: '0.24rem 0.6rem',
-              borderRadius: '4px',
-              border: showCurvedArcs ? '1px solid rgba(10, 179, 156, 0.4)' : '1px solid #ced4da',
-              background: showCurvedArcs ? 'rgba(10, 179, 156, 0.12)' : '#ffffff',
-              color: showCurvedArcs ? '#0ab39c' : '#878a99',
-              cursor: 'pointer',
-            }}
-            title="Aktifkan garis melengkung trajektori data match yang terhubung ke cabang terpilih"
-          >
-            <Share2 size={12} />
-            <span>Garis Lengkung Match: {showCurvedArcs ? 'Aktif' : 'Nonaktif'}</span>
-          </button>
-        </div>
+        {/* 7. Google API Key Button */}
+        <button
+          type="button"
+          onClick={() => {
+            setApiKeyInput(googleApiKey);
+            setShowApiKeyModal(true);
+          }}
+          title="Konfigurasi Google Maps Geocoding API Key"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            fontSize: '0.73rem',
+            fontWeight: 600,
+            padding: '0.25rem 0.55rem',
+            borderRadius: '5px',
+            border: googleApiKey ? '1px solid #10b981' : '1px solid #e2e8f0',
+            background: googleApiKey ? 'rgba(16,185,129,0.1)' : '#f8fafc',
+            color: googleApiKey ? '#059669' : '#64748b',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <Key size={12} />
+          <span>{googleApiKey ? 'API Aktif ✓' : 'Google Key'}</span>
+        </button>
       </div>
 
       {/* Main Map Container & Interactive Side Panel */}
@@ -1310,7 +1137,7 @@ if (showAllMatchMarkers) {
       >
         {/* Leaflet Hardware Canvas Map */}
         <div className="bni-map-container" style={{ position: 'relative' }}>
-          <div ref={mapContainerRef} style={{ width: '100%', height: '530px', borderRadius: '6px' }} />
+          <div ref={mapContainerRef} style={{ width: '100%', height: '580px', borderRadius: '6px' }} />
 
           {trackingMode === 'aceh_kim' && (
             <div
