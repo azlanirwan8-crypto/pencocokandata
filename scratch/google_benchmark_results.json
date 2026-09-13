@@ -1,0 +1,135 @@
+[
+  {
+    "name": "KCU Jayapura (Jl. Argapura)",
+    "query": "Jl. Argapura, Jayapura",
+    "lat": -2.5526986,
+    "lng": 140.7140475,
+    "displayName": "Argapura, Ardipura, Jayapura, Papua, 99111, Indonesia"
+  },
+  {
+    "name": "Abepura, Jayapura",
+    "query": "Abepura, Kota Jayapura",
+    "lat": -2.6160972,
+    "lng": 140.6730139,
+    "displayName": "Abepura, Jayapura, Papua, 99225, Indonesia"
+  },
+  {
+    "name": "Sentani, Jayapura",
+    "query": "Sentani, Jayapura",
+    "lat": -2.566079,
+    "lng": 140.5057435,
+    "displayName": "Sentani, Jayapura, Papua, 99532, Indonesia"
+  },
+  {
+    "name": "Entrop, Jayapura",
+    "query": "Entrop, Jayapura",
+    "lat": -2.570158,
+    "lng": 140.6933342,
+    "displayName": "Entrop, Buton, Jayapura, Papua, 99332, Indonesia"
+  },
+  {
+    "name": "Hamadi, Jayapura",
+    "query": "Hamadi, Jayapura",
+    "lat": -2.5660888,
+    "lng": 140.71216,
+    "displayName": "Hamadi, Ardipura, Jayapura, Papua, 99116, Indonesia"
+  },
+  {
+    "name": "Kotaraja, Jayapura",
+    "query": "Kotaraja, Jayapura",
+    "lat": -2.5971896,
+    "lng": 140.6749055,
+    "displayName": "Kotaraja, Jayapura, Papua, 99355, Indonesia"
+  },
+  {
+    "name": "Waena, Jayapura",
+    "query": "Waena, Jayapura",
+    "lat": -2.5969254,
+    "lng": 140.6354405,
+    "displayName": "Waena, Jayapura, Papua, 99351, Indonesia"
+  },
+  {
+    "name": "Besuki, Situbondo",
+    "query": "Besuki, Situbondo",
+    "lat": -7.7343144,
+    "lng": 113.6902407,
+    "displayName": "Besuki, Situbondo, Jawa Timur, Indonesia"
+  },
+  {
+    "name": "Asembagus, Situbondo",
+    "query": "Asembagus, Situbondo",
+    "lat": -7.7491266,
+    "lng": 114.218138,
+    "displayName": "Asembagus, Situbondo, Jawa Timur, 68373, Indonesia"
+  },
+  {
+    "name": "Situbondo Kota",
+    "query": "Kabupaten Situbondo, Jawa Timur",
+    "lat": -7.7986089,
+    "lng": 114.264743,
+    "displayName": "Situbondo, Jawa Timur, Indonesia"
+  },
+  {
+    "name": "Padang Barat",
+    "query": "Kecamatan Padang Barat, Padang",
+    "lat": -0.4635722,
+    "lng": 100.3952293,
+    "displayName": "Padang Panjang (Eks), Jalan Siti Manggopoh, Kampung Manggis, Padang Panjang Barat, Padang Panjang, Sumatera Barat, 27118, Indonesia"
+  },
+  {
+    "name": "Koto Tangah, Padang",
+    "query": "Koto Tangah, Padang",
+    "lat": -0.8757903,
+    "lng": 100.3634629,
+    "displayName": "Kontrakan Dadok Biru Padang, Jl. Kesehatan , Dadok , Koto Tangah , Padang , 25176, Dadok Tunggul Hitam, Padang, Sumatera Barat, 25176, Indonesia"
+  },
+  {
+    "name": "Nanggalo, Padang",
+    "query": "Nanggalo, Padang",
+    "lat": -0.8963678,
+    "lng": 100.3655202,
+    "displayName": "Taman Nanggalo, Surau Gadang, Padang, Sumatera Barat, Indonesia"
+  },
+  {
+    "name": "Kuranji, Padang",
+    "query": "Kuranji, Padang",
+    "lat": -0.9013911,
+    "lng": 100.4150822,
+    "displayName": "Kuranji, Padang, Sumatera Barat, 25157, Indonesia"
+  },
+  {
+    "name": "Banda Aceh Kota",
+    "query": "Banda Aceh, Aceh",
+    "lat": 5.5528455,
+    "lng": 95.3192908,
+    "displayName": "Banda Aceh, Aceh, Indonesia"
+  },
+  {
+    "name": "Baiturrahman, Banda Aceh",
+    "query": "Baiturrahman, Banda Aceh",
+    "lat": 5.5455265,
+    "lng": 95.3191025,
+    "displayName": "Baiturrahman, Banda Aceh, Aceh, Indonesia"
+  },
+  {
+    "name": "Gresik Kota",
+    "query": "Gresik, Jawa Timur",
+    "lat": -5.7933465,
+    "lng": 112.6598223,
+    "displayName": "Gresik, Jawa Timur, Indonesia"
+  },
+  {
+    "name": "Semarang Tengah",
+    "query": "Semarang Tengah, Semarang",
+    "lat": -6.9786542,
+    "lng": 110.4217815,
+    "displayName": "Semarang Tengah, Kota Semarang, Jawa Tengah, Indonesia"
+  },
+  {
+    "name": "Genteng, Surabaya",
+    "query": "Genteng, Surabaya",
+    "lat": -7.2584687,
+    "lng": 112.7443263,
+    "displayName": "Genteng, Surabaya, Jawa Timur, Indonesia"
+  }
+]

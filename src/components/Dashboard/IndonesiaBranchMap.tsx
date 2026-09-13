@@ -17,6 +17,7 @@ import {
   Radio,
   FileSpreadsheet,
   ShieldCheck,
+  Key,
 } from 'lucide-react';
 import type { MasterRow, TargetRow } from '../../types';
 import {
@@ -30,6 +31,15 @@ import {
   type PlottedBranchPin,
   getAllMatchedCoordinates,
 } from '../../utils/geoCoder';
+import {
+  buildMasterQuery,
+  buildTargetQuery,
+  batchGeocodeUniqueQueries,
+  getStoredGoogleApiKey,
+  setStoredGoogleApiKey,
+  type GeoLocationResult,
+  type BatchProgress,
+} from '../../utils/onlineGeoCoder';
 
 interface IndonesiaBranchMapProps {
   masterRows: MasterRow[];
@@ -121,10 +131,70 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 // @ts-ignore: suppress unused setter warning
   const [showAllMatchMarkers, setShowAllMatchMarkers] = useState(false);
 
-  // 1. Group & Cluster master rows into pins and correlate with Matched target rows
+  // Realtime Google Maps / Online Geocoding State
+  const [googleApiKey, setGoogleApiKey] = useState(() => getStoredGoogleApiKey());
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [resolvedCoords, setResolvedCoords] = useState<Map<string, GeoLocationResult>>(new Map());
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [geocodingProgress, setGeocodingProgress] = useState<BatchProgress | null>(null);
+
+  // Realtime Geocoding Hook: Resolves unique branch & target coordinates via Google Maps / Online API
+  useEffect(() => {
+    if (!masterRows || masterRows.length === 0) return;
+
+    let isMounted = true;
+    const queriesToFetch: string[] = [];
+
+    for (const r of masterRows) {
+      const q = buildMasterQuery(r);
+      if (q && !resolvedCoords.has(q)) {
+        queriesToFetch.push(q);
+      }
+    }
+
+    if (targetRows && targetRows.length > 0) {
+      for (const t of targetRows) {
+        if (!t._isMatched) continue;
+        const q = buildTargetQuery(t);
+        if (q && !resolvedCoords.has(q)) {
+          queriesToFetch.push(q);
+        }
+      }
+    }
+
+    const uniqueQueries = Array.from(new Set(queriesToFetch));
+    if (uniqueQueries.length === 0) return;
+
+    setIsGeocoding(true);
+    setGeocodingProgress({ completed: 0, total: uniqueQueries.length, percent: 0 });
+
+    batchGeocodeUniqueQueries(
+      uniqueQueries,
+      (prog) => {
+        if (isMounted) setGeocodingProgress(prog);
+      },
+      googleApiKey
+    ).then((newResults) => {
+      if (!isMounted) return;
+      setResolvedCoords((prev) => {
+        const next = new Map(prev);
+        newResults.forEach((val, key) => next.set(key, val));
+        return next;
+      });
+      setIsGeocoding(false);
+      setGeocodingProgress(null);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [masterRows, targetRows, googleApiKey]);
+
+  // 1. Group & Cluster master rows into pins using dynamic resolved coordinates
   const allPins = useMemo(() => {
-    return clusterMasterRowsForMap(masterRows, selectedWilayah, targetRows);
-  }, [masterRows, selectedWilayah, targetRows]);
+    return clusterMasterRowsForMap(masterRows, selectedWilayah, targetRows, resolvedCoords);
+  }, [masterRows, selectedWilayah, targetRows, resolvedCoords]);
 
   // 2. Filter pins based on Display Scope (Semua vs Hanya Terpilih vs Matched vs Multi)
   const filteredPins = useMemo(() => {
@@ -197,7 +267,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         });
 
         if (matchingTarget) {
-          const origin = resolveTargetOriginCoordinates(matchingTarget);
+          const origin = resolveTargetOriginCoordinates(matchingTarget, resolvedCoords);
           const [oLat, oLng] = clampToIndonesia(origin.lat, origin.lng);
           const originCity = matchingTarget['Dati II'] || origin.city || 'Aceh';
           const originKp = matchingTarget['KODE POS'] || '';
@@ -461,7 +531,7 @@ if (displayScope === 'SELECTED_ONLY' && selectedPin) {
 
 // Render all matched target coordinates as orange markers when enabled
 if (showAllMatchMarkers) {
-  const allCoords = getAllMatchedCoordinates(targetRows);
+  const allCoords = getAllMatchedCoordinates(targetRows, resolvedCoords);
   allCoords.forEach(([lat, lng]) => {
     const marker = L.circleMarker([lat, lng], {
       radius: 4,
@@ -473,7 +543,7 @@ if (showAllMatchMarkers) {
     markersLayer.addLayer(marker);
   });
 }
-    }, [filteredPins, selectedPin, displayScope, selectedWilayah, selectedMatchedRows.length, showAllMatchMarkers]);
+    }, [filteredPins, selectedPin, displayScope, selectedWilayah, selectedMatchedRows.length, showAllMatchMarkers, resolvedCoords]);
 
   // 9. Render arcs from real administrative origin points → selected branch (no unbounded fan-out)
   useEffect(() => {
@@ -489,7 +559,7 @@ if (showAllMatchMarkers) {
 
     const destCoords: [number, number] = clampToIndonesia(selectedPin.lat, selectedPin.lng);
     const isIsolated = displayScope === 'SELECTED_ONLY' || trackingMode === 'aceh_kim';
-    const originGroups = groupTargetOriginsForMap(selectedMatchedRows);
+    const originGroups = groupTargetOriginsForMap(selectedMatchedRows, resolvedCoords);
     const visibleGroups = isIsolated ? originGroups : originGroups.slice(0, 24);
     const allArcEndpoints: [number, number][] = [destCoords];
 
@@ -824,6 +894,32 @@ if (showAllMatchMarkers) {
         {/* Right side: Tile Provider Switcher & Search Bar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
 
+          {/* Google Maps API Key Config Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setApiKeyInput(googleApiKey);
+              setShowApiKeyModal(true);
+            }}
+            title="Konfigurasi Google Maps Geocoding API Key untuk verifikasi koordinat 100% presisi"
+            style={{
+              fontSize: '0.68rem',
+              fontWeight: 600,
+              padding: '0.22rem 0.55rem',
+              borderRadius: '4px',
+              border: googleApiKey ? '1px solid #10b981' : '1px solid #e2e8f0',
+              background: googleApiKey ? 'rgba(16, 185, 129, 0.1)' : '#f8fafc',
+              color: googleApiKey ? '#059669' : '#475569',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <Key size={12} color={googleApiKey ? '#059669' : '#64748b'} />
+            <span>{googleApiKey ? 'Google API: Aktif' : 'Google API Key'}</span>
+          </button>
 
           {/* Tile Layer Toggle */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', background: '#f8f9fa', padding: '0.15rem 0.3rem', borderRadius: '5px', border: '1px solid #e9ebec' }}>
@@ -1324,6 +1420,25 @@ if (showAllMatchMarkers) {
                   >
                     📮 {selectedPin.kodePos}
                   </span>
+                  {selectedPin.isOnlineVerified && (
+                    <span
+                      style={{
+                        marginLeft: '0.4rem',
+                        fontSize: '0.68rem',
+                        fontWeight: 700,
+                        background: selectedPin.onlineSource === 'google' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                        color: selectedPin.onlineSource === 'google' ? '#2563eb' : '#059669',
+                        padding: '0.15rem 0.5rem',
+                        borderRadius: '4px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                      }}
+                      title={selectedPin.alamatDisplay}
+                    >
+                      <span>{selectedPin.onlineSource === 'google' ? '🗺️ Google Verified' : '🌐 Online Verified'}</span>
+                    </span>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -1898,6 +2013,201 @@ if (showAllMatchMarkers) {
               >
                 Tutup
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Live Realtime Geocoding Progress Pill */}
+      {isGeocoding && geocodingProgress && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '24px',
+            right: '24px',
+            zIndex: 9999,
+            background: 'rgba(15, 23, 42, 0.92)',
+            backdropFilter: 'blur(8px)',
+            color: '#ffffff',
+            padding: '0.65rem 1.1rem',
+            borderRadius: '50px',
+            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.65rem',
+            fontSize: '0.78rem',
+            border: '1px solid rgba(255, 255, 255, 0.15)',
+          }}
+        >
+          <div
+            style={{
+              width: '12px',
+              height: '12px',
+              border: '2px solid #34d399',
+              borderTopColor: 'transparent',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+            }}
+          />
+          <div>
+            <div style={{ fontWeight: 600 }}>
+              {googleApiKey ? '🗺️ Validasi Google Maps Realtime:' : '🌐 Validasi Geocoding Realtime:'}{' '}
+              {geocodingProgress.completed}/{geocodingProgress.total} ({geocodingProgress.percent}%)
+            </div>
+            {geocodingProgress.activeItem && (
+              <div style={{ fontSize: '0.68rem', color: '#94a3b8', maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {geocodingProgress.activeItem}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Google Maps API Key Configuration Modal */}
+      {showApiKeyModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 10000,
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '12px',
+              maxWidth: '460px',
+              width: '100%',
+              padding: '1.5rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              border: '1px solid #e2e8f0',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{ padding: '0.4rem', borderRadius: '8px', background: 'rgba(59, 130, 246, 0.1)', color: '#2563eb' }}>
+                  <Key size={18} />
+                </div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
+                    Google Maps Geocoding API
+                  </h4>
+                  <p style={{ margin: 0, fontSize: '0.72rem', color: '#64748b' }}>
+                    Validasi koordinat langsung ke server Google Maps
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowApiKeyModal(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1rem', fontSize: '0.75rem', color: '#334155', lineHeight: 1.5 }}>
+              <p style={{ margin: 0, marginBottom: '0.4rem' }}>
+                💡 <strong>Gratis $200/bulan dari Google Cloud</strong> (setara ~40.000 request gratis setiap bulan).
+              </p>
+              <p style={{ margin: 0, color: '#64748b' }}>
+                Jika dikosongkan, sistem secara otomatis menggunakan engine publik (ESRI / OpenStreetMap) secara gratis tanpa perlu API Key.
+              </p>
+            </div>
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#334155', marginBottom: '0.35rem' }}>
+                Google Maps API Key:
+              </label>
+              <input
+                type="password"
+                value={apiKeyInput}
+                onChange={(e) => setApiKeyInput(e.target.value)}
+                placeholder="AIzaSy..."
+                style={{
+                  width: '100%',
+                  padding: '0.5rem 0.75rem',
+                  fontSize: '0.82rem',
+                  borderRadius: '6px',
+                  border: '1px solid #cbd5e1',
+                  outline: 'none',
+                  fontFamily: 'monospace',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setApiKeyInput('');
+                  setStoredGoogleApiKey('');
+                  setGoogleApiKey('');
+                  setShowApiKeyModal(false);
+                }}
+                style={{
+                  padding: '0.4rem 0.75rem',
+                  fontSize: '0.74rem',
+                  fontWeight: 600,
+                  color: '#e11d48',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                Hapus Key
+              </button>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowApiKeyModal(false)}
+                  style={{
+                    padding: '0.4rem 0.85rem',
+                    fontSize: '0.74rem',
+                    fontWeight: 600,
+                    color: '#64748b',
+                    background: '#f1f5f9',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cleanKey = apiKeyInput.trim();
+                    setStoredGoogleApiKey(cleanKey);
+                    setGoogleApiKey(cleanKey);
+                    setShowApiKeyModal(false);
+                  }}
+                  style={{
+                    padding: '0.4rem 0.95rem',
+                    fontSize: '0.74rem',
+                    fontWeight: 600,
+                    color: '#ffffff',
+                    background: '#2563eb',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 4px rgba(37, 99, 235, 0.25)',
+                  }}
+                >
+                  Simpan & Terapkan
+                </button>
+              </div>
             </div>
           </div>
         </div>
