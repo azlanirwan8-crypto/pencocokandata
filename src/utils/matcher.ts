@@ -107,8 +107,45 @@ export function matchSingleRow(
   // 1. Standarisasi String Kode Pos
   const targetKp = normalizeKodePos(result['KODE POS']);
 
-  // 3. Hierarki Pencocokan Cabang
-  const candidates = targetKp ? masterIndex.get(targetKp) : undefined;
+  // 3. Hierarki Pencocokan Cabang dengan Geographic Integrity Check
+  const rawCandidates = targetKp ? masterIndex.get(targetKp) : undefined;
+  let candidates = rawCandidates;
+
+  if (rawCandidates && rawCandidates.length > 0) {
+    const targetProv = String(result.Provinsi || '').trim().toUpperCase();
+    const targetDati = String(result['Dati II'] || '').trim().toUpperCase();
+
+    if (targetProv || targetDati) {
+      const geoMatched = rawCandidates.filter((cand) => {
+        const candProv = String(cand.Provinsi || '').trim().toUpperCase();
+        const candDati = String(cand['Dati II'] || '').trim().toUpperCase();
+        if (targetProv && candProv) {
+          // If provinces are explicitly specified and completely different (e.g. JAWA TIMUR vs SUMATERA BARAT)
+          const pTarget = targetProv.replace(/PROVINSI\s*/i, '').trim();
+          const pCand = candProv.replace(/PROVINSI\s*/i, '').trim();
+          if (pTarget && pCand && !pTarget.includes(pCand) && !pCand.includes(pTarget)) {
+            return false;
+          }
+        }
+        if (targetDati && candDati) {
+          const dTarget = targetDati.replace(/^KOTA\s+ADM\.?\s*|^KABUPATEN\s*|^KAB\.\s*/i, '').trim();
+          const dCand = candDati.replace(/^KOTA\s+ADM\.?\s*|^KABUPATEN\s*|^KAB\.\s*/i, '').trim();
+          if (dTarget && dCand && !dTarget.includes(dCand) && !dCand.includes(dTarget) && targetProv && candProv) {
+            // High confidence mismatch
+            return false;
+          }
+        }
+        return true;
+      });
+
+      if (geoMatched.length > 0) {
+        candidates = geoMatched;
+      } else {
+        // Discrepancy: Candidate has same postal code but different province. Do not auto-match cross-island.
+        candidates = undefined;
+      }
+    }
+  }
 
   if (candidates && candidates.length > 0) {
     let matchedMaster: MasterRow;

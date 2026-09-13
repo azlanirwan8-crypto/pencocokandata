@@ -254,12 +254,19 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       const tName = String(t['Nama Outlet'] || '').toLowerCase().trim();
       const tKp = String(t['KODE POS'] || '').replace(/\D/g, '').trim();
 
-      return (
+      const isExplicitMatch =
         (tSandi && sandiSet.has(tSandi)) ||
         (tBranchCode && branchCodeSet.has(tBranchCode)) ||
-        (tName && outletNameSet.has(tName)) ||
-        (kp && tKp && kp === tKp)
-      );
+        (tName && outletNameSet.has(tName));
+
+      if (isExplicitMatch) return true;
+
+      // Fallback matching by postal code ONLY if target row does not have a Sandi/Branch Code belonging to another branch
+      if (kp && tKp && kp === tKp) {
+        if (!tSandi && !tBranchCode && !tName) return true;
+      }
+
+      return false;
     });
 
     if (trackingMode === 'aceh_kim') {
@@ -439,14 +446,16 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       markersLayer.addLayer(marker);
     });
 
-    // Auto-fit if specific wilayah or single selected pin
+    // Auto-fit if specific wilayah or single selected pin without matched arcs
     if (displayScope === 'SELECTED_ONLY' && selectedPin) {
-      map.flyTo([selectedPin.lat, selectedPin.lng], 13, { duration: 0.9 });
+      if (selectedMatchedRows.length === 0) {
+        map.flyTo([selectedPin.lat, selectedPin.lng], 14, { duration: 0.8 });
+      }
     } else if (selectedWilayah !== 'ALL' && filteredPins.length > 0) {
       const bounds = L.latLngBounds(filteredPins.map((p) => [p.lat, p.lng]));
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
     }
-  }, [filteredPins, selectedPin, displayScope, selectedWilayah]);
+  }, [filteredPins, selectedPin, displayScope, selectedWilayah, selectedMatchedRows.length]);
 
   // 9. Render arcs from real administrative origin points → selected branch (no unbounded fan-out)
   useEffect(() => {
@@ -515,9 +524,13 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       arcsLayer.addLayer(originDot);
     });
 
-    if (isIsolated && allArcEndpoints.length > 1) {
-      const arcBounds = L.latLngBounds(allArcEndpoints);
-      map.fitBounds(arcBounds, { padding: [70, 70], maxZoom: 9 });
+    if (isIsolated && allArcEndpoints.length > 0) {
+      if (allArcEndpoints.length > 1) {
+        const arcBounds = L.latLngBounds(allArcEndpoints);
+        map.fitBounds(arcBounds, { padding: [60, 60], maxZoom: 13 });
+      } else {
+        map.flyTo(destCoords, 14, { duration: 0.8 });
+      }
     }
   }, [selectedPin, showCurvedArcs, selectedMatchedRows, displayScope, trackingMode]);
 

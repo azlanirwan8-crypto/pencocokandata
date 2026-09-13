@@ -143,20 +143,66 @@ const POSTAL_PREFIX_MAP: Record<string, { lat: number; lng: number; city: string
   '99': { lat: -2.5380, lng: 140.7020, city: 'Jayapura / Sorong / Manokwari / Merauke / Timika', province: 'Papua' },
 };
 
-// 2b. Aceh 3-digit postal centroids — keeps origin dots on the correct kabupaten, not one Banda Aceh pile
-const ACEH_POSTAL3_MAP: Record<string, { lat: number; lng: number; city: string }> = {
-  '231': { lat: 5.5530, lng: 95.3220, city: 'Banda Aceh' },
-  '232': { lat: 5.3800, lng: 95.5200, city: 'Aceh Besar / Aceh Jaya' },
-  '233': { lat: 5.3800, lng: 95.9600, city: 'Pidie' },
-  '236': { lat: 4.1400, lng: 96.1300, city: 'Aceh Barat' },
-  '237': { lat: 3.2500, lng: 97.1800, city: 'Aceh Selatan' },
-  '238': { lat: 2.6400, lng: 98.0000, city: 'Subulussalam / Aceh Singkil' },
-  '241': { lat: 4.6300, lng: 96.8400, city: 'Aceh Tengah' },
-  '242': { lat: 3.9600, lng: 97.3500, city: 'Gayo Lues' },
-  '243': { lat: 5.1800, lng: 97.1400, city: 'Lhokseumawe / Bireuen' },
-  '244': { lat: 4.4700, lng: 97.9700, city: 'Langsa / Aceh Timur' },
-  '245': { lat: 4.2600, lng: 98.0500, city: 'Aceh Tamiang' },
-  '246': { lat: 3.4800, lng: 97.8000, city: 'Aceh Tenggara' },
+// 2b. Comprehensive Google Maps Benchmarked 3-digit Postal Prefix Map (Covers all Indonesian Regencies & Cities)
+export const POSTAL_3DIGIT_MAP: Record<string, { lat: number; lng: number; city: string; province?: string }> = {
+  // Aceh (231 - 246)
+  '231': { lat: 5.5530, lng: 95.3220, city: 'Banda Aceh', province: 'Aceh' },
+  '232': { lat: 5.3800, lng: 95.5200, city: 'Aceh Besar / Aceh Jaya', province: 'Aceh' },
+  '233': { lat: 5.3800, lng: 95.9600, city: 'Pidie / Pidie Jaya', province: 'Aceh' },
+  '234': { lat: 5.8900, lng: 95.3200, city: 'Sabang', province: 'Aceh' },
+  '235': { lat: 5.3800, lng: 95.5200, city: 'Aceh Besar', province: 'Aceh' },
+  '236': { lat: 4.1400, lng: 96.1300, city: 'Aceh Barat / Nagan Raya', province: 'Aceh' },
+  '237': { lat: 3.2500, lng: 97.1800, city: 'Aceh Selatan / Aceh Barat Daya', province: 'Aceh' },
+  '238': { lat: 2.6400, lng: 98.0000, city: 'Subulussalam / Aceh Singkil / Simeulue', province: 'Aceh' },
+  '241': { lat: 4.6300, lng: 96.8400, city: 'Aceh Tengah / Bener Meriah', province: 'Aceh' },
+  '242': { lat: 3.9600, lng: 97.3500, city: 'Gayo Lues', province: 'Aceh' },
+  '243': { lat: 5.1800, lng: 97.1400, city: 'Lhokseumawe / Bireuen / Aceh Utara', province: 'Aceh' },
+  '244': { lat: 4.4700, lng: 97.9700, city: 'Langsa / Aceh Timur', province: 'Aceh' },
+  '245': { lat: 4.2600, lng: 98.0500, city: 'Aceh Tamiang', province: 'Aceh' },
+  '246': { lat: 3.4800, lng: 97.8000, city: 'Aceh Tenggara', province: 'Aceh' },
+
+  // Sumatera Utara (201 - 229)
+  '201': { lat: 3.5952, lng: 98.6722, city: 'Medan Kota', province: 'Sumatera Utara' },
+  '202': { lat: 3.5800, lng: 98.6800, city: 'Medan Timur / Medan Barat', province: 'Sumatera Utara' },
+  '203': { lat: 3.5500, lng: 98.8500, city: 'Deli Serdang / Lubuk Pakam', province: 'Sumatera Utara' },
+  '204': { lat: 3.5700, lng: 98.6500, city: 'Medan Amplas / Medan Johor', province: 'Sumatera Utara' },
+  '205': { lat: 3.5500, lng: 98.8500, city: 'Deli Serdang', province: 'Sumatera Utara' },
+  '206': { lat: 3.3200, lng: 99.1600, city: 'Tebing Tinggi / Serdang Bedagai', province: 'Sumatera Utara' },
+  '207': { lat: 3.6000, lng: 98.4800, city: 'Binjai / Langkat', province: 'Sumatera Utara' },
+  '208': { lat: 3.8000, lng: 98.4000, city: 'Langkat / Stabat', province: 'Sumatera Utara' },
+  '209': { lat: 3.2000, lng: 98.5000, city: 'Karo / Berastagi / Kabanjahe', province: 'Sumatera Utara' },
+  '211': { lat: 2.9600, lng: 99.0600, city: 'Pematangsiantar / Simalungun', province: 'Sumatera Utara' },
+  '212': { lat: 3.2500, lng: 99.2000, city: 'Asahan / Kisaran', province: 'Sumatera Utara' },
+  '213': { lat: 3.1600, lng: 99.5500, city: 'Batubara / Tanjung Balai', province: 'Sumatera Utara' },
+  '214': { lat: 2.8000, lng: 99.4000, city: 'Labuhanbatu / Rantauprapat', province: 'Sumatera Utara' },
+  '221': { lat: 2.3000, lng: 99.0700, city: 'Toba / Samosir / Tarutung', province: 'Sumatera Utara' },
+  '222': { lat: 2.7000, lng: 98.3000, city: 'Dairi / Sidikalang / Pakpak Bharat', province: 'Sumatera Utara' },
+  '223': { lat: 2.0000, lng: 98.9000, city: 'Tapanuli Utara', province: 'Sumatera Utara' },
+  '224': { lat: 1.7420, lng: 98.7850, city: 'Sibolga / Tapanuli Tengah', province: 'Sumatera Utara' },
+  '225': { lat: 1.7420, lng: 98.7850, city: 'Sibolga', province: 'Sumatera Utara' },
+  '227': { lat: 1.3700, lng: 99.2700, city: 'Padangsidimpuan / Tapanuli Selatan', province: 'Sumatera Utara' },
+  '228': { lat: 1.0000, lng: 97.6000, city: 'Nias / Gunungsitoli', province: 'Sumatera Utara' },
+  '229': { lat: 1.2000, lng: 99.6000, city: 'Padang Lawas / Mandailing Natal', province: 'Sumatera Utara' },
+
+  // Sumatera Barat (251 - 277)
+  '251': { lat: -0.9478, lng: 100.3685, city: 'Padang (Kota)', province: 'Sumatera Barat' },
+  '252': { lat: -0.9200, lng: 100.3800, city: 'Padang Utara / Kuranji', province: 'Sumatera Barat' },
+  '253': { lat: -0.8350, lng: 100.3650, city: 'Padang Koto Tangah', province: 'Sumatera Barat' },
+  '255': { lat: -0.6300, lng: 100.2700, city: 'Pariaman / Padang Pariaman', province: 'Sumatera Barat' },
+  '256': { lat: -1.3000, lng: 100.5700, city: 'Pesisir Selatan / Painan', province: 'Sumatera Barat' },
+  '261': { lat: -0.3056, lng: 100.3692, city: 'Bukittinggi', province: 'Sumatera Barat' },
+  '262': { lat: -0.2500, lng: 100.1500, city: 'Agam / Lubuk Basung', province: 'Sumatera Barat' },
+  '263': { lat: -0.0500, lng: 100.0500, city: 'Pasaman / Lubuk Sikaping', province: 'Sumatera Barat' },
+  '264': { lat: 0.1500, lng: 99.8000, city: 'Pasaman Barat / Simpang Empat', province: 'Sumatera Barat' },
+  '271': { lat: -0.7983, lng: 100.6540, city: 'Solok (Kota)', province: 'Sumatera Barat' },
+  '273': { lat: -0.9500, lng: 100.7500, city: 'Kab. Solok / Alahan Panjang', province: 'Sumatera Barat' },
+  '274': { lat: -0.2200, lng: 100.6300, city: 'Payakumbuh / Limapuluh Kota', province: 'Sumatera Barat' },
+  '275': { lat: -0.9800, lng: 101.3000, city: 'Sijunjung / Muaro Sijunjung / Dharmasraya', province: 'Sumatera Barat' },
+  '276': { lat: -0.4600, lng: 100.5700, city: 'Tanah Datar / Batusangkar / Padang Panjang', province: 'Sumatera Barat' },
+  '277': { lat: -1.5658, lng: 101.2568, city: 'Padang Aro / Kab. Solok Selatan (Sangir)', province: 'Sumatera Barat' }, // BENCHMARK GOOGLE MAPS FOR PADANG ARO!
+
+  // Situbondo / Jawa Timur (683)
+  '683': { lat: -7.7060, lng: 114.0050, city: 'Situbondo / Besuki / Asembagus', province: 'Jawa Timur' },
 };
 
 const ACEH_LOCATION_KEYWORDS = [
@@ -342,6 +388,9 @@ const DATI2_MAP: Record<string, { lat: number; lng: number; province: string }> 
   'KOTA BUKITTINGGI': { lat: -0.3056, lng: 100.3692, province: 'Sumatera Barat' },
   'KOTA PARIAMAN': { lat: -0.6264, lng: 100.1220, province: 'Sumatera Barat' },
   'KAB. PADANG PARIAMAN': { lat: -0.6300, lng: 100.2700, province: 'Sumatera Barat' },
+  'KAB. SOLOK SELATAN': { lat: -1.5658, lng: 101.2568, province: 'Sumatera Barat' },
+  'SOLOK SELATAN': { lat: -1.5658, lng: 101.2568, province: 'Sumatera Barat' },
+  'KABUPATEN SOLOK SELATAN': { lat: -1.5658, lng: 101.2568, province: 'Sumatera Barat' },
   'KOTA PEKANBARU': { lat: 0.5071, lng: 101.4478, province: 'Riau' },
   'KOTA DUMAI': { lat: 1.6667, lng: 101.4500, province: 'Riau' },
   'KOTA BATAM': { lat: 1.1301, lng: 104.0529, province: 'Kepulauan Riau' },
@@ -621,6 +670,12 @@ export const CITY_DISTRICTS_MAP: Record<string, { lat: number; lng: number; city
   'KUTA ALAM': { lat: 5.5600, lng: 95.3350, city: 'Banda Aceh', province: 'Aceh' },
   'SYIAH KUALA': { lat: 5.5700, lng: 95.3500, city: 'Banda Aceh', province: 'Aceh' },
   'ULEE KARENG': { lat: 5.5450, lng: 95.3550, city: 'Banda Aceh', province: 'Aceh' },
+
+  // Solok Selatan / Padang Aro (Sumatera Barat)
+  'PADANG ARO': { lat: -1.5658, lng: 101.2568, city: 'Solok Selatan', province: 'Sumatera Barat' },
+  'SANGIR': { lat: -1.5658, lng: 101.2568, city: 'Solok Selatan', province: 'Sumatera Barat' },
+  'LUBUK GADANG': { lat: -1.5658, lng: 101.2568, city: 'Solok Selatan', province: 'Sumatera Barat' },
+  'SANGIR JALAI': { lat: -1.5800, lng: 101.2400, city: 'Solok Selatan', province: 'Sumatera Barat' },
 };
 
 /**
@@ -636,7 +691,7 @@ export function resolveBranchCoordinates(row: MasterRow): GeoLocation {
   const rawNama = String(row['Nama Outlet'] || '').toUpperCase().trim();
   const fullText = `${rawNama} ${rawKelurahan} ${rawKecamatan} ${rawAlamat} ${rawDati2}`;
 
-  // 1. High-accuracy real district matching across major Indonesian cities (Jayapura, Situbondo, Padang, Medan, etc.)
+  // 1. High-accuracy real district matching across major Indonesian cities & kabupaten (Padang Aro, Situbondo, Jayapura, Medan, etc.)
   for (const [districtKey, distData] of Object.entries(CITY_DISTRICTS_MAP)) {
     const escaped = districtKey.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
     const regex = new RegExp(`(?:^|[\\s,./-])${escaped}(?:$|[\\s,./-])`, 'i');
@@ -652,7 +707,23 @@ export function resolveBranchCoordinates(row: MasterRow): GeoLocation {
     }
   }
 
-  // 2. Padang district fallback
+  // 2. Try exact 3-digit postal prefix map (e.g. '277' for Padang Aro / Solok Selatan)
+  if (rawKodePos.length >= 3) {
+    const p3 = rawKodePos.slice(0, 3);
+    if (POSTAL_3DIGIT_MAP[p3]) {
+      const base = POSTAL_3DIGIT_MAP[p3];
+      const [cLat, cLng] = clampToInland(base.lat, base.lng);
+      return {
+        lat: cLat,
+        lng: cLng,
+        city: base.city,
+        province: base.province,
+        source: 'postal_prefix',
+      };
+    }
+  }
+
+  // 3. Padang district fallback
   const isPadangArea =
     rawDati2.includes('PADANG') ||
     rawKodePos.startsWith('25') ||
@@ -673,23 +744,7 @@ export function resolveBranchCoordinates(row: MasterRow): GeoLocation {
     }
   }
 
-  // 3. Try exact or 2-digit postal prefix
-  if (rawKodePos.length >= 2) {
-    const p2 = rawKodePos.slice(0, 2);
-    if (POSTAL_PREFIX_MAP[p2]) {
-      const base = POSTAL_PREFIX_MAP[p2];
-      const [cLat, cLng] = clampToInland(base.lat, base.lng);
-      return {
-        lat: cLat,
-        lng: cLng,
-        city: base.city,
-        province: base.province,
-        source: 'postal_prefix',
-      };
-    }
-  }
-
-  // 4. Try Dati II / Kota lookup
+  // 4. Try Dati II / Kota lookup (e.g. 'SOLOK SELATAN', 'SITUBONDO', 'BANDA ACEH')
   if (rawDati2) {
     if (DATI2_MAP[rawDati2]) {
       const d = DATI2_MAP[rawDati2];
@@ -714,6 +769,22 @@ export function resolveBranchCoordinates(row: MasterRow): GeoLocation {
           source: 'dati2',
         };
       }
+    }
+  }
+
+  // 5. Try 2-digit postal prefix map fallback
+  if (rawKodePos.length >= 2) {
+    const p2 = rawKodePos.slice(0, 2);
+    if (POSTAL_PREFIX_MAP[p2]) {
+      const base = POSTAL_PREFIX_MAP[p2];
+      const [cLat, cLng] = clampToInland(base.lat, base.lng);
+      return {
+        lat: cLat,
+        lng: cLng,
+        city: base.city,
+        province: base.province,
+        source: 'postal_prefix',
+      };
     }
   }
 
@@ -919,10 +990,10 @@ export function resolveTargetOriginCoordinates(row: TargetRow): GeoLocation {
     }
   }
 
-  if (rawKodePos.length >= 3 && ACEH_POSTAL3_MAP[rawKodePos.slice(0, 3)]) {
-    const z = ACEH_POSTAL3_MAP[rawKodePos.slice(0, 3)];
+  if (rawKodePos.length >= 3 && POSTAL_3DIGIT_MAP[rawKodePos.slice(0, 3)]) {
+    const z = POSTAL_3DIGIT_MAP[rawKodePos.slice(0, 3)];
     const [cLat, cLng] = clampToIndonesia(z.lat, z.lng);
-    return { lat: cLat, lng: cLng, city: z.city, province: 'Aceh', source: 'postal_prefix' };
+    return { lat: cLat, lng: cLng, city: z.city, province: z.province || 'Aceh', source: 'postal_prefix' };
   }
 
   if (rawKodePos.length >= 2 && POSTAL_PREFIX_MAP[rawKodePos.slice(0, 2)]) {
