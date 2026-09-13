@@ -612,14 +612,17 @@ export const App: React.FC = () => {
   // Setujui Semua Rekomendasi: Mengisi atribut master ke baris target yang cocok, pindah ke matched, tab 1 & 2 kosong
   const handleApproveAllRecommendations = (recs: RecommendationResult[]) => {
     if (recs.length === 0) return;
-    const recMap = new Map<string | number, MasterRow>();
+    const recMap = new Map<string, MasterRow>();
     recs.forEach((r) => {
-      recMap.set(r.targetRow.No, r.recommendedMaster);
+      if (r?.targetRow?.No !== undefined && r.recommendedMaster) {
+        recMap.set(String(r.targetRow.No).trim(), r.recommendedMaster);
+      }
     });
 
     setTargetRows((prev) => {
       const updated = prev.map((row) => {
-        const matchedMaster = recMap.get(row.No);
+        const rowNoKey = String(row.No).trim();
+        const matchedMaster = recMap.get(rowNoKey);
         if (!matchedMaster) return row;
 
         const branchCode = matchedMaster['Branch Code'] || matchedMaster['Kode Cabang'] || '';
@@ -664,9 +667,10 @@ export const App: React.FC = () => {
 
   // Setujui Satu Rekomendasi Per Baris
   const handleApproveSingleRecommendation = (rowNo: number | string, matchedMaster: MasterRow) => {
+    const targetNoStr = String(rowNo).trim();
     setTargetRows((prev) => {
       const updated = prev.map((row) => {
-        if (row.No !== rowNo) return row;
+        if (String(row.No).trim() !== targetNoStr) return row;
 
         const branchCode = matchedMaster['Branch Code'] || matchedMaster['Kode Cabang'] || '';
         const resolved = extractWilayahFromBranchCode(
@@ -710,9 +714,10 @@ export const App: React.FC = () => {
 
   // Batalkan Persetujuan Rekomendasi (Revert) - Mengembalikan baris ke status belum cocok (unmatched)
   const handleRevertRecommendation = (rowNo: number | string) => {
+    const targetNoStr = String(rowNo).trim();
     setTargetRows((prev) => {
       const updated = prev.map((row) => {
-        if (row.No !== rowNo) return row;
+        if (String(row.No).trim() !== targetNoStr) return row;
 
         return {
           ...row,

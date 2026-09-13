@@ -23,6 +23,7 @@ import type { TargetRow, MasterRow, WilayahSetting } from '../../types';
 import {
   generateRecommendationsProgressive,
   buildMasterProximityIndex,
+  findClosestMasterRecommendation,
   type RecommendationResult,
   type CandidateOption,
 } from '../../utils/recommender';
@@ -122,23 +123,34 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     setSelectedRowNos(new Set());
   }, [checkerTab, searchTerm, selectedWilayah]);
 
+  // Reactive Set of matched row numbers for O(1) checks and 100% reliable synchronization across stale references
+  const matchedNoSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of rows) {
+      if (r._isMatched) {
+        set.add(String(r.No).trim());
+      }
+    }
+    return set;
+  }, [rows]);
+
   // Helper to determine if a row is clean / matched
-  const isRowMatched = (r: TargetRow) => Boolean(r._isMatched);
+  const isRowMatched = (r: TargetRow) => Boolean(r._isMatched || (r?.No !== undefined && matchedNoSet.has(String(r.No).trim())));
 
   // Tab 3: Data Match (Data Bersih yang sudah cocok) - SELALU TERSEDIA jika ada data matched, tidak hilang saat upload baru
   const matchedRows = useMemo(() => {
     return rows.filter(isRowMatched);
-  }, [rows]);
+  }, [rows, matchedNoSet]);
 
   // Tab 2: Unmatched (Data yang sudah dianalisa tetapi belum cocok -> masuk rekomendasi)
   const unmatchedRows = useMemo(() => {
     return rows.filter((r) => !isRowMatched(r) && r._matchLevel === 'none');
-  }, [rows]);
+  }, [rows, matchedNoSet]);
 
   // Tab 1: Data Upload (Data baru hasil upload yang masih menunggu pencocokan)
   const pendingUploadRows = useMemo(() => {
     return rows.filter((r) => !isRowMatched(r) && r._matchLevel !== 'none');
-  }, [rows]);
+  }, [rows, matchedNoSet]);
 
   // Scope Rekomendasi di Tab 2: 'unmatched' atau 'all' (Audit Seluruh Data)
   const [recommendationScope, setRecommendationScope] = useState<'unmatched' | 'all'>(() => {
@@ -153,7 +165,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   }, [rows]);
 
   // Menentukan baris target yang dievaluasi rekomendasinya di Tab 2
-  // PENTING: Hanya baris yang BELUM MATCH (!r._isMatched) yang masuk rekomendasi!
+  // PENTING: Hanya baris yang BELUM MATCH (!isRowMatched) yang masuk rekomendasi!
   // Jika sudah disetujui (matched), baris otomatis dikeluarkan dari rekomendasi.
   const targetRecommendationRows = useMemo(() => {
     const unapprovedRows = rows.filter((r) => !isRowMatched(r));
@@ -167,7 +179,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
       return pendingUploadRows;
     }
     return unapprovedRows;
-  }, [recommendationScope, unmatchedRows, pendingUploadRows, rows]);
+  }, [recommendationScope, unmatchedRows, pendingUploadRows, rows, matchedNoSet]);
 
   // Build Master Proximity Index once (O(1) bucket index)
   const masterProximityIndex = useMemo(() => {
@@ -478,16 +490,20 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
 
   // Setujui satu rekomendasi (Langsung update state rekomendasi lokal agar instan 0ms)
   const handleApproveSingle = (rowNo: number | string, m: MasterRow) => {
-    setRecommendations((prev) => prev.filter((r) => r.targetRow.No !== rowNo));
+    const targetNoStr = String(rowNo).trim();
+    setRecommendations((prev) => prev.filter((r) => String(r.targetRow.No).trim() !== targetNoStr));
     onApproveRecommendation(rowNo, m);
   };
 
   // Setujui Rekomendasi Terpilih (Batch Selected Approval)
   const handleApproveSelected = () => {
     if (selectedRowNos.size === 0) return;
+    const selectedStrSet = new Set(Array.from(selectedRowNos).map((s) => String(s).trim()));
     const selectedRecs: RecommendationResult[] = [];
+
     recommendations.forEach((rec) => {
-      if (selectedRowNos.has(rec.targetRow.No)) {
+      const recNoStr = String(rec.targetRow.No).trim();
+      if (selectedStrSet.has(recNoStr)) {
         const activeRank = activeCandidateByRow[rec.targetRow.No];
         if (activeRank && rec.candidates) {
           const chosen = rec.candidates.find((c) => c.rank === activeRank);
@@ -506,35 +522,67 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     });
 
     onApproveAllRecommendations(selectedRecs);
-    setRecommendations((prev) => prev.filter((r) => !selectedRowNos.has(r.targetRow.No)));
+    setRecommendations((prev) => prev.filter((r) => !selectedStrSet.has(String(r.targetRow.No).trim())));
     setSelectedRowNos(new Set());
-    if (selectedRecs.length === recommendations.length) {
+    if (selectedRecs.length >= recommendations.length) {
       setCheckerTab('matched');
       setPage(1);
     }
   };
 
+  // Setujui Semua Rekomendasi: Menyetujui seluruh baris yang belum match, membatalkan worker background, mengosongkan rekomendasi, dan langsung pindah ke Tab Data Match
   const handleApproveAll = () => {
-    if (recommendations.length === 0) return;
-    const effectiveRecs = recommendations.map((rec) => {
-      const activeRank = activeCandidateByRow[rec.targetRow.No];
-      if (activeRank && rec.candidates) {
-        const chosen = rec.candidates.find((c) => c.rank === activeRank);
-        if (chosen) {
-          return {
-            ...rec,
-            recommendedMaster: chosen.master,
-            score: chosen.score,
-            reason: chosen.reason,
-          };
-        }
-      }
-      return rec;
+    // 1. Hentikan worker background segera agar tidak memicu rekalkulasi berulang
+    if (cancelProgressiveRef.current) {
+      cancelProgressiveRef.current();
+      cancelProgressiveRef.current = null;
+    }
+    setIsComputingRecs(false);
+
+    // 2. Petakan rekomendasi yang sudah sempat dihitung
+    const existingRecMap = new Map<string, RecommendationResult>();
+    recommendations.forEach((rec) => {
+      existingRecMap.set(String(rec.targetRow.No).trim(), rec);
     });
-    onApproveAllRecommendations(effectiveRecs);
+
+    // 3. Kumpulkan rekomendasi untuk SELURUH targetRecommendationRows
+    const allRecsToApprove: RecommendationResult[] = [];
+
+    for (const row of targetRecommendationRows) {
+      const key = String(row.No).trim();
+      let rec = existingRecMap.get(key);
+
+      // Jika belum sempat dihitung background worker, hitung saat itu juga via proximity index
+      if (!rec) {
+        rec = findClosestMasterRecommendation(row, masterProximityIndex) || undefined;
+      }
+
+      if (rec) {
+        const activeRank = activeCandidateByRow[row.No];
+        if (activeRank && rec.candidates) {
+          const chosen = rec.candidates.find((c) => c.rank === activeRank);
+          if (chosen) {
+            allRecsToApprove.push({
+              ...rec,
+              recommendedMaster: chosen.master,
+              score: chosen.score,
+              reason: chosen.reason,
+            });
+            continue;
+          }
+        }
+        allRecsToApprove.push(rec);
+      }
+    }
+
+    if (allRecsToApprove.length === 0) return;
+
+    onApproveAllRecommendations(allRecsToApprove);
     setSelectedRowNos(new Set());
     setRecommendations([]);
-    // Pindah langsung ke Tab 3 (Data Match)
+    setIsComputingRecs(false);
+
+    // 4. Pindah langsung ke Tab 3 (Data Match)
     setCheckerTab('matched');
     setPage(1);
   };
@@ -647,18 +695,18 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               borderRadius: '9999px',
               fontSize: '0.67rem',
               fontWeight: 600,
-              background: (targetRecommendationRows.length > 0 || recommendations.filter((rec) => !isRowMatched(rec.targetRow)).length > 0) ? 'rgba(247, 184, 75, 0.15)' : '#f3f3f9',
-              color: (targetRecommendationRows.length > 0 || recommendations.filter((rec) => !isRowMatched(rec.targetRow)).length > 0) ? '#d97706' : '#878a99',
-              border: (targetRecommendationRows.length > 0 || recommendations.filter((rec) => !isRowMatched(rec.targetRow)).length > 0) ? '1px solid rgba(247, 184, 75, 0.3)' : '1px solid #e9ebec',
+              background: targetRecommendationRows.length > 0 ? 'rgba(247, 184, 75, 0.15)' : '#f3f3f9',
+              color: targetRecommendationRows.length > 0 ? '#d97706' : '#878a99',
+              border: targetRecommendationRows.length > 0 ? '1px solid rgba(247, 184, 75, 0.3)' : '1px solid #e9ebec',
             }}
           >
-            {isComputingRecs
+            {targetRecommendationRows.length === 0
+              ? '0 Rekomendasi (Selesai)'
+              : isComputingRecs
               ? `${recommendations.filter((rec) => !isRowMatched(rec.targetRow)).length.toLocaleString('id-ID')} Memproses...`
               : recommendations.filter((rec) => !isRowMatched(rec.targetRow)).length > 0
               ? `${recommendations.filter((rec) => !isRowMatched(rec.targetRow)).length.toLocaleString('id-ID')} Rekomendasi`
-              : targetRecommendationRows.length > 0
-              ? `${targetRecommendationRows.length.toLocaleString('id-ID')} Siap Dianalisa`
-              : '0 Rekomendasi (Selesai)'}
+              : `${targetRecommendationRows.length.toLocaleString('id-ID')} Siap Dianalisa`}
           </span>
         </button>
 
@@ -1132,8 +1180,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           </div>
         ) : (
           <>
-            {/* Indikator Non-blocking Latar Belakang (Tidak menutup tabel) */}
-            {isComputingRecs && (
+            {/* Indikator Non-blocking Latar Belakang (Hanya tampil jika masih ada baris yang belum disetujui) */}
+            {isComputingRecs && targetRecommendationRows.length > 0 && (
               <div
                 style={{
                   display: 'flex',
@@ -1158,8 +1206,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               </div>
             )}
 
-            {/* Jika hasil filter wilayah / search kosong ATAU seluruh rekomendasi telah disetujui */}
-            {currentTabRecs.length === 0 && !isComputingRecs ? (
+            {/* Jika seluruh rekomendasi telah disetujui ATAU hasil filter kosong */}
+            {targetRecommendationRows.length === 0 || (currentTabRecs.length === 0 && !isComputingRecs) ? (
               targetRecommendationRows.length === 0 ? (
                 <div
                   style={{
