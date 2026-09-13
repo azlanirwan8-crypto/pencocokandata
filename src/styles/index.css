@@ -1165,3 +1165,54 @@ body {
   content-visibility: auto;
   contain-intrinsic-size: 42px;
 }
+
+/* ==========================================================================
+   BNI GEOSPATIAL MAP STYLES (LEAFLET CUSTOMIZATION)
+   ========================================================================== */
+.bni-map-container {
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+.bni-map-container .leaflet-container {
+  width: 100%;
+  height: 520px;
+  background: #edf2f7;
+  font-family: var(--font-sans);
+}
+
+.leaflet-popup-content-wrapper {
+  background: #ffffff !important;
+  color: #212529 !important;
+  border-radius: 8px !important;
+  padding: 0 !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.leaflet-popup-content {
+  margin: 0 !important;
+  line-height: 1.4 !important;
+}
+
+.leaflet-popup-tip {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+/* Custom Marker Pins */
+.bni-pin-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  cursor: pointer;
+}
+
+.bni-pin-icon:hover {
+  transform: scale(1.25) translateY(-4px);
+  z-index: 9999 !important;
+}
+

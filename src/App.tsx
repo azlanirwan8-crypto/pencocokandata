@@ -4,6 +4,7 @@ import { Topbar } from './components/Topbar';
 import { MetricCards } from './components/Dashboard/MetricCards';
 import { RegionalAnalyticsCharts } from './components/Dashboard/RegionalAnalyticsCharts';
 import { MasterDuplicateChart } from './components/Dashboard/MasterDuplicateChart';
+import { IndonesiaBranchMap } from './components/Dashboard/IndonesiaBranchMap';
 import { DashboardMatchTable } from './components/Dashboard/DashboardMatchTable';
 import { MasterHealthCard } from './components/MasterData/MasterHealthCard';
 import { MasterDataGrid } from './components/MasterData/MasterDataGrid';
@@ -885,6 +886,13 @@ export const App: React.FC = () => {
             {/* Visualisasi Data Master Duplikat / Multi-Cabang per Kode Pos */}
             <MasterDuplicateChart
               masterHealth={masterHealth}
+              masterRows={masterRows}
+              selectedWilayah={dashboardWilayahFilter}
+              onNavigateToMaster={() => setActiveTab('master')}
+            />
+
+            {/* Peta Tracking Penyebaran Cabang BNI di Indonesia (GIS & Google Maps Direct Link) */}
+            <IndonesiaBranchMap
               masterRows={masterRows}
               selectedWilayah={dashboardWilayahFilter}
               onNavigateToMaster={() => setActiveTab('master')}
