@@ -24,6 +24,7 @@ import {
   INDONESIA_REGIONS,
   createCurvedArcPoints,
   resolveTargetRowCoordinates,
+  clampToInland,
   FOREIGN_LAND_MASKS,
   type PlottedBranchPin
 } from '../../utils/geoCoder';
@@ -192,12 +193,13 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
         if (matchingTarget) {
           const origin = resolveTargetRowCoordinates(matchingTarget);
+          const [oLat, oLng] = clampToInland(origin.lat, origin.lng);
           const originCity = matchingTarget['Dati II'] || origin.city || 'Aceh';
           const originKp = matchingTarget['KODE POS'] || '';
           items.push({
             pin: p,
             serviceNote: `Melayani data target di ${originCity} (📮 ${originKp})`,
-            sourceCoords: [origin.lat, origin.lng],
+            sourceCoords: [oLat, oLng],
           });
           addedPinIds.add(p.id);
           if (items.length >= 8) break;
@@ -530,37 +532,22 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     }
 
     // Group matched target rows by distinct origin locations (up to 20 representative clusters)
-    const destCoords: [number, number] = [selectedPin.lat, selectedPin.lng];
+    const destCoords: [number, number] = clampToInland(selectedPin.lat, selectedPin.lng);
     const originGroups = new Map<string, { lat: number; lng: number; rows: TargetRow[] }>();
 
-    selectedMatchedRows.forEach((r, idx) => {
+    selectedMatchedRows.forEach((r) => {
       const origin = resolveTargetRowCoordinates(r);
-      let originLat = origin.lat;
-      let originLng = origin.lng;
+      const [originLat, originLng] = clampToInland(origin.lat, origin.lng);
 
-      // If origin coordinates are identical to branch pin (e.g. same postal code),
-      // create radial fan-out so trajectories flow from realistic surrounding client/transaction points
-      const dLat = Math.abs(originLat - destCoords[0]);
-      const dLng = Math.abs(originLng - destCoords[1]);
-      if (dLat < 0.0008 && dLng < 0.0008) {
-        // Detect west-coast Sumatra (e.g. Padang, Sibolga, Bengkulu)
-        const isWestCoastSumatra = destCoords[1] >= 95.0 && destCoords[1] <= 102.5 && destCoords[0] <= 6.0 && destCoords[0] >= -5.0;
-        let angle: number;
-        if (isWestCoastSumatra) {
-          // Inland angles: -70 deg to +70 deg (eastward into land, away from the ocean)
-          const angleSpread = Math.PI * 0.7;
-          angle = -angleSpread / 2 + ((idx % 12) / 11) * angleSpread;
-        } else {
-          angle = (idx % 12) * (Math.PI / 6);
-        }
-        const radiusDist = 0.008 + ((idx % 4) * 0.004); // ~800m - 2.4km fan-out
-        originLat = destCoords[0] + Math.sin(angle) * radiusDist;
-        originLng = destCoords[1] + Math.cos(angle) * radiusDist;
-      }
+      // Check distance between target data real origin and destination branch
+      const dLat = originLat - destCoords[0];
+      const dLng = originLng - destCoords[1];
+      const dist = Math.sqrt(dLat * dLat + dLng * dLng);
 
-      // Hard safety check for Padang coast (shoreline at lng ~ 100.354)
-      if (destCoords[1] >= 100.33 && destCoords[1] <= 100.48 && destCoords[0] >= -1.15 && destCoords[0] <= -0.80) {
-        originLng = Math.max(originLng, 100.3605);
+      // If origin coordinates are identical or on-site to the branch pin (dist < 0.001),
+      // do NOT create artificial fan-out loops into the ocean/sea!
+      if (dist < 0.001) {
+        return;
       }
 
       const key = `${originLat.toFixed(3)}_${originLng.toFixed(3)}`;

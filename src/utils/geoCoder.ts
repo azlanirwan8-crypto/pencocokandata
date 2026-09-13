@@ -7,7 +7,7 @@ export interface GeoLocation {
   lng: number;
   city?: string;
   province?: string;
-  source: 'postal_exact' | 'postal_prefix' | 'dati2' | 'wilayah_centroid';
+  source: 'postal_exact' | 'postal_prefix' | 'dati2' | 'wilayah_centroid' | 'district_map';
 }
 
 export interface PlottedBranchPin {
@@ -113,7 +113,7 @@ const POSTAL_PREFIX_MAP: Record<string, { lat: number; lng: number; city: string
   '73': { lat: -2.2100, lng: 113.9213, city: 'Palangka Raya', province: 'Kalimantan Tengah' },
   '74': { lat: -2.5000, lng: 112.0000, city: 'Sampit / Pangkalan Bun', province: 'Kalimantan Tengah' },
   '75': { lat: -0.5022, lng: 117.1536, city: 'Samarinda / Kutai Kartanegara', province: 'Kalimantan Timur' },
-  '76': { lat: -1.2654, lng: 116.8312, city: 'Balikpapan / Penajam Paser', province: 'Kalimantan Timur' },
+  '76': { lat: -1.2580, lng: 116.8350, city: 'Balikpapan / Penajam Paser', province: 'Kalimantan Timur' },
   '77': { lat: 3.3276, lng: 117.5925, city: 'Tarakan / Tanjung Selor / Nunukan', province: 'Kalimantan Utara' },
   '78': { lat: -0.0263, lng: 109.3425, city: 'Pontianak / Kubu Raya', province: 'Kalimantan Barat' },
   '79': { lat: 0.9083, lng: 108.9872, city: 'Singkawang / Sambas / Sintang', province: 'Kalimantan Barat' },
@@ -140,7 +140,7 @@ const POSTAL_PREFIX_MAP: Record<string, { lat: number; lng: number; city: string
   // Maluku & Papua (97 - 99)
   '97': { lat: -3.6954, lng: 128.1814, city: 'Ambon / Tual / Maluku Tengah', province: 'Maluku' },
   '98': { lat: 0.7900, lng: 127.3800, city: 'Ternate / Tidore / Halmahera', province: 'Maluku Utara' },
-  '99': { lat: -2.5489, lng: 140.7181, city: 'Jayapura / Sorong / Manokwari / Merauke / Timika', province: 'Papua' },
+  '99': { lat: -2.5380, lng: 140.7020, city: 'Jayapura / Sorong / Manokwari / Merauke / Timika', province: 'Papua' },
 };
 
 // 3. Known Major Cities / Dati II Centroids
@@ -327,7 +327,7 @@ const DATI2_MAP: Record<string, { lat: number; lng: number; province: string }> 
   // Kalimantan
   'KOTA BANJARMASIN': { lat: -3.3167, lng: 114.5900, province: 'Kalimantan Selatan' },
   'KOTA BANJARBARU': { lat: -3.4400, lng: 114.8300, province: 'Kalimantan Selatan' },
-  'KOTA BALIKPAPAN': { lat: -1.2654, lng: 116.8312, province: 'Kalimantan Timur' },
+  'KOTA BALIKPAPAN': { lat: -1.2580, lng: 116.8350, province: 'Kalimantan Timur' },
   'KOTA SAMARINDA': { lat: -0.5022, lng: 117.1536, province: 'Kalimantan Timur' },
   'KOTA BONTANG': { lat: 0.1333, lng: 117.5000, province: 'Kalimantan Timur' },
   'KOTA PONTIANAK': { lat: -0.0263, lng: 109.3425, province: 'Kalimantan Barat' },
@@ -350,7 +350,7 @@ const DATI2_MAP: Record<string, { lat: number; lng: number; province: string }> 
   // Maluku & Papua
   'KOTA AMBON': { lat: -3.6954, lng: 128.1814, province: 'Maluku' },
   'KOTA TERNATE': { lat: 0.7900, lng: 127.3800, province: 'Maluku Utara' },
-  'KOTA JAYAPURA': { lat: -2.5489, lng: 140.7181, province: 'Papua' },
+  'KOTA JAYAPURA': { lat: -2.5380, lng: 140.7020, province: 'Papua' },
   'KOTA SORONG': { lat: -0.8800, lng: 131.2500, province: 'Papua Barat Daya' },
 };
 
@@ -370,7 +370,7 @@ const WILAYAH_CENTROID_MAP: Record<string, { lat: number; lng: number; regionNam
   'W12': { lat: -6.2383, lng: 106.9756, regionName: 'Jakarta Kota / Bekasi' },
   'W14': { lat: -6.2088, lng: 106.6381, regionName: 'Jakarta Barat / Tangerang' },
   'W15': { lat: -6.2615, lng: 106.8106, regionName: 'Jakarta Selatan' },
-  'W16': { lat: -2.5489, lng: 140.7181, regionName: 'Papua (Jayapura)' },
+  'W16': { lat: -2.5380, lng: 140.7020, regionName: 'Papua (Jayapura)' },
   'W17': { lat: -7.7956, lng: 110.3695, regionName: 'Yogyakarta' },
   'W18': { lat: -7.9797, lng: 112.6304, regionName: 'Malang' },
 };
@@ -398,18 +398,10 @@ const KECAMATAN_PADANG_MAP: Record<string, { lat: number; lng: number }> = {
   'LUBUK BEGALUNG': { lat: -0.9780, lng: 100.3950 },
   'LUBUK KILANGAN': { lat: -0.9650, lng: 100.4400 },
   'PAUH': { lat: -0.9250, lng: 100.4450 },
-  'KOTO TANGAH': { lat: -0.8500, lng: 100.3450 },
+  'KOTO TANGAH': { lat: -0.8350, lng: 100.3650 },
   'BUNGUS TELUK KABUNG': { lat: -1.0450, lng: 100.4000 },
 };
 
-function simpleHash(str: string): number {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) {
-    h = ((h << 5) - h) + str.charCodeAt(i);
-    h |= 0;
-  }
-  return Math.abs(h);
-}
 
 export function extractWCode(raw: string): string {
   if (!raw) return '';
@@ -426,6 +418,160 @@ export function extractWCode(raw: string): string {
 }
 
 /**
+ * Strict Inland Protection: Prevents any coordinates from falling into oceans, bays, or straits.
+ * Enforces land boundaries across all major coastal cities in Indonesia (Jayapura, Padang, Semarang, Surabaya, etc.)
+ */
+export function clampToInland(lat: number, lng: number): [number, number] {
+  let cLat = lat;
+  let cLng = lng;
+
+  // 1. Jayapura / Teluk Yos Sudarso:
+  // Water is east of lng 140.7035 between lat -2.570 and -2.510.
+  if (cLat >= -2.570 && cLat <= -2.510 && cLng > 140.7035) {
+    cLng = 140.7015; // Kept strictly inland on town corridor (Jl. Argapura / Jl. Koti)
+  }
+  // Hamadi / Tobati bay area:
+  if (cLat >= -2.610 && cLat < -2.570 && cLng > 140.6970) {
+    cLng = 140.6920; // Kept inland (Entrop / Vim)
+  }
+
+  // 2. Padang:
+  // Shoreline at lng ~ 100.354. Water is west of lng 100.358.
+  if (cLat >= -1.15 && cLat <= -0.75 && cLng < 100.3595) {
+    cLng = 100.3605; // Kept strictly inland eastward
+  }
+
+  // 3. Semarang:
+  // Water is north of lat -6.958 between lng 110.35 and 110.48.
+  if (cLat > -6.958 && cLng >= 110.35 && cLng <= 110.48) {
+    cLat = -6.968; // Kept strictly inland southward
+  }
+
+  // 4. Surabaya:
+  // North water: lat > -7.198. East water (Madura Strait): lng > 112.795.
+  if (cLat > -7.198 && cLng >= 112.65 && cLng <= 112.80) {
+    cLat = -7.215;
+  }
+  if (cLng > 112.795 && cLat >= -7.33 && cLat <= -7.18) {
+    cLng = 112.785;
+  }
+
+  // 5. Balikpapan:
+  // South water: lat < -1.260. East water: lng > 116.885.
+  if (cLat < -1.260 && cLng >= 116.80 && cLng <= 116.92) {
+    cLat = -1.255;
+  }
+  if (cLng > 116.885 && cLat >= -1.27 && cLat <= -1.15) {
+    cLng = 116.875;
+  }
+
+  // 6. Makassar:
+  // Water to the west (lng < 119.408).
+  if (cLng < 119.408 && cLat >= -5.20 && cLat <= -5.08) {
+    cLng = 119.418;
+  }
+
+  // 7. Banda Aceh:
+  // Water to the north (lat > 5.575) - excludes Pulau Weh (lat > 5.80)
+  if (cLat > 5.575 && cLat < 5.80 && cLng >= 95.25 && cLng <= 95.38) {
+    cLat = 5.560;
+  }
+
+  // 8. Manado:
+  // Water to the west (lng < 124.834).
+  if (cLng < 124.834 && cLat >= 1.44 && cLat <= 1.52) {
+    cLng = 124.842;
+  }
+
+  // 9. Kupang:
+  // Water to the northwest (lat > -10.158).
+  if (cLat > -10.158 && cLng >= 123.55 && cLng <= 123.65) {
+    cLat = -10.170;
+  }
+
+  // 10. Sibolga:
+  // Water to the west (lng < 98.780).
+  if (cLng < 98.780 && cLat >= 1.70 && cLat <= 1.78) {
+    cLng = 98.788;
+  }
+
+  // 11. Bengkulu:
+  // Water to the southwest (lng < 102.260).
+  if (cLng < 102.260 && cLat >= -3.85 && cLat <= -3.75) {
+    cLng = 102.270;
+  }
+
+  return [Number(cLat.toFixed(6)), Number(cLng.toFixed(6))];
+}
+
+export const CITY_DISTRICTS_MAP: Record<string, { lat: number; lng: number; city: string; province: string }> = {
+  // Jayapura (Papua) - Strictly on real town / commercial districts on land
+  'JAYAPURA UTARA': { lat: -2.5330, lng: 140.7020, city: 'Jayapura', province: 'Papua' },
+  'GURABESI': { lat: -2.5350, lng: 140.7020, city: 'Jayapura', province: 'Papua' },
+  'MANDALA': { lat: -2.5340, lng: 140.7025, city: 'Jayapura', province: 'Papua' },
+  'DOK': { lat: -2.5250, lng: 140.7020, city: 'Jayapura', province: 'Papua' },
+  'JAYAPURA SELATAN': { lat: -2.5600, lng: 140.6880, city: 'Jayapura', province: 'Papua' },
+  'ARGAPURA': { lat: -2.5515, lng: 140.7015, city: 'Jayapura', province: 'Papua' },
+  'KOTI': { lat: -2.5450, lng: 140.7015, city: 'Jayapura', province: 'Papua' },
+  'WEREF': { lat: -2.5420, lng: 140.7015, city: 'Jayapura', province: 'Papua' },
+  'POLIMAK': { lat: -2.5450, lng: 140.6920, city: 'Jayapura', province: 'Papua' },
+  'ENTROP': { lat: -2.5680, lng: 140.6850, city: 'Jayapura', province: 'Papua' },
+  'HAMADI': { lat: -2.5580, lng: 140.6940, city: 'Jayapura', province: 'Papua' },
+  'ABEPURA': { lat: -2.6010, lng: 140.6720, city: 'Jayapura', province: 'Papua' },
+  'KOTARAJA': { lat: -2.5950, lng: 140.6750, city: 'Jayapura', province: 'Papua' },
+  'VIM': { lat: -2.6040, lng: 140.6680, city: 'Jayapura', province: 'Papua' },
+  'WAENA': { lat: -2.5850, lng: 140.6250, city: 'Jayapura', province: 'Papua' },
+  'HERAM': { lat: -2.5850, lng: 140.6250, city: 'Jayapura', province: 'Papua' },
+  'SENTANI': { lat: -2.5600, lng: 140.5150, city: 'Jayapura', province: 'Papua' },
+  'MUARA TAMI': { lat: -2.6350, lng: 140.8250, city: 'Jayapura', province: 'Papua' },
+  'JAYAPURA': { lat: -2.5380, lng: 140.7020, city: 'Jayapura', province: 'Papua' },
+
+  // Surabaya (Jawa Timur)
+  'GENTENG': { lat: -7.2600, lng: 112.7450, city: 'Surabaya', province: 'Jawa Timur' },
+  'TEGALSARI': { lat: -7.2700, lng: 112.7380, city: 'Surabaya', province: 'Jawa Timur' },
+  'GUBENG': { lat: -7.2750, lng: 112.7550, city: 'Surabaya', province: 'Jawa Timur' },
+  'WONOKROMO': { lat: -7.3000, lng: 112.7350, city: 'Surabaya', province: 'Jawa Timur' },
+  'RUNGKUT': { lat: -7.3200, lng: 112.7700, city: 'Surabaya', province: 'Jawa Timur' },
+  'TANDES': { lat: -7.2600, lng: 112.6800, city: 'Surabaya', province: 'Jawa Timur' },
+
+  // Semarang (Jawa Tengah)
+  'SEMARANG TENGAH': { lat: -6.9800, lng: 110.4200, city: 'Semarang', province: 'Jawa Tengah' },
+  'SEMARANG SELATAN': { lat: -7.0000, lng: 110.4250, city: 'Semarang', province: 'Jawa Tengah' },
+  'SEMARANG BARAT': { lat: -6.9900, lng: 110.3900, city: 'Semarang', province: 'Jawa Tengah' },
+  'BANYUMANIK': { lat: -7.0600, lng: 110.4200, city: 'Semarang', province: 'Jawa Tengah' },
+  'CANDISARI': { lat: -7.0150, lng: 110.4250, city: 'Semarang', province: 'Jawa Tengah' },
+
+  // Makassar (Sulawesi Selatan)
+  'PANAKKUKANG': { lat: -5.1450, lng: 119.4500, city: 'Makassar', province: 'Sulawesi Selatan' },
+  'RAPPOCINI': { lat: -5.1650, lng: 119.4400, city: 'Makassar', province: 'Sulawesi Selatan' },
+  'TAMALANREA': { lat: -5.1350, lng: 119.4900, city: 'Makassar', province: 'Sulawesi Selatan' },
+  'UJUNG PANDANG': { lat: -5.1350, lng: 119.4120, city: 'Makassar', province: 'Sulawesi Selatan' },
+
+  // Medan (Sumatera Utara)
+  'MEDAN KOTA': { lat: 3.5780, lng: 98.6850, city: 'Medan', province: 'Sumatera Utara' },
+  'MEDAN BARU': { lat: 3.5700, lng: 98.6550, city: 'Medan', province: 'Sumatera Utara' },
+  'MEDAN PETISAH': { lat: 3.5900, lng: 98.6650, city: 'Medan', province: 'Sumatera Utara' },
+  'MEDAN BARAT': { lat: 3.6050, lng: 98.6700, city: 'Medan', province: 'Sumatera Utara' },
+  'MEDAN DELI': { lat: 3.6550, lng: 98.6800, city: 'Medan', province: 'Sumatera Utara' },
+
+  // Balikpapan (Kalimantan Timur)
+  'BALIKPAPAN KOTA': { lat: -1.2600, lng: 116.8350, city: 'Balikpapan', province: 'Kalimantan Timur' },
+  'BALIKPAPAN SELATAN': { lat: -1.2500, lng: 116.8650, city: 'Balikpapan', province: 'Kalimantan Timur' },
+  'BALIKPAPAN UTARA': { lat: -1.2100, lng: 116.8600, city: 'Balikpapan', province: 'Kalimantan Timur' },
+
+  // Manado (Sulawesi Utara)
+  'WENANG': { lat: 1.4850, lng: 124.8450, city: 'Manado', province: 'Sulawesi Utara' },
+  'WANEA': { lat: 1.4650, lng: 124.8450, city: 'Manado', province: 'Sulawesi Utara' },
+  'MALALAYANG': { lat: 1.4550, lng: 124.8380, city: 'Manado', province: 'Sulawesi Utara' },
+
+  // Banda Aceh (Aceh)
+  'BAITURRAHMAN': { lat: 5.5500, lng: 95.3200, city: 'Banda Aceh', province: 'Aceh' },
+  'KUTA ALAM': { lat: 5.5600, lng: 95.3350, city: 'Banda Aceh', province: 'Aceh' },
+  'SYIAH KUALA': { lat: 5.5700, lng: 95.3500, city: 'Banda Aceh', province: 'Aceh' },
+  'ULEE KARENG': { lat: 5.5450, lng: 95.3550, city: 'Banda Aceh', province: 'Aceh' },
+};
+
+/**
  * Resolves accurate coordinates for a MasterRow based on Kode Pos, Dati II, and Wilayah
  */
 export function resolveBranchCoordinates(row: MasterRow): GeoLocation {
@@ -433,27 +579,38 @@ export function resolveBranchCoordinates(row: MasterRow): GeoLocation {
   const rawDati2 = cleanDati2(row['Dati II'] || row['Kode Dati II'] || '');
   const rawWilayah = String(row.Wilayah || '').toUpperCase().trim();
   const rawKecamatan = String(row.Kecamatan || '').toUpperCase().trim();
+  const rawKelurahan = String(row.Kelurahan || '').toUpperCase().trim();
   const rawAlamat = String(row.ALAMAT || '').toUpperCase().trim();
-  const fullText = `${rawKecamatan} ${rawAlamat} ${rawDati2}`;
+  const rawNama = String(row['Nama Outlet'] || '').toUpperCase().trim();
+  const fullText = `${rawNama} ${rawKelurahan} ${rawKecamatan} ${rawAlamat} ${rawDati2}`;
 
+  // 1. High-accuracy real district matching across major Indonesian cities (Jayapura, Padang, Medan, etc.)
+  for (const [districtKey, distData] of Object.entries(CITY_DISTRICTS_MAP)) {
+    if (fullText.includes(districtKey)) {
+      const [cLat, cLng] = clampToInland(distData.lat, distData.lng);
+      return {
+        lat: cLat,
+        lng: cLng,
+        city: distData.city,
+        province: distData.province,
+        source: 'district_map',
+      };
+    }
+  }
+
+  // 2. Padang district fallback
   const isPadangArea =
     rawDati2.includes('PADANG') ||
     rawKodePos.startsWith('25') ||
     fullText.includes('PADANG');
 
-  // 1. High-accuracy district matching for Padang to place pins on real land/urban areas
   if (isPadangArea) {
     for (const [kec, coords] of Object.entries(KECAMATAN_PADANG_MAP)) {
       if (fullText.includes(kec)) {
-        const hash = simpleHash(`${row['Nama Outlet'] || ''}_${rawAlamat}_${rawKodePos}`);
-        // Micro scatter safely inland (eastward: 0 to +600m, north/south: -400m to +400m)
-        const angle = ((hash % 180) - 90) * (Math.PI / 180); // -90 to +90 (strictly eastward)
-        const radius = 0.0015 + ((hash % 6) * 0.0006);
-        const lat = Number((coords.lat + Math.sin(angle) * radius).toFixed(6));
-        const lng = Number(Math.max(coords.lng + Math.abs(Math.cos(angle)) * radius, 100.3590).toFixed(6));
+        const [cLat, cLng] = clampToInland(coords.lat, coords.lng);
         return {
-          lat,
-          lng,
+          lat: cLat,
+          lng: cLng,
           city: 'Padang',
           province: 'Sumatera Barat',
           source: 'dati2',
@@ -462,42 +619,15 @@ export function resolveBranchCoordinates(row: MasterRow): GeoLocation {
     }
   }
 
-  // 2. Try exact or 2-digit postal prefix
+  // 3. Try exact or 2-digit postal prefix
   if (rawKodePos.length >= 2) {
     const p2 = rawKodePos.slice(0, 2);
     if (POSTAL_PREFIX_MAP[p2]) {
       const base = POSTAL_PREFIX_MAP[p2];
-      const hash = simpleHash(`${row['Nama Outlet'] || ''}_${rawAlamat}_${rawKodePos}_${row['Kode Cabang'] || ''}`);
-      let latOffset = 0;
-      let lngOffset = 0;
-
-      if (isPadangArea || base.city === 'Padang') {
-        // Padang is on the west coast: longitude must stay inland (>= 100.3595)
-        // Disperse eastwards into city corridors, never westwards into the Indian Ocean
-        latOffset = ((hash % 100) / 50 - 1) * 0.010;
-        lngOffset = (((hash >> 6) % 100) / 100) * 0.018; // strictly positive (eastward)
-        const finalLat = Number((base.lat + latOffset).toFixed(6));
-        const finalLng = Number(Math.max(base.lng + lngOffset, 100.3595).toFixed(6));
-        return {
-          lat: finalLat,
-          lng: finalLng,
-          city: base.city,
-          province: base.province,
-          source: 'postal_prefix',
-        };
-      }
-
-      // Other cities: balanced circular micro-scatter (~150m - 600m)
-      if (rawKodePos.length >= 5) {
-        const angle = (hash % 360) * (Math.PI / 180);
-        const dist = 0.0015 + ((hash % 8) * 0.0005);
-        latOffset = Math.sin(angle) * dist;
-        lngOffset = Math.cos(angle) * dist;
-      }
-
+      const [cLat, cLng] = clampToInland(base.lat, base.lng);
       return {
-        lat: Number((base.lat + latOffset).toFixed(6)),
-        lng: Number((base.lng + lngOffset).toFixed(6)),
+        lat: cLat,
+        lng: cLng,
         city: base.city,
         province: base.province,
         source: 'postal_prefix',
@@ -505,13 +635,14 @@ export function resolveBranchCoordinates(row: MasterRow): GeoLocation {
     }
   }
 
-  // 3. Try Dati II / Kota lookup
+  // 4. Try Dati II / Kota lookup
   if (rawDati2) {
     if (DATI2_MAP[rawDati2]) {
       const d = DATI2_MAP[rawDati2];
+      const [cLat, cLng] = clampToInland(d.lat, d.lng);
       return {
-        lat: d.lat,
-        lng: d.lng,
+        lat: cLat,
+        lng: cLng,
         city: rawDati2,
         province: d.province,
         source: 'dati2',
@@ -520,9 +651,10 @@ export function resolveBranchCoordinates(row: MasterRow): GeoLocation {
     // Substring search in DATI2_MAP
     for (const [key, d] of Object.entries(DATI2_MAP)) {
       if (rawDati2.includes(key) || key.includes(rawDati2)) {
+        const [cLat, cLng] = clampToInland(d.lat, d.lng);
         return {
-          lat: d.lat,
-          lng: d.lng,
+          lat: cLat,
+          lng: cLng,
           city: key,
           province: d.province,
           source: 'dati2',
@@ -531,22 +663,24 @@ export function resolveBranchCoordinates(row: MasterRow): GeoLocation {
     }
   }
 
-  // 4. Fallback to Wilayah Centroid
+  // 5. Fallback to Wilayah Centroid
   const wCode = extractWCode(rawWilayah);
   if (wCode && WILAYAH_CENTROID_MAP[wCode]) {
     const w = WILAYAH_CENTROID_MAP[wCode];
+    const [cLat, cLng] = clampToInland(w.lat, w.lng);
     return {
-      lat: w.lat,
-      lng: w.lng,
+      lat: cLat,
+      lng: cLng,
       city: w.regionName,
       source: 'wilayah_centroid',
     };
   }
 
-  // 5. Default fallback: Monas Jakarta
+  // 6. Default fallback: Monas Jakarta
+  const [cLat, cLng] = clampToInland(-6.1754, 106.8272);
   return {
-    lat: -6.1754,
-    lng: 106.8272,
+    lat: cLat,
+    lng: cLng,
     city: 'Jakarta Pusat',
     province: 'DKI Jakarta',
     source: 'wilayah_centroid',
@@ -704,8 +838,8 @@ export function createCurvedArcPoints(
   curveOffset: number = 0.15,
   numPoints: number = 24
 ): [number, number][] {
-  const [lat1, lng1] = start;
-  const [lat2, lng2] = end;
+  const [lat1, lng1] = clampToInland(start[0], start[1]);
+  const [lat2, lng2] = clampToInland(end[0], end[1]);
 
   const midLat = (lat1 + lat2) / 2;
   const midLng = (lng1 + lng2) / 2;
@@ -714,13 +848,9 @@ export function createCurvedArcPoints(
   const dLng = lng2 - lng1;
   const dist = Math.sqrt(dLat * dLat + dLng * dLng);
 
-  if (dist < 0.0001) {
-    const points: [number, number][] = [];
-    for (let i = 0; i <= numPoints; i++) {
-      const angle = (i / numPoints) * 2 * Math.PI;
-      points.push([lat1 + Math.sin(angle) * 0.002, lng1 + Math.cos(angle) * 0.002]);
-    }
-    return points;
+  // If distance is zero or negligible (on-site record), do NOT create circular loops into water
+  if (dist < 0.0005) {
+    return [];
   }
 
   // Normal vector perpendicular to chord
@@ -731,17 +861,13 @@ export function createCurvedArcPoints(
   let controlLat = midLat + normLat * arcHeight;
   let controlLng = midLng + normLng * arcHeight;
 
-  // Land-safety constraint for coastal cities (e.g. Padang, West Sumatra)
-  // Shoreline is at lng ~ 100.354. Ensure control point never dips into the sea.
-  const isPadangArea = midLat >= -1.15 && midLat <= -0.80 && midLng >= 100.33 && midLng <= 100.50;
-  if (isPadangArea && controlLng < 100.3600) {
-    // Invert normal vector so arc bends inland (eastward) over the city instead of into the sea
+  // Test whether control point bows toward water; if so, flip normal vector to bend inland!
+  const [clampedLat, clampedLng] = clampToInland(controlLat, controlLng);
+  if (clampedLat !== controlLat || clampedLng !== controlLng) {
     controlLng = midLng - normLng * arcHeight;
     controlLat = midLat - normLat * arcHeight;
-    if (controlLng < 100.3600) {
-      controlLng = 100.3620;
-    }
   }
+  [controlLat, controlLng] = clampToInland(controlLat, controlLng);
 
   const points: [number, number][] = [];
   for (let i = 0; i <= numPoints; i++) {
@@ -749,7 +875,7 @@ export function createCurvedArcPoints(
     const oneMinusT = 1 - t;
     const lat = oneMinusT * oneMinusT * lat1 + 2 * oneMinusT * t * controlLat + t * t * lat2;
     const lng = oneMinusT * oneMinusT * lng1 + 2 * oneMinusT * t * controlLng + t * t * lng2;
-    points.push([lat, lng]);
+    points.push(clampToInland(lat, lng));
   }
 
   return points;
