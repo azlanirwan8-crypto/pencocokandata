@@ -169,6 +169,11 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         .map((b) => String(b['Sandi Cabang'] || b.Sandi || b['Kode Cabang'] || '').trim())
         .filter(Boolean)
     );
+    const branchCodeSet = new Set(
+      selectedPin.branches
+        .map((b) => String(b['Branch Code'] || b['Kode Cabang'] || '').trim())
+        .filter(Boolean)
+    );
     const outletNameSet = new Set(
       selectedPin.branches.map((b) => String(b['Nama Outlet'] || '').toLowerCase().trim()).filter(Boolean)
     );
@@ -177,11 +182,13 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     return targetRows.filter((t) => {
       if (!t._isMatched) return false;
       const tSandi = String(t['Sandi Cabang'] || t.Sandi || t.Cabang || '').trim();
+      const tBranchCode = String(t['Branch Code'] || t['Kode Cabang'] || '').trim();
       const tName = String(t['Nama Outlet'] || '').toLowerCase().trim();
       const tKp = String(t['KODE POS'] || '').replace(/\D/g, '').trim();
 
       return (
         (tSandi && sandiSet.has(tSandi)) ||
+        (tBranchCode && branchCodeSet.has(tBranchCode)) ||
         (tName && outletNameSet.has(tName)) ||
         (kp && tKp && kp === tKp)
       );

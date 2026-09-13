@@ -1,5 +1,6 @@
 // Geocoding Engine for Indonesian Postal Codes, Dati II (Kabupaten/Kota), and BNI Wilayah
 import type { MasterRow, TargetRow } from '../types';
+import { formatWilayahName } from './normalizer.ts';
 
 export interface GeoLocation {
   lat: number;
@@ -388,6 +389,20 @@ function simpleHash(str: string): number {
   return Math.abs(h);
 }
 
+export function extractWCode(raw: string): string {
+  if (!raw) return '';
+  const match = raw.match(/(?:W(?:ILAYAH)?\s*|W)(\d{1,2})/i);
+  if (match) {
+    const num = parseInt(match[1], 10);
+    return `W${num < 10 ? '0' + num : num}`;
+  }
+  const pureNum = parseInt(raw, 10);
+  if (!isNaN(pureNum) && pureNum >= 1 && pureNum <= 18) {
+    return `W${pureNum < 10 ? '0' + pureNum : pureNum}`;
+  }
+  return '';
+}
+
 /**
  * Resolves accurate coordinates for a MasterRow based on Kode Pos, Dati II, and Wilayah
  */
@@ -495,7 +510,7 @@ export function resolveBranchCoordinates(row: MasterRow): GeoLocation {
   }
 
   // 4. Fallback to Wilayah Centroid
-  const wCode = rawWilayah.startsWith('W') ? rawWilayah.slice(0, 3) : '';
+  const wCode = extractWCode(rawWilayah);
   if (wCode && WILAYAH_CENTROID_MAP[wCode]) {
     const w = WILAYAH_CENTROID_MAP[wCode];
     return {
@@ -551,10 +566,18 @@ export function clusterMasterRowsForMap(
     }
   }
 
-  // Filter by Wilayah if specified
+  // Filter by Wilayah if specified with extractWCode and formatWilayahName normalization
   const filtered = selectedWilayah === 'ALL'
     ? masterRows
     : masterRows.filter((r) => {
+        const rowCode = extractWCode(r.Wilayah || '');
+        const selCode = extractWCode(selectedWilayah || '');
+        if (rowCode && selCode && rowCode === selCode) return true;
+
+        const rowNorm = formatWilayahName(r.Wilayah || '').toUpperCase();
+        const selNorm = formatWilayahName(selectedWilayah || '').toUpperCase();
+        if (rowNorm && selNorm && rowNorm === selNorm) return true;
+
         const rowW = String(r.Wilayah || '').trim().toUpperCase();
         const selW = String(selectedWilayah || '').trim().toUpperCase();
         return rowW === selW || rowW.startsWith(selW) || selW.startsWith(rowW);
