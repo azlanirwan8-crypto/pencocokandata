@@ -37,6 +37,12 @@ interface IndonesiaBranchMapProps {
 type DisplayScope = 'ALL' | 'SELECTED_ONLY' | 'MATCHED_ONLY' | 'MULTI_ONLY';
 type TileProvider = 'google' | 'google_hybrid' | 'esri' | 'osm';
 
+export interface SearchSuggestionItem {
+  pin: PlottedBranchPin;
+  serviceNote?: string;
+  sourceCoords?: [number, number];
+}
+
 // Clean, lightweight tile layer factory supporting Google Maps, Satellite, Esri, and OSM
 function getMapTileLayer(provider: TileProvider, bounds: L.LatLngBounds): L.TileLayer {
   if (provider === 'google') {
@@ -120,29 +126,79 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     return allPins;
   }, [allPins, displayScope, selectedPin]);
 
-  // 3. Search suggestions (top matches)
-  const searchSuggestions = useMemo(() => {
+  // 3. Search suggestions (top matches, including matched target origins like Aceh -> KIM)
+  const searchSuggestions = useMemo((): SearchSuggestionItem[] => {
     if (!searchQuery.trim() || searchQuery.length < 2) return [];
     const q = searchQuery.toLowerCase().trim();
-    const matches: PlottedBranchPin[] = [];
+    const items: SearchSuggestionItem[] = [];
+    const addedPinIds = new Set<string>();
 
+    // 1. Direct branch matches
     for (const p of allPins) {
-      if (
+      const isDirectMatch =
         p.kodePos.includes(q) ||
         p.dati2.toLowerCase().includes(q) ||
         p.primaryOutletName.toLowerCase().includes(q) ||
         p.branches.some(
           (b) =>
-            String(b['Sandi Cabang'] || b.Sandi || '').includes(q) ||
+            String(b['Sandi Cabang'] || b.Sandi || '').toLowerCase().includes(q) ||
+            String(b['Branch Code'] || b['Kode Cabang'] || '').toLowerCase().includes(q) ||
             String(b['Nama Outlet'] || '').toLowerCase().includes(q)
-        )
-      ) {
-        matches.push(p);
-        if (matches.length >= 6) break;
+        );
+
+      if (isDirectMatch) {
+        items.push({ pin: p });
+        addedPinIds.add(p.id);
+        if (items.length >= 6) break;
       }
     }
-    return matches;
-  }, [allPins, searchQuery]);
+
+    // 2. Also search matched target records (e.g. searching 'Aceh' or '23xxx' finds Cabang KIM)
+    if (items.length < 8 && targetRows && targetRows.length > 0) {
+      for (const p of allPins) {
+        if (addedPinIds.has(p.id)) continue;
+        const sandiSet = new Set(
+          p.branches.map((b) => String(b['Sandi Cabang'] || b.Sandi || b['Kode Cabang'] || '').trim()).filter(Boolean)
+        );
+        const branchCodeSet = new Set(
+          p.branches.map((b) => String(b['Branch Code'] || b['Kode Cabang'] || '').trim()).filter(Boolean)
+        );
+        const outletNameSet = new Set(
+          p.branches.map((b) => String(b['Nama Outlet'] || '').toLowerCase().trim()).filter(Boolean)
+        );
+
+        const matchingTarget = targetRows.find((t) => {
+          if (!t._isMatched) return false;
+          const tSandi = String(t['Sandi Cabang'] || t.Sandi || t.Cabang || '').trim();
+          const tBranchCode = String(t['Branch Code'] || t['Kode Cabang'] || '').trim();
+          const tName = String(t['Nama Outlet'] || '').toLowerCase().trim();
+          const isAttached =
+            (tSandi && sandiSet.has(tSandi)) ||
+            (tBranchCode && branchCodeSet.has(tBranchCode)) ||
+            (tName && outletNameSet.has(tName));
+          if (!isAttached) return false;
+
+          const targetText = `${t['KODE POS'] || ''} ${t['Dati II'] || ''} ${t.Provinsi || ''} ${t.Kecamatan || ''} ${t['Nama Outlet'] || ''} ${t.ALAMAT || ''}`.toLowerCase();
+          return targetText.includes(q);
+        });
+
+        if (matchingTarget) {
+          const origin = resolveTargetRowCoordinates(matchingTarget);
+          const originCity = matchingTarget['Dati II'] || origin.city || 'Aceh';
+          const originKp = matchingTarget['KODE POS'] || '';
+          items.push({
+            pin: p,
+            serviceNote: `Melayani data target di ${originCity} (📮 ${originKp})`,
+            sourceCoords: [origin.lat, origin.lng],
+          });
+          addedPinIds.add(p.id);
+          if (items.length >= 8) break;
+        }
+      }
+    }
+
+    return items;
+  }, [allPins, targetRows, searchQuery]);
 
   // Map Summary Statistics
   const stats = useMemo(() => {
@@ -194,6 +250,42 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       );
     });
   }, [selectedPin, targetRows]);
+
+  // Dedicated Aceh Detection (Kodepos 23xxx/24xxx & Aceh target records served by Cabang KIM)
+  const acehTargetMatches = useMemo(() => {
+    return targetRows.filter((t) => {
+      if (!t._isMatched) return false;
+      const kp = String(t['KODE POS'] || '').trim();
+      const prov = String(t.Provinsi || '').toLowerCase();
+      const dati = String(t['Dati II'] || '').toLowerCase();
+      const alamat = String(t.ALAMAT || '').toLowerCase();
+
+      return (
+        kp.startsWith('23') ||
+        kp.startsWith('24') ||
+        prov.includes('aceh') ||
+        dati.includes('aceh') ||
+        alamat.includes('aceh')
+      );
+    });
+  }, [targetRows]);
+
+  const acehTotalTargetCount = useMemo(() => {
+    return targetRows.filter((t) => {
+      const kp = String(t['KODE POS'] || '').trim();
+      const prov = String(t.Provinsi || '').toLowerCase();
+      const dati = String(t['Dati II'] || '').toLowerCase();
+      const alamat = String(t.ALAMAT || '').toLowerCase();
+
+      return (
+        kp.startsWith('23') ||
+        kp.startsWith('24') ||
+        prov.includes('aceh') ||
+        dati.includes('aceh') ||
+        alamat.includes('aceh')
+      );
+    }).length;
+  }, [targetRows]);
 
   // Filtered rows inside the Matched Detail Modal
   const filteredModalRows = useMemo(() => {
@@ -486,14 +578,24 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     }
   };
 
-  // Select a suggestion pin
-  const handleSelectSuggestion = (pin: PlottedBranchPin) => {
+  // Select a suggestion pin (supports frame fitting for remote links like Aceh -> KIM)
+  const handleSelectSuggestion = (item: SearchSuggestionItem | PlottedBranchPin) => {
+    const pin = 'pin' in item ? item.pin : item;
+    const sourceCoords = 'sourceCoords' in item ? item.sourceCoords : undefined;
+
     setSelectedPin(pin);
     setActiveBranchIndex(0);
     setShowSuggestions(false);
     setSearchQuery(pin.primaryOutletName);
+    setShowCurvedArcs(true);
+
     if (mapInstanceRef.current) {
-      mapInstanceRef.current.flyTo([pin.lat, pin.lng], 14, { duration: 0.9 });
+      if (sourceCoords) {
+        const bounds = L.latLngBounds([sourceCoords, [pin.lat, pin.lng]]);
+        mapInstanceRef.current.fitBounds(bounds, { padding: [60, 60], maxZoom: 12 });
+      } else {
+        mapInstanceRef.current.flyTo([pin.lat, pin.lng], 14, { duration: 0.9 });
+      }
     }
   };
 
@@ -828,44 +930,52 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                   overflowY: 'auto',
                 }}
               >
-                {searchSuggestions.map((sug) => (
-                  <div
-                    key={sug.id}
-                    onClick={() => handleSelectSuggestion(sug)}
-                    style={{
-                      padding: '0.45rem 0.75rem',
-                      borderBottom: '1px solid #f3f3f9',
-                      cursor: 'pointer',
-                      fontSize: '0.75rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = '#f8f9fa')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = '#ffffff')}
-                  >
-                    <div>
-                      <strong style={{ color: '#212529', display: 'block' }}>{sug.primaryOutletName}</strong>
-                      <span style={{ color: '#878a99', fontSize: '0.7rem' }}>
-                        {sug.dati2} &bull; 📮 {sug.kodePos}
-                      </span>
+                {searchSuggestions.map((sug, sIdx) => {
+                  const p = sug.pin;
+                  return (
+                    <div
+                      key={`${p.id}_${sIdx}`}
+                      onClick={() => handleSelectSuggestion(sug)}
+                      style={{
+                        padding: '0.45rem 0.75rem',
+                        borderBottom: '1px solid #f3f3f9',
+                        cursor: 'pointer',
+                        fontSize: '0.75rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = '#f8f9fa')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = '#ffffff')}
+                    >
+                      <div>
+                        <strong style={{ color: '#212529', display: 'block' }}>{p.primaryOutletName}</strong>
+                        <span style={{ color: '#878a99', fontSize: '0.7rem' }}>
+                          {p.dati2} &bull; 📮 {p.kodePos}
+                        </span>
+                        {sug.serviceNote && (
+                          <div style={{ color: '#0891b2', fontSize: '0.68rem', fontWeight: 600, marginTop: '2px' }}>
+                            ✦ {sug.serviceNote}
+                          </div>
+                        )}
+                      </div>
+                      {p.matchedCount > 0 && (
+                        <span
+                          style={{
+                            background: 'rgba(10, 179, 156, 0.1)',
+                            color: '#0ab39c',
+                            padding: '0.1rem 0.4rem',
+                            borderRadius: '4px',
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                          }}
+                        >
+                          ✓ {p.matchedCount} Cocok
+                        </span>
+                      )}
                     </div>
-                    {sug.matchedCount > 0 && (
-                      <span
-                        style={{
-                          background: 'rgba(10, 179, 156, 0.1)',
-                          color: '#0ab39c',
-                          padding: '0.1rem 0.4rem',
-                          borderRadius: '4px',
-                          fontSize: '0.68rem',
-                          fontWeight: 700,
-                        }}
-                      >
-                        ✓ {sug.matchedCount} Cocok
-                      </span>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -967,6 +1077,69 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           >
             ⚠️ Multi-Outlet Saja ({stats.multiOutletPins})
           </button>
+          {/* Dedicated Aceh Tracking Button if Aceh data exists */}
+          {acehTargetMatches.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                const kimPin =
+                  allPins.find(
+                    (p) =>
+                      p.primaryOutletName.toUpperCase().includes('KIM') ||
+                      p.branches.some((b) =>
+                        String(b.Cabang || b['Nama Outlet'] || b['Branch Code'] || '').toUpperCase().includes('KIM')
+                      )
+                  ) || allPins.find((p) => p.wilayah === 'W01' || p.dati2.toUpperCase().includes('MEDAN'));
+
+                if (kimPin) {
+                  handleSelectSuggestion({
+                    pin: kimPin,
+                    serviceNote: `Melayani ${acehTargetMatches.length} Data Aceh`,
+                    sourceCoords: [5.5530, 95.3220],
+                  });
+                } else {
+                  alert('Cabang KIM tidak ditemukan di master data cabang.');
+                }
+              }}
+              style={{
+                fontSize: '0.71rem',
+                fontWeight: 700,
+                padding: '0.22rem 0.6rem',
+                borderRadius: '4px',
+                border: '1px solid #0891b2',
+                background: '#ecfeff',
+                color: '#0e7490',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                boxShadow: '0 1px 2px rgba(8,145,178,0.1)',
+              }}
+              title="Klik untuk melacak alur trajektori data kodepos Aceh yang diarahkan ke Cabang KIM"
+            >
+              <span>🕌</span> Lacak Alur Aceh ➔ KIM ({acehTargetMatches.length} Data)
+            </button>
+          )}
+
+          {acehTargetMatches.length === 0 && acehTotalTargetCount > 0 && (
+            <span
+              style={{
+                fontSize: '0.7rem',
+                fontWeight: 600,
+                padding: '0.2rem 0.5rem',
+                borderRadius: '4px',
+                border: '1px solid #fed7aa',
+                background: '#fff7ed',
+                color: '#c2410c',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+              title="Data Aceh terdeteksi tapi masih berada di tab Rekomendasi"
+            >
+              <span>ℹ️</span> {acehTotalTargetCount} Data Aceh (Di tab Rekomendasi ➔ Cabang KIM)
+            </span>
+          )}
         </div>
 
         {/* Toggle Garis Melengkung Match */}
