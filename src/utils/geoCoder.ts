@@ -564,8 +564,19 @@ export const CITY_DISTRICTS_MAP: Record<string, { lat: number; lng: number; city
   'WANEA': { lat: 1.4650, lng: 124.8450, city: 'Manado', province: 'Sulawesi Utara' },
   'MALALAYANG': { lat: 1.4550, lng: 124.8380, city: 'Manado', province: 'Sulawesi Utara' },
 
+  // Situbondo & Sekitarnya (Jawa Timur - Benchmarked from Google Maps / OSM)
+  'BESUKI': { lat: -7.7343, lng: 113.6902, city: 'Situbondo', province: 'Jawa Timur' },
+  'ASEMBAGUS': { lat: -7.7491, lng: 114.2181, city: 'Situbondo', province: 'Jawa Timur' },
+  'SITUBONDO': { lat: -7.7060, lng: 114.0050, city: 'Situbondo', province: 'Jawa Timur' },
+  'PANJI': { lat: -7.7120, lng: 114.0200, city: 'Situbondo', province: 'Jawa Timur' },
+  'KAPONGAN': { lat: -7.7180, lng: 114.0900, city: 'Situbondo', province: 'Jawa Timur' },
+  'BANYUGLUGUR': { lat: -7.7300, lng: 113.6000, city: 'Situbondo', province: 'Jawa Timur' },
+  'SUBOH': { lat: -7.7450, lng: 113.7200, city: 'Situbondo', province: 'Jawa Timur' },
+  'MANGARAN': { lat: -7.6850, lng: 114.0350, city: 'Situbondo', province: 'Jawa Timur' },
+  'JANGKAR': { lat: -7.7200, lng: 114.1800, city: 'Situbondo', province: 'Jawa Timur' },
+
   // Banda Aceh (Aceh)
-  'BAITURRAHMAN': { lat: 5.5500, lng: 95.3200, city: 'Banda Aceh', province: 'Aceh' },
+  'BAITURRAHMAN': { lat: 5.5455, lng: 95.3191, city: 'Banda Aceh', province: 'Aceh' },
   'KUTA ALAM': { lat: 5.5600, lng: 95.3350, city: 'Banda Aceh', province: 'Aceh' },
   'SYIAH KUALA': { lat: 5.5700, lng: 95.3500, city: 'Banda Aceh', province: 'Aceh' },
   'ULEE KARENG': { lat: 5.5450, lng: 95.3550, city: 'Banda Aceh', province: 'Aceh' },
@@ -584,9 +595,11 @@ export function resolveBranchCoordinates(row: MasterRow): GeoLocation {
   const rawNama = String(row['Nama Outlet'] || '').toUpperCase().trim();
   const fullText = `${rawNama} ${rawKelurahan} ${rawKecamatan} ${rawAlamat} ${rawDati2}`;
 
-  // 1. High-accuracy real district matching across major Indonesian cities (Jayapura, Padang, Medan, etc.)
+  // 1. High-accuracy real district matching across major Indonesian cities (Jayapura, Situbondo, Padang, Medan, etc.)
   for (const [districtKey, distData] of Object.entries(CITY_DISTRICTS_MAP)) {
-    if (fullText.includes(districtKey)) {
+    const escaped = districtKey.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const regex = new RegExp(`(?:^|[\\s,./-])${escaped}(?:$|[\\s,./-])`, 'i');
+    if (regex.test(fullText)) {
       const [cLat, cLng] = clampToInland(distData.lat, distData.lng);
       return {
         lat: cLat,

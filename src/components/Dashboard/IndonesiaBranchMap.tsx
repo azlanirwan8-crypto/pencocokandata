@@ -1566,10 +1566,36 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
               </div>
             </div>
 
+            {/* GPS & Benchmark Ground-Truth Coordinates */}
+            <div
+              style={{
+                marginBottom: '0.65rem',
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '6px',
+                padding: '0.45rem 0.65rem',
+                fontSize: '0.69rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.2rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748b', fontWeight: 600 }}>📍 Titik GPS Real:</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#0f766e' }}>
+                  {selectedPin.lat.toFixed(6)}, {selectedPin.lng.toFixed(6)}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#059669', fontWeight: 600, fontSize: '0.67rem' }}>
+                <ShieldCheck size={12} />
+                <span>Terverifikasi Real Daratan (Benchmark Google Maps)</span>
+              </div>
+            </div>
+
             {/* Bottom Actions: Google Maps & Master Navigation */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
               <a
-                href={currentGmapsUrl}
+                href={`https://www.google.com/maps/search/?api=1&query=${selectedPin.lat},${selectedPin.lng}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn btn-success"
@@ -1578,16 +1604,41 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '0.45rem',
-                  padding: '0.5rem 0.9rem',
-                  fontSize: '0.78rem',
+                  padding: '0.45rem 0.8rem',
+                  fontSize: '0.76rem',
                   fontWeight: 600,
                   textDecoration: 'none',
                   borderRadius: '4px',
                   boxShadow: '0 2px 4px rgba(10, 179, 156, 0.25)',
                 }}
+                title="Buka titik koordinat real langsung di Google Maps"
               >
-                <ExternalLink size={14} />
-                <span>Buka di Google Maps</span>
+                <ExternalLink size={13} />
+                <span>Buka di Google Maps (Titik Real GPS)</span>
+              </a>
+
+              <a
+                href={currentGmapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.35rem',
+                  padding: '0.35rem 0.7rem',
+                  fontSize: '0.72rem',
+                  color: '#405189',
+                  background: 'rgba(64, 81, 137, 0.08)',
+                  border: '1px solid rgba(64, 81, 137, 0.2)',
+                  borderRadius: '4px',
+                  textDecoration: 'none',
+                  fontWeight: 600,
+                }}
+                title="Cari berdasarkan nama cabang dan alamat di Google Maps"
+              >
+                <ExternalLink size={12} />
+                <span>Cari Alamat di Google Maps</span>
               </a>
 
               {onNavigateToMaster && (
@@ -1746,12 +1797,13 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                     <th style={{ minWidth: '110px', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Kecamatan</th>
                     <th style={{ minWidth: '85px', textAlign: 'center', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Kode Pos</th>
                     <th style={{ minWidth: '100px', textAlign: 'center', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Metode Match</th>
+                    <th style={{ minWidth: '110px', textAlign: 'center', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Google Maps</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredModalRows.length === 0 ? (
                     <tr>
-                      <td colSpan={6} style={{ textAlign: 'center', padding: '2rem 1rem', color: '#878a99' }}>
+                      <td colSpan={7} style={{ textAlign: 'center', padding: '2rem 1rem', color: '#878a99' }}>
                         Tidak ada record yang sesuai dengan pencarian "{modalSearchTerm}".
                       </td>
                     </tr>
@@ -1786,6 +1838,33 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                           >
                             {row._matchLevel === 'level1' ? 'Level 1 (Sandi)' : row._matchLevel === 'level2' ? 'Level 2 (Nama/Alamat)' : 'Rekomendasi'}
                           </span>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <a
+                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                              `${row['Nama Outlet'] || ''} ${row.ALAMAT || ''} ${row.Kecamatan || ''} ${row['Dati II'] || ''} ${row['KODE POS'] || ''}`
+                            )}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-sm btn-ghost-primary"
+                            style={{
+                              padding: '0.15rem 0.45rem',
+                              fontSize: '0.67rem',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.25rem',
+                              borderRadius: '4px',
+                              color: '#2563eb',
+                              background: 'rgba(37, 99, 235, 0.08)',
+                              border: '1px solid rgba(37, 99, 235, 0.2)',
+                              textDecoration: 'none',
+                              fontWeight: 600,
+                            }}
+                            title="Buka dan verifikasi alamat record ini langsung di Google Maps"
+                          >
+                            <ExternalLink size={11} />
+                            <span>Cek Google</span>
+                          </a>
                         </td>
                       </tr>
                     ))
