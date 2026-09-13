@@ -3,6 +3,7 @@ import { Sidebar } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
 import { MetricCards } from './components/Dashboard/MetricCards';
 import { RegionalAnalyticsCharts } from './components/Dashboard/RegionalAnalyticsCharts';
+import { MasterDuplicateChart } from './components/Dashboard/MasterDuplicateChart';
 import { DashboardMatchTable } from './components/Dashboard/DashboardMatchTable';
 import { MasterHealthCard } from './components/MasterData/MasterHealthCard';
 import { MasterDataGrid } from './components/MasterData/MasterDataGrid';
@@ -845,32 +846,24 @@ export const App: React.FC = () => {
                   <label htmlFor="dashboard-wilayah-filter" style={{ fontSize: '0.76rem', fontWeight: 600, color: '#495057' }}>
                     Pilih Wilayah:
                   </label>
-                  <select
-                    id="dashboard-wilayah-filter"
-                    value={dashboardWilayahFilter}
-                    onChange={(e) => setDashboardWilayahFilter(e.target.value)}
-                    className="filter-select"
-                    style={{
-                      padding: '0.35rem 0.75rem',
-                      fontSize: '0.78rem',
-                      fontWeight: 600,
-                      color: '#405189',
-                      border: '1px solid rgba(64, 81, 137, 0.3)',
-                      borderRadius: '4px',
-                      background: '#ffffff',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <option value="ALL">Semua Wilayah ({targetRows.length.toLocaleString('id-ID')} Data)</option>
-                    {wilayahList.map((w) => {
-                      const countW = targetRows.filter(r => String(r.Wilayah || '').trim() === String(w).trim()).length;
-                      return (
-                        <option key={w} value={w}>
-                          {formatWilayahName(w)} ({countW.toLocaleString('id-ID')} Data)
-                        </option>
-                      );
-                    })}
-                  </select>
+                  <div className="unified-select-box" style={{ width: '220px' }}>
+                    <Filter size={13} style={{ color: '#405189', flexShrink: 0 }} />
+                    <select
+                      id="dashboard-wilayah-filter"
+                      value={dashboardWilayahFilter}
+                      onChange={(e) => setDashboardWilayahFilter(e.target.value)}
+                    >
+                      <option value="ALL">Semua Wilayah ({targetRows.length.toLocaleString('id-ID')} Data)</option>
+                      {wilayahList.map((w) => {
+                        const countW = targetRows.filter(r => String(r.Wilayah || '').trim() === String(w).trim()).length;
+                        return (
+                          <option key={w} value={w}>
+                            {formatWilayahName(w)} ({countW.toLocaleString('id-ID')} Data)
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
                 </div>
               </div>
             )}
@@ -881,12 +874,20 @@ export const App: React.FC = () => {
               multiCabangCount={masterHealth.multiOutletCount}
             />
 
-            {/* 2 Visual Analisis: Dekomposisi Donut Chart & Kinerja Wilayah (Mengikuti Filter) */}
+            {/* Visual Analisis: Dekomposisi Donut Chart & Kinerja Wilayah */}
             <RegionalAnalyticsCharts
               stats={regionalStats}
               matchingStats={dashboardStats}
               totalDataCount={dashboardFilteredRows.length}
               selectedWilayah={dashboardWilayahFilter}
+            />
+
+            {/* Visualisasi Data Master Duplikat / Multi-Cabang per Kode Pos */}
+            <MasterDuplicateChart
+              masterHealth={masterHealth}
+              masterRows={masterRows}
+              selectedWilayah={dashboardWilayahFilter}
+              onNavigateToMaster={() => setActiveTab('master')}
             />
 
             {/* Rekapitulasi Data Match per Wilayah & Download Laporan Excel/PDF */}

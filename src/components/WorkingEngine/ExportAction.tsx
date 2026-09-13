@@ -179,10 +179,9 @@ export const ExportAction: React.FC<ExportActionProps> = ({
           </label>
 
           {/* Dropdown Filter Wilayah */}
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
-            <MapPin size={13} color="#405189" />
+          <div className="unified-select-box" style={{ opacity: isAllChecked ? 0.6 : 1, maxWidth: '240px' }}>
+            <MapPin size={13} color="#405189" style={{ flexShrink: 0 }} />
             <select
-              className="filter-select"
               value={selectedExportWilayah}
               disabled={isAllChecked}
               onChange={(e) => {
@@ -195,16 +194,6 @@ export const ExportAction: React.FC<ExportActionProps> = ({
                 }
               }}
               id="select-export-wilayah"
-              style={{
-                padding: '0.35rem 0.6rem',
-                fontSize: '0.78rem',
-                borderRadius: '4px',
-                borderColor: isAllChecked ? '#e9ebec' : '#ced4da',
-                background: isAllChecked ? '#f8f9fa' : '#ffffff',
-                color: isAllChecked ? '#878a99' : '#212529',
-                cursor: isAllChecked ? 'not-allowed' : 'pointer',
-                maxWidth: '220px',
-              }}
               title={isAllChecked ? 'Hilangkan centang "Semua Wilayah" untuk memilih wilayah spesifik' : 'Pilih Wilayah untuk diunduh'}
             >
               <option value="ALL">Semua Wilayah ({allTargetRows.length.toLocaleString('id-ID')} Baris)</option>

@@ -30,10 +30,9 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
     <div className="filter-toolbar">
       <div className="filter-group">
         {/* Wilayah / Regional Filter */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        <div className="unified-select-box">
           <MapPin size={15} color="var(--accent-blue)" />
           <select
-            className="filter-select"
             value={selectedWilayah}
             onChange={(e) => onWilayahChange(e.target.value)}
             id="filter-select-wilayah"
@@ -48,10 +47,9 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
         </div>
 
         {/* Status Pencocokan Filter */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        <div className="unified-select-box">
           <Filter size={15} color="#94a3b8" />
           <select
-            className="filter-select"
             value={statusFilter}
             onChange={(e) => onStatusFilterChange(e.target.value as any)}
             id="filter-select-status"

@@ -86,31 +86,23 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
             <span style={{ fontSize: '0.78rem', color: '#878a99', fontWeight: 500 }}>Search by:</span>
-            <select
-              value={searchBy}
-              onChange={(e) => {
-                setSearchBy(e.target.value);
-                setPage(1);
-              }}
-              style={{
-                fontSize: '0.78rem',
-                padding: '0.38rem 0.65rem',
-                borderRadius: '4px',
-                border: '1px solid #ced4da',
-                background: '#ffffff',
-                color: '#495057',
-                cursor: 'pointer',
-                outline: 'none',
-              }}
-            >
-              <option value="all">Semua Kolom</option>
-              <option value="nama">Nama Outlet</option>
-              <option value="kodepos">KODE POS</option>
-              <option value="sandi">Sandi Cabang</option>
-              <option value="kodecabang">Branch / Kode Cabang</option>
-              <option value="wilayah">Wilayah</option>
-              <option value="alamat">Alamat / Lokasi</option>
-            </select>
+            <div className="unified-select-box">
+              <select
+                value={searchBy}
+                onChange={(e) => {
+                  setSearchBy(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="all">Semua Kolom</option>
+                <option value="nama">Nama Outlet</option>
+                <option value="kodepos">KODE POS</option>
+                <option value="sandi">Sandi Cabang</option>
+                <option value="kodecabang">Branch / Kode Cabang</option>
+                <option value="wilayah">Wilayah</option>
+                <option value="alamat">Alamat / Lokasi</option>
+              </select>
+            </div>
           </div>
 
           <div className="search-input-wrapper">

@@ -1003,6 +1003,58 @@ body {
   box-shadow: 0 0 0 2px rgba(64, 81, 137, 0.12);
 }
 
+/* Unified Single-Box Dropdown with Icon (Clean, no nested borders) */
+.unified-select-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #ffffff;
+  border: 1px solid #ced4da;
+  border-radius: var(--radius-sm);
+  padding: 0 0.45rem 0 0.5rem;
+  height: 30px;
+  box-sizing: border-box;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  color: #495057;
+  flex-shrink: 0;
+}
+
+.unified-select-box:hover {
+  border-color: #adb5bd;
+}
+
+.unified-select-box:focus-within {
+  border-color: #405189;
+  box-shadow: 0 0 0 2px rgba(64, 81, 137, 0.12);
+}
+
+.unified-select-box select {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  padding: 0 0.15rem 0 0.1rem !important;
+  margin: 0 !important;
+  font-size: 0.76rem;
+  font-family: var(--font-sans);
+  color: #405189;
+  font-weight: 600;
+  cursor: pointer;
+  height: 100%;
+}
+
+.unified-select-box select:disabled {
+  color: #878a99 !important;
+  cursor: not-allowed;
+}
+
+.unified-select-box select option {
+  background: #ffffff;
+  color: #212529;
+  font-weight: 500;
+}
+
 .search-input-wrapper {
   position: relative;
   display: flex;

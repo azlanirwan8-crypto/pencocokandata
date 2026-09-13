@@ -712,350 +712,350 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '0.6rem',
-            padding: '0.6rem 0.85rem',
+            flexWrap: 'nowrap',
+            gap: '0.45rem',
+            padding: '0.45rem 0.75rem',
             background: '#ffffff',
             border: '1px solid #e9ebec',
             borderRadius: '6px',
             marginBottom: '0.85rem',
+            overflowX: 'auto',
+            whiteSpace: 'nowrap',
           }}
         >
-          {/* Sisi Kiri: Scope, Wilayah Filter, Aksi, & Kolom */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', flexWrap: 'wrap' }}>
-            {/* Toggle Scope Rekomendasi di Tab 2 */}
-            {checkerTab === 'recommendation' && rows.length > 0 && (
-              <div style={{ display: 'inline-flex', alignItems: 'center', background: '#f3f6f9', border: '1px solid #e9ebec', borderRadius: '5px', padding: '2px', gap: '2px' }}>
-                <button
-                  type="button"
-                  onClick={() => { setRecommendationScope('unmatched'); setPage(1); setRenderedLimit(60); }}
-                  style={{
-                    border: 'none',
-                    background: recommendationScope === 'unmatched' ? '#ffffff' : 'transparent',
-                    color: recommendationScope === 'unmatched' ? '#212529' : '#6c757d',
-                    fontWeight: recommendationScope === 'unmatched' ? 700 : 500,
-                    fontSize: '0.72rem',
-                    padding: '0.22rem 0.55rem',
-                    borderRadius: '4px',
-                    boxShadow: recommendationScope === 'unmatched' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Belum Cocok {unmatchedRows.length > 0 ? `(${unmatchedRows.length.toLocaleString('id-ID')})` : ''}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setRecommendationScope('all'); setPage(1); setRenderedLimit(60); }}
-                  style={{
-                    border: 'none',
-                    background: recommendationScope === 'all' ? '#d97706' : 'transparent',
-                    color: recommendationScope === 'all' ? '#ffffff' : '#6c757d',
-                    fontWeight: recommendationScope === 'all' ? 700 : 500,
-                    fontSize: '0.72rem',
-                    padding: '0.22rem 0.55rem',
-                    borderRadius: '4px',
-                    boxShadow: recommendationScope === 'all' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
-                    cursor: 'pointer',
-                  }}
-                  title="Tampilkan rekomendasi untuk SELURUH baris data target"
-                >
-                  Audit Seluruh Data ({rows.length.toLocaleString('id-ID')})
-                </button>
-              </div>
-            )}
-
-            {/* Separator jika Tab Rekomendasi */}
-            {checkerTab === 'recommendation' && rows.length > 0 && (
-              <div style={{ width: '1px', height: '20px', background: '#e9ebec' }} />
-            )}
-
-            {/* Dropdown Filter Wilayah */}
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: '#f8f9fa', border: '1px solid #e9ebec', borderRadius: '5px', padding: '0.1rem 0.45rem' }}>
-              <MapPin size={13} color="#405189" />
-              <select
-                className="filter-select"
-                value={selectedWilayah}
-                onChange={(e) => {
-                  onWilayahChange(e.target.value);
-                  setPage(1);
-                  setRenderedLimit(60);
-                }}
-                id="filter-select-wilayah"
+          {/* Toggle Scope Rekomendasi di Tab 2 */}
+          {checkerTab === 'recommendation' && rows.length > 0 && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', background: '#f3f6f9', border: '1px solid #e9ebec', borderRadius: '5px', padding: '2px', gap: '2px', flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => { setRecommendationScope('unmatched'); setPage(1); setRenderedLimit(60); }}
                 style={{
                   border: 'none',
-                  background: 'transparent',
-                  padding: '0.22rem 0.35rem',
-                  fontSize: '0.76rem',
+                  background: recommendationScope === 'unmatched' ? '#ffffff' : 'transparent',
+                  color: recommendationScope === 'unmatched' ? '#212529' : '#6c757d',
+                  fontWeight: recommendationScope === 'unmatched' ? 700 : 500,
+                  fontSize: '0.72rem',
+                  padding: '0.22rem 0.5rem',
+                  borderRadius: '4px',
+                  boxShadow: recommendationScope === 'unmatched' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
                   cursor: 'pointer',
-                  outline: 'none',
-                  fontWeight: selectedWilayah !== 'ALL' ? 700 : 500,
-                  color: selectedWilayah !== 'ALL' ? '#405189' : '#495057',
+                  whiteSpace: 'nowrap',
                 }}
               >
-                <option value="ALL">Semua Wilayah ({wilayahList.length})</option>
-                {wilayahList.map((w) => (
-                  <option key={w} value={w}>
-                    {formatWilayahName(w)}
-                  </option>
-                ))}
-              </select>
+                Belum Cocok {unmatchedRows.length > 0 ? `(${unmatchedRows.length.toLocaleString('id-ID')})` : ''}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setRecommendationScope('all'); setPage(1); setRenderedLimit(60); }}
+                style={{
+                  border: 'none',
+                  background: recommendationScope === 'all' ? '#d97706' : 'transparent',
+                  color: recommendationScope === 'all' ? '#ffffff' : '#6c757d',
+                  fontWeight: recommendationScope === 'all' ? 700 : 500,
+                  fontSize: '0.72rem',
+                  padding: '0.22rem 0.5rem',
+                  borderRadius: '4px',
+                  boxShadow: recommendationScope === 'all' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+                title="Tampilkan rekomendasi untuk SELURUH baris data target"
+              >
+                Audit Seluruh Data ({rows.length.toLocaleString('id-ID')})
+              </button>
             </div>
+          )}
 
-            {/* Action button in Tab 1: PENCOCOKAN */}
-            {checkerTab === 'upload' && pendingUploadRows.length > 0 && (
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={onExecuteMatching}
-                disabled={!canExecute || isProcessing}
-                id="btn-mulai-pencocokan"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.4rem',
-                  fontSize: '0.77rem',
-                  padding: '0.3rem 0.85rem',
-                }}
-              >
-                {isProcessing ? (
-                  <>
-                    <RotateCcw size={13} className="pulse-dot" />
-                    <span>Memproses...</span>
-                  </>
-                ) : (
-                  <>
-                    <Play size={13} fill="currentColor" />
-                    <span>Pencocokan</span>
-                  </>
-                )}
-              </button>
-            )}
+          {/* Separator jika Tab Rekomendasi */}
+          {checkerTab === 'recommendation' && rows.length > 0 && (
+            <div style={{ width: '1px', height: '18px', background: '#e9ebec', flexShrink: 0 }} />
+          )}
 
-            {/* Action button in Tab 2: SETUJUI SEMUA REKOMENDASI */}
-            {checkerTab === 'recommendation' && recommendations.length > 0 && (
-              <button
-                type="button"
-                className="btn btn-success btn-sm"
-                onClick={handleApproveAll}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.35rem',
-                  fontSize: '0.76rem',
-                  padding: '0.3rem 0.85rem',
-                }}
-                id="btn-setujui-semua-rekomendasi"
-              >
-                <Check size={13} />
-                <span>Setujui Semua ({recommendations.length.toLocaleString('id-ID')})</span>
-              </button>
-            )}
-
-            {/* Action button in Tab 2: SETUJUI BARIS TERPILIH */}
-            {checkerTab === 'recommendation' && selectedRowNos.size > 0 && (
-              <button
-                type="button"
-                className="btn btn-success btn-sm"
-                onClick={handleApproveSelected}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.35rem',
-                  fontSize: '0.76rem',
-                  padding: '0.3rem 0.85rem',
-                  background: '#0ab39c',
-                  borderColor: '#0ab39c',
-                  fontWeight: 600,
-                }}
-                id="btn-setujui-terpilih"
-              >
-                <Check size={13} />
-                <span>Setujui {selectedRowNos.size} Terpilih</span>
-              </button>
-            )}
-
-            {/* Tombol Panduan Skor */}
-            {checkerTab === 'recommendation' && (
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                onClick={() => setIsGuideModalOpen(true)}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.3rem',
-                  fontSize: '0.76rem',
-                  padding: '0.3rem 0.7rem',
-                  color: '#d97706',
-                  borderColor: 'rgba(247, 184, 75, 0.45)',
-                  background: '#fffdf5',
-                }}
-                id="btn-panduan-skor"
-                title="Buka panduan sederhana cara sistem menghitung skor kedekatan cabang"
-              >
-                <HelpCircle size={13} />
-                <span>Panduan Skor</span>
-              </button>
-            )}
-
-            {/* Dropdown Visibilitas Kolom */}
-            <div style={{ position: 'relative' }}>
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                onClick={() => setIsColDropdownOpen(!isColDropdownOpen)}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.3rem',
-                  fontSize: '0.76rem',
-                  padding: '0.3rem 0.7rem',
-                  color: '#495057',
-                  borderColor: '#ced4da',
-                  background: isColDropdownOpen ? '#f3f6f9' : '#ffffff',
-                  fontWeight: 500,
-                }}
-                id="btn-toggle-columns"
-                title="Pilih kolom yang ingin ditampilkan atau disembunyikan"
-              >
-                <SlidersHorizontal size={13} />
-                <span>
-                  Kolom {hiddenCols.size > 0 ? `(${TOGGLEABLE_COLUMNS.length - hiddenCols.size}/${TOGGLEABLE_COLUMNS.length})` : ''}
-                </span>
-              </button>
-
-              {isColDropdownOpen && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    marginTop: '0.35rem',
-                    background: '#ffffff',
-                    border: '1px solid #e9ebec',
-                    borderRadius: '6px',
-                    boxShadow: '0 5px 15px rgba(0, 0, 0, 0.12)',
-                    zIndex: 50,
-                    minWidth: '210px',
-                    padding: '0.5rem',
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      paddingBottom: '0.35rem',
-                      borderBottom: '1px solid #f3f6f9',
-                      marginBottom: '0.35rem',
-                    }}
-                  >
-                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#495057' }}>Visibilitas Kolom</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setHiddenCols(new Set());
-                        localStorage.removeItem('target_grid_hidden_cols');
-                      }}
-                      style={{
-                        border: 'none',
-                        background: 'transparent',
-                        fontSize: '0.68rem',
-                        color: '#3577f1',
-                        cursor: 'pointer',
-                        padding: 0,
-                      }}
-                    >
-                      Reset Semua
-                    </button>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', maxHeight: '220px', overflowY: 'auto' }}>
-                    {TOGGLEABLE_COLUMNS.map((col) => (
-                      <label
-                        key={col.key}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.45rem',
-                          fontSize: '0.74rem',
-                          color: '#495057',
-                          cursor: 'pointer',
-                          userSelect: 'none',
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={!hiddenCols.has(col.key)}
-                          onChange={() => toggleCol(col.key)}
-                        />
-                        <span>{col.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Sisi Kanan: Tampilkan Semua Mode & Search */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-            {/* Tombol Tampilkan Semua Record / Mode Halaman */}
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => {
-                setPageSize((prev) => (prev === 'all' ? 15 : 'all'));
+          {/* Dropdown Filter Wilayah (Single Unified Clean Box) */}
+          <div className="unified-select-box">
+            <MapPin size={13} color="#405189" style={{ flexShrink: 0 }} />
+            <select
+              value={selectedWilayah}
+              onChange={(e) => {
+                onWilayahChange(e.target.value);
                 setPage(1);
                 setRenderedLimit(60);
               }}
+              id="filter-select-wilayah"
+            >
+              <option value="ALL">Semua Wilayah ({wilayahList.length})</option>
+              {wilayahList.map((w) => (
+                <option key={w} value={w}>
+                  {formatWilayahName(w)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Action button in Tab 1: PENCOCOKAN */}
+          {checkerTab === 'upload' && pendingUploadRows.length > 0 && (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={onExecuteMatching}
+              disabled={!canExecute || isProcessing}
+              id="btn-mulai-pencocokan"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '0.35rem',
                 fontSize: '0.76rem',
-                padding: '0.3rem 0.75rem',
-                color: pageSize === 'all' ? '#0ab39c' : '#405189',
-                borderColor: pageSize === 'all' ? '#0ab39c' : '#ced4da',
-                background: pageSize === 'all' ? 'rgba(10, 179, 156, 0.08)' : '#ffffff',
-                fontWeight: 600,
+                padding: '0.28rem 0.75rem',
+                flexShrink: 0,
+                whiteSpace: 'nowrap',
               }}
-              title="Tampilkan seluruh baris data tanpa batasan per halaman"
             >
-              <Eye size={13} />
-              <span>{pageSize === 'all' ? 'Mode Paginasi (15 Baris)' : 'Tampilkan Semua Record'}</span>
+              {isProcessing ? (
+                <>
+                  <RotateCcw size={13} className="pulse-dot" />
+                  <span>Memproses...</span>
+                </>
+              ) : (
+                <>
+                  <Play size={13} fill="currentColor" />
+                  <span>Pencocokan</span>
+                </>
+              )}
+            </button>
+          )}
+
+          {/* Action button in Tab 2: SETUJUI SEMUA REKOMENDASI */}
+          {checkerTab === 'recommendation' && recommendations.length > 0 && (
+            <button
+              type="button"
+              className="btn btn-success btn-sm"
+              onClick={handleApproveAll}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+                fontSize: '0.75rem',
+                padding: '0.28rem 0.75rem',
+                flexShrink: 0,
+                whiteSpace: 'nowrap',
+              }}
+              id="btn-setujui-semua-rekomendasi"
+            >
+              <Check size={13} />
+              <span>Setujui Semua ({recommendations.length.toLocaleString('id-ID')})</span>
+            </button>
+          )}
+
+          {/* Action button in Tab 2: SETUJUI BARIS TERPILIH */}
+          {checkerTab === 'recommendation' && selectedRowNos.size > 0 && (
+            <button
+              type="button"
+              className="btn btn-success btn-sm"
+              onClick={handleApproveSelected}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+                fontSize: '0.75rem',
+                padding: '0.28rem 0.75rem',
+                background: '#0ab39c',
+                borderColor: '#0ab39c',
+                fontWeight: 600,
+                flexShrink: 0,
+                whiteSpace: 'nowrap',
+              }}
+              id="btn-setujui-terpilih"
+            >
+              <Check size={13} />
+              <span>Setujui {selectedRowNos.size} Terpilih</span>
+            </button>
+          )}
+
+          {/* Tombol Panduan Skor */}
+          {checkerTab === 'recommendation' && (
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => setIsGuideModalOpen(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+                fontSize: '0.75rem',
+                padding: '0.28rem 0.65rem',
+                color: '#d97706',
+                borderColor: 'rgba(247, 184, 75, 0.45)',
+                background: '#fffdf5',
+                flexShrink: 0,
+                whiteSpace: 'nowrap',
+              }}
+              id="btn-panduan-skor"
+              title="Buka panduan sederhana cara sistem menghitung skor kedekatan cabang"
+            >
+              <HelpCircle size={13} />
+              <span>Panduan Skor</span>
+            </button>
+          )}
+
+          {/* Dropdown Visibilitas Kolom */}
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => setIsColDropdownOpen(!isColDropdownOpen)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+                fontSize: '0.75rem',
+                padding: '0.28rem 0.65rem',
+                color: '#495057',
+                borderColor: '#ced4da',
+                background: isColDropdownOpen ? '#f3f6f9' : '#ffffff',
+                fontWeight: 500,
+                whiteSpace: 'nowrap',
+              }}
+              id="btn-toggle-columns"
+              title="Pilih kolom yang ingin ditampilkan atau disembunyikan"
+            >
+              <SlidersHorizontal size={13} />
+              <span>
+                Kolom {hiddenCols.size > 0 ? `(${TOGGLEABLE_COLUMNS.length - hiddenCols.size}/${TOGGLEABLE_COLUMNS.length})` : ''}
+              </span>
             </button>
 
-            {/* Input Search */}
-            <div className="search-input-wrapper">
-              <Search size={14} className="search-icon-pos" />
-              <input
-                type="text"
-                className="search-input"
-                placeholder="Cari Sandi, Outlet, Alamat..."
-                value={searchTerm}
-                onChange={(e) => {
-                  onSearchChange(e.target.value);
+            {isColDropdownOpen && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  marginTop: '0.35rem',
+                  background: '#ffffff',
+                  border: '1px solid #e9ebec',
+                  borderRadius: '6px',
+                  boxShadow: '0 5px 15px rgba(0, 0, 0, 0.12)',
+                  zIndex: 50,
+                  minWidth: '210px',
+                  padding: '0.5rem',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingBottom: '0.35rem',
+                    borderBottom: '1px solid #f3f6f9',
+                    marginBottom: '0.35rem',
+                  }}
+                >
+                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#495057' }}>Visibilitas Kolom</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHiddenCols(new Set());
+                      localStorage.removeItem('target_grid_hidden_cols');
+                    }}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      fontSize: '0.68rem',
+                      color: '#3577f1',
+                      cursor: 'pointer',
+                      padding: 0,
+                    }}
+                  >
+                    Reset Semua
+                  </button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', maxHeight: '220px', overflowY: 'auto' }}>
+                  {TOGGLEABLE_COLUMNS.map((col) => (
+                    <label
+                      key={col.key}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.45rem',
+                        fontSize: '0.74rem',
+                        color: '#495057',
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={!hiddenCols.has(col.key)}
+                        onChange={() => toggleCol(col.key)}
+                      />
+                      <span>{col.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Spacer fleksibel untuk meratakan sisi kanan */}
+          <div style={{ flex: 1, minWidth: '4px' }} />
+
+          {/* Tombol Tampilkan Semua Record / Mode Halaman */}
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={() => {
+              setPageSize((prev) => (prev === 'all' ? 15 : 'all'));
+              setPage(1);
+              setRenderedLimit(60);
+            }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+              fontSize: '0.75rem',
+              padding: '0.28rem 0.65rem',
+              color: pageSize === 'all' ? '#0ab39c' : '#405189',
+              borderColor: pageSize === 'all' ? '#0ab39c' : '#ced4da',
+              background: pageSize === 'all' ? 'rgba(10, 179, 156, 0.08)' : '#ffffff',
+              fontWeight: 600,
+              flexShrink: 0,
+              whiteSpace: 'nowrap',
+            }}
+            title="Tampilkan seluruh baris data tanpa batasan per halaman"
+          >
+            <Eye size={13} />
+            <span>{pageSize === 'all' ? 'Mode Paginasi (15 Baris)' : 'Tampilkan Semua Record'}</span>
+          </button>
+
+          {/* Input Search */}
+          <div className="search-input-wrapper" style={{ flexShrink: 0 }}>
+            <Search size={13} className="search-icon-pos" />
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Cari Sandi, Outlet, Alamat..."
+              value={searchTerm}
+              onChange={(e) => {
+                onSearchChange(e.target.value);
+                setPage(1);
+                setRenderedLimit(60);
+              }}
+              style={{ width: '180px', height: '30px', paddingRight: searchTerm ? '1.8rem' : '0.65rem', fontSize: '0.74rem' }}
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => {
+                  onSearchChange('');
                   setPage(1);
                   setRenderedLimit(60);
                 }}
-                style={{ width: '220px', paddingRight: searchTerm ? '2rem' : '0.85rem' }}
-              />
-              {searchTerm && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onSearchChange('');
-                    setPage(1);
-                    setRenderedLimit(60);
-                  }}
-                  className="search-clear-btn"
-                  title="Hapus pencarian"
-                >
-                  <X size={13} />
-                </button>
-              )}
-            </div>
+                className="search-clear-btn"
+                title="Hapus pencarian"
+              >
+                <X size={13} />
+              </button>
+            )}
           </div>
         </div>
       )}
