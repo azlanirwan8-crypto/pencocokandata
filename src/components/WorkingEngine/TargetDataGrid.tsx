@@ -153,9 +153,12 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   }, [rows]);
 
   // Menentukan baris target yang dievaluasi rekomendasinya di Tab 2
+  // PENTING: Hanya baris yang BELUM MATCH (!r._isMatched) yang masuk rekomendasi!
+  // Jika sudah disetujui (matched), baris otomatis dikeluarkan dari rekomendasi.
   const targetRecommendationRows = useMemo(() => {
+    const unapprovedRows = rows.filter((r) => !isRowMatched(r));
     if (recommendationScope === 'all') {
-      return rows;
+      return unapprovedRows;
     }
     if (unmatchedRows.length > 0) {
       return unmatchedRows;
@@ -163,7 +166,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     if (pendingUploadRows.length > 0) {
       return pendingUploadRows;
     }
-    return rows;
+    return unapprovedRows;
   }, [recommendationScope, unmatchedRows, pendingUploadRows, rows]);
 
   // Build Master Proximity Index once (O(1) bucket index)
@@ -326,7 +329,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
 
   const currentTabRecs = useMemo(() => {
     if (checkerTab !== 'recommendation') return [];
-    let list = recommendations;
+    // HANYA data yang belum disetujui / belum match yang tampil di tab rekomendasi
+    let list = recommendations.filter((rec) => !isRowMatched(rec.targetRow));
 
     // 1. FILTER BERDASARKAN WILAYAH
     if (selectedWilayah !== 'ALL') {
@@ -643,20 +647,18 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               borderRadius: '9999px',
               fontSize: '0.67rem',
               fontWeight: 600,
-              background: (recommendations.length > 0 || unmatchedRows.length > 0 || targetRecommendationRows.length > 0) ? 'rgba(247, 184, 75, 0.15)' : '#f3f3f9',
-              color: (recommendations.length > 0 || unmatchedRows.length > 0 || targetRecommendationRows.length > 0) ? '#d97706' : '#878a99',
-              border: (recommendations.length > 0 || unmatchedRows.length > 0 || targetRecommendationRows.length > 0) ? '1px solid rgba(247, 184, 75, 0.3)' : '1px solid #e9ebec',
+              background: (targetRecommendationRows.length > 0 || recommendations.filter((rec) => !isRowMatched(rec.targetRow)).length > 0) ? 'rgba(247, 184, 75, 0.15)' : '#f3f3f9',
+              color: (targetRecommendationRows.length > 0 || recommendations.filter((rec) => !isRowMatched(rec.targetRow)).length > 0) ? '#d97706' : '#878a99',
+              border: (targetRecommendationRows.length > 0 || recommendations.filter((rec) => !isRowMatched(rec.targetRow)).length > 0) ? '1px solid rgba(247, 184, 75, 0.3)' : '1px solid #e9ebec',
             }}
           >
             {isComputingRecs
-              ? `${recommendations.length.toLocaleString('id-ID')} Memproses...`
-              : recommendations.length > 0
-              ? `${recommendations.length.toLocaleString('id-ID')} Rekomendasi`
-              : unmatchedRows.length > 0
-              ? `${unmatchedRows.length.toLocaleString('id-ID')} Belum Cocok`
+              ? `${recommendations.filter((rec) => !isRowMatched(rec.targetRow)).length.toLocaleString('id-ID')} Memproses...`
+              : recommendations.filter((rec) => !isRowMatched(rec.targetRow)).length > 0
+              ? `${recommendations.filter((rec) => !isRowMatched(rec.targetRow)).length.toLocaleString('id-ID')} Rekomendasi`
               : targetRecommendationRows.length > 0
               ? `${targetRecommendationRows.length.toLocaleString('id-ID')} Siap Dianalisa`
-              : '0 Rekomendasi'}
+              : '0 Rekomendasi (Selesai)'}
           </span>
         </button>
 
@@ -1091,14 +1093,18 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               <Sparkles size={20} color="#d97706" />
             </div>
             <h4 style={{ fontSize: '0.92rem', fontWeight: 600, color: '#212529', margin: '0 0 0.25rem' }}>
-              Belum Ada Rekomendasi Data
+              {matchedRows.length > 0 && pendingUploadRows.length === 0
+                ? 'Seluruh Rekomendasi Telah Disetujui'
+                : 'Belum Ada Rekomendasi Data'}
             </h4>
-            <p style={{ fontSize: '0.78rem', color: '#878a99', margin: '0 auto 0.85rem', maxWidth: '440px' }}>
+            <p style={{ fontSize: '0.78rem', color: '#878a99', margin: '0 auto 0.85rem', maxWidth: '440px', lineHeight: 1.5 }}>
               {pendingUploadRows.length > 0
                 ? 'Ada data baru di tab Data Upload yang belum dijalankan pencocokan.'
+                : matchedRows.length > 0
+                ? 'Semua data target telah berhasil dicocokkan dan tersimpan di tab Data Match. Jika ingin membatalkan persetujuan baris tertentu, buka tab Data Match dan klik "Batalkan" agar kembali ke sini.'
                 : 'Semua data target telah berhasil dicocokkan ke master data.'}
             </p>
-            {pendingUploadRows.length > 0 && (
+            {pendingUploadRows.length > 0 ? (
               <button
                 type="button"
                 className="btn btn-outline btn-sm"
@@ -1110,7 +1116,19 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               >
                 Buka Tab Data Upload
               </button>
-            )}
+            ) : matchedRows.length > 0 ? (
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => {
+                  setCheckerTab('matched');
+                  setPage(1);
+                }}
+                style={{ fontSize: '0.76rem', padding: '0.3rem 0.85rem', color: '#0ab39c', borderColor: '#0ab39c' }}
+              >
+                Lihat di Tab Data Match ({matchedRows.length.toLocaleString('id-ID')})
+              </button>
+            ) : null}
           </div>
         ) : (
           <>
@@ -1140,52 +1158,97 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               </div>
             )}
 
-            {/* Jika hasil filter wilayah / search kosong */}
+            {/* Jika hasil filter wilayah / search kosong ATAU seluruh rekomendasi telah disetujui */}
             {currentTabRecs.length === 0 && !isComputingRecs ? (
-              <div
-                style={{
-                  textAlign: 'center',
-                  padding: '2.5rem 1.5rem',
-                  background: '#ffffff',
-                  borderRadius: '6px',
-                  border: '1px solid #e9ebec',
-                }}
-              >
+              targetRecommendationRows.length === 0 ? (
                 <div
                   style={{
-                    width: '38px',
-                    height: '38px',
-                    borderRadius: '50%',
-                    background: '#f3f6f9',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    margin: '0 auto 0.5rem',
-                    color: '#878a99',
+                    textAlign: 'center',
+                    padding: '2.5rem 1.5rem',
+                    background: '#ffffff',
+                    borderRadius: '6px',
+                    border: '1px solid #e9ebec',
                   }}
                 >
-                  <Search size={18} />
+                  <div
+                    style={{
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '50%',
+                      background: 'rgba(10, 179, 156, 0.12)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      margin: '0 auto 0.65rem',
+                      color: '#0ab39c',
+                    }}
+                  >
+                    <CheckCircle2 size={24} />
+                  </div>
+                  <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#212529', margin: '0 0 0.35rem' }}>
+                    Seluruh Rekomendasi Telah Disetujui
+                  </h4>
+                  <p style={{ fontSize: '0.79rem', color: '#878a99', margin: '0 auto 1rem', maxWidth: '480px', lineHeight: 1.5 }}>
+                    Daftar rekomendasi saat ini kosong karena semua baris rekomendasi sudah disetujui dan masuk ke tab <strong>Data Match</strong>. Jika ada yang ingin dibatalkan, buka tab <strong>Data Match</strong> lalu klik tombol <strong>"Batalkan"</strong> pada baris terkait untuk mengembalikannya ke sini.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() => {
+                      setCheckerTab('matched');
+                      setPage(1);
+                    }}
+                    style={{ fontSize: '0.78rem', padding: '0.35rem 0.95rem' }}
+                  >
+                    Buka Tab Data Match
+                  </button>
                 </div>
-                <h5 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#212529', margin: '0 0 0.25rem' }}>
-                  Tidak Ada Rekomendasi Sesuai Filter
-                </h5>
-                <p style={{ fontSize: '0.78rem', color: '#878a99', margin: '0 0 0.85rem' }}>
-                  Tidak ditemukan rekomendasi untuk wilayah "{selectedWilayah !== 'ALL' ? formatWilayahName(selectedWilayah) : ''}" {searchTerm ? `atau kata kunci "${searchTerm}"` : ''}.
-                </p>
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  onClick={() => {
-                    onWilayahChange('ALL');
-                    onSearchChange('');
-                    setPage(1);
-                    setRenderedLimit(60);
+              ) : (
+                <div
+                  style={{
+                    textAlign: 'center',
+                    padding: '2.5rem 1.5rem',
+                    background: '#ffffff',
+                    borderRadius: '6px',
+                    border: '1px solid #e9ebec',
                   }}
-                  style={{ fontSize: '0.76rem', padding: '0.28rem 0.85rem' }}
                 >
-                  Reset Filter & Pencarian
-                </button>
-              </div>
+                  <div
+                    style={{
+                      width: '38px',
+                      height: '38px',
+                      borderRadius: '50%',
+                      background: '#f3f6f9',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      margin: '0 auto 0.5rem',
+                      color: '#878a99',
+                    }}
+                  >
+                    <Search size={18} />
+                  </div>
+                  <h5 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#212529', margin: '0 0 0.25rem' }}>
+                    Tidak Ada Rekomendasi Sesuai Filter
+                  </h5>
+                  <p style={{ fontSize: '0.78rem', color: '#878a99', margin: '0 0 0.85rem' }}>
+                    Tidak ditemukan rekomendasi yang belum disetujui untuk wilayah "{selectedWilayah !== 'ALL' ? formatWilayahName(selectedWilayah) : ''}" {searchTerm ? `atau kata kunci "${searchTerm}"` : ''}.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={() => {
+                      onWilayahChange('ALL');
+                      onSearchChange('');
+                      setPage(1);
+                      setRenderedLimit(60);
+                    }}
+                    style={{ fontSize: '0.76rem', padding: '0.28rem 0.85rem' }}
+                  >
+                    Reset Filter & Pencarian
+                  </button>
+                </div>
+              )
             ) : (
               <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', overflowX: 'auto' }}>
           <table className="modern-table" style={{ width: '100%', minWidth: '1200px', borderCollapse: 'separate', borderSpacing: 0 }}>
