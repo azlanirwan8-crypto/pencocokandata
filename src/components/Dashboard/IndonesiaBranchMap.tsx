@@ -35,7 +35,44 @@ interface IndonesiaBranchMapProps {
 }
 
 type DisplayScope = 'ALL' | 'SELECTED_ONLY' | 'MATCHED_ONLY' | 'MULTI_ONLY';
-type TileProvider = 'esri' | 'osm';
+type TileProvider = 'google' | 'google_hybrid' | 'esri' | 'osm';
+
+// Clean, lightweight tile layer factory supporting Google Maps, Satellite, Esri, and OSM
+function getMapTileLayer(provider: TileProvider, bounds: L.LatLngBounds): L.TileLayer {
+  if (provider === 'google') {
+    return L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+      subdomains: ['0', '1', '2', '3'],
+      attribution: '&copy; Google Maps',
+      minZoom: 4,
+      maxZoom: 20,
+      bounds,
+    });
+  }
+  if (provider === 'google_hybrid') {
+    return L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+      subdomains: ['0', '1', '2', '3'],
+      attribution: '&copy; Google Maps',
+      minZoom: 4,
+      maxZoom: 20,
+      bounds,
+    });
+  }
+  if (provider === 'osm') {
+    return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      minZoom: 4,
+      maxZoom: 19,
+      bounds,
+    });
+  }
+  // Default: Esri World Street Map
+  return L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+    attribution: '&copy; Esri, HERE, Garmin, USGS',
+    minZoom: 4,
+    maxZoom: 18,
+    bounds,
+  });
+}
 
 export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   masterRows,
@@ -53,7 +90,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
   const [activeRegion, setActiveRegion] = useState<keyof typeof INDONESIA_REGIONS>('ALL');
   const [displayScope, setDisplayScope] = useState<DisplayScope>('ALL');
-  const [tileProvider, setTileProvider] = useState<TileProvider>('esri');
+  const [tileProvider, setTileProvider] = useState<TileProvider>('google');
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedPin, setSelectedPin] = useState<PlottedBranchPin | null>(null);
@@ -196,15 +233,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       // Fit bounds immediately on load so Aceh and Papua are completely visible
       map.fitBounds(indonesiaBounds, { padding: [15, 15] });
 
-      // Clean tile layer without ANY watermark and NO API key required
-      const esriUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
-      const tileLayer = L.tileLayer(esriUrl, {
-        attribution: '&copy; Esri, HERE, Garmin, USGS',
-        minZoom: 4,
-        maxZoom: 18,
-        bounds: indonesiaBounds,
-      }).addTo(map);
-
+      // Ultra-clean, fast tile layer (Default: Google Maps Roadmap)
+      const tileLayer = getMapTileLayer('google', indonesiaBounds).addTo(map);
       tileLayerRef.current = tileLayer;
 
       const markersLayer = L.layerGroup().addTo(map);
@@ -223,7 +253,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     };
   }, [indonesiaBounds]);
 
-  // 7. Handle Tile Provider Switch (Esri vs OSM - Both 100% Watermark-Free)
+  // 7. Handle Tile Provider Switch (Google Maps vs Google Satelit vs Esri vs OSM)
   const handleSwitchTile = (provider: TileProvider) => {
     setTileProvider(provider);
     const map = mapInstanceRef.current;
@@ -233,21 +263,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       map.removeLayer(tileLayerRef.current);
     }
 
-    const url = provider === 'esri'
-      ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'
-      : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-
-    const attribution = provider === 'esri'
-      ? '&copy; Esri, HERE, Garmin, USGS'
-      : '&copy; OpenStreetMap contributors';
-
-    const newLayer = L.tileLayer(url, {
-      attribution,
-      minZoom: 4,
-      maxZoom: 18,
-      bounds: indonesiaBounds,
-    }).addTo(map);
-
+    const newLayer = getMapTileLayer(provider, indonesiaBounds).addTo(map);
     tileLayerRef.current = newLayer;
   };
 
@@ -365,11 +381,25 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       // create radial fan-out so trajectories flow from realistic surrounding client/transaction points
       const dLat = Math.abs(originLat - destCoords[0]);
       const dLng = Math.abs(originLng - destCoords[1]);
-      if (dLat < 0.0005 && dLng < 0.0005) {
-        const angle = (idx % 12) * (Math.PI / 6);
-        const radiusDist = 0.015 + ((idx % 4) * 0.008); // ~1.5km - 3km fan-out
+      if (dLat < 0.0008 && dLng < 0.0008) {
+        // Detect west-coast Sumatra (e.g. Padang, Sibolga, Bengkulu)
+        const isWestCoastSumatra = destCoords[1] >= 95.0 && destCoords[1] <= 102.5 && destCoords[0] <= 6.0 && destCoords[0] >= -5.0;
+        let angle: number;
+        if (isWestCoastSumatra) {
+          // Inland angles: -70 deg to +70 deg (eastward into land, away from the ocean)
+          const angleSpread = Math.PI * 0.7;
+          angle = -angleSpread / 2 + ((idx % 12) / 11) * angleSpread;
+        } else {
+          angle = (idx % 12) * (Math.PI / 6);
+        }
+        const radiusDist = 0.008 + ((idx % 4) * 0.004); // ~800m - 2.4km fan-out
         originLat = destCoords[0] + Math.sin(angle) * radiusDist;
         originLng = destCoords[1] + Math.cos(angle) * radiusDist;
+      }
+
+      // Hard safety check for Padang coast (shoreline at lng ~ 100.354)
+      if (destCoords[1] >= 100.33 && destCoords[1] <= 100.48 && destCoords[0] >= -1.15 && destCoords[0] <= -0.80) {
+        originLng = Math.max(originLng, 100.3605);
       }
 
       const key = `${originLat.toFixed(3)}_${originLng.toFixed(3)}`;
@@ -385,8 +415,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     topOrigins.forEach((group, gIdx) => {
       const startCoords: [number, number] = [group.lat, group.lng];
 
-      // Alternate curve curvature direction slightly for organic, realistic flight trajectory appearance
-      const curveDirection = gIdx % 2 === 0 ? 0.28 : -0.22;
+      // Subtle, sleek curve curvature
+      const curveDirection = gIdx % 2 === 0 ? 0.15 : -0.12;
       const arcPoints = createCurvedArcPoints(startCoords, destCoords, curveDirection, 24);
 
       // Curved Trajectory Line
@@ -663,11 +693,52 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         {/* Right side: Tile Provider Switcher & Search Bar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
           {/* Tile Layer Toggle */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', background: '#f8f9fa', padding: '0.15rem 0.3rem', borderRadius: '4px', border: '1px solid #e9ebec' }}>
-            <Globe size={12} color="#878a99" style={{ marginLeft: '0.2rem' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', background: '#f8f9fa', padding: '0.15rem 0.3rem', borderRadius: '5px', border: '1px solid #e9ebec' }}>
+            <Globe size={12} color="#878a99" style={{ marginLeft: '0.2rem', marginRight: '0.1rem' }} />
+            <button
+              type="button"
+              onClick={() => handleSwitchTile('google')}
+              title="Peta Standar Google Maps (Ringan, Rapih, Cepat)"
+              style={{
+                fontSize: '0.68rem',
+                fontWeight: 600,
+                padding: '0.18rem 0.45rem',
+                border: 'none',
+                borderRadius: '3px',
+                background: tileProvider === 'google' ? '#0ab39c' : 'transparent',
+                color: tileProvider === 'google' ? '#ffffff' : '#6c757d',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px',
+              }}
+            >
+              <span>🗺️</span> Google Maps
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSwitchTile('google_hybrid')}
+              title="Google Maps Satelit Hybrid"
+              style={{
+                fontSize: '0.68rem',
+                fontWeight: 600,
+                padding: '0.18rem 0.45rem',
+                border: 'none',
+                borderRadius: '3px',
+                background: tileProvider === 'google_hybrid' ? '#0ab39c' : 'transparent',
+                color: tileProvider === 'google_hybrid' ? '#ffffff' : '#6c757d',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px',
+              }}
+            >
+              <span>🛰️</span> Satelit
+            </button>
             <button
               type="button"
               onClick={() => handleSwitchTile('esri')}
+              title="Esri World Street Map"
               style={{
                 fontSize: '0.68rem',
                 fontWeight: 600,
@@ -679,11 +750,12 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 cursor: 'pointer',
               }}
             >
-              Esri Street
+              Esri
             </button>
             <button
               type="button"
               onClick={() => handleSwitchTile('osm')}
+              title="OpenStreetMap"
               style={{
                 fontSize: '0.68rem',
                 fontWeight: 600,
