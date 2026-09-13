@@ -15,7 +15,8 @@ import {
   Share2,
   X,
   Radio,
-  FileSpreadsheet
+  FileSpreadsheet,
+  ShieldCheck,
 } from 'lucide-react';
 import type { MasterRow, TargetRow } from '../../types';
 import {
@@ -23,6 +24,7 @@ import {
   INDONESIA_REGIONS,
   createCurvedArcPoints,
   resolveTargetRowCoordinates,
+  FOREIGN_LAND_MASKS,
   type PlottedBranchPin
 } from '../../utils/geoCoder';
 
@@ -49,34 +51,38 @@ function getMapTileLayer(provider: TileProvider, bounds: L.LatLngBounds): L.Tile
     return L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
       subdomains: ['0', '1', '2', '3'],
       attribution: '&copy; Google Maps',
-      minZoom: 4,
+      minZoom: 5,
       maxZoom: 20,
       bounds,
+      noWrap: true,
     });
   }
   if (provider === 'google_hybrid') {
     return L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
       subdomains: ['0', '1', '2', '3'],
       attribution: '&copy; Google Maps',
-      minZoom: 4,
+      minZoom: 5,
       maxZoom: 20,
       bounds,
+      noWrap: true,
     });
   }
   if (provider === 'osm') {
     return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors',
-      minZoom: 4,
+      minZoom: 5,
       maxZoom: 19,
       bounds,
+      noWrap: true,
     });
   }
   // Default: Esri World Street Map
   return L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
     attribution: '&copy; Esri, HERE, Garmin, USGS',
-    minZoom: 4,
+    minZoom: 5,
     maxZoom: 18,
     bounds,
+    noWrap: true,
   });
 }
 
@@ -93,10 +99,12 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const arcsLayerRef = useRef<L.LayerGroup | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const foreignMaskLayerRef = useRef<L.LayerGroup | null>(null);
 
   const [activeRegion, setActiveRegion] = useState<keyof typeof INDONESIA_REGIONS>('ALL');
   const [displayScope, setDisplayScope] = useState<DisplayScope>('ALL');
   const [tileProvider, setTileProvider] = useState<TileProvider>('google');
+  const [lockIndonesiaOnly, setLockIndonesiaOnly] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedPin, setSelectedPin] = useState<PlottedBranchPin | null>(null);
@@ -304,8 +312,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   // 5. Strict geographical bounds for Indonesia (Sabang / Aceh to Merauke / Papua)
   const indonesiaBounds = useMemo(() => {
     return L.latLngBounds(
-      L.latLng(-11.5, 93.0), // West & South: Ample room covering all of Aceh & Sabang
-      L.latLng(7.0, 141.5)   // North & East: Ample room covering Miangas & Papua
+      L.latLng(-11.2, 94.5), // West & South: Strict boundary at Sabang & Rote Ndao
+      L.latLng(6.2, 141.2)   // North & East: Strict boundary at Miangas & Merauke
     );
   }, []);
 
@@ -319,11 +327,11 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
       const map = L.map(mapContainerRef.current, {
         center: INDONESIA_REGIONS.ALL.center,
-        zoom: INDONESIA_REGIONS.ALL.zoom,
-        minZoom: 4,                  // Allow seeing full archipelago including Aceh
+        zoom: 5,
+        minZoom: 5,                  // Strict lock: cannot zoom out beyond Indonesian archipelago
         maxZoom: 18,                 // High detail zoom to street level
         maxBounds: indonesiaBounds,  // Strict lock on Indonesia
-        maxBoundsViscosity: 0.95,    // Rubber-band resistance at boundaries
+        maxBoundsViscosity: 1.0,     // 100% rigid boundary: impossible to pan outside Indonesia
         zoomControl: true,
         scrollWheelZoom: true,
         preferCanvas: true,          // GPU Canvas for zero lag
@@ -335,6 +343,10 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       // Ultra-clean, fast tile layer (Default: Google Maps Roadmap)
       const tileLayer = getMapTileLayer('google', indonesiaBounds).addTo(map);
       tileLayerRef.current = tileLayer;
+
+      // Layer for masking foreign countries (Malaysia, Singapore, Brunei, Philippines, Australia, PNG, Timor-Leste)
+      const foreignMaskLayer = L.layerGroup().addTo(map);
+      foreignMaskLayerRef.current = foreignMaskLayer;
 
       const markersLayer = L.layerGroup().addTo(map);
       const arcsLayer = L.layerGroup().addTo(map);
@@ -365,6 +377,56 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     const newLayer = getMapTileLayer(provider, indonesiaBounds).addTo(map);
     tileLayerRef.current = newLayer;
   };
+
+  // Render & Update Foreign Country Masks (Covering Malaysia, Singapore, Brunei, Philippines, Australia, PNG, Timor-Leste)
+  useEffect(() => {
+    const maskLayer = foreignMaskLayerRef.current;
+    if (!maskLayer) return;
+
+    maskLayer.clearLayers();
+
+    if (!lockIndonesiaOnly) return;
+
+    const isSatellite = tileProvider === 'google_hybrid';
+    const maskFillColor = isSatellite ? '#0b1329' : '#f8fafc';
+    const maskBorderColor = isSatellite ? '#1e293b' : '#cbd5e1';
+    const maskFillOpacity = isSatellite ? 0.94 : 0.92;
+
+    FOREIGN_LAND_MASKS.forEach((mask) => {
+      const polygon = L.polygon(mask.coords, {
+        fillColor: maskFillColor,
+        fillOpacity: maskFillOpacity,
+        color: maskBorderColor,
+        weight: 1.5,
+        interactive: true,
+      });
+
+      polygon.bindTooltip(
+        `<div style="font-size:11px;font-weight:600;color:${isSatellite ? '#94a3b8' : '#64748b'};padding:2px 4px;">
+          🚫 ${mask.name}<br/>
+          <span style="font-size:10px;color:${isSatellite ? '#64748b' : '#94a3b8'};">Di luar jangkauan operasional BNI</span>
+        </div>`,
+        { sticky: true }
+      );
+
+      maskLayer.addLayer(polygon);
+    });
+  }, [lockIndonesiaOnly, tileProvider]);
+
+  // Synchronize dynamic Map constraints based on lockIndonesiaOnly
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    if (lockIndonesiaOnly) {
+      map.setMaxBounds(indonesiaBounds);
+      map.setMinZoom(5);
+      if (map.getZoom() < 5) {
+        map.setZoom(5);
+      }
+    } else {
+      map.setMinZoom(3);
+    }
+  }, [lockIndonesiaOnly, indonesiaBounds]);
 
   // 8. Render CircleMarkers on GPU Canvas with Live Matched Data Correlation
   useEffect(() => {
@@ -801,6 +863,30 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
         {/* Right side: Tile Provider Switcher & Search Bar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {/* Lock Indonesia Only Toggle Button */}
+          <button
+            type="button"
+            onClick={() => setLockIndonesiaOnly(!lockIndonesiaOnly)}
+            title={lockIndonesiaOnly ? 'Peta dikunci 100% khusus wilayah Indonesia (negara tetangga ditutup)' : 'Kunci wilayah Indonesia dinonaktifkan'}
+            style={{
+              fontSize: '0.68rem',
+              fontWeight: 700,
+              padding: '0.2rem 0.55rem',
+              borderRadius: '4px',
+              border: lockIndonesiaOnly ? '1px solid #0ab39c' : '1px solid #ced4da',
+              background: lockIndonesiaOnly ? '#ecfdf5' : '#ffffff',
+              color: lockIndonesiaOnly ? '#059669' : '#6c757d',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <ShieldCheck size={12} color={lockIndonesiaOnly ? '#059669' : '#878a99'} />
+            <span>{lockIndonesiaOnly ? '🇮🇩 Kunci Indonesia Saja' : '🔓 Buka Kunci Negara Lain'}</span>
+          </button>
+
           {/* Tile Layer Toggle */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', background: '#f8f9fa', padding: '0.15rem 0.3rem', borderRadius: '5px', border: '1px solid #e9ebec' }}>
             <Globe size={12} color="#878a99" style={{ marginLeft: '0.2rem', marginRight: '0.1rem' }} />
