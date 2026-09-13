@@ -6,7 +6,7 @@ export interface GeoLocationResult {
   lat: number;
   lng: number;
   formattedAddress: string;
-  source: 'google' | 'esri' | 'osm' | 'cache';
+  source: 'google' | 'esri' | 'osm' | 'locationiq' | 'cache';
 }
 
 const STORAGE_KEY_GOOGLE_API = 'tools_matcher_google_maps_api_key';
@@ -154,6 +154,29 @@ export async function geocodeRealtime(
     }
   } catch (err) {
     // Photon failed
+  }
+
+  // 4. Client-side direct fallback: LocationIQ (free tier, 10k req/month)
+  try {
+    const LOCATIONIQ_KEY = 'pk.34bc363aee1f8e1880252863ee3816e0';
+    const liqUrl = `https://us1.locationiq.com/v1/search?key=${LOCATIONIQ_KEY}&q=${encodeURIComponent(clean + ', Indonesia')}&format=json&limit=1&addressdetails=1`;
+    const res = await fetch(liqUrl);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const top = data[0];
+        const result: GeoLocationResult = {
+          lat: Number(top.lat),
+          lng: Number(top.lon),
+          formattedAddress: top.display_name || clean,
+          source: 'locationiq',
+        };
+        sessionCache.set(cacheKey, result);
+        return result;
+      }
+    }
+  } catch (err) {
+    // LocationIQ failed
   }
 
   return null;

@@ -1098,14 +1098,14 @@ if (showAllMatchMarkers) {
           )}
         </div>
 
-        {/* 7. Google API Key Button */}
+        {/* 7. Geocoding API Status Button */}
         <button
           type="button"
           onClick={() => {
             setApiKeyInput(googleApiKey);
             setShowApiKeyModal(true);
           }}
-          title="Konfigurasi Google Maps Geocoding API Key"
+          title="Geocoding: LocationIQ aktif (fallback). Klik untuk tambah Google API Key (opsional)"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -1114,15 +1114,15 @@ if (showAllMatchMarkers) {
             fontWeight: 600,
             padding: '0.25rem 0.55rem',
             borderRadius: '5px',
-            border: googleApiKey ? '1px solid #10b981' : '1px solid #e2e8f0',
-            background: googleApiKey ? 'rgba(16,185,129,0.1)' : '#f8fafc',
-            color: googleApiKey ? '#059669' : '#64748b',
+            border: '1px solid #10b981',
+            background: 'rgba(16,185,129,0.1)',
+            color: '#059669',
             cursor: 'pointer',
             whiteSpace: 'nowrap',
           }}
         >
           <Key size={12} />
-          <span>{googleApiKey ? 'API Aktif ✓' : 'Google Key'}</span>
+          <span>{googleApiKey ? 'Google + LocationIQ ✓' : 'LocationIQ Aktif ✓'}</span>
         </button>
       </div>
 
