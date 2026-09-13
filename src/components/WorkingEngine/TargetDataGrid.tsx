@@ -1990,7 +1990,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
             <thead>
               <tr>
                 <th style={{ width: '60px', textAlign: 'center', background: '#f3f6f9', borderRight: '1px solid #e9ebec', color: '#405189' }}>No</th>
-                <th style={{ minWidth: '150px' }}>Status Match</th>
+                <th style={{ minWidth: '220px', whiteSpace: 'nowrap' }}>Status Match</th>
                 <th>Wilayah</th>
                 {/* Atribut Hasil Enrichment Master */}
                 {hasCombinedSandiCabang ? (
@@ -2068,9 +2068,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                       </td>
 
                       {/* Status Match Badge + Revert Action */}
-                      <td style={{ minWidth: '150px' }}>
+                      <td style={{ whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
                         {isMatched ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.22rem', alignItems: 'flex-start' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', whiteSpace: 'nowrap' }}>
                             <span
                               className={`badge ${
                                 r._matchLevel === 'recommendation'
@@ -2094,6 +2094,52 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                 : 'MATCH (L1)'}
                             </span>
 
+                            {/* Timestamp */}
+                            {r._matchedAt && (
+                              <span style={{ fontSize: '0.65rem', color: '#878a99', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                                {new Date(r._matchedAt).toLocaleDateString('id-ID', {
+                                  day: '2-digit',
+                                  month: 'short',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </span>
+                            )}
+
+                            {/* Tombol Batalkan / Revert jika baris hasil persetujuan rekomendasi */}
+                            {onRevertRecommendation && r._matchLevel === 'recommendation' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (window.confirm(`Batalkan persetujuan rekomendasi baris #${r.No}? Baris ini akan dikembalikan ke tab Rekomendasi Data.`)) {
+                                    onRevertRecommendation(r.No);
+                                  }
+                                }}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.2rem',
+                                  height: '18px',
+                                  padding: '0 0.35rem',
+                                  borderRadius: '3px',
+                                  border: '1px solid rgba(240, 101, 72, 0.3)',
+                                  background: 'rgba(240, 101, 72, 0.06)',
+                                  color: '#e05338',
+                                  fontSize: '0.64rem',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease',
+                                  boxSizing: 'border-box',
+                                  lineHeight: '18px',
+                                  whiteSpace: 'nowrap',
+                                }}
+                                title="Batalkan status match rekomendasi dan kembalikan ke tab Rekomendasi Data"
+                              >
+                                <RotateCcw size={9} />
+                                <span>Batalkan</span>
+                              </button>
+                            )}
+
                             {/* Audit Kesesuaian dengan Isi Awal Excel */}
                             {r._hasUserFilledData && (
                               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.61rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
@@ -2107,66 +2153,20 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                     (uCabang && mCabang && (uCabang === mCabang || mCabang.includes(uCabang) || uCabang.includes(mCabang)));
 
                                   return isAgree ? (
-                                    <span style={{ color: '#059669', background: 'rgba(5, 150, 105, 0.08)', padding: '0.04rem 0.25rem', borderRadius: '2px' }} title="Pencocokan sistem sesuai dengan cabang yang Anda isi di file Excel">
+                                    <span style={{ color: '#059669', background: 'rgba(5, 150, 105, 0.08)', padding: '0.04rem 0.25rem', borderRadius: '2px', whiteSpace: 'nowrap' }} title="Pencocokan sistem sesuai dengan cabang yang Anda isi di file Excel">
                                       ✓ Sesuai Excel Anda
                                     </span>
                                   ) : (
-                                    <span style={{ color: '#d97706', background: 'rgba(217, 119, 6, 0.08)', padding: '0.04rem 0.25rem', borderRadius: '2px' }} title={`Di Excel Anda isi: ${r._originalFilledCabang || r._originalFilledSandi || r._originalFilledSandiCabang}`}>
+                                    <span style={{ color: '#d97706', background: 'rgba(217, 119, 6, 0.08)', padding: '0.04rem 0.25rem', borderRadius: '2px', whiteSpace: 'nowrap' }} title={`Di Excel Anda isi: ${r._originalFilledCabang || r._originalFilledSandi || r._originalFilledSandiCabang}`}>
                                       ⚠️ Beda dr Excel
                                     </span>
                                   );
                                 })()}
                               </div>
                             )}
-
-                            {/* Baris 2: Timestamp dan Tombol Batalkan Berdampingan Sejajar */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', whiteSpace: 'nowrap' }}>
-                              {r._matchedAt && (
-                                <span style={{ fontSize: '0.65rem', color: '#878a99', fontWeight: 500 }}>
-                                  {new Date(r._matchedAt).toLocaleDateString('id-ID', {
-                                    day: '2-digit',
-                                    month: 'short',
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                  })}
-                                </span>
-                              )}
-                              {/* Tombol Batalkan / Revert jika baris hasil persetujuan rekomendasi */}
-                              {onRevertRecommendation && r._matchLevel === 'recommendation' && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (window.confirm(`Batalkan persetujuan rekomendasi baris #${r.No}? Baris ini akan dikembalikan ke tab Rekomendasi Data.`)) {
-                                      onRevertRecommendation(r.No);
-                                    }
-                                  }}
-                                  style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '0.2rem',
-                                    height: '17px',
-                                    padding: '0 0.35rem',
-                                    borderRadius: '3px',
-                                    border: '1px solid rgba(240, 101, 72, 0.3)',
-                                    background: 'rgba(240, 101, 72, 0.06)',
-                                    color: '#e05338',
-                                    fontSize: '0.64rem',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    transition: 'all 0.15s ease',
-                                    boxSizing: 'border-box',
-                                    lineHeight: '17px',
-                                  }}
-                                  title="Batalkan status match rekomendasi dan kembalikan ke tab Rekomendasi Data"
-                                >
-                                  <RotateCcw size={9} />
-                                  <span>Batalkan</span>
-                                </button>
-                              )}
-                            </div>
                           </div>
                         ) : (
-                          <span className="badge badge-unmatched">UNMATCHED</span>
+                          <span className="badge badge-unmatched" style={{ whiteSpace: 'nowrap' }}>UNMATCHED</span>
                         )}
                       </td>
 
@@ -2215,7 +2215,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                         </td>
                       )}
                       {!hiddenCols.has('ALAMAT') && (
-                        <td style={{ minWidth: '220px', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.4 }} title={r.ALAMAT}>
+                        <td style={{ minWidth: '180px', maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', verticalAlign: 'middle' }} title={r.ALAMAT}>
                           {r.ALAMAT || <span style={{ color: '#878a99' }}>-</span>}
                         </td>
                       )}
