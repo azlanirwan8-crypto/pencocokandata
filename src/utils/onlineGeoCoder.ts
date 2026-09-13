@@ -1,6 +1,7 @@
 // Realtime Online Geocoding Engine (Google Maps, ESRI & OSM)
 // Zero hardcoded coordinate bloat in source code.
 import type { MasterRow, TargetRow } from '../types';
+import { get, set } from 'idb-keyval';
 
 export interface GeoLocationResult {
   lat: number;
@@ -10,6 +11,7 @@ export interface GeoLocationResult {
 }
 
 const STORAGE_KEY_GOOGLE_API = 'tools_matcher_google_maps_api_key';
+const IDB_PREFIX = 'geo_cache_';
 
 // In-Memory ephemeral session cache (RAM only, 0 bytes in code/harddisk)
 const sessionCache = new Map<string, GeoLocationResult>();
@@ -82,8 +84,21 @@ export async function geocodeRealtime(
   if (!clean) return null;
 
   const cacheKey = clean.toLowerCase();
+  
+  // L1 Cache: In-Memory
   if (sessionCache.has(cacheKey)) {
     return sessionCache.get(cacheKey)!;
+  }
+
+  // L2 Cache: IndexedDB Persistent Cache
+  try {
+    const cachedData = await get<GeoLocationResult>(IDB_PREFIX + cacheKey);
+    if (cachedData) {
+      sessionCache.set(cacheKey, cachedData);
+      return cachedData;
+    }
+  } catch (err) {
+    // ignore idb error
   }
 
   const activeKey = apiKey || getStoredGoogleApiKey();
@@ -104,6 +119,7 @@ export async function geocodeRealtime(
           source: data.source || 'google',
         };
         sessionCache.set(cacheKey, result);
+        try { await set(IDB_PREFIX + cacheKey, result); } catch (e) {}
         return result;
       }
     }
@@ -126,6 +142,7 @@ export async function geocodeRealtime(
           source: 'esri',
         };
         sessionCache.set(cacheKey, result);
+        try { await set(IDB_PREFIX + cacheKey, result); } catch (e) {}
         return result;
       }
     }
@@ -149,6 +166,7 @@ export async function geocodeRealtime(
           source: 'osm',
         };
         sessionCache.set(cacheKey, result);
+        try { await set(IDB_PREFIX + cacheKey, result); } catch (e) {}
         return result;
       }
     }
@@ -172,6 +190,7 @@ export async function geocodeRealtime(
           source: 'locationiq',
         };
         sessionCache.set(cacheKey, result);
+        try { await set(IDB_PREFIX + cacheKey, result); } catch (e) {}
         return result;
       }
     }
