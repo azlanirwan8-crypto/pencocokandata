@@ -1,5 +1,5 @@
 // Geocoding Engine for Indonesian Postal Codes, Dati II (Kabupaten/Kota), and BNI Wilayah
-import type { MasterRow } from '../types';
+import type { MasterRow, TargetRow } from '../types';
 
 export interface GeoLocation {
   lat: number;
@@ -20,12 +20,14 @@ export interface PlottedBranchPin {
   branchCount: number;
   primaryOutletName: string;
   alamatDisplay: string;
+  matchedCount: number;
+  totalTargetCount: number;
 }
 
-// 1. Regional Island Bounds & Centroids
+// 1. Regional Island Bounds & Centroids (Adjusted to properly frame Aceh & Papua)
 export const INDONESIA_REGIONS = {
-  ALL: { name: 'Seluruh Indonesia', center: [-2.5489, 118.0149] as [number, number], zoom: 5 },
-  SUMATERA: { name: 'Sumatera', center: [0.5897, 101.3431] as [number, number], zoom: 6 },
+  ALL: { name: 'Seluruh Indonesia', center: [-1.2000, 117.0000] as [number, number], zoom: 5 },
+  SUMATERA: { name: 'Sumatera & Aceh', center: [2.2000, 99.0000] as [number, number], zoom: 6 },
   JAWA: { name: 'Jawa & Banten', center: [-7.2504, 110.1500] as [number, number], zoom: 7 },
   BALI_NUSA: { name: 'Bali & Nusa Tenggara', center: [-8.6500, 118.5000] as [number, number], zoom: 7 },
   KALIMANTAN: { name: 'Kalimantan', center: [-1.2000, 114.0000] as [number, number], zoom: 6 },
@@ -444,8 +446,35 @@ export function resolveBranchCoordinates(row: MasterRow): GeoLocation {
  */
 export function clusterMasterRowsForMap(
   masterRows: MasterRow[],
-  selectedWilayah: string = 'ALL'
+  selectedWilayah: string = 'ALL',
+  targetRows: TargetRow[] = []
 ): PlottedBranchPin[] {
+  // Build fast indexes of target rows for 0ms lookup
+  const sandiMatchMap = new Map<string, { matched: number; total: number }>();
+  const kpMatchMap = new Map<string, { matched: number; total: number }>();
+
+  if (targetRows && targetRows.length > 0) {
+    for (const t of targetRows) {
+      const isMatched = !!t._isMatched;
+      const s = String(t['Sandi Cabang'] || t.Sandi || t.Cabang || '').trim();
+      const kp = String(t['KODE POS'] || '').replace(/\D/g, '').trim();
+
+      if (s) {
+        const cur = sandiMatchMap.get(s) || { matched: 0, total: 0 };
+        cur.total++;
+        if (isMatched) cur.matched++;
+        sandiMatchMap.set(s, cur);
+      }
+
+      if (kp && kp.length >= 5) {
+        const cur = kpMatchMap.get(kp) || { matched: 0, total: 0 };
+        cur.total++;
+        if (isMatched) cur.matched++;
+        kpMatchMap.set(kp, cur);
+      }
+    }
+  }
+
   // Filter by Wilayah if specified
   const filtered = selectedWilayah === 'ALL'
     ? masterRows
@@ -478,6 +507,26 @@ export function clusterMasterRowsForMap(
     if (branches.length === 0) return;
     const first = branches[0];
     const coords = resolveBranchCoordinates(first);
+    const kp = String(first['KODE POS'] || '').replace(/\D/g, '').trim();
+
+    // Compute matched target records associated with this pin
+    let matchedCount = 0;
+    let totalTargetCount = 0;
+
+    for (const b of branches) {
+      const s = String(b['Sandi Cabang'] || b.Sandi || b['Kode Cabang'] || '').trim();
+      if (s && sandiMatchMap.has(s)) {
+        const st = sandiMatchMap.get(s)!;
+        matchedCount += st.matched;
+        totalTargetCount += st.total;
+      }
+    }
+
+    if (matchedCount === 0 && kp && kpMatchMap.has(kp)) {
+      const kt = kpMatchMap.get(kp)!;
+      matchedCount += kt.matched;
+      totalTargetCount += kt.total;
+    }
 
     const branchCount = branches.length;
     const baseLat = coords.lat;
@@ -494,6 +543,8 @@ export function clusterMasterRowsForMap(
       branchCount,
       primaryOutletName: first['Nama Outlet'] || 'Outlet BNI',
       alamatDisplay: first.ALAMAT || `${first.Kecamatan || ''}, ${first['Dati II'] || ''}`,
+      matchedCount,
+      totalTargetCount,
     });
   });
 

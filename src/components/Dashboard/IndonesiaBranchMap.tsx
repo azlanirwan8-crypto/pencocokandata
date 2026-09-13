@@ -2,18 +2,18 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
-  MapPin,
   Search,
   ExternalLink,
   Layers,
   Compass,
   ChevronRight,
   Building2,
-  Zap,
   Filter,
-  Eye
+  CheckCircle,
+  Eye,
+  Globe
 } from 'lucide-react';
-import type { MasterRow } from '../../types';
+import type { MasterRow, TargetRow } from '../../types';
 import {
   clusterMasterRowsForMap,
   INDONESIA_REGIONS,
@@ -22,14 +22,17 @@ import {
 
 interface IndonesiaBranchMapProps {
   masterRows: MasterRow[];
+  targetRows?: TargetRow[];
   selectedWilayah?: string;
   onNavigateToMaster?: () => void;
 }
 
-type OutletTypeFilter = 'ALL' | 'KC' | 'KCP' | 'KK' | 'MULTI_ONLY';
+type MapModeFilter = 'ALL' | 'MATCHED_ONLY' | 'MULTI_ONLY' | 'KC' | 'KCP';
+type TileProvider = 'esri' | 'osm';
 
 export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   masterRows,
+  targetRows = [],
   selectedWilayah = 'ALL',
   onNavigateToMaster,
 }) => {
@@ -37,37 +40,50 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   const mapInstanceRef = useRef<L.Map | null>(null);
   const canvasRendererRef = useRef<L.Canvas | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
 
   const [activeRegion, setActiveRegion] = useState<keyof typeof INDONESIA_REGIONS>('ALL');
-  const [typeFilter, setTypeFilter] = useState<OutletTypeFilter>('ALL');
+  const [mapMode, setMapMode] = useState<MapModeFilter>('ALL');
+  const [tileProvider, setTileProvider] = useState<TileProvider>('esri');
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedPin, setSelectedPin] = useState<PlottedBranchPin | null>(null);
   const [activeBranchIndex, setActiveBranchIndex] = useState(0);
 
-  // 1. Group & Cluster master rows into pins based on postal code & Wilayah
+  // 1. Group & Cluster master rows into pins and correlate with Matched target rows
   const allPins = useMemo(() => {
-    return clusterMasterRowsForMap(masterRows, selectedWilayah);
-  }, [masterRows, selectedWilayah]);
+    return clusterMasterRowsForMap(masterRows, selectedWilayah, targetRows);
+  }, [masterRows, selectedWilayah, targetRows]);
 
-  // 2. Filter pins based on outlet type or multi-outlet only
+  // 2. Filter pins based on Collaboration & Activity Mode
   const filteredPins = useMemo(() => {
-    if (typeFilter === 'ALL') return allPins;
-    if (typeFilter === 'MULTI_ONLY') {
+    if (mapMode === 'ALL') return allPins;
+    if (mapMode === 'MATCHED_ONLY') {
+      return allPins.filter((p) => p.matchedCount > 0);
+    }
+    if (mapMode === 'MULTI_ONLY') {
       return allPins.filter((p) => p.branchCount > 1);
     }
-    return allPins.filter((p) =>
-      p.branches.some((b) => {
-        const status = String(b['Status Outlet'] || b['Nama Outlet'] || '').toUpperCase();
-        if (typeFilter === 'KC') return status.includes(' KC ') || status.startsWith('KC ') || status === 'KC';
-        if (typeFilter === 'KCP') return status.includes('KCP');
-        if (typeFilter === 'KK') return status.includes(' KK ') || status.includes('KAS');
-        return true;
-      })
-    );
-  }, [allPins, typeFilter]);
+    if (mapMode === 'KC') {
+      return allPins.filter((p) =>
+        p.branches.some((b) => {
+          const status = String(b['Status Outlet'] || b['Nama Outlet'] || '').toUpperCase();
+          return status.includes(' KC ') || status.startsWith('KC ') || status === 'KC';
+        })
+      );
+    }
+    if (mapMode === 'KCP') {
+      return allPins.filter((p) =>
+        p.branches.some((b) => {
+          const status = String(b['Status Outlet'] || b['Nama Outlet'] || '').toUpperCase();
+          return status.includes('KCP');
+        })
+      );
+    }
+    return allPins;
+  }, [allPins, mapMode]);
 
-  // 3. Search suggestions (top 5 matches)
+  // 3. Search suggestions (top matches)
   const searchSuggestions = useMemo(() => {
     if (!searchQuery.trim() || searchQuery.length < 2) return [];
     const q = searchQuery.toLowerCase().trim();
@@ -91,57 +107,64 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     return matches;
   }, [allPins, searchQuery]);
 
-  // Map Summary Statistics
+  // Map Summary Statistics (Including Matched Collaboration)
   const stats = useMemo(() => {
     const totalBranches = allPins.reduce((acc, p) => acc + p.branchCount, 0);
     const multiOutletPins = allPins.filter((p) => p.branchCount > 1).length;
+    const pinsWithMatch = allPins.filter((p) => p.matchedCount > 0);
+    const totalMatchedRecords = allPins.reduce((acc, p) => acc + p.matchedCount, 0);
+
     return {
       totalBranches,
       uniqueSpots: allPins.length,
       multiOutletPins,
+      pinsWithMatchCount: pinsWithMatch.length,
+      totalMatchedRecords,
       activeShowing: filteredPins.length,
     };
   }, [allPins, filteredPins]);
 
-  // 4. Initialize Map with GPU Hardware Canvas Renderer & Ultra-Fast CartoDB Voyager CDN Tiles
+  // 4. Strict geographical bounds for Indonesia (Sabang / Aceh to Merauke / Papua)
+  const indonesiaBounds = useMemo(() => {
+    return L.latLngBounds(
+      L.latLng(-11.5, 94.0), // West & South: Ample room covering all of Aceh & Sabang
+      L.latLng(7.0, 141.5)   // North & East: Ample room covering Miangas & Papua
+    );
+  }, []);
+
+  // 5. Initialize Leaflet Map
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
     if (!mapInstanceRef.current) {
-      // GPU Accelerated Canvas renderer for instant rendering of thousands of pins
       const canvasRenderer = L.canvas({ padding: 0.5 });
       canvasRendererRef.current = canvasRenderer;
-
-      // Strict geographical bounds for Indonesia (Sabang to Merauke)
-      const indonesiaBounds = L.latLngBounds(
-        L.latLng(-11.5, 94.0), // Barat Daya / South-West (Samudera Hindia)
-        L.latLng(6.5, 141.5)   // Timur Laut / North-East (Papua / Miangas)
-      );
 
       const map = L.map(mapContainerRef.current, {
         center: INDONESIA_REGIONS.ALL.center,
         zoom: INDONESIA_REGIONS.ALL.zoom,
-        minZoom: 5,                  // LOCK: Tidak bisa zoom out melewati wilayah Indonesia
-        maxZoom: 18,                 // Eksplorasi detail sampai level jalan cabang
-        maxBounds: indonesiaBounds,  // LOCK: Terkunci rapat di dalam batas geografi Indonesia
-        maxBoundsViscosity: 1.0,     // LOCK: 100% kaku, mencegah geser keluar batas wilayah
+        minZoom: 4,                  // Allow seeing full archipelago including Aceh
+        maxZoom: 18,                 // High detail zoom to street level
+        maxBounds: indonesiaBounds,  // Strict lock on Indonesia
+        maxBoundsViscosity: 0.95,    // Rubber-band resistance at boundaries
         zoomControl: true,
         scrollWheelZoom: true,
-        preferCanvas: true,          // Canvas-first mode for zero lag
-        bounceAtZoomLimits: true,
+        preferCanvas: true,          // GPU Canvas for zero lag
       });
 
-      // CartoDB Voyager Global Cloudflare CDN (Hanya request tile di batas Indonesia)
-      L.tileLayer(
-        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-        {
-          attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-          subdomains: 'abcd',
-          minZoom: 5,
-          maxZoom: 18,
-          bounds: indonesiaBounds,   // Hemat bandwidth: hanya unduh tile di area Indonesia
-        }
-      ).addTo(map);
+      // Fit bounds immediately on load so Aceh and Papua are completely visible
+      map.fitBounds(indonesiaBounds, { padding: [15, 15] });
+
+      // Clean tile layer without ANY watermark and NO API key required
+      const esriUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+      const tileLayer = L.tileLayer(esriUrl, {
+        attribution: '&copy; Esri, HERE, Garmin, USGS',
+        minZoom: 4,
+        maxZoom: 18,
+        bounds: indonesiaBounds,
+      }).addTo(map);
+
+      tileLayerRef.current = tileLayer;
 
       const markersLayer = L.layerGroup().addTo(map);
       mapInstanceRef.current = map;
@@ -154,9 +177,37 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         mapInstanceRef.current = null;
       }
     };
-  }, []);
+  }, [indonesiaBounds]);
 
-  // 5. Draw CircleMarkers on GPU Canvas (Instant 0ms, No heavy DOM nodes)
+  // 6. Handle Tile Provider Switch (Esri vs OSM - Both 100% Watermark-Free)
+  const handleSwitchTile = (provider: TileProvider) => {
+    setTileProvider(provider);
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    if (tileLayerRef.current) {
+      map.removeLayer(tileLayerRef.current);
+    }
+
+    const url = provider === 'esri'
+      ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'
+      : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+    const attribution = provider === 'esri'
+      ? '&copy; Esri, HERE, Garmin, USGS'
+      : '&copy; OpenStreetMap contributors';
+
+    const newLayer = L.tileLayer(url, {
+      attribution,
+      minZoom: 4,
+      maxZoom: 18,
+      bounds: indonesiaBounds,
+    }).addTo(map);
+
+    tileLayerRef.current = newLayer;
+  };
+
+  // 7. Render CircleMarkers on GPU Canvas with Live Matched Data Correlation
   useEffect(() => {
     const map = mapInstanceRef.current;
     const markersLayer = markersLayerRef.current;
@@ -167,27 +218,49 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
     filteredPins.forEach((pin) => {
       const isMulti = pin.branchCount > 1;
+      const hasMatch = pin.matchedCount > 0;
 
-      // GPU Canvas CircleMarker: Lightweight, highly responsive, gorgeous styling
+      // Color coding:
+      // 1. Multi-outlet: Vibrant Orange / Coral (#f06548)
+      // 2. Active with Matched records: Vibrant Teal / Emerald (#0ab39c)
+      // 3. Standby (Master active, no target matches yet): Slate / Steel Blue (#6366f1)
+      let fillColor = '#6366f1';
+      let strokeColor = '#ffffff';
+      let radius = 5.5;
+
+      if (isMulti) {
+        fillColor = '#f06548';
+        radius = 8.5;
+      } else if (hasMatch) {
+        fillColor = '#0ab39c';
+        radius = 7;
+      } else {
+        fillColor = '#818cf8';
+        radius = 5.5;
+      }
+
       const marker = L.circleMarker([pin.lat, pin.lng], {
         renderer: canvasRenderer,
-        radius: isMulti ? 8.5 : 5.5,
-        fillColor: isMulti ? '#f06548' : '#0ab39c',
-        color: '#ffffff',
+        radius,
+        fillColor,
+        color: strokeColor,
         weight: isMulti ? 2.5 : 1.8,
         opacity: 1,
-        fillOpacity: isMulti ? 0.95 : 0.85,
+        fillOpacity: hasMatch ? 0.95 : 0.85,
       });
 
-      // Instant lightweight hover tooltip
+      // Instant lightweight hover tooltip with Matched Collaboration data
       const tooltipContent = `
-        <div style="font-family:inherit;font-size:11.5px;padding:2px 4px;line-height:1.35;">
+        <div style="font-family:inherit;font-size:11.5px;padding:3px 5px;line-height:1.4;">
           <div style="font-weight:700;color:#212529;display:flex;align-items:center;gap:4px;">
             <span>${pin.primaryOutletName}</span>
           </div>
           <div style="color:#6c757d;font-size:10.5px;margin-top:2px;">
             ${pin.dati2} &bull; <strong style="color:#405189;">📮 ${pin.kodePos}</strong>
           </div>
+          ${hasMatch ? `<div style="color:#0ab39c;font-weight:700;font-size:11px;margin-top:3px;display:flex;align-items:center;gap:4px;">
+            <span>✓</span> <strong>${pin.matchedCount.toLocaleString('id-ID')} Data Matched</strong>
+          </div>` : ''}
           ${isMulti ? `<div style="color:#f06548;font-weight:700;font-size:10.5px;margin-top:2px;">⚠️ ${pin.branchCount} Cabang di Titik ini</div>` : ''}
         </div>
       `;
@@ -220,8 +293,12 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     setActiveRegion(regionKey);
     const map = mapInstanceRef.current;
     if (!map) return;
-    const reg = INDONESIA_REGIONS[regionKey];
-    map.flyTo(reg.center, reg.zoom, { duration: 0.9 });
+    if (regionKey === 'ALL') {
+      map.fitBounds(indonesiaBounds, { padding: [15, 15] });
+    } else {
+      const reg = INDONESIA_REGIONS[regionKey];
+      map.flyTo(reg.center, reg.zoom, { duration: 0.9 });
+    }
   };
 
   // Select a suggestion pin
@@ -325,31 +402,31 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                   gap: '0.25rem',
                 }}
               >
-                <Zap size={10} />
-                LIGHTWEIGHT GPU GIS
+                <CheckCircle size={10} />
+                TERKOLABORASI DATA MATCHED
               </span>
             </div>
             <p style={{ fontSize: '0.75rem', color: '#878a99', margin: '0.15rem 0 0 0' }}>
-              Visualisasi geospasial sebaran cabang aktif per kode pos & wilayah operasional
+              Monitoring geospasial sebaran kantor cabang BNI dan korelasi data matched transaksi
             </p>
           </div>
         </div>
 
-        {/* Real-Time Stats Counters */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+        {/* Real-Time Stats Counters (Master + Matched Data) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
           <div
             style={{
-              padding: '0.3rem 0.65rem',
+              padding: '0.3rem 0.6rem',
               background: '#f8f9fa',
               borderRadius: '4px',
               border: '1px solid #e9ebec',
               display: 'flex',
               alignItems: 'center',
-              gap: '0.4rem',
+              gap: '0.35rem',
             }}
           >
             <Building2 size={13} color="#405189" />
-            <span style={{ fontSize: '0.73rem', color: '#6c757d' }}>Cabang:</span>
+            <span style={{ fontSize: '0.73rem', color: '#6c757d' }}>Total Cabang:</span>
             <strong style={{ fontSize: '0.78rem', color: '#405189' }}>
               {stats.totalBranches.toLocaleString('id-ID')}
             </strong>
@@ -357,31 +434,31 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
           <div
             style={{
-              padding: '0.3rem 0.65rem',
-              background: '#f8f9fa',
+              padding: '0.3rem 0.6rem',
+              background: 'rgba(10, 179, 156, 0.08)',
               borderRadius: '4px',
-              border: '1px solid #e9ebec',
+              border: '1px solid rgba(10, 179, 156, 0.25)',
               display: 'flex',
               alignItems: 'center',
-              gap: '0.4rem',
+              gap: '0.35rem',
             }}
           >
-            <MapPin size={13} color="#0ab39c" />
-            <span style={{ fontSize: '0.73rem', color: '#6c757d' }}>Titik Lokasi:</span>
+            <CheckCircle size={13} color="#0ab39c" />
+            <span style={{ fontSize: '0.73rem', color: '#0ab39c' }}>Cabang Matched:</span>
             <strong style={{ fontSize: '0.78rem', color: '#0ab39c' }}>
-              {stats.uniqueSpots.toLocaleString('id-ID')}
+              {stats.pinsWithMatchCount.toLocaleString('id-ID')} Titik ({stats.totalMatchedRecords.toLocaleString('id-ID')} Record)
             </strong>
           </div>
 
           <div
             style={{
-              padding: '0.3rem 0.65rem',
+              padding: '0.3rem 0.6rem',
               background: 'rgba(240, 101, 72, 0.08)',
               borderRadius: '4px',
               border: '1px solid rgba(240, 101, 72, 0.25)',
               display: 'flex',
               alignItems: 'center',
-              gap: '0.4rem',
+              gap: '0.35rem',
             }}
           >
             <Layers size={13} color="#f06548" />
@@ -404,7 +481,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           marginBottom: '0.6rem',
         }}
       >
-        {/* Island Navigation Pills */}
+        {/* Island Navigation Pills (Aceh Included) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '0.71rem', fontWeight: 600, color: '#878a99', marginRight: '0.15rem' }}>
             Pulau:
@@ -435,100 +512,142 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           })}
         </div>
 
-        {/* Search Input with Instant Autocomplete */}
-        <div style={{ position: 'relative', minWidth: '280px' }}>
-          <form onSubmit={handleSearchSubmit} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <div className="search-input-wrapper" style={{ flex: 1 }}>
-              <Search size={13} className="search-icon-pos" />
-              <input
-                type="text"
-                className="search-input"
-                style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem 0.3rem 1.85rem', width: '100%' }}
-                placeholder="Cari Kota, Outlet, atau Kode Pos..."
-                value={searchQuery}
-                onFocus={() => setShowSuggestions(true)}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setShowSuggestions(true);
-                }}
-              />
-            </div>
+        {/* Right side: Tile Provider Switcher & Search Bar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {/* Tile Layer Style Toggle (Clean Esri vs OSM - Zero Watermark) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', background: '#f8f9fa', padding: '0.15rem 0.3rem', borderRadius: '4px', border: '1px solid #e9ebec' }}>
+            <Globe size={12} color="#878a99" style={{ marginLeft: '0.2rem' }} />
             <button
-              type="submit"
-              className="btn btn-primary"
+              type="button"
+              onClick={() => handleSwitchTile('esri')}
               style={{
-                padding: '0.3rem 0.75rem',
-                fontSize: '0.73rem',
-                whiteSpace: 'nowrap',
-                borderRadius: '4px',
+                fontSize: '0.68rem',
+                fontWeight: 600,
+                padding: '0.18rem 0.45rem',
+                border: 'none',
+                borderRadius: '3px',
+                background: tileProvider === 'esri' ? '#405189' : 'transparent',
+                color: tileProvider === 'esri' ? '#ffffff' : '#6c757d',
+                cursor: 'pointer',
               }}
+              title="Esri World Street Map (Bersih, Tajam, Tanpa Watermark)"
             >
-              Lacak
+              Esri Street
             </button>
-          </form>
-
-          {/* Autocomplete Dropdown List */}
-          {showSuggestions && searchSuggestions.length > 0 && (
-            <div
+            <button
+              type="button"
+              onClick={() => handleSwitchTile('osm')}
               style={{
-                position: 'absolute',
-                top: '100%',
-                left: 0,
-                right: 0,
-                marginTop: '4px',
-                background: '#ffffff',
-                border: '1px solid #e9ebec',
-                borderRadius: '6px',
-                boxShadow: '0 6px 16px rgba(0,0,0,0.12)',
-                zIndex: 1050,
-                maxHeight: '220px',
-                overflowY: 'auto',
+                fontSize: '0.68rem',
+                fontWeight: 600,
+                padding: '0.18rem 0.45rem',
+                border: 'none',
+                borderRadius: '3px',
+                background: tileProvider === 'osm' ? '#405189' : 'transparent',
+                color: tileProvider === 'osm' ? '#ffffff' : '#6c757d',
+                cursor: 'pointer',
               }}
+              title="OpenStreetMap Standard (Tanpa Watermark)"
             >
-              {searchSuggestions.map((sug) => (
-                <div
-                  key={sug.id}
-                  onClick={() => handleSelectSuggestion(sug)}
-                  style={{
-                    padding: '0.45rem 0.75rem',
-                    borderBottom: '1px solid #f3f3f9',
-                    cursor: 'pointer',
-                    fontSize: '0.75rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
+              OSM
+            </button>
+          </div>
+
+          {/* Search Input with Instant Autocomplete */}
+          <div style={{ position: 'relative', minWidth: '260px' }}>
+            <form onSubmit={handleSearchSubmit} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <div className="search-input-wrapper" style={{ flex: 1 }}>
+                <Search size={13} className="search-icon-pos" />
+                <input
+                  type="text"
+                  className="search-input"
+                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem 0.3rem 1.85rem', width: '100%' }}
+                  placeholder="Cari Kota, Outlet, atau Kode Pos..."
+                  value={searchQuery}
+                  onFocus={() => setShowSuggestions(true)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setShowSuggestions(true);
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = '#f8f9fa')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = '#ffffff')}
-                >
-                  <div>
-                    <strong style={{ color: '#212529', display: 'block' }}>{sug.primaryOutletName}</strong>
-                    <span style={{ color: '#878a99', fontSize: '0.7rem' }}>
-                      {sug.dati2} &bull; 📮 {sug.kodePos}
-                    </span>
+                />
+              </div>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                style={{
+                  padding: '0.3rem 0.75rem',
+                  fontSize: '0.73rem',
+                  whiteSpace: 'nowrap',
+                  borderRadius: '4px',
+                }}
+              >
+                Lacak
+              </button>
+            </form>
+
+            {/* Autocomplete Dropdown List */}
+            {showSuggestions && searchSuggestions.length > 0 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  marginTop: '4px',
+                  background: '#ffffff',
+                  border: '1px solid #e9ebec',
+                  borderRadius: '6px',
+                  boxShadow: '0 6px 16px rgba(0,0,0,0.12)',
+                  zIndex: 1050,
+                  maxHeight: '220px',
+                  overflowY: 'auto',
+                }}
+              >
+                {searchSuggestions.map((sug) => (
+                  <div
+                    key={sug.id}
+                    onClick={() => handleSelectSuggestion(sug)}
+                    style={{
+                      padding: '0.45rem 0.75rem',
+                      borderBottom: '1px solid #f3f3f9',
+                      cursor: 'pointer',
+                      fontSize: '0.75rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#f8f9fa')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = '#ffffff')}
+                  >
+                    <div>
+                      <strong style={{ color: '#212529', display: 'block' }}>{sug.primaryOutletName}</strong>
+                      <span style={{ color: '#878a99', fontSize: '0.7rem' }}>
+                        {sug.dati2} &bull; 📮 {sug.kodePos}
+                      </span>
+                    </div>
+                    {sug.matchedCount > 0 && (
+                      <span
+                        style={{
+                          background: 'rgba(10, 179, 156, 0.1)',
+                          color: '#0ab39c',
+                          padding: '0.1rem 0.4rem',
+                          borderRadius: '4px',
+                          fontSize: '0.68rem',
+                          fontWeight: 700,
+                        }}
+                      >
+                        ✓ {sug.matchedCount} Cocok
+                      </span>
+                    )}
                   </div>
-                  {sug.branchCount > 1 && (
-                    <span
-                      style={{
-                        background: 'rgba(240, 101, 72, 0.1)',
-                        color: '#f06548',
-                        padding: '0.1rem 0.4rem',
-                        borderRadius: '4px',
-                        fontSize: '0.68rem',
-                        fontWeight: 700,
-                      }}
-                    >
-                      {sug.branchCount} Cabang
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Control Bar 2: Quick Filter Pills (Outlet Types) */}
+      {/* Control Bar 2: Collaboration & Activity Filter Mode */}
       <div
         style={{
           display: 'flex',
@@ -544,22 +663,22 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginRight: '0.3rem' }}>
           <Filter size={12} color="#878a99" />
-          <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#6c757d' }}>Filter Tipe:</span>
+          <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#6c757d' }}>Filter Data:</span>
         </div>
 
         {[
-          { id: 'ALL', label: 'Semua Tipe Cabang' },
-          { id: 'KC', label: 'Kantor Cabang (KC)' },
+          { id: 'ALL', label: `Semua Cabang (${allPins.length})` },
+          { id: 'MATCHED_ONLY', label: `🎯 Hanya Ber-Data Matched (${stats.pinsWithMatchCount})` },
+          { id: 'MULTI_ONLY', label: `⚠️ Multi-Outlet Saja (${stats.multiOutletPins})` },
+          { id: 'KC', label: 'KC' },
           { id: 'KCP', label: 'KCP' },
-          { id: 'KK', label: 'Kantor Kas (KK)' },
-          { id: 'MULTI_ONLY', label: '⚠️ Multi-Outlet Saja (>1 Cabang)' },
         ].map((f) => {
-          const isActive = typeFilter === f.id;
+          const isActive = mapMode === f.id;
           return (
             <button
               key={f.id}
               type="button"
-              onClick={() => setTypeFilter(f.id as OutletTypeFilter)}
+              onClick={() => setMapMode(f.id as MapModeFilter)}
               style={{
                 fontSize: '0.7rem',
                 fontWeight: 600,
@@ -578,7 +697,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         })}
 
         <div style={{ marginLeft: 'auto', fontSize: '0.7rem', color: '#878a99' }}>
-          Menampilkan <strong style={{ color: '#212529' }}>{filteredPins.length.toLocaleString('id-ID')}</strong> titik
+          Menampilkan <strong style={{ color: '#212529' }}>{filteredPins.length.toLocaleString('id-ID')}</strong> titik cabang
         </div>
       </div>
 
@@ -616,17 +735,20 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
               <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#0ab39c', display: 'inline-block', border: '1.5px solid #fff' }} />
-              <span style={{ color: '#495057', fontWeight: 600 }}>1 Cabang</span>
+              <span style={{ color: '#495057', fontWeight: 600 }}>Cabang Matched</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#6366f1', display: 'inline-block', border: '1.5px solid #fff' }} />
+              <span style={{ color: '#495057', fontWeight: 600 }}>Cabang Master</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
               <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#f06548', display: 'inline-block', border: '2px solid #fff' }} />
               <span style={{ color: '#495057', fontWeight: 600 }}>Multi-Cabang (&gt;1)</span>
             </div>
-            <span style={{ color: '#878a99' }}>&bull; Hover untuk info cepat, klik untuk rincian</span>
           </div>
         </div>
 
-        {/* Selected Pin Side Drawer / Detail Card */}
+        {/* Selected Pin Side Drawer / Detail Card with Matched Data Correlation */}
         {selectedPin && currentBranch && (
           <div
             style={{
@@ -686,6 +808,34 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 >
                   ✕
                 </button>
+              </div>
+
+              {/* Matched Data Collaboration Highlight Box */}
+              <div
+                style={{
+                  background: selectedPin.matchedCount > 0 ? 'rgba(10, 179, 156, 0.08)' : '#f1f5f9',
+                  border: `1px solid ${selectedPin.matchedCount > 0 ? 'rgba(10, 179, 156, 0.3)' : '#cbd5e1'}`,
+                  borderRadius: '6px',
+                  padding: '0.5rem 0.65rem',
+                  marginBottom: '0.75rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                  <CheckCircle size={15} color={selectedPin.matchedCount > 0 ? '#0ab39c' : '#64748b'} />
+                  <div>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: selectedPin.matchedCount > 0 ? '#0ab39c' : '#475569' }}>
+                      {selectedPin.matchedCount > 0
+                        ? `TERKORELASI: ${selectedPin.matchedCount.toLocaleString('id-ID')} DATA MATCHED`
+                        : 'Belum Ada Transaksi Cocok'}
+                    </div>
+                    <div style={{ fontSize: '0.67rem', color: '#64748b' }}>
+                      Monitoring aktivitas data target pada cabang ini
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Multi-Branch Switcher if > 1 branch */}

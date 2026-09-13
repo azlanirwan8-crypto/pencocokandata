@@ -894,6 +894,7 @@ export const App: React.FC = () => {
             {/* Peta Tracking Penyebaran Cabang BNI di Indonesia (GIS & Google Maps Direct Link) */}
             <IndonesiaBranchMap
               masterRows={masterRows}
+              targetRows={targetRows}
               selectedWilayah={dashboardWilayahFilter}
               onNavigateToMaster={() => setActiveTab('master')}
             />
