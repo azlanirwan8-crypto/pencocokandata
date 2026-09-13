@@ -1,5 +1,11 @@
 import type { MasterRow, TargetRow, MasterHealth, WilayahSetting } from '../types';
-import { normalizeKodePos, textSimilarityScore, extractWilayahFromBranchCode } from './normalizer';
+import {
+  normalizeKodePos,
+  textSimilarityScore,
+  extractWilayahFromBranchCode,
+  cleanText,
+  findSharedStreetOrLandmark,
+} from './normalizer.ts';
 
 /**
  * Build fast O(1) In-Memory Hash Map index keyed by 5-digit KODE POS
@@ -56,7 +62,8 @@ export function analyzeMasterHealth(masterRows: MasterRow[], index: Map<string, 
  * 1. Cocokkan teks Kecamatan Data Asli vs Master
  * 2. Jika masih > 1, cocokkan Kelurahan
  * 3. Jika masih > 1, gunakan kesamaan teks Dati II
- * 4. Pilih baris master dengan skor kecocokan tertinggi
+ * 4. Analisis koridor nama jalan / landmark / mall pada Alamat
+ * 5. Pilih baris master dengan skor kecocokan tertinggi
  */
 export function resolveLevel2TieBreaker(target: TargetRow, candidates: MasterRow[]): MasterRow {
   let bestCandidate = candidates[0];
@@ -66,9 +73,12 @@ export function resolveLevel2TieBreaker(target: TargetRow, candidates: MasterRow
     const scoreKec = textSimilarityScore(target.Kecamatan || '', cand.Kecamatan || '');
     const scoreKel = textSimilarityScore(target.Kelurahan || '', cand.Kelurahan || '');
     const scoreDati = textSimilarityScore(target['Dati II'] || '', cand['Dati II'] || '');
+    const scoreAddr = textSimilarityScore(cleanText(target.ALAMAT), cleanText(cand.ALAMAT));
+    const streetMatch = findSharedStreetOrLandmark(target.ALAMAT || '', cand.ALAMAT || '');
+    const streetBonus = streetMatch.isMatch ? 0.35 : 0;
 
-    // Weighted composite score prioritizes Kecamatan (0.5), Kelurahan (0.3), Dati II (0.2)
-    const compositeScore = scoreKec * 0.5 + scoreKel * 0.3 + scoreDati * 0.2;
+    // Weighted composite score prioritizes Kecamatan (0.4), Kelurahan (0.25), Dati II (0.15), Alamat & Koridor Jalan (0.2 + bonus jalan)
+    const compositeScore = scoreKec * 0.4 + scoreKel * 0.25 + scoreDati * 0.15 + scoreAddr * 0.2 + streetBonus;
 
     if (compositeScore > bestScore) {
       bestScore = compositeScore;

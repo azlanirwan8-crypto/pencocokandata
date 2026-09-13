@@ -9,8 +9,10 @@ import {
   textSimilarityScore,
   hasDirectionalConflict,
   stripAdminNoise,
-} from './normalizer';
-import { calculateRealDistance } from './geoDistance';
+  normalizeNumerals,
+  findSharedStreetOrLandmark,
+} from './normalizer.ts';
+import { calculateRealDistance } from './geoDistance.ts';
 
 export interface CandidateOption {
   master: MasterRow;
@@ -136,11 +138,14 @@ export function buildMasterProximityIndex(masterRows: MasterRow[]): MasterProxim
       }
     }
 
-    // Indeks Kelurahan (Simpan varian nama bersih, nama murni tanpa stopword, dan nama asli)
+    // Indeks Kelurahan (Simpan varian nama bersih, nama murni tanpa stopword, nama asli, varian tanpa spasi, dan angka)
     const rawKel = cleanText(m.Kelurahan);
     const normKel = cleanKelurahan(m.Kelurahan);
     const coreKel = stripAdminNoise(m.Kelurahan);
-    [normKel, coreKel, rawKel].filter(Boolean).forEach((k) => {
+    const noSpaceKel = normKel ? normKel.replace(/\s+/g, '') : '';
+    const numKel = normKel ? normalizeNumerals(normKel) : '';
+    const numNoSpaceKel = numKel ? numKel.replace(/\s+/g, '') : '';
+    [normKel, coreKel, rawKel, noSpaceKel, numKel, numNoSpaceKel].filter(Boolean).forEach((k) => {
       let arr = byKelurahan.get(k);
       if (!arr) {
         arr = [];
@@ -149,11 +154,14 @@ export function buildMasterProximityIndex(masterRows: MasterRow[]): MasterProxim
       if (arr.length < 30 && !arr.includes(m)) arr.push(m);
     });
 
-    // Indeks Kecamatan (Simpan varian nama bersih, nama murni tanpa stopword, dan nama asli)
+    // Indeks Kecamatan (Simpan varian nama bersih, nama murni tanpa stopword, nama asli, varian tanpa spasi, dan angka)
     const rawKec = cleanText(m.Kecamatan);
     const normKec = cleanKecamatan(m.Kecamatan);
     const coreKec = stripAdminNoise(m.Kecamatan);
-    [normKec, coreKec, rawKec].filter(Boolean).forEach((k) => {
+    const noSpaceKec = normKec ? normKec.replace(/\s+/g, '') : '';
+    const numKec = normKec ? normalizeNumerals(normKec) : '';
+    const numNoSpaceKec = numKec ? numKec.replace(/\s+/g, '') : '';
+    [normKec, coreKec, rawKec, noSpaceKec, numKec, numNoSpaceKec].filter(Boolean).forEach((k) => {
       let arr = byKecamatan.get(k);
       if (!arr) {
         arr = [];
@@ -182,12 +190,12 @@ export function buildMasterProximityIndex(masterRows: MasterRow[]): MasterProxim
       if (arr2.length < 30 && !arr2.includes(m)) arr2.push(m);
     }
 
-    // Indeks Dati II (Simpan varian nama bersih tanpa prefix 'kabupaten'/'kota', nama murni, dan nama asli)
-    // Contoh: "KABUPATEN BONDOWOSO" -> diindeks sebagai "bondowoso" dan "kabupaten bondowoso"
+    // Indeks Dati II (Simpan varian nama bersih tanpa prefix 'kabupaten'/'kota', nama murni, nama asli, dan varian tanpa spasi)
     const rawDati = cleanText(m['Dati II']);
     const normDati = cleanDati(m['Dati II']);
     const coreDati = stripAdminNoise(m['Dati II']);
-    [normDati, coreDati, rawDati].filter(Boolean).forEach((d) => {
+    const noSpaceDati = normDati ? normDati.replace(/\s+/g, '') : '';
+    [normDati, coreDati, rawDati, noSpaceDati].filter(Boolean).forEach((d) => {
       let arrD = byDati.get(d);
       if (!arrD) {
         arrD = [];
@@ -242,13 +250,13 @@ function evaluateMasterCandidate(
   const masterKel = cleanKelurahan(m.Kelurahan);
   const kelSim = textSimilarityScore(target.Kelurahan || '', m.Kelurahan || '');
   const rawKelMatch = !hasDirectionalConflict(target.Kelurahan || '', m.Kelurahan || '') &&
-    (kelSim > 0.75 || (targetKel && masterKel && targetKel === masterKel));
+    (kelSim > 0.75 || (targetKel && masterKel && (targetKel === masterKel || targetKel.replace(/\s+/g, '') === masterKel.replace(/\s+/g, ''))));
 
   const targetKec = cleanKecamatan(target.Kecamatan);
   const masterKec = cleanKecamatan(m.Kecamatan);
   const kecSim = textSimilarityScore(target.Kecamatan || '', m.Kecamatan || '');
   const rawKecMatch = !hasDirectionalConflict(target.Kecamatan || '', m.Kecamatan || '') &&
-    (kecSim > 0.75 || (targetKec && masterKec && targetKec === masterKec));
+    (kecSim > 0.75 || (targetKec && masterKec && (targetKec === masterKec || targetKec.replace(/\s+/g, '') === masterKec.replace(/\s+/g, ''))));
 
   // Normalisasi Dati II: "KABUPATEN BONDOWOSO" vs "BONDOWOSO" diakui sama persis (100% Match)
   // Diproteksi agar arah (utara/selatan/barat/timur) tidak saling tertukar
@@ -256,12 +264,12 @@ function evaluateMasterCandidate(
   const masterDati = cleanDati(m['Dati II']);
   const datiSim = textSimilarityScore(target['Dati II'] || '', m['Dati II'] || '');
   const datiMatch = !hasDirectionalConflict(target['Dati II'] || '', m['Dati II'] || '') &&
-    (datiSim > 0.75 || (targetDati && masterDati && targetDati === masterDati));
+    (datiSim > 0.75 || (targetDati && masterDati && (targetDati === masterDati || targetDati.replace(/\s+/g, '') === masterDati.replace(/\s+/g, ''))));
 
   const targetProv = cleanProvinsi(target.Provinsi);
   const masterProv = cleanProvinsi(m.Provinsi);
   const provSim = textSimilarityScore(target.Provinsi || '', m.Provinsi || '');
-  const provMatch = provSim > 0.75 || (targetProv && masterProv && targetProv === masterProv);
+  const provMatch = provSim > 0.75 || (targetProv && masterProv && (targetProv === masterProv || targetProv.replace(/\s+/g, '') === masterProv.replace(/\s+/g, '')));
 
   // Proteksi mutlak hierarki administratif Indonesia:
   // 1. Jika terbukti berbeda Provinsi, kelurahan/kecamatan sama adalah homonim/kebetulan nama sama!
@@ -284,6 +292,27 @@ function evaluateMasterCandidate(
   const kelMatch = isDiffProv || (isDiffDati && !provMatch) ? false : rawKelMatch;
   const kecMatch = isDiffProv || (isDiffDati && !provMatch) ? false : rawKecMatch;
 
+  // Analisis Alamat Layaknya Auditor Manusia:
+  const targetAddrClean = cleanText(target.ALAMAT);
+  const targetHasKel = Boolean(targetKel && targetKel !== '-' && targetKel.length >= 2);
+  const targetHasKec = Boolean(targetKec && targetKec !== '-' && targetKec.length >= 2);
+
+  // Jika kolom target Kelurahan kosong, deteksi apakah ada tertulis di Alamat:
+  const masterKelCore = stripAdminNoise(m.Kelurahan);
+  const kelInAddr = !targetHasKel && Boolean(
+    targetAddrClean && masterKelCore && masterKelCore.length >= 4 &&
+    targetAddrClean.includes(masterKelCore)
+  );
+
+  // Jika kolom target Kecamatan kosong, deteksi apakah ada tertulis di Alamat:
+  const masterKecCore = stripAdminNoise(m.Kecamatan);
+  const kecInAddr = !targetHasKec && Boolean(
+    targetAddrClean && masterKecCore && masterKecCore.length >= 4 &&
+    targetAddrClean.includes(masterKecCore)
+  );
+
+  // Deteksi kecocokan koridor nama jalan / gedung / landmark utama
+  const streetMatch = findSharedStreetOrLandmark(target.ALAMAT || '', m.ALAMAT || '');
   const addrSim = textSimilarityScore(cleanText(target.ALAMAT), cleanText(m.ALAMAT));
 
   let score = 50;
@@ -315,19 +344,37 @@ function evaluateMasterCandidate(
       distance -= 10;
     }
 
+    // Pengecekan Koridor Jalan Utama
+    if (streetMatch.isMatch) {
+      score += 12;
+      distance -= 1500;
+    }
+
     // Pengecekan Kelurahan & Kecamatan di Dati II yang sama:
-    if (kelMatch && kecMatch) {
-      score += 23; // 95 - Sangat presisi (Satu Dati II, Kecamatan, & Kelurahan)
+    const effectiveKel = kelMatch || kelInAddr;
+    const effectiveKec = kecMatch || kecInAddr;
+
+    const streetPrefix = streetMatch.isMatch ? `Satu Jalur/Jalan (${streetMatch.sharedKeyword}) • ` : '';
+
+    if (effectiveKel && effectiveKec) {
+      score += 23; // 95 - 98: Sangat presisi (Satu Dati II, Kecamatan, & Kelurahan)
       distance -= 600;
-      reason = `Satu Kelurahan (${m.Kelurahan || target.Kelurahan}) & Kecamatan • ${m['Dati II']}`;
-    } else if (kelMatch) {
+      const kelLabel = kelInAddr ? `${m.Kelurahan} (dari Alamat)` : (m.Kelurahan || target.Kelurahan);
+      const kecLabel = kecInAddr ? `${m.Kecamatan} (dari Alamat)` : (m.Kecamatan || target.Kecamatan);
+      reason = `${streetPrefix}Satu Kelurahan (${kelLabel}) & Kecamatan (${kecLabel}) • ${m['Dati II']}`;
+    } else if (effectiveKel) {
       score += 18; // 90
       distance -= 550;
-      reason = `Satu Kelurahan (${m.Kelurahan || target.Kelurahan}) • ${m['Dati II']}`;
-    } else if (kecMatch) {
+      const kelLabel = kelInAddr ? `${m.Kelurahan} (dari Alamat)` : (m.Kelurahan || target.Kelurahan);
+      reason = `${streetPrefix}Satu Kelurahan (${kelLabel}) • ${m['Dati II']}`;
+    } else if (effectiveKec) {
       score += 13; // 85
       distance -= 400;
-      reason = `Satu Kecamatan (${m.Kecamatan || target.Kecamatan}) • ${m['Dati II']}`;
+      const kecLabel = kecInAddr ? `${m.Kecamatan} (dari Alamat)` : (m.Kecamatan || target.Kecamatan);
+      reason = `${streetPrefix}Satu Kecamatan (${kecLabel}) • ${m['Dati II']}`;
+    } else if (streetMatch.isMatch) {
+      score += 8; // ~84
+      reason = `Satu Jalur/Jalan (${streetMatch.sharedKeyword}) • ${m['Dati II']}`;
     } else {
       if (postal3Match) {
         reason = `Satu Zona Pos (${m['KODE POS']}) • ${m['Dati II']}`;
@@ -339,14 +386,22 @@ function evaluateMasterCandidate(
     // Satu Provinsi atau Dati II belum match (misal lintas kabupaten/kota terdekat di provinsi yang sama)
     score = 55;
     distance = postalDiff * 2 + 4000;
+    if (streetMatch.isMatch) {
+      score += 10;
+      distance -= 800;
+    }
+    const streetPrefix = streetMatch.isMatch ? `Satu Jalur/Jalan (${streetMatch.sharedKeyword}) • ` : '';
+
     if (kelMatch && !isDiffDati) {
       score += 10; // maks 65 (di bawah 72 agar cabang dalam Dati II selalu menang)
       distance -= 500;
-      reason = `Kelurahan Serupa (${m.Kelurahan || target.Kelurahan}) • ${m['Dati II'] || m.Provinsi}`;
+      reason = `${streetPrefix}Kelurahan Serupa (${m.Kelurahan || target.Kelurahan}) • ${m['Dati II'] || m.Provinsi}`;
     } else if (kecMatch && !isDiffDati) {
       score += 6; // maks 61
       distance -= 300;
-      reason = `Kecamatan Serupa (${m.Kecamatan || target.Kecamatan}) • ${m['Dati II'] || m.Provinsi}`;
+      reason = `${streetPrefix}Kecamatan Serupa (${m.Kecamatan || target.Kecamatan}) • ${m['Dati II'] || m.Provinsi}`;
+    } else if (streetMatch.isMatch) {
+      reason = `Satu Jalur/Jalan (${streetMatch.sharedKeyword}) • ${m['Dati II'] || m.Provinsi}`;
     } else if (postal2Match) {
       score += 4;
       distance -= 100;
@@ -467,22 +522,32 @@ export function findClosestMasterRecommendation(
     );
   };
 
+  const targetKelNoSpace = targetKel ? targetKel.replace(/\s+/g, '') : '';
+  const targetKelNum = targetKel ? normalizeNumerals(targetKel) : '';
+  const targetKelNumNoSpace = targetKelNum ? targetKelNum.replace(/\s+/g, '') : '';
+
+  const targetKecNoSpace = targetKec ? targetKec.replace(/\s+/g, '') : '';
+  const targetKecNum = targetKec ? normalizeNumerals(targetKec) : '';
+  const targetKecNumNoSpace = targetKecNum ? targetKecNum.replace(/\s+/g, '') : '';
+
+  const targetDatiNoSpace = targetDati ? targetDati.replace(/\s+/g, '') : '';
+
   // Kumpulkan kandidat real dari master dengan proteksi batas wilayah
   const rawPool: MasterRow[] = [];
 
   // TIER 1: Cabang di Dati II / Kota yang sama
   const datiPool: MasterRow[] = [];
 
-  // Prioritas 0 (Dalam Dati II): Cabang di KELURAHAN yang SAMA PERSIS di Dati II target
-  [targetKelCore, targetKel, targetKelRaw].filter(Boolean).forEach((kel) => {
+  // Prioritas 0 (Dalam Dati II): Cabang di KELURAHAN yang SAMA PERSIS / varian spaceless & angka di Dati II target
+  [targetKelCore, targetKel, targetKelRaw, targetKelNoSpace, targetKelNum, targetKelNumNoSpace].filter(Boolean).forEach((kel) => {
     if (index.byKelurahan.has(kel)) {
       const list = (index.byKelurahan.get(kel) || []).filter(matchesDati);
       datiPool.push(...list);
     }
   });
 
-  // Prioritas 0.5 (Dalam Dati II): Cabang di KECAMATAN yang SAMA PERSIS di Dati II target
-  [targetKecCore, targetKec, targetKecRaw].filter(Boolean).forEach((kec) => {
+  // Prioritas 0.5 (Dalam Dati II): Cabang di KECAMATAN yang SAMA PERSIS / varian spaceless & angka di Dati II target
+  [targetKecCore, targetKec, targetKecRaw, targetKecNoSpace, targetKecNum, targetKecNumNoSpace].filter(Boolean).forEach((kec) => {
     if (index.byKecamatan.has(kec)) {
       const list = (index.byKecamatan.get(kec) || []).filter(matchesDati);
       datiPool.push(...list);
@@ -490,15 +555,11 @@ export function findClosestMasterRecommendation(
   });
 
   // Prioritas 1: Seluruh cabang lain di Dati II yang sama
-  if (targetDati && index.byDati.has(targetDati)) {
-    datiPool.push(...(index.byDati.get(targetDati) || []));
-  }
-  if (targetDatiCore && targetDatiCore !== targetDati && index.byDati.has(targetDatiCore)) {
-    datiPool.push(...(index.byDati.get(targetDatiCore) || []));
-  }
-  if (targetDatiRaw && targetDatiRaw !== targetDati && targetDatiRaw !== targetDatiCore && index.byDati.has(targetDatiRaw)) {
-    datiPool.push(...(index.byDati.get(targetDatiRaw) || []));
-  }
+  [targetDati, targetDatiCore, targetDatiRaw, targetDatiNoSpace].filter(Boolean).forEach((d) => {
+    if (index.byDati.has(d)) {
+      datiPool.push(...(index.byDati.get(d) || []));
+    }
+  });
 
   // Fallback pencarian Dati II dengan pemindaian menyeluruh jika lookup langsung belum menemukan kandidat
   if (datiPool.length === 0 && targetDati) {
@@ -524,15 +585,15 @@ export function findClosestMasterRecommendation(
     // TIER 2: Jika di Dati II target TIDAK ADA cabang sama sekali di Master, cari di Provinsi yang sama
     const provPool: MasterRow[] = [];
 
-    // Cek kelurahan/kecamatan yang berada di provinsi yang sama
-    [targetKelCore, targetKel, targetKelRaw].filter(Boolean).forEach((kel) => {
+    // Cek kelurahan/kecamatan yang berada di provinsi yang sama (termasuk varian spaceless & angka)
+    [targetKelCore, targetKel, targetKelRaw, targetKelNoSpace, targetKelNum, targetKelNumNoSpace].filter(Boolean).forEach((kel) => {
       if (index.byKelurahan.has(kel)) {
         const list = (index.byKelurahan.get(kel) || []).filter(matchesProvince);
         provPool.push(...list);
       }
     });
 
-    [targetKecCore, targetKec, targetKecRaw].filter(Boolean).forEach((kec) => {
+    [targetKecCore, targetKec, targetKecRaw, targetKecNoSpace, targetKecNum, targetKecNumNoSpace].filter(Boolean).forEach((kec) => {
       if (index.byKecamatan.has(kec)) {
         const list = (index.byKecamatan.get(kec) || []).filter(matchesProvince);
         provPool.push(...list);

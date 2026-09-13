@@ -1,7 +1,7 @@
 // Utility for Real-World Geographic Distance Calculation & Google Maps Integration
 // Menghitung estimasi jarak fisik nyata (Kilometer) dan menyediakan rute Google Maps resmi
 
-import { cleanText, cleanDati, cleanKecamatan, cleanKelurahan, normalizeKodePos, hasDirectionalConflict } from './normalizer';
+import { cleanText, cleanDati, cleanKecamatan, cleanKelurahan, normalizeKodePos, hasDirectionalConflict, findSharedStreetOrLandmark } from './normalizer.ts';
 import type { TargetRow, MasterRow } from '../types';
 
 /**
@@ -259,6 +259,19 @@ export function calculateRealDistance(target: TargetRow, master: MasterRow): Rea
       distanceKm: km,
       formattedDistance: `~${km.toLocaleString('id-ID')} km`,
       basis: `Satu Kelurahan (${master.Kelurahan || target.Kelurahan})`,
+      isPrecise: true,
+      googleMapsUrl: mapsUrl,
+    };
+  }
+
+  // KASUS 1.5: Satu Koridor Jalan / Landmark yang Sama di Kota yang Sama (Jarak ~0.8 km)
+  const streetMatch = findSharedStreetOrLandmark(target.ALAMAT || '', master.ALAMAT || '');
+  if (streetMatch.isMatch && datiMatch) {
+    const km = 0.8;
+    return {
+      distanceKm: km,
+      formattedDistance: `~${km.toLocaleString('id-ID')} km`,
+      basis: `Satu Koridor Jalan (${streetMatch.sharedKeyword})`,
       isPrecise: true,
       googleMapsUrl: mapsUrl,
     };

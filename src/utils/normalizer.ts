@@ -548,3 +548,71 @@ export function extractWilayahFromBranchCode(
   return { branchCode: bc, kodeWilayah: '', wilayahName: fallback, isMatched: false };
 }
 
+/**
+ * Normalisasi alamat jalan Indonesia untuk perbandingan layaknya auditor manusia:
+ * Menyeragamkan variasi singkatan umum (Jl, Jln, Gg, Komp, Kav, No, Lt, Gedung, dsb)
+ */
+export function normalizeStreetAddress(val: unknown): string {
+  if (val === null || val === undefined) return '';
+  const s = cleanText(val);
+  if (!s) return '';
+
+  return s
+    .replace(/\b(jalan|jln|jl|raya)\b/gi, 'jl')
+    .replace(/\b(gang|gg)\b/gi, 'gang')
+    .replace(/\b(komplek|kompleks|komp)\b/gi, 'komplek')
+    .replace(/\b(kavling|kav)\b/gi, 'kav')
+    .replace(/\b(gedung|gdg|gd)\b/gi, 'gedung')
+    .replace(/\b(nomor|no)\b/gi, 'no')
+    .replace(/\b(lantai|lt)\b/gi, 'lt')
+    .replace(/\b(blok|blk)\b/gi, 'blok')
+    .replace(/\b(pertokoan|ruko)\b/gi, 'ruko')
+    .replace(/[\s\-_/\\,.]+/g, ' ')
+    .trim();
+}
+
+/**
+ * Ekstraksi token kata jalan/gedung/mall/landmark bermakna (panjang >= 4 karakter, non-stopword)
+ */
+export function extractAddressKeywords(addr: string): string[] {
+  const norm = normalizeStreetAddress(addr);
+  if (!norm) return [];
+
+  const stopWords = new Set([
+    'jl', 'gang', 'komplek', 'kav', 'gedung', 'no', 'lt', 'blok', 'ruko',
+    'rt', 'rw', 'dati', 'kota', 'kabupaten', 'kecamatan', 'kelurahan', 'desa',
+    'provinsi', 'indonesia', 'raya', 'dalam', 'barat', 'timur', 'selatan', 'utara',
+    'pusat', 'dan', 'di', 'ke', 'dari', 'seberang', 'depan', 'dekat', 'nomor',
+    'lantai', 'unit', 'kavling', 'jalan', 'jln'
+  ]);
+
+  return norm
+    .split(' ')
+    .map((w) => w.trim())
+    .filter((w) => w.length >= 4 && !stopWords.has(w) && !/^\d+$/.test(w));
+}
+
+/**
+ * Cek apakah dua alamat berbagi nama jalan utama, gedung, atau landmark yang sama
+ */
+export function findSharedStreetOrLandmark(
+  addr1: string,
+  addr2: string
+): { isMatch: boolean; sharedKeyword?: string } {
+  const kw1 = extractAddressKeywords(addr1);
+  const kw2 = extractAddressKeywords(addr2);
+
+  for (const w1 of kw1) {
+    for (const w2 of kw2) {
+      if (w1 === w2) {
+        return { isMatch: true, sharedKeyword: w1 };
+      }
+      if (w1.length >= 5 && w2.length >= 5 && (w1.includes(w2) || w2.includes(w1))) {
+        return { isMatch: true, sharedKeyword: w1 };
+      }
+    }
+  }
+
+  return { isMatch: false };
+}
+
