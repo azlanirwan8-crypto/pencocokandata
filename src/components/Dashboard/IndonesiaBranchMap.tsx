@@ -27,7 +27,8 @@ import {
   clampToIndonesia,
   isAcehTargetRow,
   groupTargetOriginsForMap,
-  type PlottedBranchPin
+  type PlottedBranchPin,
+  getAllMatchedCoordinates,
 } from '../../utils/geoCoder';
 
 interface IndonesiaBranchMapProps {
@@ -117,6 +118,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   const [showMatchedModal, setShowMatchedModal] = useState(false);
   const [modalSearchTerm, setModalSearchTerm] = useState('');
   const [trackingMode, setTrackingMode] = useState<'none' | 'aceh_kim'>('none');
+// @ts-ignore: suppress unused setter warning
+  const [showAllMatchMarkers, setShowAllMatchMarkers] = useState(false);
 
   // 1. Group & Cluster master rows into pins and correlate with Matched target rows
   const allPins = useMemo(() => {
@@ -447,15 +450,30 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     });
 
     // Auto-fit if specific wilayah or single selected pin without matched arcs
-    if (displayScope === 'SELECTED_ONLY' && selectedPin) {
-      if (selectedMatchedRows.length === 0) {
-        map.flyTo([selectedPin.lat, selectedPin.lng], 14, { duration: 0.8 });
-      }
-    } else if (selectedWilayah !== 'ALL' && filteredPins.length > 0) {
-      const bounds = L.latLngBounds(filteredPins.map((p) => [p.lat, p.lng]));
-      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
-    }
-  }, [filteredPins, selectedPin, displayScope, selectedWilayah, selectedMatchedRows.length]);
+if (displayScope === 'SELECTED_ONLY' && selectedPin) {
+  if (selectedMatchedRows.length === 0) {
+    map.flyTo([selectedPin.lat, selectedPin.lng], 14, { duration: 0.8 });
+  }
+} else if (selectedWilayah !== 'ALL' && filteredPins.length > 0) {
+  const bounds = L.latLngBounds(filteredPins.map((p) => [p.lat, p.lng]));
+  map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
+}
+
+// Render all matched target coordinates as orange markers when enabled
+if (showAllMatchMarkers) {
+  const allCoords = getAllMatchedCoordinates(targetRows);
+  allCoords.forEach(([lat, lng]) => {
+    const marker = L.circleMarker([lat, lng], {
+      radius: 4,
+      fillColor: '#ff6600',
+      color: '#ffffff',
+      weight: 1,
+      fillOpacity: 0.9,
+    });
+    markersLayer.addLayer(marker);
+  });
+}
+    }, [filteredPins, selectedPin, displayScope, selectedWilayah, selectedMatchedRows.length, showAllMatchMarkers]);
 
   // 9. Render arcs from real administrative origin points → selected branch (no unbounded fan-out)
   useEffect(() => {
@@ -883,6 +901,26 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
               }}
             >
               OSM
+            </button>
+                      <button
+              type="button"
+              onClick={() => setShowAllMatchMarkers((prev) => !prev)}
+              title="Toggle All Match Markers"
+              style={{
+                fontSize: '0.68rem',
+                fontWeight: 600,
+                padding: '0.18rem 0.45rem',
+                border: 'none',
+                borderRadius: '3px',
+                background: showAllMatchMarkers ? '#405189' : 'transparent',
+                color: showAllMatchMarkers ? '#ffffff' : '#6c757d',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px',
+              }}
+            >
+              All
             </button>
           </div>
 

@@ -176,10 +176,10 @@ export const POSTAL_3DIGIT_MAP: Record<string, { lat: number; lng: number; city:
   '213': { lat: 3.1600, lng: 99.5500, city: 'Batubara / Tanjung Balai', province: 'Sumatera Utara' },
   '214': { lat: 2.8000, lng: 99.4000, city: 'Labuhanbatu / Rantauprapat', province: 'Sumatera Utara' },
   '221': { lat: 2.3000, lng: 99.0700, city: 'Toba / Samosir / Tarutung', province: 'Sumatera Utara' },
-  '222': { lat: 2.7000, lng: 98.3000, city: 'Dairi / Sidikalang / Pakpak Bharat', province: 'Sumatera Utara' },
-  '223': { lat: 2.0000, lng: 98.9000, city: 'Tapanuli Utara', province: 'Sumatera Utara' },
-  '224': { lat: 1.7420, lng: 98.7850, city: 'Sibolga / Tapanuli Tengah', province: 'Sumatera Utara' },
-  '225': { lat: 1.7420, lng: 98.7850, city: 'Sibolga', province: 'Sumatera Utara' },
+  '222': { lat: 2.7485, lng: 98.3125, city: 'Dairi / Sidikalang / Pakpak Bharat', province: 'Sumatera Utara' },
+  '223': { lat: 2.6074, lng: 98.7092, city: 'Samosir / Pangururan / Toba', province: 'Sumatera Utara' }, // BENCHMARK GOOGLE MAPS FOR SAMOSIR & PANGURURAN!
+  '224': { lat: 1.7420, lng: 98.7880, city: 'Sibolga / Tapanuli Tengah', province: 'Sumatera Utara' },
+  '225': { lat: 1.7420, lng: 98.7880, city: 'Sibolga', province: 'Sumatera Utara' },
   '227': { lat: 1.3700, lng: 99.2700, city: 'Padangsidimpuan / Tapanuli Selatan', province: 'Sumatera Utara' },
   '228': { lat: 1.0000, lng: 97.6000, city: 'Nias / Gunungsitoli', province: 'Sumatera Utara' },
   '229': { lat: 1.2000, lng: 99.6000, city: 'Padang Lawas / Mandailing Natal', province: 'Sumatera Utara' },
@@ -203,6 +203,44 @@ export const POSTAL_3DIGIT_MAP: Record<string, { lat: number; lng: number; city:
 
   // Situbondo / Jawa Timur (683)
   '683': { lat: -7.7060, lng: 114.0050, city: 'Situbondo / Besuki / Asembagus', province: 'Jawa Timur' },
+};
+
+// 2c. Exact 5-digit Postal Code Benchmark Database (Verified with Google Maps)
+export const EXACT_POSTAL_MAP: Record<string, { lat: number; lng: number; city: string; province: string }> = {
+  // Pangururan & Samosir (22390 - 22398) - Benchmarked to Pulau Samosir
+  '22390': { lat: 2.6074, lng: 98.7092, city: 'Pangururan / Kab. Samosir', province: 'Sumatera Utara' },
+  '22391': { lat: 2.6074, lng: 98.7092, city: 'Pangururan (Pardomuan I) / Kab. Samosir', province: 'Sumatera Utara' },
+  '22392': { lat: 2.6800, lng: 98.7500, city: 'Simanindo / Kab. Samosir', province: 'Sumatera Utara' },
+  '22393': { lat: 2.5300, lng: 98.8800, city: 'Onan Runggu / Kab. Samosir', province: 'Sumatera Utara' },
+  '22394': { lat: 2.4500, lng: 98.8800, city: 'Nainggolan / Kab. Samosir', province: 'Sumatera Utara' },
+  '22395': { lat: 2.5000, lng: 98.7200, city: 'Palipi / Kab. Samosir', province: 'Sumatera Utara' },
+  '22396': { lat: 2.6200, lng: 98.7800, city: 'Ronggur Nihuta / Kab. Samosir', province: 'Sumatera Utara' },
+  '22397': { lat: 2.4000, lng: 98.6700, city: 'Sitio-tio / Kab. Samosir', province: 'Sumatera Utara' },
+  '22398': { lat: 2.5800, lng: 98.6500, city: 'Sianjur Mula Mula / Kab. Samosir', province: 'Sumatera Utara' },
+
+  // Padang Aro & Solok Selatan (27778, 27779, 27777) - Benchmarked to Sangir / Solok Selatan
+  '27778': { lat: -1.5658, lng: 101.2568, city: 'Padang Aro / Kab. Solok Selatan (Sangir)', province: 'Sumatera Barat' },
+  '27779': { lat: -1.5800, lng: 101.2400, city: 'Sangir Jujuan / Kab. Solok Selatan', province: 'Sumatera Barat' },
+  '27777': { lat: -1.5400, lng: 101.2700, city: 'Sangir Balai Janggo / Kab. Solok Selatan', province: 'Sumatera Barat' },
+
+  // Sidikalang & Dairi (22211 - 22214)
+  '22211': { lat: 2.7485, lng: 98.3125, city: 'Sidikalang Kota / Kab. Dairi', province: 'Sumatera Utara' },
+  '22212': { lat: 2.7485, lng: 98.3125, city: 'Batang Beruh / Sidikalang', province: 'Sumatera Utara' },
+  '22214': { lat: 2.7400, lng: 98.3200, city: 'Kuta Gambir / Sidikalang', province: 'Sumatera Utara' },
+
+  // Sibolga & Tapanuli Tengah (22411 - 22414, 22611)
+  '22411': { lat: 1.7420, lng: 98.7880, city: 'Sibolga Kota', province: 'Sumatera Utara' },
+  '22412': { lat: 1.7450, lng: 98.7850, city: 'Sibolga Utara', province: 'Sumatera Utara' },
+  '22413': { lat: 1.7380, lng: 98.7850, city: 'Sibolga Selatan', province: 'Sumatera Utara' },
+  '22414': { lat: 1.7400, lng: 98.7900, city: 'Sibolga Sambas', province: 'Sumatera Utara' },
+  '22611': { lat: 1.6850, lng: 98.8350, city: 'Pandan / Kab. Tapanuli Tengah', province: 'Sumatera Utara' },
+
+  // Tarutung & Tapanuli Utara (22452)
+  '22452': { lat: 2.0235, lng: 98.9667, city: 'Tarutung / Kab. Tapanuli Utara', province: 'Sumatera Utara' },
+
+  // Balige & Toba (22311 - 22316)
+  '22311': { lat: 2.3333, lng: 99.0667, city: 'Balige / Kab. Toba', province: 'Sumatera Utara' },
+  '22312': { lat: 2.3300, lng: 99.0700, city: 'Balige Kota / Kab. Toba', province: 'Sumatera Utara' },
 };
 
 const ACEH_LOCATION_KEYWORDS = [
@@ -383,14 +421,60 @@ const DATI2_MAP: Record<string, { lat: number; lng: number; province: string }> 
   'KOTA SUBULUSSALAM': { lat: 2.6400, lng: 98.0000, province: 'Aceh' },
   'KAB. ACEH SINGKIL': { lat: 2.3300, lng: 97.8000, province: 'Aceh' },
   'KAB. SIMEULUE': { lat: 2.4800, lng: 96.3800, province: 'Aceh' },
-  'KOTA SIBOLGA': { lat: 1.7420, lng: 98.7850, province: 'Sumatera Utara' },
+  'KOTA SIBOLGA': { lat: 1.7420, lng: 98.7880, province: 'Sumatera Utara' },
+  'SIBOLGA': { lat: 1.7420, lng: 98.7880, province: 'Sumatera Utara' },
+  'KAB. SAMOSIR': { lat: 2.6074, lng: 98.7092, province: 'Sumatera Utara' },
+  'SAMOSIR': { lat: 2.6074, lng: 98.7092, province: 'Sumatera Utara' },
+  'KABUPATEN SAMOSIR': { lat: 2.6074, lng: 98.7092, province: 'Sumatera Utara' },
+  'KAB. DAIRI': { lat: 2.7485, lng: 98.3125, province: 'Sumatera Utara' },
+  'DAIRI': { lat: 2.7485, lng: 98.3125, province: 'Sumatera Utara' },
+  'KABUPATEN DAIRI': { lat: 2.7485, lng: 98.3125, province: 'Sumatera Utara' },
+  'KAB. TAPANULI TENGAH': { lat: 1.7000, lng: 98.8500, province: 'Sumatera Utara' },
+  'TAPANULI TENGAH': { lat: 1.7000, lng: 98.8500, province: 'Sumatera Utara' },
+  'KABUPATEN TAPANULI TENGAH': { lat: 1.7000, lng: 98.8500, province: 'Sumatera Utara' },
+  'KAB. TAPANULI UTARA': { lat: 2.0235, lng: 98.9667, province: 'Sumatera Utara' },
+  'TAPANULI UTARA': { lat: 2.0235, lng: 98.9667, province: 'Sumatera Utara' },
+  'KABUPATEN TAPANULI UTARA': { lat: 2.0235, lng: 98.9667, province: 'Sumatera Utara' },
+  'KAB. TOBA': { lat: 2.3333, lng: 99.0667, province: 'Sumatera Utara' },
+  'KAB. TOBA SAMOSIR': { lat: 2.3333, lng: 99.0667, province: 'Sumatera Utara' },
+  'TOBA': { lat: 2.3333, lng: 99.0667, province: 'Sumatera Utara' },
+  'TOBA SAMOSIR': { lat: 2.3333, lng: 99.0667, province: 'Sumatera Utara' },
+  'KAB. KARO': { lat: 3.1200, lng: 98.5000, province: 'Sumatera Utara' },
+  'KAB. SIMALUNGUN': { lat: 2.9600, lng: 99.0600, province: 'Sumatera Utara' },
+  'KAB. TAPANULI SELATAN': { lat: 1.5000, lng: 99.2500, province: 'Sumatera Utara' },
+  'KOTA PADANG SIDEMPUAN': { lat: 1.3700, lng: 99.2700, province: 'Sumatera Utara' },
+  'KOTA PADANGSIDIMPUAN': { lat: 1.3700, lng: 99.2700, province: 'Sumatera Utara' },
+  'KAB. MANDAILING NATAL': { lat: 0.8600, lng: 99.5600, province: 'Sumatera Utara' },
+  'KAB. ASAHAN': { lat: 2.9800, lng: 99.6200, province: 'Sumatera Utara' },
+  'KAB. BATUBARA': { lat: 3.1600, lng: 99.5500, province: 'Sumatera Utara' },
+  'KOTA TANJUNG BALAI': { lat: 2.9600, lng: 99.8000, province: 'Sumatera Utara' },
+  'KAB. LABUHANBATU': { lat: 2.1000, lng: 99.8300, province: 'Sumatera Utara' },
+  'KAB. LABUHANBATU UTARA': { lat: 2.3300, lng: 99.6500, province: 'Sumatera Utara' },
+  'KAB. LABUHANBATU SELATAN': { lat: 1.8800, lng: 100.0800, province: 'Sumatera Utara' },
+  'KOTA GUNUNGSITOLI': { lat: 1.2800, lng: 97.6100, province: 'Sumatera Utara' },
+  'KAB. NIAS': { lat: 1.1500, lng: 97.7500, province: 'Sumatera Utara' },
+
+  // Sumatera Barat
   'KOTA PADANG': { lat: -0.9478, lng: 100.3685, province: 'Sumatera Barat' },
   'KOTA BUKITTINGGI': { lat: -0.3056, lng: 100.3692, province: 'Sumatera Barat' },
   'KOTA PARIAMAN': { lat: -0.6264, lng: 100.1220, province: 'Sumatera Barat' },
+  'KOTA SOLOK': { lat: -0.7983, lng: 100.6540, province: 'Sumatera Barat' },
+  'KAB. SOLOK': { lat: -0.9500, lng: 100.6500, province: 'Sumatera Barat' },
+  'SOLOK': { lat: -0.9500, lng: 100.6500, province: 'Sumatera Barat' },
   'KAB. PADANG PARIAMAN': { lat: -0.6300, lng: 100.2700, province: 'Sumatera Barat' },
   'KAB. SOLOK SELATAN': { lat: -1.5658, lng: 101.2568, province: 'Sumatera Barat' },
   'SOLOK SELATAN': { lat: -1.5658, lng: 101.2568, province: 'Sumatera Barat' },
   'KABUPATEN SOLOK SELATAN': { lat: -1.5658, lng: 101.2568, province: 'Sumatera Barat' },
+  'KOTA PAYAKUMBUH': { lat: -0.2244, lng: 100.6322, province: 'Sumatera Barat' },
+  'KOTA PADANG PANJANG': { lat: -0.4635, lng: 100.4020, province: 'Sumatera Barat' },
+  'KOTA SAWAHLUNTO': { lat: -0.6811, lng: 100.7850, province: 'Sumatera Barat' },
+  'KAB. AGAM': { lat: -0.2500, lng: 100.1500, province: 'Sumatera Barat' },
+  'KAB. PASAMAN': { lat: -0.0500, lng: 100.0500, province: 'Sumatera Barat' },
+  'KAB. PASAMAN BARAT': { lat: 0.1500, lng: 99.8000, province: 'Sumatera Barat' },
+  'KAB. PESISIR SELATAN': { lat: -1.3500, lng: 100.5700, province: 'Sumatera Barat' },
+  'KAB. SIJUNJUNG': { lat: -0.6900, lng: 101.3000, province: 'Sumatera Barat' },
+  'KAB. TANAH DATAR': { lat: -0.4600, lng: 100.5700, province: 'Sumatera Barat' },
+  'KAB. DHARMASRAYA': { lat: -1.0500, lng: 101.5300, province: 'Sumatera Barat' },
   'KOTA PEKANBARU': { lat: 0.5071, lng: 101.4478, province: 'Riau' },
   'KOTA DUMAI': { lat: 1.6667, lng: 101.4500, province: 'Riau' },
   'KOTA BATAM': { lat: 1.1301, lng: 104.0529, province: 'Kepulauan Riau' },
@@ -676,6 +760,28 @@ export const CITY_DISTRICTS_MAP: Record<string, { lat: number; lng: number; city
   'SANGIR': { lat: -1.5658, lng: 101.2568, city: 'Solok Selatan', province: 'Sumatera Barat' },
   'LUBUK GADANG': { lat: -1.5658, lng: 101.2568, city: 'Solok Selatan', province: 'Sumatera Barat' },
   'SANGIR JALAI': { lat: -1.5800, lng: 101.2400, city: 'Solok Selatan', province: 'Sumatera Barat' },
+
+  // Samosir, Dairi, Sibolga & Tapanuli (Sumatera Utara - Benchmarked from Google Maps)
+  'PANGURURAN': { lat: 2.6074, lng: 98.7092, city: 'Pangururan (Samosir)', province: 'Sumatera Utara' },
+  'SAMOSIR': { lat: 2.6074, lng: 98.7092, city: 'Samosir', province: 'Sumatera Utara' },
+  'PARDOMUAN': { lat: 2.6080, lng: 98.7090, city: 'Pangururan (Samosir)', province: 'Sumatera Utara' },
+  'SIMANINDO': { lat: 2.6800, lng: 98.7500, city: 'Samosir', province: 'Sumatera Utara' },
+  'ONAN RUNGGU': { lat: 2.5300, lng: 98.8800, city: 'Samosir', province: 'Sumatera Utara' },
+  'NAINGGOLAN': { lat: 2.4500, lng: 98.8800, city: 'Samosir', province: 'Sumatera Utara' },
+  'PALIPPI': { lat: 2.5000, lng: 98.7200, city: 'Samosir', province: 'Sumatera Utara' },
+  'RONGGUR NIHUTA': { lat: 2.6200, lng: 98.7800, city: 'Samosir', province: 'Sumatera Utara' },
+  'SITIO-TIO': { lat: 2.4000, lng: 98.6700, city: 'Samosir', province: 'Sumatera Utara' },
+  'SIANJUR MULA MULA': { lat: 2.5800, lng: 98.6500, city: 'Samosir', province: 'Sumatera Utara' },
+  'SIDIKALANG': { lat: 2.7485, lng: 98.3125, city: 'Dairi (Sidikalang)', province: 'Sumatera Utara' },
+  'DAIRI': { lat: 2.7485, lng: 98.3125, city: 'Dairi', province: 'Sumatera Utara' },
+  'SIBOLGA': { lat: 1.7420, lng: 98.7880, city: 'Sibolga', province: 'Sumatera Utara' },
+  'PANDAN': { lat: 1.6850, lng: 98.8350, city: 'Tapanuli Tengah', province: 'Sumatera Utara' },
+  'TAPANULI TENGAH': { lat: 1.7000, lng: 98.8500, city: 'Tapanuli Tengah', province: 'Sumatera Utara' },
+  'TARUTUNG': { lat: 2.0235, lng: 98.9667, city: 'Tapanuli Utara (Tarutung)', province: 'Sumatera Utara' },
+  'TAPANULI UTARA': { lat: 2.0235, lng: 98.9667, city: 'Tapanuli Utara', province: 'Sumatera Utara' },
+  'BALIGE': { lat: 2.3333, lng: 99.0667, city: 'Toba (Balige)', province: 'Sumatera Utara' },
+  'TOBA': { lat: 2.3333, lng: 99.0667, city: 'Toba', province: 'Sumatera Utara' },
+  'TOBA SAMOSIR': { lat: 2.3333, lng: 99.0667, city: 'Toba', province: 'Sumatera Utara' },
 };
 
 /**
@@ -690,6 +796,19 @@ export function resolveBranchCoordinates(row: MasterRow): GeoLocation {
   const rawAlamat = String(row.ALAMAT || '').toUpperCase().trim();
   const rawNama = String(row['Nama Outlet'] || '').toUpperCase().trim();
   const fullText = `${rawNama} ${rawKelurahan} ${rawKecamatan} ${rawAlamat} ${rawDati2}`;
+
+  // 0. High-accuracy real 5-digit postal code benchmark (e.g. '22390' for Pangururan, '27778' for Padang Aro)
+  if (rawKodePos.length === 5 && EXACT_POSTAL_MAP[rawKodePos]) {
+    const ep = EXACT_POSTAL_MAP[rawKodePos];
+    const [cLat, cLng] = clampToInland(ep.lat, ep.lng);
+    return {
+      lat: cLat,
+      lng: cLng,
+      city: ep.city,
+      province: ep.province,
+      source: 'postal_exact',
+    };
+  }
 
   // 1. High-accuracy real district matching across major Indonesian cities & kabupaten (Padang Aro, Situbondo, Jayapura, Medan, etc.)
   for (const [districtKey, distData] of Object.entries(CITY_DISTRICTS_MAP)) {
@@ -961,6 +1080,19 @@ export function resolveTargetOriginCoordinates(row: TargetRow): GeoLocation {
   const rawProv = String(row.Provinsi || '').toUpperCase().trim();
   const adminText = `${rawKelurahan} ${rawKecamatan} ${rawDati2} ${rawProv}`;
 
+  // 0. High-accuracy real 5-digit postal code benchmark (e.g. '22390' for Pangururan, '27778' for Padang Aro)
+  if (rawKodePos.length === 5 && EXACT_POSTAL_MAP[rawKodePos]) {
+    const ep = EXACT_POSTAL_MAP[rawKodePos];
+    const [cLat, cLng] = clampToIndonesia(ep.lat, ep.lng);
+    return {
+      lat: cLat,
+      lng: cLng,
+      city: ep.city,
+      province: ep.province,
+      source: 'postal_exact',
+    };
+  }
+
   for (const [districtKey, distData] of Object.entries(CITY_DISTRICTS_MAP)) {
     const escaped = districtKey.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
     const regex = new RegExp(`(?:^|[\\s,./-])${escaped}(?:$|[\\s,./-])`, 'i');
@@ -1057,6 +1189,18 @@ export function groupTargetOriginsForMap(rows: TargetRow[]): TargetOriginGroup[]
 
   return Array.from(groups.values()).sort((a, b) => b.rows.length - a.rows.length);
 }
+
+// Returns coordinates of all matched target rows (used for displaying all match markers)
+export function getAllMatchedCoordinates(rows: TargetRow[]): [number, number][] {
+  return rows
+    .filter((r) => r._isMatched)
+    .map((r) => {
+      const loc = resolveTargetOriginCoordinates(r);
+      return clampToIndonesia(loc.lat, loc.lng);
+    });
+}
+
+
 
 /**
  * Computes sampled points along a quadratic Bezier curve to render
