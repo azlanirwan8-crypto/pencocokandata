@@ -54,15 +54,15 @@ export const MasterDuplicateChart: React.FC<MasterDuplicateChartProps> = ({
     return [...items].sort((a, b) => b.count - a.count);
   }, [masterHealth.multiOutletItems, selectedWilayah, searchTerm]);
 
-  // Top 8 Kode Pos for the visual bar chart
-  const topChartItems = useMemo(() => {
-    return filteredItems.slice(0, 8);
+  // All multi-outlet items available for the visual chart (with 5 visible + scrollable)
+  const chartItems = useMemo(() => {
+    return filteredItems;
   }, [filteredItems]);
 
   const maxCount = useMemo(() => {
-    if (topChartItems.length === 0) return 1;
-    return Math.max(...topChartItems.map((i) => i.count));
-  }, [topChartItems]);
+    if (chartItems.length === 0) return 1;
+    return Math.max(...chartItems.map((i) => i.count));
+  }, [chartItems]);
 
   const totalBranchesInMulti = useMemo(() => {
     return filteredItems.reduce((acc, curr) => acc + curr.count, 0);
@@ -278,12 +278,13 @@ export const MasterDuplicateChart: React.FC<MasterDuplicateChartProps> = ({
               KODE POS DENGAN CABANG TERBANYAK {selectedWilayah !== 'ALL' ? `(${formatWilayahName(selectedWilayah).toUpperCase()})` : ''}
             </span>
             <span style={{ fontSize: '0.7rem', color: '#405189' }}>
-              Menampilkan {topChartItems.length} dari {filteredItems.length} kode pos multi-cabang
+              Menampilkan {chartItems.length} kode pos {chartItems.length > 5 ? '(5 Terlihat & Scroll)' : ''}
             </span>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-            {topChartItems.map((item, idx) => {
+          {/* Visual Chart: 5 Records Visible + Smooth Scroll */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', maxHeight: '430px', overflowY: 'auto', paddingRight: '0.35rem' }}>
+            {chartItems.map((item, idx) => {
               const percentage = Math.round((item.count / maxCount) * 100);
               const datiName = item.matchingMasterRows?.[0]?.['Dati II'] || '';
               const provName = item.matchingMasterRows?.[0]?.Provinsi || '';

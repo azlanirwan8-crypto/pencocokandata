@@ -875,6 +875,14 @@ export const App: React.FC = () => {
               multiCabangCount={masterHealth.multiOutletCount}
             />
 
+            {/* URUTAN KE-2: Peta Tracking Penyebaran Cabang BNI di Indonesia (GIS & Google Maps Direct Link) */}
+            <IndonesiaBranchMap
+              masterRows={masterRows}
+              targetRows={targetRows}
+              selectedWilayah={dashboardWilayahFilter}
+              onNavigateToMaster={() => setActiveTab('master')}
+            />
+
             {/* Visual Analisis: Dekomposisi Donut Chart & Kinerja Wilayah */}
             <RegionalAnalyticsCharts
               stats={regionalStats}
@@ -887,14 +895,6 @@ export const App: React.FC = () => {
             <MasterDuplicateChart
               masterHealth={masterHealth}
               masterRows={masterRows}
-              selectedWilayah={dashboardWilayahFilter}
-              onNavigateToMaster={() => setActiveTab('master')}
-            />
-
-            {/* Peta Tracking Penyebaran Cabang BNI di Indonesia (GIS & Google Maps Direct Link) */}
-            <IndonesiaBranchMap
-              masterRows={masterRows}
-              targetRows={targetRows}
               selectedWilayah={dashboardWilayahFilter}
               onNavigateToMaster={() => setActiveTab('master')}
             />

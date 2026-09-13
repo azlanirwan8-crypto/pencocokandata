@@ -267,7 +267,7 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
               Rekapitulasi Data Match per Wilayah (Data Bersih)
             </h4>
             <span style={{ fontSize: '0.71rem', color: '#878a99' }}>
-              Daftar data target yang telah berhasil cocok dengan master cabang operasional beserta opsi ekspor
+              Daftar data target yang telah berhasil cocok per wilayah (Menampilkan 5 wilayah teratas & scroll ke bawah)
             </span>
           </div>
         </div>
@@ -368,15 +368,15 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
         </div>
       )}
 
-      {/* Data Table */}
-      <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '5px', overflowX: 'auto' }}>
+      {/* Data Table: 5 Records Visible + Sticky Header + Smooth Scroll */}
+      <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '5px', overflowX: 'auto', maxHeight: '275px', overflowY: 'auto' }}>
         <table className="modern-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
-              <th style={{ width: '48px', textAlign: 'center', background: '#f3f6f9', color: '#405189' }}>No</th>
+              <th style={{ width: '48px', textAlign: 'center', background: '#f3f6f9', color: '#405189', position: 'sticky', top: 0, zIndex: 3 }}>No</th>
               <th
                 onClick={() => toggleSort('wilayah')}
-                style={{ minWidth: '160px', color: '#405189', cursor: 'pointer', userSelect: 'none' }}
+                style={{ minWidth: '160px', color: '#405189', cursor: 'pointer', userSelect: 'none', position: 'sticky', top: 0, zIndex: 3, background: '#f3f6f9' }}
                 title="Klik untuk mengurutkan berdasarkan Wilayah"
               >
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
@@ -388,7 +388,7 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
               </th>
               <th
                 onClick={() => toggleSort('matched')}
-                style={{ minWidth: '140px', textAlign: 'center', color: '#405189', cursor: 'pointer', userSelect: 'none' }}
+                style={{ minWidth: '140px', textAlign: 'center', color: '#405189', cursor: 'pointer', userSelect: 'none', position: 'sticky', top: 0, zIndex: 3, background: '#f3f6f9' }}
                 title="Klik untuk mengurutkan berdasarkan Data Match"
               >
                 <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
@@ -400,7 +400,7 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
               </th>
               <th
                 onClick={() => toggleSort('total')}
-                style={{ minWidth: '120px', textAlign: 'center', color: '#405189', cursor: 'pointer', userSelect: 'none' }}
+                style={{ minWidth: '120px', textAlign: 'center', color: '#405189', cursor: 'pointer', userSelect: 'none', position: 'sticky', top: 0, zIndex: 3, background: '#f3f6f9' }}
                 title="Klik untuk mengurutkan berdasarkan Total Target"
               >
                 <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
@@ -412,7 +412,7 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
               </th>
               <th
                 onClick={() => toggleSort('rate')}
-                style={{ minWidth: '180px', color: '#405189', cursor: 'pointer', userSelect: 'none' }}
+                style={{ minWidth: '180px', color: '#405189', cursor: 'pointer', userSelect: 'none', position: 'sticky', top: 0, zIndex: 3, background: '#f3f6f9' }}
                 title="Klik untuk mengurutkan berdasarkan Tingkat Keberhasilan"
               >
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
@@ -422,8 +422,8 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
                   </span>
                 </span>
               </th>
-              <th style={{ minWidth: '130px', textAlign: 'center', color: '#405189' }}>Status</th>
-              <th style={{ minWidth: '180px', textAlign: 'center', color: '#405189' }}>Aksi Unduh Laporan</th>
+              <th style={{ minWidth: '130px', textAlign: 'center', color: '#405189', position: 'sticky', top: 0, zIndex: 3, background: '#f3f6f9' }}>Status</th>
+              <th style={{ minWidth: '180px', textAlign: 'center', color: '#405189', position: 'sticky', top: 0, zIndex: 3, background: '#f3f6f9' }}>Aksi Unduh Laporan</th>
             </tr>
           </thead>
           <tbody>

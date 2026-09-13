@@ -138,12 +138,12 @@ export const RegionalAnalyticsCharts: React.FC<RegionalAnalyticsChartsProps> = (
               border: '1px solid rgba(53, 119, 241, 0.2)',
             }}
           >
-            {displayedStats.length} Wilayah
+            {displayedStats.length} Wilayah {displayedStats.length > 5 ? '(5 Terlihat & Scroll)' : ''}
           </span>
         </div>
 
-        {/* List Bars per Region */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', flex: 1, overflowY: 'auto', maxHeight: '330px', paddingRight: '0.2rem' }}>
+        {/* List Bars per Region: 5 Records Visible + Smooth Scroll */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1, overflowY: 'auto', maxHeight: '272px', paddingRight: '0.35rem' }}>
           {displayedStats.map((item, idx) => {
             const matchedWidth = item.total > 0 ? (item.matched / item.total) * 100 : 0;
             const isHigh = item.rate >= 90;
