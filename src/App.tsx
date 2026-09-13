@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
 import { MetricCards } from './components/Dashboard/MetricCards';
@@ -211,27 +211,45 @@ export const App: React.FC = () => {
     restoreSavedData();
   }, []);
 
+  const persistTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Helper to persist target & match data across IndexedDB, Neon Postgres, and Supabase Cloud
-  const persistTargetData = (payload: {
-    rows: TargetRow[];
-    fileName: string;
-    initialCount: number;
-    matchedDone: boolean;
-  }) => {
-    // 1. Local IndexedDB (Instant local cache)
+  const persistTargetData = (
+    payload: {
+      rows: TargetRow[];
+      fileName: string;
+      initialCount: number;
+      matchedDone: boolean;
+    },
+    immediate = false
+  ) => {
+    // 1. Local IndexedDB (Instant non-blocking local cache)
     setItem('target_data', payload);
 
-    // 2. Neon Postgres (Serverless DB on Vercel)
-    saveTargetToNeon(payload).catch((e) => console.warn('Neon target auto-save skipped:', e));
-
-    // 3. Supabase Cloud if configured
-    if (isSupabaseConfigured()) {
-      saveTargetToCloud(payload.rows, payload.fileName, payload.initialCount, payload.matchedDone).catch((e) =>
-        console.warn('Cloud target auto-save skipped:', e)
-      );
+    if (persistTimeoutRef.current) {
+      clearTimeout(persistTimeoutRef.current);
     }
 
-    setLastSyncedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
+    const syncRemote = () => {
+      // 2. Neon Postgres (Serverless DB on Vercel)
+      saveTargetToNeon(payload).catch((e) => console.warn('Neon target auto-save skipped:', e));
+
+      // 3. Supabase Cloud if configured
+      if (isSupabaseConfigured()) {
+        saveTargetToCloud(payload.rows, payload.fileName, payload.initialCount, payload.matchedDone).catch((e) =>
+          console.warn('Cloud target auto-save skipped:', e)
+        );
+      }
+
+      setLastSyncedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
+    };
+
+    if (immediate) {
+      syncRemote();
+    } else {
+      // 350ms trailing debounce: eliminates network I/O lag during rapid batch actions
+      persistTimeoutRef.current = setTimeout(syncRemote, 350);
+    }
   };
 
   // Compute Wilayah List from Target Data, Master Data, and Wilayah Settings
