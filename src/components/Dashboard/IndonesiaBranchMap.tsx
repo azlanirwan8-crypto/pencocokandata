@@ -112,21 +112,34 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       const canvasRenderer = L.canvas({ padding: 0.5 });
       canvasRendererRef.current = canvasRenderer;
 
+      // Strict geographical bounds for Indonesia (Sabang to Merauke)
+      const indonesiaBounds = L.latLngBounds(
+        L.latLng(-11.5, 94.0), // Barat Daya / South-West (Samudera Hindia)
+        L.latLng(6.5, 141.5)   // Timur Laut / North-East (Papua / Miangas)
+      );
+
       const map = L.map(mapContainerRef.current, {
         center: INDONESIA_REGIONS.ALL.center,
         zoom: INDONESIA_REGIONS.ALL.zoom,
+        minZoom: 5,                  // LOCK: Tidak bisa zoom out melewati wilayah Indonesia
+        maxZoom: 18,                 // Eksplorasi detail sampai level jalan cabang
+        maxBounds: indonesiaBounds,  // LOCK: Terkunci rapat di dalam batas geografi Indonesia
+        maxBoundsViscosity: 1.0,     // LOCK: 100% kaku, mencegah geser keluar batas wilayah
         zoomControl: true,
         scrollWheelZoom: true,
-        preferCanvas: true, // Canvas-first mode for zero lag
+        preferCanvas: true,          // Canvas-first mode for zero lag
+        bounceAtZoomLimits: true,
       });
 
-      // CartoDB Voyager Global Cloudflare CDN (Ultra-fast, beautiful light fintech theme)
+      // CartoDB Voyager Global Cloudflare CDN (Hanya request tile di batas Indonesia)
       L.tileLayer(
         'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
         {
           attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
           subdomains: 'abcd',
-          maxZoom: 19,
+          minZoom: 5,
+          maxZoom: 18,
+          bounds: indonesiaBounds,   // Hemat bandwidth: hanya unduh tile di area Indonesia
         }
       ).addTo(map);
 
