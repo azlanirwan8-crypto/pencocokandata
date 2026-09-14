@@ -239,6 +239,16 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({
                       ? `Server time: ${neonStatus.serverTime || 'Online'}`
                       : 'Data master saat ini disimpan aman di IndexedDB (Browser).'}
                   </div>
+                  {neonStatus?.connected && neonStatus.tables && (
+                    <div style={{ marginTop: '0.45rem', display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.7rem', background: '#ffffff', padding: '0.15rem 0.45rem', borderRadius: '4px', border: '1px solid #c7d2fe', color: '#4338ca', fontWeight: 600 }}>
+                        📊 Tabel master_records: {neonStatus.tables.masterRecords.toLocaleString('id-ID')} baris
+                      </span>
+                      <span style={{ fontSize: '0.7rem', background: '#ffffff', padding: '0.15rem 0.45rem', borderRadius: '4px', border: '1px solid #a7f3d0', color: '#047857', fontWeight: 600 }}>
+                        🎯 Tabel target_records: {neonStatus.tables.targetRecords.toLocaleString('id-ID')} baris
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -254,25 +264,34 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({
               </button>
             </div>
 
+            {/* Structured Table Information */}
+            <div style={{ background: '#f0fdf4', borderRadius: '6px', padding: '0.85rem 1rem', border: '1px solid #bbf7d0' }}>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#166534', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <CheckCircle size={15} color="#16a34a" />
+                <span>Penyimpanan Tabel Relasional Database Aktif:</span>
+              </div>
+              <ul style={{ fontSize: '0.75rem', color: '#14532d', lineHeight: 1.6, paddingLeft: '1.2rem', margin: 0 }}>
+                <li><strong>master_records</strong>: Seluruh data master cabang tersimpan permanen per baris.</li>
+                <li><strong>target_records</strong>: Seluruh data target &amp; hasil pencocokan (status matching) tersimpan permanen per baris.</li>
+                <li>Data tetap ada saat refresh, buka bersama rekan lain, atau tambah data baru, kecuali jika tombol <strong>Reset</strong> diklik.</li>
+              </ul>
+            </div>
+
             {/* How to activate Neon on Vercel */}
             <div style={{ background: '#f8f9fa', borderRadius: '6px', padding: '1rem', border: '1px solid #e9ebec' }}>
               <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#405189', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 <Zap size={14} color="#0ab39c" />
-                <span>Cara Mengaktifkan Neon di Vercel (1-Klik Tanpa Ketik SQL):</span>
+                <span>Cara Menghubungkan Database Neon di Vercel:</span>
               </div>
               <ol style={{ fontSize: '0.78rem', color: '#495057', lineHeight: 1.7, paddingLeft: '1.2rem', margin: 0 }}>
                 <li>Buka project Anda di dashboard <strong>Vercel</strong>.</li>
                 <li>Pilih tab <strong>Storage</strong> di menu bagian atas.</li>
-                <li>Klik tombol <strong>Create Database</strong> &rarr; pilih <strong>Postgres (Powered by Neon)</strong>.</li>
-                <li>Klik tombol <strong>Connect to Project</strong>. Vercel akan otomatis mengisi <code style={{ color: '#0ab39c', background: '#f3f3f9', padding: '1px 4px', borderRadius: '3px' }}>POSTGRES_URL</code> dan <code style={{ color: '#0ab39c', background: '#f3f3f9', padding: '1px 4px', borderRadius: '3px' }}>DATABASE_URL</code>.</li>
+                <li>Pilih <strong>Postgres (Powered by Neon)</strong> dan klik <strong>Connect to Project</strong>.</li>
+                <li>Vercel otomatis mengisi variable <code style={{ color: '#0ab39c', background: '#f3f3f9', padding: '1px 4px', borderRadius: '3px' }}>POSTGRES_URL</code> dan <code style={{ color: '#0ab39c', background: '#f3f3f9', padding: '1px 4px', borderRadius: '3px' }}>DATABASE_URL</code>.</li>
                 <li>
-                  <strong>Selesai!</strong> Sistem otomatis melakukan auto-migrasi tabel saat aplikasi dibuka pertama kali.
+                  <strong>Selesai!</strong> Tabel <code style={{ color: '#405189' }}>master_records</code> dan <code style={{ color: '#405189' }}>target_records</code> otomatis dibuat dan tersinkronisasi.
                 </li>
               </ol>
-            </div>
-
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              💡 <em>Catatan:</em> Aplikasi telah memiliki backend serverless Vercel di <code>/api/master</code> yang siap langsung berkomunikasi dengan Neon Postgres begitu dihubungkan.
             </div>
           </div>
         )}

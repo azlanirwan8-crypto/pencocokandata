@@ -31,7 +31,41 @@ export default async function handler(req: any, res: any) {
   try {
     const sql = neon(connectionString);
 
-    // Auto-migrate: create table if not exists
+    // Auto-migrate: Dedicated master table, metadata table, and fallback store
+    await sql`
+      CREATE TABLE IF NOT EXISTS master_records (
+        id SERIAL PRIMARY KEY,
+        branch_code TEXT,
+        kode_cabang TEXT,
+        nama_outlet TEXT,
+        sandi_cabang TEXT,
+        sandi TEXT,
+        cabang TEXT,
+        wilayah TEXT,
+        status_outlet TEXT,
+        alamat TEXT,
+        kode_pos TEXT,
+        kelurahan TEXT,
+        kecamatan TEXT,
+        dati_ii TEXT,
+        kode_dati_ii TEXT,
+        provinsi TEXT,
+        telp TEXT,
+        raw_data JSONB,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `;
+
+    await sql`
+      CREATE TABLE IF NOT EXISTS master_meta (
+        key VARCHAR(50) PRIMARY KEY,
+        file_name TEXT,
+        total_count INT,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `;
+
     await sql`
       CREATE TABLE IF NOT EXISTS app_store (
         key VARCHAR(100) PRIMARY KEY,
@@ -40,36 +74,142 @@ export default async function handler(req: any, res: any) {
       );
     `;
 
-    // 1. GET: Fetch master data
+    // 1. GET: Fetch master data (first from dedicated master_records table, fallback to app_store)
     if (req.method === 'GET') {
-      const result = await sql`
+      const records = await sql`
+        SELECT * FROM master_records ORDER BY id ASC;
+      `;
+
+      if (records && records.length > 0) {
+        const meta = await sql`
+          SELECT file_name, total_count FROM master_meta WHERE key = 'master_meta' LIMIT 1;
+        `;
+        const fileName = meta[0]?.file_name || `${records.length} Cabang (Master_Neon.xlsx)`;
+
+        const mappedRows = records.map((r: any) => ({
+          Wilayah: r.wilayah || '',
+          'Sandi Cabang': r.sandi_cabang || '',
+          Sandi: r.sandi || '',
+          Cabang: r.cabang || '',
+          'Branch Code': r.branch_code || '',
+          'Kode Cabang': r.kode_cabang || '',
+          'Nama Outlet': r.nama_outlet || '',
+          'Status Outlet': r.status_outlet || '',
+          ALAMAT: r.alamat || '',
+          'KODE POS': r.kode_pos || '',
+          Kelurahan: r.kelurahan || '',
+          Kecamatan: r.kecamatan || '',
+          'Dati II': r.dati_ii || '',
+          'Kode Dati II': r.kode_dati_ii || '',
+          Provinsi: r.provinsi || '',
+          Telp: r.telp || '',
+          ...(r.raw_data || {}),
+        }));
+
+        return res.status(200).json({
+          ok: true,
+          configured: true,
+          table: 'master_records',
+          total: mappedRows.length,
+          data: {
+            rows: mappedRows,
+            fileName,
+          },
+        });
+      }
+
+      // Fallback: check app_store
+      const storeResult = await sql`
         SELECT data, updated_at 
         FROM app_store 
         WHERE key = 'master_data' 
         LIMIT 1;
       `;
 
-      if (result && result.length > 0) {
+      if (storeResult && storeResult.length > 0) {
         return res.status(200).json({
           ok: true,
           configured: true,
-          data: result[0].data,
-          updatedAt: result[0].updated_at,
+          table: 'app_store',
+          data: storeResult[0].data,
+          updatedAt: storeResult[0].updated_at,
         });
       }
 
       return res.status(200).json({
         ok: true,
         configured: true,
+        table: 'master_records',
+        total: 0,
         data: null,
       });
     }
 
-    // 2. POST: Upsert master data
+    // 2. POST: Save / Append master data into dedicated master_records table
     if (req.method === 'POST') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-      const dataJson = JSON.stringify(body);
+      const rows = Array.isArray(body?.rows) ? body.rows : [];
+      const fileName = body?.fileName || 'Master_Neon_Vercel.xlsx';
+      const mode = body?.mode || 'replace'; // 'replace' or 'append'
 
+      if (mode === 'replace') {
+        await sql`DELETE FROM master_records;`;
+      }
+
+      if (rows.length > 0) {
+        // Chunk insert in batches of 200 using native PostgreSQL json_to_recordset
+        const chunkSize = 200;
+        for (let i = 0; i < rows.length; i += chunkSize) {
+          const chunk = rows.slice(i, i + chunkSize).map((r: any) => ({
+            branch_code: String(r['Branch Code'] || r['Kode Cabang'] || '').trim(),
+            kode_cabang: String(r['Kode Cabang'] || r['Branch Code'] || '').trim(),
+            nama_outlet: String(r['Nama Outlet'] || r['Sandi Cabang'] || r.Cabang || '').trim(),
+            sandi_cabang: String(r['Sandi Cabang'] || r.Sandi || '').trim(),
+            sandi: String(r.Sandi || r['Sandi Cabang'] || '').trim(),
+            cabang: String(r.Cabang || '').trim(),
+            wilayah: String(r.Wilayah || '').trim(),
+            status_outlet: String(r['Status Outlet'] || '').trim(),
+            alamat: String(r.ALAMAT || '').trim(),
+            kode_pos: String(r['KODE POS'] || '').trim(),
+            kelurahan: String(r.Kelurahan || '').trim(),
+            kecamatan: String(r.Kecamatan || '').trim(),
+            dati_ii: String(r['Dati II'] || '').trim(),
+            kode_dati_ii: String(r['Kode Dati II'] || '').trim(),
+            provinsi: String(r.Provinsi || '').trim(),
+            telp: String(r.Telp || '').trim(),
+            raw_data: r,
+          }));
+
+          await sql`
+            INSERT INTO master_records (
+              branch_code, kode_cabang, nama_outlet, sandi_cabang, sandi, cabang,
+              wilayah, status_outlet, alamat, kode_pos, kelurahan, kecamatan,
+              dati_ii, kode_dati_ii, provinsi, telp, raw_data, updated_at
+            )
+            SELECT
+              branch_code, kode_cabang, nama_outlet, sandi_cabang, sandi, cabang,
+              wilayah, status_outlet, alamat, kode_pos, kelurahan, kecamatan,
+              dati_ii, kode_dati_ii, provinsi, telp, raw_data, NOW()
+            FROM json_to_recordset(${JSON.stringify(chunk)}::json) as x(
+              branch_code TEXT, kode_cabang TEXT, nama_outlet TEXT, sandi_cabang TEXT, sandi TEXT, cabang TEXT,
+              wilayah TEXT, status_outlet TEXT, alamat TEXT, kode_pos TEXT, kelurahan TEXT, kecamatan TEXT,
+              dati_ii TEXT, kode_dati_ii TEXT, provinsi TEXT, telp TEXT, raw_data JSONB
+            );
+          `;
+        }
+      }
+
+      // Upsert metadata
+      const totalCount = (await sql`SELECT COUNT(*)::int as count FROM master_records;`)[0]?.count || rows.length;
+      await sql`
+        INSERT INTO master_meta (key, file_name, total_count, updated_at)
+        VALUES ('master_meta', ${fileName}, ${totalCount}, NOW())
+        ON CONFLICT (key)
+        DO UPDATE SET file_name = EXCLUDED.file_name, total_count = EXCLUDED.total_count, updated_at = NOW();
+      `;
+
+      // Dual sync to app_store for fast backup
+      const dataJson = JSON.stringify(body);
       await sql`
         INSERT INTO app_store (key, data, updated_at)
         VALUES ('master_data', ${dataJson}::jsonb, NOW())
@@ -80,23 +220,28 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({
         ok: true,
         configured: true,
-        message: 'Data master berhasil disimpan ke Neon Postgres di Vercel.',
+        table: 'master_records',
+        totalRows: totalCount,
+        message: `Sebanyak ${rows.length} data master berhasil disimpan permanen ke tabel master_records di Neon Postgres.`,
       });
     }
 
-    // 3. DELETE: Reset master data
+    // 3. DELETE: Reset / wipe master data (only when user clicks reset)
     if (req.method === 'DELETE') {
+      await sql`DELETE FROM master_records;`;
+      await sql`DELETE FROM master_meta;`;
       await sql`DELETE FROM app_store WHERE key = 'master_data';`;
+
       return res.status(200).json({
         ok: true,
         configured: true,
-        message: 'Data master berhasil dibersihkan dari Neon Postgres.',
+        message: 'Tabel master_records dan master_meta berhasil direset/dikosongkan dari Neon Postgres.',
       });
     }
 
     return res.status(405).json({ ok: false, error: 'Method Not Allowed' });
   } catch (error: any) {
-    console.error('Neon DB API Error:', error);
+    console.error('Neon DB API Error (Master):', error);
     return res.status(500).json({
       ok: false,
       configured: true,
@@ -104,3 +249,4 @@ export default async function handler(req: any, res: any) {
     });
   }
 }
+

@@ -18,18 +18,39 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({
       connected: false,
       provider: 'none',
-      message: 'DATABASE_URL Neon belum terpasang di Vercel.',
+      message: 'DATABASE_URL Neon belum terpasang di Vercel Environment Variables.',
     });
   }
 
   try {
     const sql = neon(connectionString);
-    const result = await sql`SELECT NOW() as current_time;`;
+    const timeRes = await sql`SELECT NOW() as current_time;`;
+
+    let masterCount = 0;
+    let targetCount = 0;
+
+    try {
+      const m = await sql`SELECT COUNT(*)::int as count FROM master_records;`;
+      masterCount = m[0]?.count || 0;
+    } catch {
+      // table might not have been created yet
+    }
+
+    try {
+      const t = await sql`SELECT COUNT(*)::int as count FROM target_records;`;
+      targetCount = t[0]?.count || 0;
+    } catch {
+      // table might not have been created yet
+    }
 
     return res.status(200).json({
       connected: true,
       provider: 'Neon Postgres (Vercel)',
-      serverTime: result[0]?.current_time,
+      serverTime: timeRes[0]?.current_time,
+      tables: {
+        masterRecords: masterCount,
+        targetRecords: targetCount,
+      },
     });
   } catch (error: any) {
     return res.status(200).json({
@@ -39,3 +60,4 @@ export default async function handler(req: any, res: any) {
     });
   }
 }
+

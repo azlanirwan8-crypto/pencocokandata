@@ -5,6 +5,10 @@ export interface NeonStatus {
   provider?: string;
   serverTime?: string;
   message?: string;
+  tables?: {
+    masterRecords: number;
+    targetRecords: number;
+  };
 }
 
 /**
@@ -79,7 +83,11 @@ export async function loadMasterFromNeon(): Promise<{ rows: MasterRow[]; fileNam
 /**
  * Save Master Data to Neon DB via /api/master
  */
-export async function saveMasterToNeon(rows: MasterRow[], fileName: string): Promise<boolean> {
+export async function saveMasterToNeon(
+  rows: MasterRow[],
+  fileName: string,
+  mode: 'replace' | 'append' = 'replace'
+): Promise<boolean> {
   try {
     const res = await fetchWithRetry(
       '/api/master',
@@ -91,10 +99,11 @@ export async function saveMasterToNeon(rows: MasterRow[], fileName: string): Pro
         body: JSON.stringify({
           fileName,
           rows,
+          mode,
           updatedAt: new Date().toISOString(),
         }),
       },
-      6000,
+      8000,
       2
     );
     if (!res.ok) return false;
@@ -189,7 +198,10 @@ export function sanitizeTargetRowsForStorage(rows: TargetRow[]): TargetRow[] {
 /**
  * Save Target & Match Data to Neon DB via /api/target
  */
-export async function saveTargetToNeon(payload: SavedTargetPayload): Promise<boolean> {
+export async function saveTargetToNeon(
+  payload: SavedTargetPayload,
+  mode: 'replace' | 'append' = 'replace'
+): Promise<boolean> {
   try {
     const res = await fetchWithRetry(
       '/api/target',
@@ -200,11 +212,12 @@ export async function saveTargetToNeon(payload: SavedTargetPayload): Promise<boo
         },
         body: JSON.stringify({
           ...payload,
+          mode,
           rows: sanitizeTargetRowsForStorage(payload.rows),
           updatedAt: new Date().toISOString(),
         }),
       },
-      6500,
+      8000,
       2
     );
     if (!res.ok) return false;
