@@ -482,7 +482,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       const masterDati = cleanDati(master['Dati II']);
       const provinceMismatch = Boolean(targetProvince && masterProvince && targetProvince !== masterProvince);
       const datiMismatch = Boolean(targetDati && masterDati && targetDati !== masterDati);
-      return provinceMismatch || datiMismatch
+      return provinceMismatch
         ? [{ target, master, provinceMismatch, datiMismatch }]
         : [];
     });
@@ -1631,7 +1631,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         <div style={{ marginBottom: '0.65rem', padding: '0.7rem 0.85rem', border: '1px solid rgba(240,101,72,0.35)', borderRadius: '7px', background: '#fff8f6', color: '#7c2d12', fontSize: '0.72rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
             <strong>Audit data upload vs Master</strong>
-            <span>{anomalyRows.length === 0 ? 'Tidak ada anomali' : `${anomalyRows.length} record berbeda wilayah`}</span>
+            <span>{anomalyRows.length === 0 ? 'Tidak ada anomali' : `${anomalyRows.length} record beda provinsi`}</span>
           </div>
           {anomalyRows.length > 0 && (
             <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'grid', gap: '0.3rem' }}>
@@ -1656,7 +1656,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                   <span style={{ color: '#b91c1c' }}> {target['Dati II'] || '-'}, {target.Provinsi || '-'}</span>
                   {' → Master '}
                   <span style={{ color: '#0369a1' }}>{master['Nama Outlet']} ({master['Dati II']}, {master.Provinsi})</span>
-                  <span style={{ color: '#9a3412' }}> [{provinceMismatch ? 'Provinsi' : ''}{provinceMismatch && datiMismatch ? ' + ' : ''}{datiMismatch ? 'Dati II' : ''} berbeda]</span>
+                  <span style={{ color: '#9a3412' }}> [Provinsi berbeda]</span>
                 </div>
               ))}
             </div>
