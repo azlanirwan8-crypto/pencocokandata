@@ -1262,3 +1262,25 @@ body {
   }
 }
 
+/* Leaflet Map Cursor Fix: Ubah tangan (grab) menjadi kursor navigasi standar & pointer klik */
+.bni-map-container .leaflet-container,
+.bni-map-container .leaflet-grab {
+  cursor: default !important;
+}
+
+.bni-map-container .leaflet-dragging .leaflet-grab,
+.bni-map-container .leaflet-dragging .leaflet-container {
+  cursor: grabbing !important;
+}
+
+.bni-map-container .leaflet-interactive,
+.bni-map-container path.leaflet-interactive,
+.bni-map-container circle.leaflet-interactive {
+  cursor: pointer !important;
+}
+
+.bni-map-container canvas {
+  cursor: default;
+}
+
+

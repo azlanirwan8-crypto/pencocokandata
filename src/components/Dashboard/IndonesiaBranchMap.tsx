@@ -381,7 +381,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     if (!mapContainerRef.current) return;
 
     if (!mapInstanceRef.current) {
-      const canvasRenderer = L.canvas({ padding: 0.5 });
+      const canvasRenderer = L.canvas({ padding: 0.5, tolerance: 12 });
       canvasRendererRef.current = canvasRenderer;
 
       const map = L.map(mapContainerRef.current, {
@@ -394,6 +394,16 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         preferCanvas: true,
       });
 
+      // Dedicated z-index panes so markers are always above background arcs
+      if (!map.getPane('arcsPane')) {
+        const arcsPane = map.createPane('arcsPane');
+        arcsPane.style.zIndex = '450';
+      }
+      if (!map.getPane('markersPane')) {
+        const markersPane = map.createPane('markersPane');
+        markersPane.style.zIndex = '550';
+      }
+
       // Fit Indonesia bounds on load
       map.fitBounds(indonesiaBounds, { padding: [20, 20] });
 
@@ -401,10 +411,9 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       const tileLayer = getMapTileLayer('google', indonesiaBounds).addTo(map);
       tileLayerRef.current = tileLayer;
 
-
-
-      const markersLayer = L.layerGroup().addTo(map);
+      // Add arcs layer first, then markers layer on top
       const arcsLayer = L.layerGroup().addTo(map);
+      const markersLayer = L.layerGroup().addTo(map);
 
       mapInstanceRef.current = map;
       markersLayerRef.current = markersLayer;
@@ -474,6 +483,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       }
 
       const marker = L.circleMarker([pin.lat, pin.lng], {
+        pane: 'markersPane',
         renderer: canvasRenderer,
         radius,
         fillColor,
@@ -506,8 +516,23 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         className: 'bni-map-fast-tooltip',
       });
 
-      // Click to select, fly to pin, and open drawer
-      marker.on('click', () => {
+      // Instant cursor feedback on hover
+      marker.on('mouseover', () => {
+        if (mapContainerRef.current) {
+          mapContainerRef.current.style.cursor = 'pointer';
+        }
+      });
+      marker.on('mouseout', () => {
+        if (mapContainerRef.current) {
+          mapContainerRef.current.style.cursor = 'default';
+        }
+      });
+
+      // Click to select, fly to pin, and open drawer (with stopPropagation)
+      marker.on('click', (e) => {
+        if (e && e.originalEvent) {
+          L.DomEvent.stopPropagation(e);
+        }
         setTrackingMode('none');
         setSelectedPin(pin);
         setActiveBranchIndex(0);
@@ -517,29 +542,31 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     });
 
     // Auto-fit if specific wilayah or single selected pin without matched arcs
-if (displayScope === 'SELECTED_ONLY' && selectedPin) {
-  if (selectedMatchedRows.length === 0) {
-    map.flyTo([selectedPin.lat, selectedPin.lng], 14, { duration: 0.8 });
-  }
-} else if (selectedWilayah !== 'ALL' && filteredPins.length > 0) {
-  const bounds = L.latLngBounds(filteredPins.map((p) => [p.lat, p.lng]));
-  map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
-}
+    if (displayScope === 'SELECTED_ONLY' && selectedPin) {
+      if (selectedMatchedRows.length === 0) {
+        map.flyTo([selectedPin.lat, selectedPin.lng], 14, { duration: 0.8 });
+      }
+    } else if (selectedWilayah !== 'ALL' && filteredPins.length > 0) {
+      const bounds = L.latLngBounds(filteredPins.map((p) => [p.lat, p.lng]));
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
+    }
 
-// Render all matched target coordinates as orange markers when enabled
-if (showAllMatchMarkers) {
-  const allCoords = getAllMatchedCoordinates(targetRows, resolvedCoords);
-  allCoords.forEach(([lat, lng]) => {
-    const marker = L.circleMarker([lat, lng], {
-      radius: 4,
-      fillColor: '#ff6600',
-      color: '#ffffff',
-      weight: 1,
-      fillOpacity: 0.9,
-    });
-    markersLayer.addLayer(marker);
-  });
-}
+    // Render all matched target coordinates as orange markers when enabled
+    if (showAllMatchMarkers) {
+      const allCoords = getAllMatchedCoordinates(targetRows, resolvedCoords);
+      allCoords.forEach(([lat, lng]) => {
+        const marker = L.circleMarker([lat, lng], {
+          pane: 'markersPane',
+          renderer: canvasRenderer,
+          radius: 4,
+          fillColor: '#ff6600',
+          color: '#ffffff',
+          weight: 1,
+          fillOpacity: 0.9,
+        });
+        markersLayer.addLayer(marker);
+      });
+    }
     }, [filteredPins, selectedPin, displayScope, selectedWilayah, selectedMatchedRows.length, showAllMatchMarkers, resolvedCoords]);
 
   // 9. Render arcs from real administrative origin points → selected branch (no unbounded fan-out)
@@ -574,9 +601,11 @@ if (showAllMatchMarkers) {
         const arcPoints = createCurvedArcPoints(startCoords, destCoords, curveDirection, 22);
         if (arcPoints.length > 0) {
           const curvedPolyline = L.polyline(arcPoints, {
+            pane: 'arcsPane',
             color: '#0ab39c',
             weight: Math.min(2 + Math.log10(count + 1), 4),
             opacity: 0.82,
+            interactive: false, // Prevents curved lines from blocking clicks on markers
             className: 'bni-flow-arc',
           });
           curvedPolyline.bindTooltip(
@@ -592,11 +621,22 @@ if (showAllMatchMarkers) {
       }
 
       const originDot = L.circleMarker(isOnSite ? destCoords : startCoords, {
+        pane: 'arcsPane',
         radius: isOnSite ? 4 : Math.min(5 + Math.log10(count + 1) * 2, 9),
         fillColor: isOnSite ? '#a78bfa' : '#38bdf8',
         color: '#ffffff',
         weight: 1.8,
         fillOpacity: 0.95,
+      });
+      originDot.on('mouseover', () => {
+        if (mapContainerRef.current) {
+          mapContainerRef.current.style.cursor = 'pointer';
+        }
+      });
+      originDot.on('mouseout', () => {
+        if (mapContainerRef.current) {
+          mapContainerRef.current.style.cursor = 'default';
+        }
       });
       originDot.bindTooltip(
         `<div style="font-size:11px;padding:2px 4px;">
@@ -1137,7 +1177,7 @@ if (showAllMatchMarkers) {
       >
         {/* Leaflet Hardware Canvas Map */}
         <div className="bni-map-container" style={{ position: 'relative' }}>
-          <div ref={mapContainerRef} style={{ width: '100%', height: '580px', borderRadius: '6px' }} />
+          <div ref={mapContainerRef} style={{ width: '100%', height: '580px', borderRadius: '6px', cursor: 'default' }} />
 
           {trackingMode === 'aceh_kim' && (
             <div
