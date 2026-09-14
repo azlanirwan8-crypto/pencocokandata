@@ -151,6 +151,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   const [modalSearchTerm, setModalSearchTerm] = useState('');
   const [trackingMode, setTrackingMode] = useState<'none' | 'aceh_kim'>('none');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [showAnomalyPanel, setShowAnomalyPanel] = useState(false);
   const [mapInteractionTick, setMapInteractionTick] = useState(0);
 // @ts-ignore: suppress unused setter warning
   const [showAllMatchMarkers, setShowAllMatchMarkers] = useState(false);
@@ -457,6 +458,34 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   const acehTargetMatches = useMemo(() => {
     return targetRows.filter((t) => t._isMatched && isAcehTargetRow(t));
   }, [targetRows]);
+
+  const anomalyRows = useMemo(() => {
+    const masterByIdentity = new Map<string, MasterRow>();
+    masterRows.forEach((master) => {
+      [master['Branch Code'], master['Kode Cabang'], master['Sandi Cabang'], master.Sandi, master.Cabang, master['Nama Outlet']]
+        .map((value) => String(value || '').trim().toUpperCase())
+        .filter(Boolean)
+        .forEach((identity) => masterByIdentity.set(identity, master));
+    });
+
+    return targetRows.flatMap((target) => {
+      if (!target._isMatched) return [];
+      const identities = [target['Branch Code'], target['Kode Cabang'], target['Sandi Cabang'], target.Sandi, target.Cabang, target['Nama Outlet']]
+        .map((value) => String(value || '').trim().toUpperCase())
+        .filter(Boolean);
+      const master = identities.map((identity) => masterByIdentity.get(identity)).find(Boolean);
+      if (!master) return [];
+      const targetProvince = cleanProvinsi(target.Provinsi);
+      const masterProvince = cleanProvinsi(master.Provinsi);
+      const targetDati = cleanDati(target['Dati II']);
+      const masterDati = cleanDati(master['Dati II']);
+      const provinceMismatch = Boolean(targetProvince && masterProvince && targetProvince !== masterProvince);
+      const datiMismatch = Boolean(targetDati && masterDati && targetDati !== masterDati);
+      return provinceMismatch || datiMismatch
+        ? [{ target, master, provinceMismatch, datiMismatch }]
+        : [];
+    });
+  }, [targetRows, masterRows]);
 
 
   // Filtered rows inside the Matched Detail Modal
@@ -1415,6 +1444,28 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           </button>
         )}
 
+        <button
+          type="button"
+          onClick={() => setShowAnomalyPanel((visible) => !visible)}
+          title="Periksa data upload yang berbeda provinsi atau kabupaten dari Master"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            fontSize: '0.73rem',
+            fontWeight: 700,
+            padding: '0.25rem 0.55rem',
+            borderRadius: '5px',
+            border: anomalyRows.length > 0 ? '1px solid #f06548' : '1px solid #ced4da',
+            background: showAnomalyPanel ? '#f06548' : (anomalyRows.length > 0 ? 'rgba(240,101,72,0.1)' : '#ffffff'),
+            color: showAnomalyPanel ? '#ffffff' : (anomalyRows.length > 0 ? '#c2410c' : '#6c757d'),
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <span>⚠️</span><span>Anomali Wilayah ({anomalyRows.length})</span>
+        </button>
+
         {/* Spacer */}
         <div style={{ flex: 1 }} />
 
@@ -1540,6 +1591,28 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           <span>{googleApiKey ? 'Google + LocationIQ ✓' : 'LocationIQ Aktif ✓'}</span>
         </button>
       </div>
+
+      {showAnomalyPanel && (
+        <div style={{ marginBottom: '0.65rem', padding: '0.7rem 0.85rem', border: '1px solid rgba(240,101,72,0.35)', borderRadius: '7px', background: '#fff8f6', color: '#7c2d12', fontSize: '0.72rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
+            <strong>Audit data upload vs Master</strong>
+            <span>{anomalyRows.length === 0 ? 'Tidak ada anomali' : `${anomalyRows.length} record berbeda wilayah`}</span>
+          </div>
+          {anomalyRows.length > 0 && (
+            <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'grid', gap: '0.3rem' }}>
+              {anomalyRows.slice(0, 50).map(({ target, master, provinceMismatch, datiMismatch }) => (
+                <div key={`${target.No}-${master['Branch Code']}`} style={{ padding: '0.35rem 0.5rem', background: '#ffffff', border: '1px solid #fed7aa', borderRadius: '4px' }}>
+                  <strong>No. {target.No}</strong> · KP {target['KODE POS'] || '-'} · {target['Nama Outlet'] || '-'}:
+                  <span style={{ color: '#b91c1c' }}> {target['Dati II'] || '-'}, {target.Provinsi || '-'}</span>
+                  {' → Master '}
+                  <span style={{ color: '#0369a1' }}>{master['Nama Outlet']} ({master['Dati II']}, {master.Provinsi})</span>
+                  <span style={{ color: '#9a3412' }}> [{provinceMismatch ? 'Provinsi' : ''}{provinceMismatch && datiMismatch ? ' + ' : ''}{datiMismatch ? 'Dati II' : ''} berbeda]</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Main Map Container & Interactive Side Panel */}
       <div
