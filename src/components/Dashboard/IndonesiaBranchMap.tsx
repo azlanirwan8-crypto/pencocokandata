@@ -129,6 +129,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   const [showMatchedModal, setShowMatchedModal] = useState(false);
   const [modalSearchTerm, setModalSearchTerm] = useState('');
   const [trackingMode, setTrackingMode] = useState<'none' | 'aceh_kim'>('none');
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
 // @ts-ignore: suppress unused setter warning
   const [showAllMatchMarkers, setShowAllMatchMarkers] = useState(false);
 
@@ -1002,38 +1003,182 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
         <div style={{ width: '1px', height: '20px', background: '#dee2e6', flexShrink: 0 }} />
 
-        {/* 3. Display Filter Dropdown */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-          <Filter size={13} color="#878a99" />
-          <select
-            value={displayScope}
-            onChange={(e) => {
-              const val = e.target.value as DisplayScope;
-              setTrackingMode('none');
-              if (val === 'SELECTED_ONLY' && !selectedPin) {
-                alert('Klik salah satu titik cabang di peta terlebih dahulu.');
-                return;
-              }
-              setDisplayScope(val);
-            }}
+        {/* 3. Display Filter — Custom Dropdown with Colored Bullets */}
+        <div style={{ position: 'relative' }}>
+          {/* Trigger Button */}
+          <button
+            type="button"
+            onClick={() => setShowFilterDropdown((v) => !v)}
             style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
               fontSize: '0.73rem',
               fontWeight: 600,
-              padding: '0.25rem 0.5rem',
+              padding: '0.25rem 0.6rem 0.25rem 0.45rem',
               borderRadius: '5px',
               border: '1px solid #ced4da',
               background: '#ffffff',
               color: '#212529',
               cursor: 'pointer',
-              outline: 'none',
-              minWidth: '155px',
+              whiteSpace: 'nowrap',
+              minWidth: '170px',
+              justifyContent: 'space-between',
             }}
           >
-            <option value="ALL">🌐 Semua Titik ({allPins.length})</option>
-            <option value="SELECTED_ONLY">🎯 Titik Terpilih</option>
-            <option value="MATCHED_ONLY">✓ Hanya Matched ({stats.pinsWithMatchCount})</option>
-            <option value="MULTI_ONLY">⚠️ Multi-Outlet ({stats.multiOutletPins})</option>
-          </select>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Filter size={12} color="#878a99" />
+              {displayScope === 'ALL' && (
+                <><span style={{ width: 9, height: 9, borderRadius: '50%', background: '#6366f1', display: 'inline-block', flexShrink: 0 }} /><span>Data Master ({allPins.length})</span></>
+              )}
+              {displayScope === 'MATCHED_ONLY' && (
+                <><span style={{ width: 9, height: 9, borderRadius: '50%', background: '#0ab39c', display: 'inline-block', flexShrink: 0 }} /><span>Data Rekomendasi ({stats.pinsWithMatchCount})</span></>
+              )}
+              {displayScope === 'MULTI_ONLY' && (
+                <><span style={{ width: 9, height: 9, borderRadius: '50%', background: '#f06548', display: 'inline-block', flexShrink: 0 }} /><span>Multi-Outlet ({stats.multiOutletPins})</span></>
+              )}
+              {displayScope === 'SELECTED_ONLY' && (
+                <><span style={{ width: 9, height: 9, borderRadius: '50%', background: '#f59e0b', display: 'inline-block', flexShrink: 0 }} /><span>Titik Terpilih</span></>
+              )}
+            </span>
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0, transition: 'transform 0.15s', transform: showFilterDropdown ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+              <path d="M2 3.5L5 6.5L8 3.5" stroke="#878a99" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+
+          {/* Custom Dropdown Panel */}
+          {showFilterDropdown && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 'calc(100% + 4px)',
+                left: 0,
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                zIndex: 2000,
+                minWidth: '230px',
+                overflow: 'hidden',
+              }}
+            >
+              {/* Section label */}
+              <div style={{ padding: '0.4rem 0.75rem 0.2rem', fontSize: '0.63rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Filter Tampilan Peta
+              </div>
+
+              {/* Option: Data Master */}
+              {([
+                {
+                  value: 'ALL' as DisplayScope,
+                  dot: '#6366f1',
+                  label: 'Data Master',
+                  count: allPins.length,
+                  desc: 'Semua titik cabang',
+                  icon: '🏦',
+                },
+                {
+                  value: 'MATCHED_ONLY' as DisplayScope,
+                  dot: '#0ab39c',
+                  label: 'Data Rekomendasi',
+                  count: stats.pinsWithMatchCount,
+                  desc: 'Cabang dengan data cocok',
+                  icon: '✅',
+                },
+                {
+                  value: 'MULTI_ONLY' as DisplayScope,
+                  dot: '#f06548',
+                  label: 'Data Multi-Outlet',
+                  count: stats.multiOutletPins,
+                  desc: 'lebih dari 1 cabang di titik sama',
+                  icon: '⚠️',
+                },
+                {
+                  value: 'SELECTED_ONLY' as DisplayScope,
+                  dot: '#f59e0b',
+                  label: 'Titik Terpilih',
+                  count: null,
+                  desc: 'Cabang yang diklik',
+                  icon: '🎯',
+                },
+              ].map((opt) => {
+                const isActive = displayScope === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => {
+                      if (opt.value === 'SELECTED_ONLY' && !selectedPin) {
+                        alert('Klik salah satu titik cabang di peta terlebih dahulu.');
+                        return;
+                      }
+                      setTrackingMode('none');
+                      setDisplayScope(opt.value);
+                      setShowFilterDropdown(false);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.6rem',
+                      width: '100%',
+                      padding: '0.5rem 0.75rem',
+                      background: isActive ? `${opt.dot}14` : 'transparent',
+                      border: 'none',
+                      borderLeft: isActive ? `3px solid ${opt.dot}` : '3px solid transparent',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'background 0.1s',
+                    }}
+                    onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = '#f8fafc'; }}
+                    onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    {/* Colored bullet */}
+                    <span style={{
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '50%',
+                      background: opt.dot,
+                      display: 'inline-block',
+                      flexShrink: 0,
+                      boxShadow: isActive ? `0 0 0 3px ${opt.dot}30` : 'none',
+                    }} />
+                    <span style={{ flex: 1 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: isActive ? opt.dot : '#212529' }}>
+                          {opt.icon} {opt.label}
+                        </span>
+                        {opt.count !== null && (
+                          <span style={{
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                            background: isActive ? opt.dot : '#f1f5f9',
+                            color: isActive ? '#fff' : '#64748b',
+                            padding: '0.05rem 0.4rem',
+                            borderRadius: '10px',
+                            minWidth: '28px',
+                            textAlign: 'center',
+                          }}>
+                            {(opt.count as number).toLocaleString('id-ID')}
+                          </span>
+                        )}
+                      </span>
+                      <span style={{ fontSize: '0.65rem', color: '#94a3b8', display: 'block', marginTop: '1px' }}>{opt.desc}</span>
+                    </span>
+                  </button>
+                );
+              }))}
+
+              <div style={{ height: '0.35rem' }} />
+            </div>
+          )}
+
+          {/* Click-away handler */}
+          {showFilterDropdown && (
+            <div
+              style={{ position: 'fixed', inset: 0, zIndex: 1999 }}
+              onClick={() => setShowFilterDropdown(false)}
+            />
+          )}
         </div>
 
         <div style={{ width: '1px', height: '20px', background: '#dee2e6', flexShrink: 0 }} />
