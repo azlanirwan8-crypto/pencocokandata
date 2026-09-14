@@ -886,7 +886,10 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     const isIsolated = displayScope === 'SELECTED_ONLY' || trackingMode === 'aceh_kim';
     const originGroups = groupTargetOriginsForMap(auditRows, resolvedCoords);
     const verifiedOriginSources = new Set(['row_data', 'google', 'esri', 'osm', 'locationiq', 'cache']);
-    const verifiedGroups = originGroups.filter((group) => verifiedOriginSources.has(group.source));
+    const auditGroup = selectedAnomalyTarget
+      ? originGroups.find((group) => group.rows.some((row) => String(row.No) === String(selectedAnomalyTarget.No)))
+      : undefined;
+    const verifiedGroups = originGroups.filter((group) => verifiedOriginSources.has(group.source) || group === auditGroup);
     const visibleGroups = isIsolated ? verifiedGroups : verifiedGroups.slice(0, 24);
     const allArcEndpoints: [number, number][] = [destCoords];
 
@@ -1740,8 +1743,9 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
               </div>
               <div style={{ padding: '0.65rem 0.75rem', borderRadius: '7px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
                 <strong>Before → Seharusnya</strong>
-                <div style={{ marginTop: '0.3rem' }}>Before: {selectedAnomalyInfo.target.Provinsi || '-'} ({getIslandGroup(selectedAnomalyInfo.target.Provinsi)}) → {selectedAnomalyInfo.master.Provinsi || '-'} ({getIslandGroup(selectedAnomalyInfo.master.Provinsi)})</div>
-                <div>Seharusnya: data dicocokkan ke Master pada pulau yang sama dengan data upload.</div>
+                <div style={{ marginTop: '0.3rem' }}><b>Yang salah:</b> data upload No. {selectedAnomalyInfo.target.No} ({selectedAnomalyInfo.target['Dati II'] || '-'}, {selectedAnomalyInfo.target.Provinsi || '-'}) dipetakan ke Branch Code {selectedAnomalyInfo.master['Branch Code'] || '-'} ({selectedAnomalyInfo.master['Dati II'] || '-'}, {selectedAnomalyInfo.master.Provinsi || '-'}).</div>
+                <div><b>Before:</b> KP {selectedAnomalyInfo.target['KODE POS'] || '-'} · {getIslandGroup(selectedAnomalyInfo.target.Provinsi)} → Master {getIslandGroup(selectedAnomalyInfo.master.Provinsi)}</div>
+                <div><b>Seharusnya:</b> record ini dicocokkan ke Master pada pulau yang sama dengan data upload.</div>
                 <div style={{ marginTop: '0.3rem', color: '#64748b' }}>Sumber validasi: kolom Excel upload, kolom Master, normalisasi provinsi, dan kelompok pulau. Garis merah menunjukkan relasi yang perlu diperiksa.</div>
               </div>
             </div>
