@@ -717,6 +717,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       // Click to select, fly to pin, and open drawer (with stopPropagation)
       marker.on('click', () => {
         setTrackingMode('none');
+        setSelectedAnomalyTarget(null);
         setSelectedPin(pin);
         setActiveBranchIndex(0);
         // Invalidate size after panel appears (grid layout changes width)
@@ -790,6 +791,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
       if (nearestPin && nearestDistance <= 28) {
         setTrackingMode('none');
+        setSelectedAnomalyTarget(null);
         setSelectedPin(nearestPin);
         setActiveBranchIndex(0);
       }
@@ -857,13 +859,16 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
     arcsLayer.clearLayers();
 
-    if (!selectedPin || !showCurvedArcs || selectedMatchedRows.length === 0) {
+    const auditRows = selectedAnomalyTarget && !selectedMatchedRows.some((row) => String(row.No) === String(selectedAnomalyTarget.No))
+      ? [...selectedMatchedRows, selectedAnomalyTarget]
+      : selectedMatchedRows;
+    if (!selectedPin || !showCurvedArcs || auditRows.length === 0) {
       return;
     }
 
     const destCoords: [number, number] = clampToIndonesia(selectedPin.lat, selectedPin.lng);
     const isIsolated = displayScope === 'SELECTED_ONLY' || trackingMode === 'aceh_kim';
-    const originGroups = groupTargetOriginsForMap(selectedMatchedRows, resolvedCoords);
+    const originGroups = groupTargetOriginsForMap(auditRows, resolvedCoords);
     const verifiedOriginSources = new Set(['row_data', 'google', 'esri', 'osm', 'locationiq', 'cache']);
     const verifiedGroups = originGroups.filter((group) => verifiedOriginSources.has(group.source));
     const visibleGroups = isIsolated ? verifiedGroups : verifiedGroups.slice(0, 24);
@@ -877,6 +882,9 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       const isOnSite = dist < 0.001;
       const count = group.rows.length;
       const firstRow = group.rows[0];
+      const isAnomalyGroup = selectedAnomalyTarget
+        ? group.rows.some((row) => String(row.No) === String(selectedAnomalyTarget.No))
+        : false;
 
       if (!isOnSite) {
         const curveDirection = gIdx % 2 === 0 ? 0.1 : -0.08;
@@ -884,7 +892,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         if (arcPoints.length > 0) {
           const curvedPolyline = L.polyline(arcPoints, {
             pane: 'arcsPane',
-            color: '#0ab39c',
+            color: isAnomalyGroup ? '#dc2626' : '#0ab39c',
             weight: Math.min(2 + Math.log10(count + 1), 4),
             opacity: 0.82,
             interactive: false, // Prevents curved lines from blocking clicks on markers
@@ -893,7 +901,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           curvedPolyline.bindTooltip(
             `<div style="font-size:11px;font-weight:600;color:#0f766e;">
               ${count.toLocaleString('id-ID')} data dari ${group.label}<br/>
-              <span style="font-size:10px;color:#64748b;">➔ ${selectedPin.primaryOutletName}</span>
+              <span style="font-size:10px;color:${isAnomalyGroup ? '#b91c1c' : '#64748b'};">${isAnomalyGroup ? '⚠️ Audit anomali →' : '➔'} ${selectedPin.primaryOutletName}</span>
             </div>`,
             { sticky: true }
           );
@@ -944,7 +952,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         map.flyTo(destCoords, 14, { duration: 0.8 });
       }
     }
-  }, [selectedPin, showCurvedArcs, selectedMatchedRows, displayScope, trackingMode]);
+  }, [selectedPin, showCurvedArcs, selectedMatchedRows, selectedAnomalyTarget, displayScope, trackingMode, resolvedCoords]);
 
 
   // Handle Quick Island Navigation
