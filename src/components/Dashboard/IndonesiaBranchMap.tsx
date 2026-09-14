@@ -514,7 +514,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     const masterPoint: [number, number] = [masterLocation.lat, masterLocation.lng];
     const bounds = L.latLngBounds([targetPoint, masterPoint]);
     const miniMap = L.map(anomalyMapRef.current, { zoomControl: true, attributionControl: false, minZoom: 3, maxZoom: 18 }).fitBounds(bounds, { padding: [35, 35], maxZoom: 9 });
-    getMapTileLayer('google', indonesiaBounds).addTo(miniMap);
+    const auditBounds = L.latLngBounds(L.latLng(-11.2, 94.5), L.latLng(6.2, 141.2));
+    getMapTileLayer('google', auditBounds).addTo(miniMap);
     L.circleMarker(targetPoint, { radius: 10, color: '#ffffff', weight: 3, fillColor: '#dc2626', fillOpacity: 0.95 }).addTo(miniMap).bindTooltip(`Excel No. ${selectedAnomalyInfo.target.No}`, { permanent: true, direction: 'top' });
     L.circleMarker(masterPoint, { radius: 10, color: '#ffffff', weight: 3, fillColor: '#2563eb', fillOpacity: 0.95 }).addTo(miniMap).bindTooltip(`Master ${selectedAnomalyInfo.master['Nama Outlet']}`, { permanent: true, direction: 'top' });
     L.polyline([targetPoint, masterPoint], { color: '#dc2626', weight: 3, dashArray: '8 6', opacity: 0.9 }).addTo(miniMap);
@@ -523,7 +524,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       miniMap.remove();
       anomalyMapInstanceRef.current = null;
     };
-  }, [selectedAnomalyInfo, resolvedCoords, indonesiaBounds]);
+  }, [selectedAnomalyInfo, resolvedCoords]);
 
 
   // Filtered rows inside the Matched Detail Modal
