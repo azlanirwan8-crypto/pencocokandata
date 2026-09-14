@@ -793,7 +793,13 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     const destCoords: [number, number] = clampToIndonesia(selectedPin.lat, selectedPin.lng);
     const isIsolated = displayScope === 'SELECTED_ONLY' || trackingMode === 'aceh_kim';
     const originGroups = groupTargetOriginsForMap(selectedMatchedRows, resolvedCoords);
-    const visibleGroups = isIsolated ? originGroups : originGroups.slice(0, 24);
+    const maxLocalArcDistance = trackingMode === 'aceh_kim' ? Number.POSITIVE_INFINITY : 4.5;
+    const nearbyGroups = originGroups.filter((group) => {
+      const deltaLat = group.lat - destCoords[0];
+      const deltaLng = group.lng - destCoords[1];
+      return Math.sqrt(deltaLat * deltaLat + deltaLng * deltaLng) <= maxLocalArcDistance;
+    });
+    const visibleGroups = isIsolated ? nearbyGroups : nearbyGroups.slice(0, 24);
     const allArcEndpoints: [number, number][] = [destCoords];
 
     visibleGroups.forEach((group, gIdx) => {
