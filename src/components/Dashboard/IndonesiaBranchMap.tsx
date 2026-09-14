@@ -152,6 +152,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   const [trackingMode, setTrackingMode] = useState<'none' | 'aceh_kim'>('none');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [showAnomalyPanel, setShowAnomalyPanel] = useState(false);
+  const [selectedAnomalyTarget, setSelectedAnomalyTarget] = useState<TargetRow | null>(null);
   const [mapInteractionTick, setMapInteractionTick] = useState(0);
 // @ts-ignore: suppress unused setter warning
   const [showAllMatchMarkers, setShowAllMatchMarkers] = useState(false);
@@ -745,7 +746,25 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         markersLayer.addLayer(marker);
       });
     }
-    }, [filteredPins, selectedPin, showAllMatchMarkers, resolvedCoords, mapInteractionTick]);
+
+    if (selectedAnomalyTarget) {
+      const anomalyOrigin = resolveTargetOriginCoordinates(selectedAnomalyTarget, resolvedCoords);
+      const anomalyMarker = L.circleMarker([anomalyOrigin.lat, anomalyOrigin.lng], {
+        pane: 'markersPane',
+        renderer: canvasRenderer,
+        radius: 11,
+        fillColor: '#dc2626',
+        color: '#ffffff',
+        weight: 3,
+        fillOpacity: 0.95,
+      });
+      anomalyMarker.bindTooltip(
+        `<strong style="color:#b91c1c;">⚠️ Anomali Excel No. ${selectedAnomalyTarget.No || '-'}</strong><br/>${selectedAnomalyTarget.ALAMAT || '-'}<br/>KP ${selectedAnomalyTarget['KODE POS'] || '-'}`,
+        { direction: 'top', className: 'bni-map-fast-tooltip' }
+      );
+      markersLayer.addLayer(anomalyMarker);
+    }
+    }, [filteredPins, selectedPin, showAllMatchMarkers, resolvedCoords, selectedAnomalyTarget, mapInteractionTick]);
 
   // Canvas hit-testing can miss a marker while thousands of points are being redrawn.
   // A pixel-distance fallback keeps the map clickable even when a marker event is missed.
@@ -807,6 +826,14 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12, animate: true, duration: 0.55 });
     }
   }, [displayScope, selectedPin, selectedWilayah, filteredPins]);
+
+  useEffect(() => {
+    if (!selectedAnomalyTarget) return;
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    const origin = resolveTargetOriginCoordinates(selectedAnomalyTarget, resolvedCoords);
+    map.flyTo([origin.lat, origin.lng], Math.max(map.getZoom(), 8), { duration: 0.55 });
+  }, [selectedAnomalyTarget, resolvedCoords]);
 
   useEffect(() => {
     if (!selectedPin) return;
@@ -1601,7 +1628,22 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           {anomalyRows.length > 0 && (
             <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'grid', gap: '0.3rem' }}>
               {anomalyRows.slice(0, 50).map(({ target, master, provinceMismatch, datiMismatch }) => (
-                <div key={`${target.No}-${master['Branch Code']}`} style={{ padding: '0.35rem 0.5rem', background: '#ffffff', border: '1px solid #fed7aa', borderRadius: '4px' }}>
+                <div
+                  key={`${target.No}-${master['Branch Code']}`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => {
+                    const masterIdentity = String(master['Branch Code'] || master['Kode Cabang'] || master['Sandi Cabang'] || '').trim();
+                    const pin = allPins.find((candidate) => candidate.branches.some((branch) => String(branch['Branch Code'] || branch['Kode Cabang'] || branch['Sandi Cabang'] || '').trim() === masterIdentity));
+                    if (pin) {
+                      setTrackingMode('none');
+                      setDisplayScope('ALL');
+                      setSelectedPin(pin);
+                    }
+                    setSelectedAnomalyTarget(target);
+                  }}
+                  style={{ padding: '0.35rem 0.5rem', background: '#ffffff', border: '1px solid #fed7aa', borderRadius: '4px', cursor: 'pointer' }}
+                >
                   <strong>No. {target.No}</strong> · KP {target['KODE POS'] || '-'} · {target['Nama Outlet'] || '-'}:
                   <span style={{ color: '#b91c1c' }}> {target['Dati II'] || '-'}, {target.Provinsi || '-'}</span>
                   {' → Master '}
