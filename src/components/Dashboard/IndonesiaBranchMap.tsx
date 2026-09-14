@@ -18,6 +18,7 @@ import {
   FileSpreadsheet,
   ShieldCheck,
   Key,
+  Info,
 } from 'lucide-react';
 import type { MasterRow, TargetRow } from '../../types';
 import {
@@ -25,6 +26,7 @@ import {
   INDONESIA_REGIONS,
   createCurvedArcPoints,
   resolveTargetOriginCoordinates,
+  resolveBranchCoordinates,
   clampToIndonesia,
   isAcehTargetRow,
   groupTargetOriginsForMap,
@@ -1647,24 +1649,6 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
             <strong>Audit data upload vs Master</strong>
             <span>{anomalyRows.length === 0 ? 'Tidak ada anomali' : `${anomalyRows.length} record beda pulau`}</span>
           </div>
-          {selectedAnomalyInfo && (
-            <div style={{ marginBottom: '0.5rem', padding: '0.55rem 0.65rem', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '5px', color: '#4c0519' }}>
-              <strong>Detail anomali No. {selectedAnomalyInfo.target.No}</strong>
-              <div style={{ marginTop: '0.3rem' }}>
-                <b>Data Excel:</b> {selectedAnomalyInfo.target['Nama Outlet'] || '-'} · KP {selectedAnomalyInfo.target['KODE POS'] || '-'} · {selectedAnomalyInfo.target['Dati II'] || '-'}, {selectedAnomalyInfo.target.Provinsi || '-'} ({getIslandGroup(selectedAnomalyInfo.target.Provinsi)})
-              </div>
-              <div>
-                <b>Master tujuan:</b> {selectedAnomalyInfo.master['Nama Outlet'] || '-'} · {selectedAnomalyInfo.master['Dati II'] || '-'}, {selectedAnomalyInfo.master.Provinsi || '-'} ({getIslandGroup(selectedAnomalyInfo.master.Provinsi)})
-              </div>
-              <div style={{ marginTop: '0.3rem', color: '#b91c1c', fontWeight: 700 }}>
-                Kesalahan: lokasi Excel dan Master berada di pulau berbeda.
-              </div>
-              <div style={{ marginTop: '0.2rem' }}>
-                <b>Before:</b> {selectedAnomalyInfo.target.Provinsi || '-'} → Master {selectedAnomalyInfo.master.Provinsi || '-'}<br />
-                <b>Seharusnya:</b> data harus dicocokkan ke Master pada pulau yang sama.
-              </div>
-            </div>
-          )}
           {anomalyRows.length > 0 && (
             <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'grid', gap: '0.3rem' }}>
               {anomalyRows.slice(0, 50).map(({ target, master }) => (
@@ -1682,17 +1666,79 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                     }
                     setSelectedAnomalyTarget(target);
                   }}
-                  style={{ padding: '0.35rem 0.5rem', background: '#ffffff', border: '1px solid #fed7aa', borderRadius: '4px', cursor: 'pointer' }}
+                  style={{ padding: '0.35rem 0.5rem', background: '#ffffff', border: '1px solid #fed7aa', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.45rem' }}
                 >
-                  <strong>No. {target.No}</strong> · KP {target['KODE POS'] || '-'} · {target['Nama Outlet'] || '-'}:
-                  <span style={{ color: '#b91c1c' }}> {target['Dati II'] || '-'}, {target.Provinsi || '-'}</span>
-                  {' → Master '}
-                  <span style={{ color: '#0369a1' }}>{master['Nama Outlet']} ({master['Dati II']}, {master.Provinsi})</span>
-                  <span style={{ color: '#9a3412' }}> [Beda pulau]</span>
+                  <span style={{ flex: 1 }}><strong>No. {target.No}</strong> · KP {target['KODE POS'] || '-'} · <span style={{ color: '#b91c1c' }}>{target['Dati II'] || '-'}, {target.Provinsi || '-'}</span> → <span style={{ color: '#0369a1' }}>{master['Nama Outlet']} ({master.Provinsi})</span></span>
+                  <button
+                    type="button"
+                    title="Lihat detail anomali"
+                    aria-label={`Lihat detail anomali No. ${target.No}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSelectedAnomalyTarget(target);
+                    }}
+                    style={{ width: '24px', height: '24px', borderRadius: '50%', border: '1px solid #f97316', background: '#fff7ed', color: '#c2410c', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+                  >
+                    <Info size={14} />
+                  </button>
                 </div>
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {selectedAnomalyInfo && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Detail anomali No. ${selectedAnomalyInfo.target.No}`}
+          onClick={() => setSelectedAnomalyTarget(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 12000, background: 'rgba(15, 23, 42, 0.42)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+        >
+          <div onClick={(event) => event.stopPropagation()} style={{ width: 'min(680px, 100%)', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', background: '#ffffff', borderRadius: '10px', boxShadow: '0 20px 50px rgba(15,23,42,0.28)', border: '1px solid #fecdd3' }}>
+            <div style={{ padding: '0.85rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #fee2e2', background: '#fff7f7' }}>
+              <div>
+                <div style={{ fontSize: '0.68rem', color: '#b91c1c', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Audit Anomali Lintas Pulau</div>
+                <strong style={{ fontSize: '1rem', color: '#4c0519' }}>Record Excel No. {selectedAnomalyInfo.target.No}</strong>
+              </div>
+              <button type="button" onClick={() => setSelectedAnomalyTarget(null)} title="Tutup detail" aria-label="Tutup detail" style={{ border: 0, background: 'transparent', color: '#64748b', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
+            <div style={{ padding: '1rem', display: 'grid', gap: '0.8rem', fontSize: '0.76rem', color: '#334155' }}>
+              <div style={{ padding: '0.65rem 0.75rem', border: '1px solid #fecdd3', borderRadius: '7px', background: '#fff1f2' }}>
+                <strong style={{ color: '#9f1239' }}>Kesimpulan validasi</strong>
+                <div style={{ marginTop: '0.3rem' }}>Lokasi data upload dan Master tujuan berada di pulau berbeda. Ini adalah anomali mapping dan bukan alur Aceh → KIM.</div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.7rem' }}>
+                <div style={{ padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '7px' }}>
+                  <strong style={{ color: '#b91c1c' }}>Data upload Excel</strong>
+                  <div style={{ marginTop: '0.4rem' }}>No: {selectedAnomalyInfo.target.No}</div>
+                  <div>Nama: {selectedAnomalyInfo.target['Nama Outlet'] || '-'}</div>
+                  <div>Alamat: {selectedAnomalyInfo.target.ALAMAT || '-'}</div>
+                  <div>Kode pos: {selectedAnomalyInfo.target['KODE POS'] || '-'}</div>
+                  <div>Provinsi: {selectedAnomalyInfo.target.Provinsi || '-'}</div>
+                  <div>Dati II: {selectedAnomalyInfo.target['Dati II'] || '-'}</div>
+                  <div>Koordinat: {(() => { const origin = resolveTargetOriginCoordinates(selectedAnomalyInfo.target, resolvedCoords); return `${origin.lat.toFixed(6)}, ${origin.lng.toFixed(6)} (${origin.source})`; })()}</div>
+                </div>
+                <div style={{ padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '7px' }}>
+                  <strong style={{ color: '#0369a1' }}>Master tujuan</strong>
+                  <div style={{ marginTop: '0.4rem' }}>Branch Code: {selectedAnomalyInfo.master['Branch Code'] || '-'}</div>
+                  <div>Nama: {selectedAnomalyInfo.master['Nama Outlet'] || '-'}</div>
+                  <div>Alamat: {selectedAnomalyInfo.master.ALAMAT || '-'}</div>
+                  <div>Kode pos: {selectedAnomalyInfo.master['KODE POS'] || '-'}</div>
+                  <div>Provinsi: {selectedAnomalyInfo.master.Provinsi || '-'}</div>
+                  <div>Dati II: {selectedAnomalyInfo.master['Dati II'] || '-'}</div>
+                  <div>Koordinat pin: {(() => { const branch = resolveBranchCoordinates(selectedAnomalyInfo.master, resolvedCoords); return `${branch.lat.toFixed(6)}, ${branch.lng.toFixed(6)} (${branch.source})`; })()}</div>
+                </div>
+              </div>
+              <div style={{ padding: '0.65rem 0.75rem', borderRadius: '7px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                <strong>Before → Seharusnya</strong>
+                <div style={{ marginTop: '0.3rem' }}>Before: {selectedAnomalyInfo.target.Provinsi || '-'} ({getIslandGroup(selectedAnomalyInfo.target.Provinsi)}) → {selectedAnomalyInfo.master.Provinsi || '-'} ({getIslandGroup(selectedAnomalyInfo.master.Provinsi)})</div>
+                <div>Seharusnya: data dicocokkan ke Master pada pulau yang sama dengan data upload.</div>
+                <div style={{ marginTop: '0.3rem', color: '#64748b' }}>Sumber validasi: kolom Excel upload, kolom Master, normalisasi provinsi, dan kelompok pulau. Garis merah menunjukkan relasi yang perlu diperiksa.</div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
