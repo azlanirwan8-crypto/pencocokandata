@@ -865,10 +865,15 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         }
       });
       originDot.bindTooltip(
-        `<div style="font-size:11px;padding:2px 4px;">
+        `<div style="font-size:11px;padding:2px 4px;max-width:280px;">
           <strong style="color:#0284c7;">📍 ${group.label}</strong>
-          <div style="color:#334155;margin-top:2px;">${count.toLocaleString('id-ID')} data target</div>
-          <div style="color:#64748b;font-size:10px;">📮 ${firstRow['KODE POS'] || '-'} · ${firstRow.Kecamatan || ''}</div>
+          <div style="color:#334155;margin-top:2px;">${count.toLocaleString('id-ID')} data dari Excel upload</div>
+          <div style="color:#64748b;font-size:10px;">Sumber koordinat: ${group.source}</div>
+          <div style="color:#64748b;font-size:10px;margin-top:3px;">📮 ${firstRow['KODE POS'] || '-'} · ${firstRow.Kecamatan || ''}</div>
+          <div style="color:#475569;font-size:10px;margin-top:3px;max-height:96px;overflow:auto;">
+            ${group.rows.slice(0, 12).map((row) => `No. ${row.No || '-'} · ${row['Nama Outlet'] || '-'} · ${row.ALAMAT || '-'} · KP ${row['KODE POS'] || '-'}`).join('<br/>')}
+            ${group.rows.length > 12 ? `<br/>+${group.rows.length - 12} record lainnya` : ''}
+          </div>
         </div>`,
         { direction: 'top' }
       );
