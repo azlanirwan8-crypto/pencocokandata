@@ -1723,9 +1723,17 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 <div style={{ padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '7px' }}>
                   <strong style={{ color: '#b91c1c' }}>Data upload Excel</strong>
                   <div style={{ marginTop: '0.4rem' }}>No: {selectedAnomalyInfo.target.No}</div>
+                  <div>Wilayah: {selectedAnomalyInfo.target.Wilayah || '-'}</div>
+                  <div>Sandi Cabang: {selectedAnomalyInfo.target['Sandi Cabang'] || selectedAnomalyInfo.target.Sandi || selectedAnomalyInfo.target.Cabang || '-'}</div>
+                  <div>Branch Code: {selectedAnomalyInfo.target['Branch Code'] || '-'}</div>
+                  <div>Kode Cabang: {selectedAnomalyInfo.target['Kode Cabang'] || '-'}</div>
                   <div>Nama: {selectedAnomalyInfo.target['Nama Outlet'] || '-'}</div>
+                  <div>Status: {selectedAnomalyInfo.target['Status Outlet'] || '-'}</div>
                   <div>Alamat: {selectedAnomalyInfo.target.ALAMAT || '-'}</div>
                   <div>Kode pos: {selectedAnomalyInfo.target['KODE POS'] || '-'}</div>
+                  <div>Kelurahan: {selectedAnomalyInfo.target.Kelurahan || '-'}</div>
+                  <div>Kecamatan: {selectedAnomalyInfo.target.Kecamatan || '-'}</div>
+                  <div>Kode Dati II: {selectedAnomalyInfo.target['Kode Dati II'] || '-'}</div>
                   <div>Provinsi: {selectedAnomalyInfo.target.Provinsi || '-'}</div>
                   <div>Dati II: {selectedAnomalyInfo.target['Dati II'] || '-'}</div>
                   <div>Koordinat: {(() => { const origin = resolveTargetOriginCoordinates(selectedAnomalyInfo.target, resolvedCoords); return `${origin.lat.toFixed(6)}, ${origin.lng.toFixed(6)} (${origin.source})`; })()}</div>
@@ -1733,9 +1741,16 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 <div style={{ padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '7px' }}>
                   <strong style={{ color: '#0369a1' }}>Master tujuan</strong>
                   <div style={{ marginTop: '0.4rem' }}>Branch Code: {selectedAnomalyInfo.master['Branch Code'] || '-'}</div>
+                  <div>Wilayah: {selectedAnomalyInfo.master.Wilayah || '-'}</div>
+                  <div>Sandi Cabang: {selectedAnomalyInfo.master['Sandi Cabang'] || selectedAnomalyInfo.master.Sandi || selectedAnomalyInfo.master.Cabang || '-'}</div>
+                  <div>Kode Cabang: {selectedAnomalyInfo.master['Kode Cabang'] || '-'}</div>
                   <div>Nama: {selectedAnomalyInfo.master['Nama Outlet'] || '-'}</div>
+                  <div>Status: {selectedAnomalyInfo.master['Status Outlet'] || '-'}</div>
                   <div>Alamat: {selectedAnomalyInfo.master.ALAMAT || '-'}</div>
                   <div>Kode pos: {selectedAnomalyInfo.master['KODE POS'] || '-'}</div>
+                  <div>Kelurahan: {selectedAnomalyInfo.master.Kelurahan || '-'}</div>
+                  <div>Kecamatan: {selectedAnomalyInfo.master.Kecamatan || '-'}</div>
+                  <div>Kode Dati II: {selectedAnomalyInfo.master['Kode Dati II'] || '-'}</div>
                   <div>Provinsi: {selectedAnomalyInfo.master.Provinsi || '-'}</div>
                   <div>Dati II: {selectedAnomalyInfo.master['Dati II'] || '-'}</div>
                   <div>Koordinat pin: {(() => { const branch = resolveBranchCoordinates(selectedAnomalyInfo.master, resolvedCoords); return `${branch.lat.toFixed(6)}, ${branch.lng.toFixed(6)} (${branch.source})`; })()}</div>
