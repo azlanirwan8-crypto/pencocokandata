@@ -40,6 +40,7 @@ import {
   type GeoLocationResult,
   type BatchProgress,
 } from '../../utils/onlineGeoCoder';
+import { get, keys } from 'idb-keyval';
 
 interface IndonesiaBranchMapProps {
   masterRows: MasterRow[];
@@ -138,9 +139,48 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   const [resolvedCoords, setResolvedCoords] = useState<Map<string, GeoLocationResult>>(new Map());
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [geocodingProgress, setGeocodingProgress] = useState<BatchProgress | null>(null);
+  // Flag: true once the IndexedDB pre-load pass completes (so geocoding effect knows cache is ready)
+  const [cachePreloaded, setCachePreloaded] = useState(false);
+
+  // PRE-LOAD: On mount, bulk-read all previously cached geocoding results from IndexedDB
+  // This makes subsequent page loads instant — no network calls for already-resolved addresses
+  useEffect(() => {
+    let cancelled = false;
+    const IDB_PREFIX = 'geo_cache_';
+    (async () => {
+      try {
+        const allKeys = await keys<string>();
+        const geoKeys = allKeys.filter((k) => typeof k === 'string' && k.startsWith(IDB_PREFIX));
+        if (geoKeys.length === 0) {
+          if (!cancelled) setCachePreloaded(true);
+          return;
+        }
+        // Bulk-fetch all cached entries in parallel (all from local IndexedDB, ultra-fast)
+        const entries = await Promise.all(
+          geoKeys.map(async (k) => {
+            const val = await get<GeoLocationResult>(k);
+            return val ? [k.slice(IDB_PREFIX.length), val] as [string, GeoLocationResult] : null;
+          })
+        );
+        if (!cancelled) {
+          const preloaded = new Map<string, GeoLocationResult>();
+          entries.forEach((e) => { if (e) preloaded.set(e[0], e[1]); });
+          setResolvedCoords(preloaded);
+          setCachePreloaded(true);
+        }
+      } catch {
+        // IndexedDB unavailable (private browsing etc.) — proceed without preload
+        if (!cancelled) setCachePreloaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []); // run once on mount
 
   // Realtime Geocoding Hook: Resolves unique branch & target coordinates via Google Maps / Online API
+  // Only runs AFTER cache preload so it only fetches truly uncached addresses
   useEffect(() => {
+    // Wait for IndexedDB preload to complete before checking what's missing
+    if (!cachePreloaded) return;
     if (!masterRows || masterRows.length === 0) return;
 
     let isMounted = true;
@@ -164,6 +204,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     }
 
     const uniqueQueries = Array.from(new Set(queriesToFetch));
+    // If everything is already in cache — skip entirely, no loading bar shown
     if (uniqueQueries.length === 0) return;
 
     setIsGeocoding(true);
@@ -189,7 +230,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [masterRows, targetRows, googleApiKey]);
+  }, [cachePreloaded, masterRows, targetRows, googleApiKey]);
 
   // 1. Group & Cluster master rows into pins using dynamic resolved coordinates
   const allPins = useMemo(() => {
