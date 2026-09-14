@@ -41,6 +41,7 @@ import {
   type BatchProgress,
 } from '../../utils/onlineGeoCoder';
 import { get, keys } from 'idb-keyval';
+import { cleanDati, cleanProvinsi } from '../../utils/normalizer';
 
 interface IndonesiaBranchMapProps {
   masterRows: MasterRow[];
@@ -63,6 +64,20 @@ function hasExplicitCoordinates(row: MasterRow | TargetRow): boolean {
   const lat = Number(row.Latitude ?? row.lat ?? row.LATITUDE);
   const lng = Number(row.Longitude ?? row.lng ?? row.LONGITUDE);
   return Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
+}
+
+function isTargetInSelectedBranchRegion(target: TargetRow, branches: MasterRow[]): boolean {
+  const targetProvince = cleanProvinsi(target.Provinsi);
+  const targetDati = cleanDati(target['Dati II']);
+  if (!targetProvince && !targetDati) return true;
+
+  return branches.some((branch) => {
+    const branchProvince = cleanProvinsi(branch.Provinsi);
+    const branchDati = cleanDati(branch['Dati II']);
+    const provinceMatches = !targetProvince || !branchProvince || targetProvince === branchProvince;
+    const datiMatches = !targetDati || !branchDati || targetDati === branchDati;
+    return provinceMatches && datiMatches;
+  });
 }
 
 // Clean, lightweight tile layer factory supporting Google Maps, Satellite, Esri, and OSM
@@ -425,7 +440,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         (tBranchCode && branchCodeSet.has(tBranchCode)) ||
         (tName && outletNameSet.has(tName));
 
-      if (isExplicitMatch) return true;
+      if (isExplicitMatch && isTargetInSelectedBranchRegion(t, selectedPin.branches)) return true;
 
       // Postal code alone is not enough to draw a relation to a branch. It can
       // represent several outlets and creates misleading long arcs on the map.
