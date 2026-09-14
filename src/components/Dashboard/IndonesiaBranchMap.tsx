@@ -142,6 +142,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   onNavigateToEngine,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const anomalyMapRef = useRef<HTMLDivElement | null>(null);
+  const anomalyMapInstanceRef = useRef<L.Map | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const canvasRendererRef = useRef<L.Canvas | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
@@ -503,6 +505,25 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     if (!selectedAnomalyTarget) return null;
     return anomalyRows.find((item) => String(item.target.No) === String(selectedAnomalyTarget.No)) || null;
   }, [anomalyRows, selectedAnomalyTarget]);
+
+  useEffect(() => {
+    if (!selectedAnomalyInfo || !anomalyMapRef.current) return;
+    const targetLocation = resolveTargetOriginCoordinates(selectedAnomalyInfo.target, resolvedCoords);
+    const masterLocation = resolveBranchCoordinates(selectedAnomalyInfo.master, resolvedCoords);
+    const targetPoint: [number, number] = [targetLocation.lat, targetLocation.lng];
+    const masterPoint: [number, number] = [masterLocation.lat, masterLocation.lng];
+    const bounds = L.latLngBounds([targetPoint, masterPoint]);
+    const miniMap = L.map(anomalyMapRef.current, { zoomControl: true, attributionControl: false, minZoom: 3, maxZoom: 18 }).fitBounds(bounds, { padding: [35, 35], maxZoom: 9 });
+    getMapTileLayer('google', indonesiaBounds).addTo(miniMap);
+    L.circleMarker(targetPoint, { radius: 10, color: '#ffffff', weight: 3, fillColor: '#dc2626', fillOpacity: 0.95 }).addTo(miniMap).bindTooltip(`Excel No. ${selectedAnomalyInfo.target.No}`, { permanent: true, direction: 'top' });
+    L.circleMarker(masterPoint, { radius: 10, color: '#ffffff', weight: 3, fillColor: '#2563eb', fillOpacity: 0.95 }).addTo(miniMap).bindTooltip(`Master ${selectedAnomalyInfo.master['Nama Outlet']}`, { permanent: true, direction: 'top' });
+    L.polyline([targetPoint, masterPoint], { color: '#dc2626', weight: 3, dashArray: '8 6', opacity: 0.9 }).addTo(miniMap);
+    anomalyMapInstanceRef.current = miniMap;
+    return () => {
+      miniMap.remove();
+      anomalyMapInstanceRef.current = null;
+    };
+  }, [selectedAnomalyInfo, resolvedCoords, indonesiaBounds]);
 
 
   // Filtered rows inside the Matched Detail Modal
@@ -1706,15 +1727,21 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           onClick={() => setSelectedAnomalyTarget(null)}
           style={{ position: 'fixed', inset: 0, zIndex: 12000, background: 'rgba(15, 23, 42, 0.42)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
         >
-          <div onClick={(event) => event.stopPropagation()} style={{ width: 'min(680px, 100%)', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', background: '#ffffff', borderRadius: '10px', boxShadow: '0 20px 50px rgba(15,23,42,0.28)', border: '1px solid #fecdd3' }}>
-            <div style={{ padding: '0.85rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #fee2e2', background: '#fff7f7' }}>
+          <div onClick={(event) => event.stopPropagation()} style={{ width: 'min(1120px, 96vw)', maxHeight: 'calc(100vh - 32px)', overflow: 'hidden', background: '#ffffff', borderRadius: '10px', boxShadow: '0 20px 50px rgba(15,23,42,0.28)', border: '1px solid #fecdd3', display: 'grid', gridTemplateColumns: '1.2fr 1fr' }}>
+            <div style={{ gridColumn: '1 / -1', padding: '0.85rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #fee2e2', background: '#fff7f7' }}>
               <div>
                 <div style={{ fontSize: '0.68rem', color: '#b91c1c', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Audit Anomali Lintas Pulau</div>
                 <strong style={{ fontSize: '1rem', color: '#4c0519' }}>Record Excel No. {selectedAnomalyInfo.target.No}</strong>
               </div>
               <button type="button" onClick={() => setSelectedAnomalyTarget(null)} title="Tutup detail" aria-label="Tutup detail" style={{ border: 0, background: 'transparent', color: '#64748b', cursor: 'pointer' }}><X size={20} /></button>
             </div>
-            <div style={{ padding: '1rem', display: 'grid', gap: '0.8rem', fontSize: '0.76rem', color: '#334155' }}>
+            <div style={{ minHeight: '560px', background: '#e2e8f0', position: 'relative' }}>
+              <div ref={anomalyMapRef} style={{ width: '100%', height: '100%', minHeight: '560px' }} />
+              <div style={{ position: 'absolute', left: '12px', bottom: '12px', zIndex: 500, padding: '0.45rem 0.6rem', borderRadius: '6px', background: 'rgba(255,255,255,0.94)', border: '1px solid #cbd5e1', fontSize: '0.68rem', color: '#334155' }}>
+                <span style={{ color: '#dc2626', fontWeight: 800 }}>● Excel</span> → <span style={{ color: '#2563eb', fontWeight: 800 }}>● Master</span>
+              </div>
+            </div>
+            <div style={{ padding: '1rem', maxHeight: 'calc(100vh - 112px)', overflowY: 'auto', display: 'grid', gap: '0.8rem', fontSize: '0.76rem', color: '#334155' }}>
               <div style={{ padding: '0.65rem 0.75rem', border: '1px solid #fecdd3', borderRadius: '7px', background: '#fff1f2' }}>
                 <strong style={{ color: '#9f1239' }}>Kesimpulan validasi</strong>
                 <div style={{ marginTop: '0.3rem' }}>Lokasi data upload dan Master tujuan berada di pulau berbeda. Ini adalah anomali mapping dan bukan alur Aceh → KIM.</div>
