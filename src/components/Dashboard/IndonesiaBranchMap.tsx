@@ -80,6 +80,17 @@ function isTargetInSelectedBranchRegion(target: TargetRow, branches: MasterRow[]
   });
 }
 
+function getIslandGroup(province: string): string {
+  const normalized = cleanProvinsi(province);
+  if (['aceh', 'sumatera utara', 'sumatera barat', 'riau', 'kepulauan riau', 'jambi', 'sumatera selatan', 'kepulauan bangka belitung', 'bengkulu', 'lampung'].includes(normalized)) return 'SUMATERA';
+  if (['banten', 'dki jakarta', 'jawa barat', 'jawa tengah', 'daerah istimewa yogyakarta', 'di yogyakarta', 'jawa timur'].includes(normalized)) return 'JAWA';
+  if (['bali', 'nusa tenggara barat', 'nusa tenggara timur'].includes(normalized)) return 'BALI_NUSA';
+  if (['kalimantan barat', 'kalimantan tengah', 'kalimantan selatan', 'kalimantan timur', 'kalimantan utara'].includes(normalized)) return 'KALIMANTAN';
+  if (['sulawesi utara', 'gorontalo', 'sulawesi tengah', 'sulawesi barat', 'sulawesi selatan', 'sulawesi tenggara'].includes(normalized)) return 'SULAWESI';
+  if (['maluku', 'maluku utara', 'papua', 'papua barat', 'papua barat daya', 'papua tengah', 'papua pegunungan', 'papua selatan'].includes(normalized)) return 'MALUKU_PAPUA';
+  return normalized;
+}
+
 // Clean, lightweight tile layer factory supporting Google Maps, Satellite, Esri, and OSM
 function getMapTileLayer(provider: TileProvider, bounds: L.LatLngBounds): L.TileLayer {
   if (provider === 'google') {
@@ -477,14 +488,11 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         .filter(Boolean);
       const master = identities.map((identity) => masterByIdentity.get(identity)).find(Boolean);
       if (!master) return [];
-      const targetProvince = cleanProvinsi(target.Provinsi);
-      const masterProvince = cleanProvinsi(master.Provinsi);
-      const targetDati = cleanDati(target['Dati II']);
-      const masterDati = cleanDati(master['Dati II']);
-      const provinceMismatch = Boolean(targetProvince && masterProvince && targetProvince !== masterProvince);
-      const datiMismatch = Boolean(targetDati && masterDati && targetDati !== masterDati);
-      return provinceMismatch
-        ? [{ target, master, provinceMismatch, datiMismatch }]
+      const targetIsland = getIslandGroup(target.Provinsi);
+      const masterIsland = getIslandGroup(master.Provinsi);
+      const islandMismatch = Boolean(targetIsland && masterIsland && targetIsland !== masterIsland);
+      return islandMismatch
+        ? [{ target, master, islandMismatch }]
         : [];
     });
   }, [targetRows, masterRows]);
@@ -1483,7 +1491,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         <button
           type="button"
           onClick={() => setShowAnomalyPanel((visible) => !visible)}
-          title="Periksa data upload yang berbeda provinsi atau kabupaten dari Master"
+          title="Periksa data upload yang berada di pulau berbeda dari Master"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -1632,7 +1640,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         <div style={{ marginBottom: '0.65rem', padding: '0.7rem 0.85rem', border: '1px solid rgba(240,101,72,0.35)', borderRadius: '7px', background: '#fff8f6', color: '#7c2d12', fontSize: '0.72rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
             <strong>Audit data upload vs Master</strong>
-            <span>{anomalyRows.length === 0 ? 'Tidak ada anomali' : `${anomalyRows.length} record beda provinsi`}</span>
+            <span>{anomalyRows.length === 0 ? 'Tidak ada anomali' : `${anomalyRows.length} record beda pulau`}</span>
           </div>
           {anomalyRows.length > 0 && (
             <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'grid', gap: '0.3rem' }}>
@@ -1657,7 +1665,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                   <span style={{ color: '#b91c1c' }}> {target['Dati II'] || '-'}, {target.Provinsi || '-'}</span>
                   {' → Master '}
                   <span style={{ color: '#0369a1' }}>{master['Nama Outlet']} ({master['Dati II']}, {master.Provinsi})</span>
-                  <span style={{ color: '#9a3412' }}> [Provinsi berbeda]</span>
+                  <span style={{ color: '#9a3412' }}> [Beda pulau]</span>
                 </div>
               ))}
             </div>
