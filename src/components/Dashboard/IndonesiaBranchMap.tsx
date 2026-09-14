@@ -677,10 +677,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       });
 
       // Click to select, fly to pin, and open drawer (with stopPropagation)
-      marker.on('click', (e) => {
-        if (e && e.originalEvent) {
-          L.DomEvent.stopPropagation(e);
-        }
+      marker.on('click', () => {
         setTrackingMode('none');
         setSelectedPin(pin);
         setActiveBranchIndex(0);
@@ -712,6 +709,41 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       });
     }
     }, [filteredPins, selectedPin, showAllMatchMarkers, resolvedCoords, mapInteractionTick]);
+
+  // Canvas hit-testing can miss a marker while thousands of points are being redrawn.
+  // A pixel-distance fallback keeps the map clickable even when a marker event is missed.
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    const handleMapClick = (event: L.LeafletMouseEvent) => {
+      if (mapInteractionRef.current || filteredPins.length === 0) return;
+
+      const clickPoint = map.latLngToContainerPoint(event.latlng);
+      let nearestPin: PlottedBranchPin | null = null;
+      let nearestDistance = Number.POSITIVE_INFINITY;
+
+      filteredPins.forEach((pin) => {
+        const markerPoint = map.latLngToContainerPoint([pin.lat, pin.lng]);
+        const distance = clickPoint.distanceTo(markerPoint);
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestPin = pin;
+        }
+      });
+
+      if (nearestPin && nearestDistance <= 28) {
+        setTrackingMode('none');
+        setSelectedPin(nearestPin);
+        setActiveBranchIndex(0);
+      }
+    };
+
+    map.on('click', handleMapClick);
+    return () => {
+      map.off('click', handleMapClick);
+    };
+  }, [filteredPins]);
 
   // Camera movement is intentionally separate from marker redraws. Geocoding can update
   // coordinates many times, but it must not interrupt the user's current zoom or click.
