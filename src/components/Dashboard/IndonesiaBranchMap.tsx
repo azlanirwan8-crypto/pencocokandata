@@ -415,15 +415,11 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     const outletNameSet = new Set(
       selectedPin.branches.map((b) => String(b['Nama Outlet'] || '').toLowerCase().trim()).filter(Boolean)
     );
-    const kp = String(selectedPin.kodePos || '').replace(/\D/g, '').trim();
-
     const attached = targetRows.filter((t) => {
       if (!t._isMatched) return false;
       const tSandi = String(t['Sandi Cabang'] || t.Sandi || t.Cabang || '').trim();
       const tBranchCode = String(t['Branch Code'] || t['Kode Cabang'] || '').trim();
       const tName = String(t['Nama Outlet'] || '').toLowerCase().trim();
-      const tKp = String(t['KODE POS'] || '').replace(/\D/g, '').trim();
-
       const isExplicitMatch =
         (tSandi && sandiSet.has(tSandi)) ||
         (tBranchCode && branchCodeSet.has(tBranchCode)) ||
@@ -431,11 +427,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
       if (isExplicitMatch) return true;
 
-      // Fallback matching by postal code ONLY if target row does not have a Sandi/Branch Code belonging to another branch
-      if (kp && tKp && kp === tKp) {
-        if (!tSandi && !tBranchCode && !tName) return true;
-      }
-
+      // Postal code alone is not enough to draw a relation to a branch. It can
+      // represent several outlets and creates misleading long arcs on the map.
       return false;
     });
 
