@@ -522,6 +522,14 @@ export function findClosestMasterRecommendation(
     );
   };
 
+  const isGeographicallyCompatible = (m: MasterRow): boolean => {
+    const masterProv = cleanProvinsi(m.Provinsi);
+    const masterDati = cleanDati(m['Dati II']);
+    if (targetProv && (!masterProv || !matchesProvince(m))) return false;
+    if (targetDati && (!masterDati || !matchesDati(m))) return false;
+    return true;
+  };
+
   const targetKelNoSpace = targetKel ? targetKel.replace(/\s+/g, '') : '';
   const targetKelNum = targetKel ? normalizeNumerals(targetKel) : '';
   const targetKelNumNoSpace = targetKelNum ? targetKelNum.replace(/\s+/g, '') : '';
@@ -624,9 +632,13 @@ export function findClosestMasterRecommendation(
     }
   }
 
+  // Final hard gate: fallback candidates must still pass province and Dati II validation.
+  const validatedPool = rawPool.filter(isGeographicallyCompatible);
+  if (validatedPool.length === 0) return null;
+
   // Deduplikasi cabang unik berdasarkan Branch Code / Sandi / Nama Outlet + Alamat
   const uniqueMap = new Map<string, MasterRow>();
-  for (const m of rawPool) {
+  for (const m of validatedPool) {
     const key = `${m['Branch Code'] || m['Kode Cabang'] || ''}_${m['Nama Outlet'] || m.Cabang || ''}_${m['KODE POS'] || ''}_${cleanText(m.ALAMAT).slice(0, 20)}`.toUpperCase().trim();
     if (!uniqueMap.has(key)) {
       uniqueMap.set(key, m);
