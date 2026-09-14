@@ -148,6 +148,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   const [geocodingProgress, setGeocodingProgress] = useState<BatchProgress | null>(null);
   // Flag: true once the IndexedDB pre-load pass completes (so geocoding effect knows cache is ready)
   const [cachePreloaded, setCachePreloaded] = useState(false);
+  const lastAutoFitKeyRef = useRef('');
 
   // PRE-LOAD: On mount, bulk-read all previously cached geocoding results from IndexedDB
   // This makes subsequent page loads instant — no network calls for already-resolved addresses
@@ -549,6 +550,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     if (!map || !markersLayer || !canvasRenderer) return;
 
     markersLayer.clearLayers();
+    const overlapCounts = new Map<string, number>();
 
     filteredPins.forEach((pin) => {
       const isMulti = isMultiOutletPin(pin);
@@ -579,7 +581,14 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         radius = 5.5;
       }
 
-      const marker = L.circleMarker([pin.lat, pin.lng], {
+      const overlapKey = `${pin.lat.toFixed(5)}:${pin.lng.toFixed(5)}`;
+      const overlappingIndex = overlapCounts.get(overlapKey) || 0;
+      overlapCounts.set(overlapKey, overlappingIndex + 1);
+      const visualCoords: [number, number] = overlappingIndex === 0
+        ? [pin.lat, pin.lng]
+        : [pin.lat + Math.sin(overlappingIndex * 2.4) * 0.002, pin.lng + Math.cos(overlappingIndex * 2.4) * 0.002];
+
+      const marker = L.circleMarker(visualCoords, {
         pane: 'markersPane',
         renderer: canvasRenderer,
         radius,
@@ -644,16 +653,6 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       markersLayer.addLayer(marker);
     });
 
-    // Auto-fit if specific wilayah or single selected pin without matched arcs
-    if (displayScope === 'SELECTED_ONLY' && selectedPin) {
-      if (selectedMatchedRows.length === 0) {
-        map.flyTo([selectedPin.lat, selectedPin.lng], 14, { duration: 0.8 });
-      }
-    } else if (selectedWilayah !== 'ALL' && filteredPins.length > 0) {
-      const bounds = L.latLngBounds(filteredPins.map((p) => [p.lat, p.lng]));
-      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
-    }
-
     // Render all matched target coordinates as orange markers when enabled
     if (showAllMatchMarkers) {
       const allCoords = getAllMatchedCoordinates(targetRows, resolvedCoords);
@@ -670,7 +669,33 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         markersLayer.addLayer(marker);
       });
     }
-    }, [filteredPins, selectedPin, displayScope, selectedWilayah, selectedMatchedRows.length, showAllMatchMarkers, resolvedCoords]);
+    }, [filteredPins, selectedPin, showAllMatchMarkers, resolvedCoords]);
+
+  // Camera movement is intentionally separate from marker redraws. Geocoding can update
+  // coordinates many times, but it must not interrupt the user's current zoom or click.
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || filteredPins.length === 0) return;
+
+    const cameraKey = displayScope === 'SELECTED_ONLY' && selectedPin
+      ? `selected:${selectedPin.id}`
+      : selectedWilayah !== 'ALL'
+      ? `wilayah:${selectedWilayah}`
+      : '';
+    if (!cameraKey) {
+      lastAutoFitKeyRef.current = '';
+      return;
+    }
+    if (lastAutoFitKeyRef.current === cameraKey) return;
+
+    lastAutoFitKeyRef.current = cameraKey;
+    if (displayScope === 'SELECTED_ONLY' && selectedPin) {
+      map.flyTo([selectedPin.lat, selectedPin.lng], 14, { duration: 0.55 });
+    } else if (selectedWilayah !== 'ALL') {
+      const bounds = L.latLngBounds(filteredPins.map((p) => [p.lat, p.lng]));
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12, animate: true, duration: 0.55 });
+    }
+  }, [displayScope, selectedPin, selectedWilayah, filteredPins]);
 
   // 9. Render arcs from real administrative origin points → selected branch (no unbounded fan-out)
   useEffect(() => {
