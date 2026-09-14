@@ -471,6 +471,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
     return targetRows.flatMap((target) => {
       if (!target._isMatched) return [];
+      if (isAcehTargetRow(target)) return [];
       const identities = [target['Branch Code'], target['Kode Cabang'], target['Sandi Cabang'], target.Sandi, target.Cabang, target['Nama Outlet']]
         .map((value) => String(value || '').trim().toUpperCase())
         .filter(Boolean);
