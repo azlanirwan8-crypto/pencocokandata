@@ -238,6 +238,20 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     return clusterMasterRowsForMap(masterRows, selectedWilayah, targetRows, resolvedCoords);
   }, [masterRows, selectedWilayah, targetRows, resolvedCoords]);
 
+  const multiOutletKodePos = useMemo(() => {
+    const counts = new Map<string, number>();
+    allPins.forEach((pin) => {
+      const kodePos = String(pin.kodePos || '').replace(/\D/g, '').trim();
+      if (kodePos) counts.set(kodePos, (counts.get(kodePos) || 0) + pin.branchCount);
+    });
+    return new Set([...counts.entries()].filter(([, count]) => count > 1).map(([kodePos]) => kodePos));
+  }, [allPins]);
+
+  const isMultiOutletPin = (pin: PlottedBranchPin) => {
+    const kodePos = String(pin.kodePos || '').replace(/\D/g, '').trim();
+    return pin.branchCount > 1 || (kodePos !== '' && multiOutletKodePos.has(kodePos));
+  };
+
   // 2. Filter pins based on Display Scope (Semua vs Hanya Terpilih vs Matched vs Multi)
   const filteredPins = useMemo(() => {
     if (displayScope === 'SELECTED_ONLY') {
@@ -247,10 +261,10 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       return allPins.filter((p) => p.matchedCount > 0);
     }
     if (displayScope === 'MULTI_ONLY') {
-      return allPins.filter((p) => p.branchCount > 1);
+      return allPins.filter(isMultiOutletPin);
     }
     return allPins;
-  }, [allPins, displayScope, selectedPin]);
+  }, [allPins, displayScope, selectedPin, multiOutletKodePos]);
 
   // 3. Search suggestions (top matches, including matched target origins like Aceh -> KIM)
   const searchSuggestions = useMemo((): SearchSuggestionItem[] => {
@@ -330,7 +344,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   // Map Summary Statistics
   const stats = useMemo(() => {
     const totalBranches = allPins.reduce((acc, p) => acc + p.branchCount, 0);
-    const multiOutletPins = allPins.filter((p) => p.branchCount > 1).length;
+    const multiOutletPins = allPins.filter(isMultiOutletPin).length;
     const pinsWithMatch = allPins.filter((p) => p.matchedCount > 0);
     const totalMatchedRecords = allPins.reduce((acc, p) => acc + p.matchedCount, 0);
 
@@ -342,7 +356,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       totalMatchedRecords,
       activeShowing: filteredPins.length,
     };
-  }, [allPins, filteredPins]);
+  }, [allPins, filteredPins, multiOutletKodePos]);
 
   // 4. Find all Matched Target Rows associated with the currently selected branch
   const selectedMatchedRows = useMemo(() => {
@@ -433,6 +447,13 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         maxZoom: 18,
         zoomControl: true,
         scrollWheelZoom: true,
+        zoomDelta: 0.5,
+        zoomSnap: 0.5,
+        wheelDebounceTime: 80,
+        wheelPxPerZoomLevel: 120,
+        zoomAnimation: true,
+        fadeAnimation: false,
+        markerZoomAnimation: false,
         preferCanvas: true,
       });
 
@@ -496,7 +517,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     markersLayer.clearLayers();
 
     filteredPins.forEach((pin) => {
-      const isMulti = pin.branchCount > 1;
+      const isMulti = isMultiOutletPin(pin);
       const hasMatch = pin.matchedCount > 0;
       const isSelected = selectedPin?.id === pin.id;
 
