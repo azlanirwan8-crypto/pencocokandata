@@ -497,6 +497,11 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     });
   }, [targetRows, masterRows]);
 
+  const selectedAnomalyInfo = useMemo(() => {
+    if (!selectedAnomalyTarget) return null;
+    return anomalyRows.find((item) => String(item.target.No) === String(selectedAnomalyTarget.No)) || null;
+  }, [anomalyRows, selectedAnomalyTarget]);
+
 
   // Filtered rows inside the Matched Detail Modal
   const filteredModalRows = useMemo(() => {
@@ -1642,6 +1647,24 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
             <strong>Audit data upload vs Master</strong>
             <span>{anomalyRows.length === 0 ? 'Tidak ada anomali' : `${anomalyRows.length} record beda pulau`}</span>
           </div>
+          {selectedAnomalyInfo && (
+            <div style={{ marginBottom: '0.5rem', padding: '0.55rem 0.65rem', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '5px', color: '#4c0519' }}>
+              <strong>Detail anomali No. {selectedAnomalyInfo.target.No}</strong>
+              <div style={{ marginTop: '0.3rem' }}>
+                <b>Data Excel:</b> {selectedAnomalyInfo.target['Nama Outlet'] || '-'} · KP {selectedAnomalyInfo.target['KODE POS'] || '-'} · {selectedAnomalyInfo.target['Dati II'] || '-'}, {selectedAnomalyInfo.target.Provinsi || '-'} ({getIslandGroup(selectedAnomalyInfo.target.Provinsi)})
+              </div>
+              <div>
+                <b>Master tujuan:</b> {selectedAnomalyInfo.master['Nama Outlet'] || '-'} · {selectedAnomalyInfo.master['Dati II'] || '-'}, {selectedAnomalyInfo.master.Provinsi || '-'} ({getIslandGroup(selectedAnomalyInfo.master.Provinsi)})
+              </div>
+              <div style={{ marginTop: '0.3rem', color: '#b91c1c', fontWeight: 700 }}>
+                Kesalahan: lokasi Excel dan Master berada di pulau berbeda.
+              </div>
+              <div style={{ marginTop: '0.2rem' }}>
+                <b>Before:</b> {selectedAnomalyInfo.target.Provinsi || '-'} → Master {selectedAnomalyInfo.master.Provinsi || '-'}<br />
+                <b>Seharusnya:</b> data harus dicocokkan ke Master pada pulau yang sama.
+              </div>
+            </div>
+          )}
           {anomalyRows.length > 0 && (
             <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'grid', gap: '0.3rem' }}>
               {anomalyRows.slice(0, 50).map(({ target, master }) => (
