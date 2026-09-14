@@ -1675,6 +1675,13 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                     aria-label={`Lihat detail anomali No. ${target.No}`}
                     onClick={(event) => {
                       event.stopPropagation();
+                      const masterIdentity = String(master['Branch Code'] || master['Kode Cabang'] || master['Sandi Cabang'] || '').trim();
+                      const pin = allPins.find((candidate) => candidate.branches.some((branch) => String(branch['Branch Code'] || branch['Kode Cabang'] || branch['Sandi Cabang'] || '').trim() === masterIdentity));
+                      if (pin) {
+                        setTrackingMode('none');
+                        setDisplayScope('ALL');
+                        setSelectedPin(pin);
+                      }
                       setSelectedAnomalyTarget(target);
                     }}
                     style={{ width: '24px', height: '24px', borderRadius: '50%', border: '1px solid #f97316', background: '#fff7ed', color: '#c2410c', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
