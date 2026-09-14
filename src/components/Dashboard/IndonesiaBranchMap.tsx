@@ -59,6 +59,12 @@ export interface SearchSuggestionItem {
   sourceCoords?: [number, number];
 }
 
+function hasExplicitCoordinates(row: MasterRow | TargetRow): boolean {
+  const lat = Number(row.Latitude ?? row.lat ?? row.LATITUDE);
+  const lng = Number(row.Longitude ?? row.lng ?? row.LONGITUDE);
+  return Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
+}
+
 // Clean, lightweight tile layer factory supporting Google Maps, Satellite, Esri, and OSM
 function getMapTileLayer(provider: TileProvider, bounds: L.LatLngBounds): L.TileLayer {
   if (provider === 'google') {
@@ -186,19 +192,22 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
     let isMounted = true;
     const queriesToFetch: string[] = [];
+    const hasCachedCoordinate = (query: string) =>
+      resolvedCoords.has(query) || resolvedCoords.has(query.toLowerCase());
 
     for (const r of masterRows) {
+      if (hasExplicitCoordinates(r)) continue;
       const q = buildMasterQuery(r);
-      if (q && !resolvedCoords.has(q)) {
+      if (q && !hasCachedCoordinate(q)) {
         queriesToFetch.push(q);
       }
     }
 
     if (targetRows && targetRows.length > 0) {
       for (const t of targetRows) {
-        if (!t._isMatched) continue;
+        if (!t._isMatched || hasExplicitCoordinates(t)) continue;
         const q = buildTargetQuery(t);
-        if (q && !resolvedCoords.has(q)) {
+        if (q && !hasCachedCoordinate(q)) {
           queriesToFetch.push(q);
         }
       }
@@ -211,22 +220,47 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     setIsGeocoding(true);
     setGeocodingProgress({ completed: 0, total: uniqueQueries.length, percent: 0 });
 
-    batchGeocodeUniqueQueries(
-      uniqueQueries,
-      (prog) => {
-        if (isMounted) setGeocodingProgress(prog);
-      },
-      googleApiKey
-    ).then((newResults) => {
-      if (!isMounted) return;
-      setResolvedCoords((prev) => {
-        const next = new Map(prev);
-        newResults.forEach((val, key) => next.set(key, val));
-        return next;
-      });
-      setIsGeocoding(false);
-      setGeocodingProgress(null);
-    });
+    const runBackgroundGeocoding = async () => {
+      const QUERY_CHUNK_SIZE = 120;
+      let completedBeforeChunk = 0;
+
+      for (let i = 0; i < uniqueQueries.length; i += QUERY_CHUNK_SIZE) {
+        if (!isMounted) return;
+        const chunk = uniqueQueries.slice(i, i + QUERY_CHUNK_SIZE);
+        const newResults = await batchGeocodeUniqueQueries(
+          chunk,
+          (prog) => {
+            if (isMounted) {
+              setGeocodingProgress({
+                ...prog,
+                completed: completedBeforeChunk + prog.completed,
+                total: uniqueQueries.length,
+                percent: Math.round(((completedBeforeChunk + prog.completed) / uniqueQueries.length) * 100),
+              });
+            }
+          },
+          googleApiKey
+        );
+
+        if (!isMounted) return;
+        completedBeforeChunk += chunk.length;
+        setResolvedCoords((prev) => {
+          const next = new Map(prev);
+          newResults.forEach((val, key) => next.set(key, val));
+          return next;
+        });
+
+        // Yield to painting and user input before starting the next network chunk.
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      }
+
+      if (isMounted) {
+        setIsGeocoding(false);
+        setGeocodingProgress(null);
+      }
+    };
+
+    void runBackgroundGeocoding();
 
     return () => {
       isMounted = false;

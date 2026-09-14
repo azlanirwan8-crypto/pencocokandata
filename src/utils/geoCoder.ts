@@ -234,8 +234,8 @@ export function resolveBranchCoordinates(
     ];
 
     for (const key of keys) {
-      if (key && resolvedMap.has(key)) {
-        const found = resolvedMap.get(key)!;
+      const found = key ? (resolvedMap.get(key) || resolvedMap.get(key.toLowerCase())) : undefined;
+      if (found) {
         const [cLat, cLng] = clampToIndonesia(found.lat, found.lng);
         return {
           lat: cLat,
@@ -303,8 +303,8 @@ export function resolveTargetOriginCoordinates(
     ];
 
     for (const key of keys) {
-      if (key && resolvedMap.has(key)) {
-        const found = resolvedMap.get(key)!;
+      const found = key ? (resolvedMap.get(key) || resolvedMap.get(key.toLowerCase())) : undefined;
+      if (found) {
         const [cLat, cLng] = clampToIndonesia(found.lat, found.lng);
         return {
           lat: cLat,
