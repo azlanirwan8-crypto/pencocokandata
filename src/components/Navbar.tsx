@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Database, Cpu, ShieldCheck, Trash2, Cloud, CloudCheck, Zap } from 'lucide-react';
+import { LayoutDashboard, Database, Cpu, ShieldCheck, Trash2, Zap } from 'lucide-react';
 
 interface NavbarProps {
   activeTab: 'dashboard' | 'master' | 'working';
@@ -7,8 +7,8 @@ interface NavbarProps {
   masterCount: number;
   targetCount: number;
   onResetAll?: () => void;
+  onOpenNeonModal?: () => void;
   onOpenSupabaseModal?: () => void;
-  isCloudConnected?: boolean;
   isNeonConnected?: boolean;
 }
 
@@ -18,10 +18,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   masterCount,
   targetCount,
   onResetAll,
+  onOpenNeonModal,
   onOpenSupabaseModal,
-  isCloudConnected,
   isNeonConnected,
 }) => {
+  const handleOpenModal = onOpenNeonModal || onOpenSupabaseModal;
   return (
     <header className="top-navbar">
       <div className="brand-section">
@@ -72,44 +73,34 @@ export const Navbar: React.FC<NavbarProps> = ({
       </nav>
 
       <div className="nav-actions">
-        {/* Cloud DB Button */}
-        {onOpenSupabaseModal && (
+        {/* Neon Postgres DB Button */}
+        {handleOpenModal && (
           <button
             type="button"
             className="btn btn-outline btn-sm"
-            onClick={onOpenSupabaseModal}
+            onClick={handleOpenModal}
             title={
               isNeonConnected
                 ? 'Neon Postgres (Vercel) Terhubung & Aktif'
-                : isCloudConnected
-                ? 'Cloud Database Supabase Terhubung'
-                : 'Pusat Konfigurasi Cloud Database (Neon / Supabase)'
+                : 'Status Database Neon Postgres (Vercel)'
             }
             style={{
               borderColor: isNeonConnected
                 ? 'rgba(10, 179, 156, 0.4)'
-                : isCloudConnected
-                ? 'rgba(64, 81, 137, 0.35)'
                 : 'var(--border-subtle)',
-              color: isNeonConnected ? '#0ab39c' : isCloudConnected ? '#405189' : '#495057',
-              backgroundColor: isNeonConnected ? 'rgba(10, 179, 156, 0.08)' : isCloudConnected ? 'rgba(64, 81, 137, 0.06)' : '#ffffff',
+              color: isNeonConnected ? '#0ab39c' : '#495057',
+              backgroundColor: isNeonConnected ? 'rgba(10, 179, 156, 0.08)' : '#ffffff',
               fontSize: '0.78rem',
             }}
             id="btn-cloud-db-config"
           >
             {isNeonConnected ? (
               <Zap size={14} color="#0ab39c" />
-            ) : isCloudConnected ? (
-              <CloudCheck size={14} color="#405189" />
             ) : (
-              <Cloud size={14} />
+              <Database size={14} color="#405189" />
             )}
             <span>
-              {isNeonConnected
-                ? 'Neon DB Aktif'
-                : isCloudConnected
-                ? 'Supabase Aktif'
-                : 'Cloud DB'}
+              {isNeonConnected ? 'Neon DB Aktif' : 'Database Neon'}
             </span>
           </button>
         )}

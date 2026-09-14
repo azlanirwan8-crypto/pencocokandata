@@ -536,6 +536,12 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         setTrackingMode('none');
         setSelectedPin(pin);
         setActiveBranchIndex(0);
+        // Invalidate size after panel appears (grid layout changes width)
+        setTimeout(() => {
+          if (mapInstanceRef.current) {
+            mapInstanceRef.current.invalidateSize({ animate: false });
+          }
+        }, 250);
       });
 
       markersLayer.addLayer(marker);
@@ -1315,6 +1321,16 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                     if (displayScope === 'SELECTED_ONLY') {
                       setDisplayScope('ALL');
                     }
+                    // Reset cursor
+                    if (mapContainerRef.current) {
+                      mapContainerRef.current.style.cursor = 'default';
+                    }
+                    // Leaflet needs to recalculate container size after grid layout changes
+                    setTimeout(() => {
+                      if (mapInstanceRef.current) {
+                        mapInstanceRef.current.invalidateSize({ animate: false });
+                      }
+                    }, 250);
                   }}
                   style={{
                     background: 'none',

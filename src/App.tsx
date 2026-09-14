@@ -22,15 +22,6 @@ import { formatWilayahName, extractWilayahFromBranchCode } from './utils/normali
 
 import { getItem, setItem } from './utils/storage';
 import {
-  isSupabaseConfigured,
-  saveMasterToCloud,
-  loadMasterFromCloud,
-  clearMasterFromCloud,
-  saveTargetToCloud,
-  loadTargetFromCloud,
-  clearTargetFromCloud,
-} from './utils/supabase';
-import {
   checkNeonStatus,
   loadMasterFromNeon,
   saveMasterToNeon,
@@ -40,14 +31,14 @@ import {
   clearTargetFromNeon,
   loadWilayahFromNeon,
 } from './utils/neonSync';
-import { SupabaseModal } from './components/SupabaseModal';
+import { NeonDatabaseModal } from './components/NeonDatabaseModal';
 import { SnapshotModal, type WorkspaceSnapshot } from './components/SnapshotModal';
 import { Database, ShieldAlert, Filter, UploadCloud, RotateCcw, Layers } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'master' | 'working' | 'wilayah'>('dashboard');
   const [masterSubTab, setMasterSubTab] = useState<'health' | 'grid'>('health');
-  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
+  const [isNeonModalOpen, setIsNeonModalOpen] = useState<boolean>(false);
   const [isSnapshotModalOpen, setIsSnapshotModalOpen] = useState<boolean>(false);
   const [isMasterUploadModalOpen, setIsMasterUploadModalOpen] = useState<boolean>(false);
   const [isTargetUploadModalOpen, setIsTargetUploadModalOpen] = useState<boolean>(false);
@@ -70,7 +61,6 @@ export const App: React.FC = () => {
     });
   };
 
-  const [isCloudConnected, setIsCloudConnected] = useState<boolean>(isSupabaseConfigured());
   const [isNeonConnected, setIsNeonConnected] = useState<boolean>(false);
 
   // Master Data State (Clean state for real data upload)
@@ -156,9 +146,6 @@ export const App: React.FC = () => {
             loadWilayahFromNeon(),
           ]);
 
-          let hasNeonMaster = false;
-          let hasNeonTarget = false;
-
           if (neonCheck.status === 'fulfilled' && neonCheck.value.connected) {
             setIsNeonConnected(true);
             setLastSyncedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
@@ -166,7 +153,6 @@ export const App: React.FC = () => {
 
           if (neonMaster.status === 'fulfilled' && neonMaster.value && neonMaster.value.rows.length > 0) {
             setMasterRows(neonMaster.value.rows);
-            hasNeonMaster = true;
           }
 
           if (neonTarget.status === 'fulfilled' && neonTarget.value && neonTarget.value.rows.length > 0) {
@@ -174,36 +160,14 @@ export const App: React.FC = () => {
             setTargetFileName(neonTarget.value.fileName || '');
             setInitialTargetCount(neonTarget.value.initialCount || neonTarget.value.rows.length);
             setMatchedDone(neonTarget.value.matchedDone || false);
-            hasNeonTarget = true;
           }
 
           if (neonWilayah.status === 'fulfilled' && neonWilayah.value && neonWilayah.value.length > 0) {
             setWilayahSettings(neonWilayah.value);
             setItem('wilayah_settings', neonWilayah.value);
           }
-
-          // Fallback to Supabase Cloud if configured & not loaded from Neon
-          if ((!hasNeonMaster || !hasNeonTarget) && isSupabaseConfigured()) {
-            setIsCloudConnected(true);
-            setLastSyncedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
-            const [cloudMaster, cloudTarget] = await Promise.allSettled([
-              !hasNeonMaster ? loadMasterFromCloud() : Promise.resolve(null),
-              !hasNeonTarget ? loadTargetFromCloud() : Promise.resolve(null),
-            ]);
-
-            if (cloudMaster.status === 'fulfilled' && cloudMaster.value && cloudMaster.value.rows.length > 0) {
-              setMasterRows(cloudMaster.value.rows);
-            }
-
-            if (cloudTarget.status === 'fulfilled' && cloudTarget.value && cloudTarget.value.rows.length > 0) {
-              setTargetRows(cloudTarget.value.rows);
-              setTargetFileName(cloudTarget.value.fileName || '');
-              setInitialTargetCount(cloudTarget.value.initialCount || cloudTarget.value.rows.length);
-              setMatchedDone(cloudTarget.value.matchedDone || false);
-            }
-          }
         } catch (cloudErr) {
-          console.warn('Background cloud sync skipped:', cloudErr);
+          console.warn('Background Neon sync skipped:', cloudErr);
         }
       })();
     };
@@ -233,13 +197,6 @@ export const App: React.FC = () => {
     const syncRemote = () => {
       // 2. Neon Postgres (Serverless DB on Vercel)
       saveTargetToNeon(payload).catch((e) => console.warn('Neon target auto-save skipped:', e));
-
-      // 3. Supabase Cloud if configured
-      if (isSupabaseConfigured()) {
-        saveTargetToCloud(payload.rows, payload.fileName, payload.initialCount, payload.matchedDone).catch((e) =>
-          console.warn('Cloud target auto-save skipped:', e)
-        );
-      }
 
       setLastSyncedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
     };
@@ -495,11 +452,6 @@ export const App: React.FC = () => {
         console.warn('Neon auto-save skipped:', e);
       }
 
-      // Sync to Supabase Cloud if configured
-      if (isSupabaseConfigured()) {
-        saveMasterToCloud(combined, combinedFileName);
-      }
-
       return combined;
     });
   };
@@ -514,13 +466,6 @@ export const App: React.FC = () => {
           await clearMasterFromNeon();
         } catch (e) {
           console.warn('Neon clear warning:', e);
-        }
-        if (isSupabaseConfigured()) {
-          try {
-            await clearMasterFromCloud();
-          } catch (e) {
-            console.warn('Cloud clear warning:', e);
-          }
         }
       } catch (e) {
         console.warn('Reset master error:', e);
@@ -581,9 +526,6 @@ export const App: React.FC = () => {
         setProgress(0);
         await setItem('target_data', { rows: [], fileName: '', initialCount: 0, matchedDone: false });
         clearTargetFromNeon().catch((e) => console.warn('Neon target clear warning:', e));
-        if (isSupabaseConfigured()) {
-          clearTargetFromCloud().catch((e) => console.warn('Cloud target clear warning:', e));
-        }
       } catch (e) {
         console.warn('Reset target error:', e);
       }
@@ -775,9 +717,6 @@ export const App: React.FC = () => {
       saveMasterToNeon(snapshot.masterData.rows, snapshot.masterData.fileName || 'Snapshot Master').catch((e) =>
         console.warn('Neon snapshot master save skipped:', e)
       );
-      if (isSupabaseConfigured()) {
-        saveMasterToCloud(snapshot.masterData.rows, snapshot.masterData.fileName || 'Snapshot Master');
-      }
     }
 
     if (snapshot.targetData && Array.isArray(snapshot.targetData.rows)) {
@@ -813,10 +752,9 @@ export const App: React.FC = () => {
           isSidebarCollapsed={isSidebarCollapsed}
           onToggleSidebar={toggleSidebar}
           isNeonConnected={isNeonConnected}
-          isCloudConnected={isCloudConnected}
           lastSyncedAt={lastSyncedAt}
           onOpenSnapshotModal={() => setIsSnapshotModalOpen(true)}
-          onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
+          onOpenNeonModal={() => setIsNeonModalOpen(true)}
         />
 
         <main className="page-content">
@@ -1345,10 +1283,10 @@ export const App: React.FC = () => {
         </main>
       </div>
 
-      <SupabaseModal
-        isOpen={isSupabaseModalOpen}
-        onClose={() => setIsSupabaseModalOpen(false)}
-        onConnectedChange={setIsCloudConnected}
+      <NeonDatabaseModal
+        isOpen={isNeonModalOpen}
+        onClose={() => setIsNeonModalOpen(false)}
+        onConnectedChange={setIsNeonConnected}
       />
 
       {/* Master Upload Modal */}

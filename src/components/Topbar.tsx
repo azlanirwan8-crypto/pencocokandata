@@ -1,13 +1,13 @@
 import React from 'react';
-import { Menu, Database, Archive, Cloud, HardDrive, CheckCircle2 } from 'lucide-react';
+import { Menu, Database, Archive, HardDrive, CheckCircle2 } from 'lucide-react';
 
 interface TopbarProps {
   isSidebarCollapsed: boolean;
   onToggleSidebar: () => void;
   isNeonConnected?: boolean;
-  isCloudConnected?: boolean;
   lastSyncedAt?: string | null;
   onOpenSnapshotModal?: () => void;
+  onOpenNeonModal?: () => void;
   onOpenSupabaseModal?: () => void;
 }
 
@@ -15,11 +15,12 @@ export const Topbar: React.FC<TopbarProps> = ({
   isSidebarCollapsed,
   onToggleSidebar,
   isNeonConnected = false,
-  isCloudConnected = false,
   lastSyncedAt,
   onOpenSnapshotModal,
+  onOpenNeonModal,
   onOpenSupabaseModal,
 }) => {
+  const handleOpenModal = onOpenNeonModal || onOpenSupabaseModal;
   return (
     <header className="app-topbar">
       <div className="topbar-left">
@@ -62,34 +63,6 @@ export const Topbar: React.FC<TopbarProps> = ({
                 height: '6px',
                 borderRadius: '50%',
                 background: '#0ab39c',
-                display: 'inline-block',
-              }}
-            />
-          </div>
-        ) : isCloudConnected ? (
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.35rem',
-              padding: '0.22rem 0.55rem',
-              borderRadius: '4px',
-              background: 'rgba(53, 119, 241, 0.1)',
-              color: '#3577f1',
-              border: '1px solid rgba(53, 119, 241, 0.25)',
-              fontSize: '0.72rem',
-              fontWeight: 600,
-            }}
-            title="Tersambung ke Supabase Cloud"
-          >
-            <Cloud size={13} />
-            <span>Supabase Cloud Aktif</span>
-            <span
-              style={{
-                width: '6px',
-                height: '6px',
-                borderRadius: '50%',
-                background: '#3577f1',
                 display: 'inline-block',
               }}
             />
@@ -155,27 +128,27 @@ export const Topbar: React.FC<TopbarProps> = ({
           </button>
         )}
 
-        {/* Supabase Cloud Config Modal Button */}
-        {onOpenSupabaseModal && (
+        {/* Neon Database Modal Button */}
+        {handleOpenModal && (
           <button
             type="button"
             className="btn btn-outline btn-sm"
-            onClick={onOpenSupabaseModal}
+            onClick={handleOpenModal}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '0.35rem',
               fontSize: '0.74rem',
               padding: '0.25rem 0.65rem',
-              borderColor: '#ced4da',
-              color: '#495057',
-              background: '#ffffff',
+              borderColor: isNeonConnected ? 'rgba(10, 179, 156, 0.4)' : '#ced4da',
+              color: isNeonConnected ? '#0ab39c' : '#495057',
+              background: isNeonConnected ? 'rgba(10, 179, 156, 0.08)' : '#ffffff',
               fontWeight: 600,
             }}
-            title="Konfigurasi Database Cloud Supabase"
+            title="Status Database Neon Postgres di Vercel"
           >
-            <Cloud size={13} color="#0ab39c" />
-            <span>Cloud DB</span>
+            <Database size={13} color={isNeonConnected ? '#0ab39c' : '#405189'} />
+            <span>{isNeonConnected ? 'Neon DB Aktif' : 'Database Neon'}</span>
           </button>
         )}
       </div>
