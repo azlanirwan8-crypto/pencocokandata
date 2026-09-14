@@ -1635,7 +1635,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           </div>
           {anomalyRows.length > 0 && (
             <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'grid', gap: '0.3rem' }}>
-              {anomalyRows.slice(0, 50).map(({ target, master, provinceMismatch, datiMismatch }) => (
+              {anomalyRows.slice(0, 50).map(({ target, master }) => (
                 <div
                   key={`${target.No}-${master['Branch Code']}`}
                   role="button"
