@@ -463,6 +463,7 @@ export interface TargetOriginGroup {
   lng: number;
   label: string;
   rows: TargetRow[];
+  source: GeoLocation['source'];
 }
 
 export function groupTargetOriginsForMap(
@@ -485,6 +486,7 @@ export function groupTargetOriginsForMap(
         lng,
         label: [kec, dati].filter(Boolean).join(', ') || origin.city || 'Titik Asal',
         rows: [],
+        source: origin.source,
       });
     }
     groups.get(key)!.rows.push(row);
