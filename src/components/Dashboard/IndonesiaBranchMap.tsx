@@ -136,6 +136,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   const [modalSearchTerm, setModalSearchTerm] = useState('');
   const [trackingMode, setTrackingMode] = useState<'none' | 'aceh_kim'>('none');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [mapInteractionTick, setMapInteractionTick] = useState(0);
 // @ts-ignore: suppress unused setter warning
   const [showAllMatchMarkers, setShowAllMatchMarkers] = useState(false);
 
@@ -149,6 +150,11 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   // Flag: true once the IndexedDB pre-load pass completes (so geocoding effect knows cache is ready)
   const [cachePreloaded, setCachePreloaded] = useState(false);
   const lastAutoFitKeyRef = useRef('');
+  const mapInteractionRef = useRef(false);
+  const mapInteractionHandlersRef = useRef<{
+    pauseMarkerRedraw: () => void;
+    resumeMarkerRedraw: () => void;
+  } | null>(null);
 
   // PRE-LOAD: On mount, bulk-read all previously cached geocoding results from IndexedDB
   // This makes subsequent page loads instant — no network calls for already-resolved addresses
@@ -501,6 +507,10 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         const markersPane = map.createPane('markersPane');
         markersPane.style.zIndex = '550';
       }
+      if (!map.getPane('selectedPane')) {
+        const selectedPane = map.createPane('selectedPane');
+        selectedPane.style.zIndex = '540';
+      }
 
       // Fit Indonesia bounds on load
       map.fitBounds(indonesiaBounds, { padding: [20, 20] });
@@ -516,10 +526,25 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       mapInstanceRef.current = map;
       markersLayerRef.current = markersLayer;
       arcsLayerRef.current = arcsLayer;
+
+      const pauseMarkerRedraw = () => { mapInteractionRef.current = true; };
+      const resumeMarkerRedraw = () => {
+        mapInteractionRef.current = false;
+        setMapInteractionTick((tick) => tick + 1);
+      };
+      map.on('zoomstart movestart', pauseMarkerRedraw);
+      map.on('zoomend moveend', resumeMarkerRedraw);
+
+      mapInteractionHandlersRef.current = { pauseMarkerRedraw, resumeMarkerRedraw };
     }
 
     return () => {
       if (mapInstanceRef.current) {
+        const handlers = mapInteractionHandlersRef.current;
+        if (handlers) {
+          mapInstanceRef.current.off('zoomstart movestart', handlers.pauseMarkerRedraw);
+          mapInstanceRef.current.off('zoomend moveend', handlers.resumeMarkerRedraw);
+        }
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
       }
@@ -548,9 +573,26 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     const markersLayer = markersLayerRef.current;
     const canvasRenderer = canvasRendererRef.current;
     if (!map || !markersLayer || !canvasRenderer) return;
+    if (mapInteractionRef.current) return;
 
     markersLayer.clearLayers();
     const overlapCounts = new Map<string, number>();
+
+    if (selectedPin) {
+      const selectedHalo = L.circleMarker([selectedPin.lat, selectedPin.lng], {
+        pane: 'selectedPane',
+        renderer: canvasRenderer,
+        radius: 17,
+        color: '#f59e0b',
+        weight: 2,
+        opacity: 0.9,
+        fillColor: '#f59e0b',
+        fillOpacity: 0.12,
+        interactive: false,
+        className: 'bni-selected-halo',
+      });
+      markersLayer.addLayer(selectedHalo);
+    }
 
     filteredPins.forEach((pin) => {
       const isMulti = isMultiOutletPin(pin);
@@ -669,7 +711,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         markersLayer.addLayer(marker);
       });
     }
-    }, [filteredPins, selectedPin, showAllMatchMarkers, resolvedCoords]);
+    }, [filteredPins, selectedPin, showAllMatchMarkers, resolvedCoords, mapInteractionTick]);
 
   // Camera movement is intentionally separate from marker redraws. Geocoding can update
   // coordinates many times, but it must not interrupt the user's current zoom or click.
@@ -696,6 +738,20 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12, animate: true, duration: 0.55 });
     }
   }, [displayScope, selectedPin, selectedWilayah, filteredPins]);
+
+  useEffect(() => {
+    if (!selectedPin) return;
+    const invalidate = () => mapInstanceRef.current?.invalidateSize({ animate: false });
+    const firstFrame = requestAnimationFrame(() => {
+      invalidate();
+      requestAnimationFrame(invalidate);
+    });
+    const settled = window.setTimeout(invalidate, 260);
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      window.clearTimeout(settled);
+    };
+  }, [selectedPin]);
 
   // 9. Render arcs from real administrative origin points → selected branch (no unbounded fan-out)
   useEffect(() => {
@@ -1444,12 +1500,40 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           display: 'grid',
           gridTemplateColumns: selectedPin ? '1fr 340px' : '1fr',
           gap: '0.85rem',
-          transition: 'all 0.2s ease',
         }}
       >
         {/* Leaflet Hardware Canvas Map */}
         <div className="bni-map-container" style={{ position: 'relative' }}>
           <div ref={mapContainerRef} style={{ width: '100%', height: '580px', borderRadius: '6px', cursor: 'default' }} />
+
+          {selectedPin && (
+            <div
+              style={{
+                position: 'absolute',
+                top: '12px',
+                right: '12px',
+                zIndex: 1000,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                maxWidth: 'min(320px, calc(100% - 24px))',
+                padding: '0.45rem 0.65rem',
+                background: 'rgba(255, 255, 255, 0.96)',
+                border: '1px solid rgba(245, 158, 11, 0.55)',
+                borderRadius: '7px',
+                boxShadow: '0 3px 12px rgba(15, 23, 42, 0.16)',
+                color: '#92400e',
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                pointerEvents: 'none',
+              }}
+            >
+              <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#f59e0b', flexShrink: 0 }} />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                Dipilih: {selectedPin.primaryOutletName} · {selectedPin.kodePos}
+              </span>
+            </div>
+          )}
 
           {trackingMode === 'aceh_kim' && (
             <div

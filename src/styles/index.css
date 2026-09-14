@@ -1212,11 +1212,6 @@ body {
   border-bottom: 1px solid rgba(64, 81, 137, 0.14) !important;
 }
 
-.bni-map-container .leaflet-pane,
-.bni-map-container .leaflet-zoom-animated {
-  will-change: transform;
-}
-
 .leaflet-popup-content-wrapper {
   background: #ffffff !important;
   color: #212529 !important;
@@ -1315,6 +1310,15 @@ body {
 
 .bni-map-container canvas {
   cursor: default;
+}
+
+.bni-selected-halo {
+  animation: selectedHaloPulse 1.8s ease-out infinite;
+}
+
+@keyframes selectedHaloPulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
 }
 
 
