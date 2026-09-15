@@ -43,7 +43,7 @@ import {
   type BatchProgress,
 } from '../../utils/onlineGeoCoder';
 import { get, keys } from 'idb-keyval';
-import { cleanDati, cleanProvinsi } from '../../utils/normalizer';
+import { cleanDati, cleanProvinsi, cleanText } from '../../utils/normalizer';
 
 interface IndonesiaBranchMapProps {
   masterRows: MasterRow[];
@@ -92,6 +92,40 @@ function getIslandGroup(province: string): string {
   if (['maluku', 'maluku utara', 'papua', 'papua barat', 'papua barat daya', 'papua tengah', 'papua pegunungan', 'papua selatan'].includes(normalized)) return 'MALUKU_PAPUA';
   return normalized;
 }
+
+// Menghitung jarak garis lurus (geodesik) menggunakan Haversine Formula dalam km
+export function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  if (lat1 === 0 || lon1 === 0 || lat2 === 0 || lon2 === 0) return 0;
+  if (lat1 === lat2 && lon1 === lon2) return 0;
+  const R = 6371; // Radius bumi dalam kilometer
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c * 10) / 10;
+}
+
+export type AnomalyType = 'BEDA_PULAU' | 'BEDA_PROVINSI' | 'BEDA_KOTA_JAUH' | 'MISMATCH_WILAYAH';
+
+export interface AnomalyItem {
+  target: TargetRow;
+  master: MasterRow;
+  islandMismatch: boolean;
+  provinceMismatch: boolean;
+  datiMismatch: boolean;
+  wilayahMismatch: boolean;
+  distanceKm: number;
+  anomalyType: AnomalyType;
+  anomalyTitle: string;
+  anomalyBadge: { text: string; bg: string; color: string; border: string };
+  reasons: string[];
+}
+
 
 // Clean, lightweight tile layer factory supporting Google Maps, Satellite, Esri, and OSM
 function getMapTileLayer(provider: TileProvider, bounds: L.LatLngBounds): L.TileLayer {
@@ -339,14 +373,49 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     return allPins;
   }, [allPins, displayScope, selectedPin, multiOutletKodePos]);
 
-  // 3. Search suggestions (top matches, including matched target origins like Aceh -> KIM)
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+
+  // Debounce search query so typing isn't lagging on large datasets
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+
+  // Pre-index target records by keywords to make target lookup instant (O(1)) instead of O(N*M)
+  const targetSearchIndex = useMemo(() => {
+    if (!targetRows || targetRows.length === 0) return null;
+    const sandiToTargets = new Map<string, TargetRow[]>();
+    const branchCodeToTargets = new Map<string, TargetRow[]>();
+
+    targetRows.forEach((t) => {
+      if (!t._isMatched) return;
+      const sandi = String(t['Sandi Cabang'] || t.Sandi || t.Cabang || '').trim();
+      const code = String(t['Branch Code'] || t['Kode Cabang'] || '').trim();
+      if (sandi) {
+        if (!sandiToTargets.has(sandi)) sandiToTargets.set(sandi, []);
+        sandiToTargets.get(sandi)!.push(t);
+      }
+      if (code) {
+        if (!branchCodeToTargets.has(code)) branchCodeToTargets.set(code, []);
+        branchCodeToTargets.get(code)!.push(t);
+      }
+    });
+
+    return { sandiToTargets, branchCodeToTargets };
+  }, [targetRows]);
+
+  // 3. Search suggestions (top matches, fast indexed lookup)
   const searchSuggestions = useMemo((): SearchSuggestionItem[] => {
-    if (!searchQuery.trim() || searchQuery.length < 2) return [];
-    const q = searchQuery.toLowerCase().trim();
+    const qRaw = debouncedSearchQuery.trim();
+    if (!qRaw || qRaw.length < 2) return [];
+    const q = qRaw.toLowerCase();
     const items: SearchSuggestionItem[] = [];
     const addedPinIds = new Set<string>();
 
-    // 1. Direct branch matches
+    // 1. Direct branch matches (kode pos, nama cabang, kota)
     for (const p of allPins) {
       const isDirectMatch =
         p.kodePos.includes(q) ||
@@ -362,38 +431,32 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       if (isDirectMatch) {
         items.push({ pin: p });
         addedPinIds.add(p.id);
-        if (items.length >= 6) break;
+        if (items.length >= 7) break;
       }
     }
 
-    // 2. Also search matched target records (e.g. searching 'Aceh' or '23xxx' finds Cabang KIM)
-    if (items.length < 8 && targetRows && targetRows.length > 0) {
+    // 2. Fast lookup for target origins (e.g. searching 'Aceh' or target postal code)
+    if (items.length < 8 && targetSearchIndex && allPins.length > 0) {
       for (const p of allPins) {
         if (addedPinIds.has(p.id)) continue;
-        const sandiSet = new Set(
-          p.branches.map((b) => String(b['Sandi Cabang'] || b.Sandi || b['Kode Cabang'] || '').trim()).filter(Boolean)
-        );
-        const branchCodeSet = new Set(
-          p.branches.map((b) => String(b['Branch Code'] || b['Kode Cabang'] || '').trim()).filter(Boolean)
-        );
-        const outletNameSet = new Set(
-          p.branches.map((b) => String(b['Nama Outlet'] || '').toLowerCase().trim()).filter(Boolean)
-        );
 
-        const matchingTarget = targetRows.find((t) => {
-          if (!t._isMatched) return false;
-          const tSandi = String(t['Sandi Cabang'] || t.Sandi || t.Cabang || '').trim();
-          const tBranchCode = String(t['Branch Code'] || t['Kode Cabang'] || '').trim();
-          const tName = String(t['Nama Outlet'] || '').toLowerCase().trim();
-          const isAttached =
-            (tSandi && sandiSet.has(tSandi)) ||
-            (tBranchCode && branchCodeSet.has(tBranchCode)) ||
-            (tName && outletNameSet.has(tName));
-          if (!isAttached) return false;
+        // Get matched targets attached to this pin using index
+        let matchingTarget: TargetRow | undefined;
+        for (const b of p.branches) {
+          const sandi = String(b['Sandi Cabang'] || b.Sandi || b['Kode Cabang'] || '').trim();
+          const code = String(b['Branch Code'] || b['Kode Cabang'] || '').trim();
+          const candidates = [
+            ...(targetSearchIndex.sandiToTargets.get(sandi) || []),
+            ...(targetSearchIndex.branchCodeToTargets.get(code) || []),
+          ];
 
-          const targetText = `${t['KODE POS'] || ''} ${t['Dati II'] || ''} ${t.Provinsi || ''} ${t.Kecamatan || ''} ${t['Nama Outlet'] || ''} ${t.ALAMAT || ''}`.toLowerCase();
-          return targetText.includes(q);
-        });
+          matchingTarget = candidates.find((t) => {
+            const targetText = `${t['KODE POS'] || ''} ${t['Dati II'] || ''} ${t.Provinsi || ''} ${t.Kecamatan || ''} ${t.ALAMAT || ''}`.toLowerCase();
+            return targetText.includes(q);
+          });
+
+          if (matchingTarget) break;
+        }
 
         if (matchingTarget) {
           const origin = resolveTargetOriginCoordinates(matchingTarget, resolvedCoords);
@@ -412,7 +475,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     }
 
     return items;
-  }, [allPins, targetRows, searchQuery]);
+  }, [allPins, debouncedSearchQuery, targetSearchIndex, resolvedCoords]);
+
 
   // Map Summary Statistics
   const stats = useMemo(() => {
@@ -475,7 +539,10 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     return targetRows.filter((t) => t._isMatched && isAcehTargetRow(t));
   }, [targetRows]);
 
-  const anomalyRows = useMemo(() => {
+  const [anomalyTypeFilter, setAnomalyTypeFilter] = useState<'ALL' | AnomalyType>('ALL');
+
+
+  const anomalyRows: AnomalyItem[] = useMemo(() => {
     const masterByIdentity = new Map<string, MasterRow>();
     masterRows.forEach((master) => {
       [master['Branch Code'], master['Kode Cabang'], master['Sandi Cabang'], master.Sandi, master.Cabang, master['Nama Outlet']]
@@ -492,19 +559,104 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         .filter(Boolean);
       const master = identities.map((identity) => masterByIdentity.get(identity)).find(Boolean);
       if (!master) return [];
+
       const targetIsland = getIslandGroup(target.Provinsi);
       const masterIsland = getIslandGroup(master.Provinsi);
       const islandMismatch = Boolean(targetIsland && masterIsland && targetIsland !== masterIsland);
-      return islandMismatch
-        ? [{ target, master, islandMismatch }]
-        : [];
+
+      const targetProv = cleanProvinsi(target.Provinsi);
+      const masterProv = cleanProvinsi(master.Provinsi);
+      const provinceMismatch = Boolean(targetProv && masterProv && targetProv !== masterProv);
+
+      const targetDati = cleanDati(target['Dati II']);
+      const masterDati = cleanDati(master['Dati II']);
+      const datiMismatch = Boolean(targetDati && masterDati && targetDati !== masterDati);
+
+      const targetWilayah = String(target.Wilayah || '').trim();
+      const masterWilayah = String(master.Wilayah || '').trim();
+      const wilayahMismatch = Boolean(targetWilayah && masterWilayah && targetWilayah !== masterWilayah);
+
+      // Hitung koordinat dan jarak geografis
+      const targetCoord = resolveTargetOriginCoordinates(target, resolvedCoords);
+      const masterCoord = resolveBranchCoordinates(master, resolvedCoords);
+      const distanceKm = calculateDistanceKm(targetCoord.lat, targetCoord.lng, masterCoord.lat, masterCoord.lng);
+
+      // Tentukan apakah ada anomali
+      // 1. Beda Pulau
+      // 2. Beda Provinsi (meski 1 pulau)
+      // 3. Beda Dati II / Kota dengan jarak jauh (> 60 km) atau Beda Wilayah BNI dengan jarak signifikan
+      let isAnomaly = false;
+      let anomalyType: AnomalyType = 'BEDA_KOTA_JAUH';
+      let anomalyTitle = '';
+      let anomalyBadge = { text: 'Beda Lokasi', bg: '#fee2e2', color: '#b91c1c', border: '#fecdd3' };
+      const reasons: string[] = [];
+
+      if (islandMismatch) {
+        isAnomaly = true;
+        anomalyType = 'BEDA_PULAU';
+        anomalyTitle = 'Anomali Lintas Pulau';
+        anomalyBadge = { text: 'Beda Pulau', bg: '#fee2e2', color: '#991b1b', border: '#f87171' };
+        reasons.push(`Pulau asal (${targetIsland}) berbeda dari Master (${masterIsland})`);
+      } else if (provinceMismatch) {
+        isAnomaly = true;
+        anomalyType = 'BEDA_PROVINSI';
+        anomalyTitle = 'Anomali Lintas Provinsi';
+        anomalyBadge = { text: 'Beda Provinsi', bg: '#ffedd5', color: '#9a3412', border: '#fb923c' };
+        reasons.push(`Provinsi asal (${target.Provinsi || '-'}) berbeda dari Master (${master.Provinsi || '-'})`);
+      } else if (datiMismatch && (distanceKm >= 60 || wilayahMismatch)) {
+        isAnomaly = true;
+        anomalyType = 'BEDA_KOTA_JAUH';
+        anomalyTitle = 'Anomali Beda Kota Berjauhan';
+        anomalyBadge = { text: `Beda Kota (~${Math.round(distanceKm)} km)`, bg: '#fef3c7', color: '#92400e', border: '#fcd34d' };
+        reasons.push(`Kota/Dati II asal (${target['Dati II'] || '-'}) berbeda dari Master (${master['Dati II'] || '-'}) dengan jarak ~${Math.round(distanceKm)} km`);
+      } else if (wilayahMismatch && distanceKm >= 45) {
+        isAnomaly = true;
+        anomalyType = 'MISMATCH_WILAYAH';
+        anomalyTitle = 'Anomali Wilayah BNI Berjauhan';
+        anomalyBadge = { text: `Beda Wilayah (${targetWilayah} vs ${masterWilayah})`, bg: '#e0e7ff', color: '#3730a3', border: '#a5b4fc' };
+        reasons.push(`Wilayah asal (${targetWilayah}) berbeda dari Master (${masterWilayah})`);
+      }
+
+      if (!isAnomaly) return [];
+
+      if (provinceMismatch && !islandMismatch) {
+        reasons.push(`Provinsi Excel: ${target.Provinsi || '-'} vs Master: ${master.Provinsi || '-'}`);
+      }
+      if (datiMismatch) {
+        reasons.push(`Dati II Excel: ${target['Dati II'] || '-'} vs Master: ${master['Dati II'] || '-'}`);
+      }
+      if (distanceKm > 0) {
+        reasons.push(`Jarak lurus: ~${distanceKm.toLocaleString('id-ID')} km`);
+      }
+
+      return [
+        {
+          target,
+          master,
+          islandMismatch,
+          provinceMismatch,
+          datiMismatch,
+          wilayahMismatch,
+          distanceKm,
+          anomalyType,
+          anomalyTitle,
+          anomalyBadge,
+          reasons,
+        },
+      ];
     });
-  }, [targetRows, masterRows]);
+  }, [targetRows, masterRows, resolvedCoords]);
+
+  const filteredAnomalyRows = useMemo(() => {
+    if (anomalyTypeFilter === 'ALL') return anomalyRows;
+    return anomalyRows.filter((item) => item.anomalyType === anomalyTypeFilter);
+  }, [anomalyRows, anomalyTypeFilter]);
 
   const selectedAnomalyInfo = useMemo(() => {
     if (!selectedAnomalyTarget) return null;
     return anomalyRows.find((item) => String(item.target.No) === String(selectedAnomalyTarget.No)) || null;
   }, [anomalyRows, selectedAnomalyTarget]);
+
 
   useEffect(() => {
     if (!selectedAnomalyInfo || !anomalyMapRef.current) return;
@@ -1669,14 +1821,51 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       </div>
 
       {showAnomalyPanel && (
-        <div style={{ marginBottom: '0.65rem', padding: '0.7rem 0.85rem', border: '1px solid rgba(240,101,72,0.35)', borderRadius: '7px', background: '#fff8f6', color: '#7c2d12', fontSize: '0.72rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
-            <strong>Audit data upload vs Master</strong>
-            <span>{anomalyRows.length === 0 ? 'Tidak ada anomali' : `${anomalyRows.length} record beda pulau`}</span>
+        <div style={{ marginBottom: '0.65rem', padding: '0.75rem 0.95rem', border: '1px solid rgba(240,101,72,0.35)', borderRadius: '8px', background: '#fff8f6', color: '#7c2d12', fontSize: '0.74rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.6rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <strong style={{ fontSize: '0.82rem', color: '#991b1b' }}>⚠️ Audit Anomali Lokasi (Excel vs Master)</strong>
+              <span style={{ fontSize: '0.7rem', padding: '0.15rem 0.45rem', borderRadius: '4px', background: '#fee2e2', color: '#991b1b', fontWeight: 700 }}>
+                {anomalyRows.length} Terdeteksi
+              </span>
+            </div>
+            {/* Filter buttons per kategori */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
+              {[
+                { id: 'ALL', label: `Semua (${anomalyRows.length})` },
+                { id: 'BEDA_PULAU', label: `Beda Pulau (${anomalyRows.filter((r) => r.anomalyType === 'BEDA_PULAU').length})` },
+                { id: 'BEDA_PROVINSI', label: `Beda Provinsi (${anomalyRows.filter((r) => r.anomalyType === 'BEDA_PROVINSI').length})` },
+                { id: 'BEDA_KOTA_JAUH', label: `Beda Kota Jauh (${anomalyRows.filter((r) => r.anomalyType === 'BEDA_KOTA_JAUH').length})` },
+                { id: 'MISMATCH_WILAYAH', label: `Beda Wilayah (${anomalyRows.filter((r) => r.anomalyType === 'MISMATCH_WILAYAH').length})` },
+              ].map((btn) => (
+                <button
+                  key={btn.id}
+                  type="button"
+                  onClick={() => setAnomalyTypeFilter(btn.id as any)}
+                  style={{
+                    fontSize: '0.68rem',
+                    fontWeight: anomalyTypeFilter === btn.id ? 700 : 500,
+                    padding: '0.15rem 0.45rem',
+                    borderRadius: '4px',
+                    border: anomalyTypeFilter === btn.id ? '1px solid #c2410c' : '1px solid #fed7aa',
+                    background: anomalyTypeFilter === btn.id ? '#ea580c' : '#ffffff',
+                    color: anomalyTypeFilter === btn.id ? '#ffffff' : '#9a3412',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {btn.label}
+                </button>
+              ))}
+            </div>
           </div>
-          {anomalyRows.length > 0 && (
-            <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'grid', gap: '0.3rem' }}>
-              {anomalyRows.slice(0, 50).map(({ target, master }) => (
+
+          {filteredAnomalyRows.length === 0 ? (
+            <div style={{ padding: '0.75rem', textAlign: 'center', background: '#ffffff', borderRadius: '6px', border: '1px dashed #fed7aa', color: '#9a3412' }}>
+              {anomalyRows.length === 0 ? 'Tidak ada anomali wilayah/kota/provinsi yang terdeteksi.' : 'Tidak ada anomali pada filter ini.'}
+            </div>
+          ) : (
+            <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'grid', gap: '0.35rem' }}>
+              {filteredAnomalyRows.slice(0, 50).map(({ target, master, anomalyBadge, distanceKm }) => (
                 <div
                   key={`${target.No}-${master['Branch Code']}`}
                   role="button"
@@ -1691,12 +1880,35 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                     }
                     setSelectedAnomalyTarget(target);
                   }}
-                  style={{ padding: '0.35rem 0.5rem', background: '#ffffff', border: '1px solid #fed7aa', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.45rem' }}
+                  style={{ padding: '0.4rem 0.6rem', background: '#ffffff', border: '1px solid #fed7aa', borderRadius: '5px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}
                 >
-                  <span style={{ flex: 1 }}><strong>No. {target.No}</strong> · KP {target['KODE POS'] || '-'} · <span style={{ color: '#b91c1c' }}>{target['Dati II'] || '-'}, {target.Provinsi || '-'}</span> → <span style={{ color: '#0369a1' }}>{master['Nama Outlet']} ({master.Provinsi})</span></span>
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                    <span
+                      style={{
+                        fontSize: '0.66rem',
+                        fontWeight: 700,
+                        padding: '0.1rem 0.4rem',
+                        borderRadius: '4px',
+                        background: anomalyBadge.bg,
+                        color: anomalyBadge.color,
+                        border: `1px solid ${anomalyBadge.border}`,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {anomalyBadge.text}
+                    </span>
+                    <span>
+                      <strong>No. {target.No}</strong> · <span style={{ color: '#b91c1c', fontWeight: 600 }}>{target['Dati II'] || '-'} ({target.Provinsi || '-'})</span> → <span style={{ color: '#0369a1', fontWeight: 600 }}>{master['Nama Outlet']} - {master['Dati II'] || '-'} ({master.Provinsi})</span>
+                    </span>
+                    {distanceKm > 0 && (
+                      <span style={{ fontSize: '0.68rem', color: '#64748b', background: '#f1f5f9', padding: '0.1rem 0.35rem', borderRadius: '3px' }}>
+                        📏 ~{Math.round(distanceKm)} km
+                      </span>
+                    )}
+                  </div>
                   <button
                     type="button"
-                    title="Lihat detail anomali"
+                    title={`Buka detail audit spesifik No. ${target.No}`}
                     aria-label={`Lihat detail anomali No. ${target.No}`}
                     onClick={(event) => {
                       event.stopPropagation();
@@ -1709,9 +1921,9 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                       }
                       setSelectedAnomalyTarget(target);
                     }}
-                    style={{ width: '24px', height: '24px', borderRadius: '50%', border: '1px solid #f97316', background: '#fff7ed', color: '#c2410c', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+                    style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', border: '1px solid #ea580c', background: '#fff7ed', color: '#c2410c', display: 'inline-flex', alignItems: 'center', gap: '3px', cursor: 'pointer', fontSize: '0.68rem', fontWeight: 700, flexShrink: 0 }}
                   >
-                    <Info size={14} />
+                    <Info size={12} /> Detail
                   </button>
                 </div>
               ))}
@@ -1726,71 +1938,204 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           aria-modal="true"
           aria-label={`Detail anomali No. ${selectedAnomalyInfo.target.No}`}
           onClick={() => setSelectedAnomalyTarget(null)}
-          style={{ position: 'fixed', inset: 0, zIndex: 12000, background: 'rgba(15, 23, 42, 0.42)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+          style={{ position: 'fixed', inset: 0, zIndex: 12000, background: 'rgba(15, 23, 42, 0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
         >
-          <div onClick={(event) => event.stopPropagation()} style={{ width: 'min(1120px, 96vw)', maxHeight: 'calc(100vh - 32px)', overflow: 'hidden', background: '#ffffff', borderRadius: '10px', boxShadow: '0 20px 50px rgba(15,23,42,0.28)', border: '1px solid #fecdd3', display: 'grid', gridTemplateColumns: '1.2fr 1fr' }}>
-            <div style={{ gridColumn: '1 / -1', padding: '0.85rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #fee2e2', background: '#fff7f7' }}>
-              <div>
-                <div style={{ fontSize: '0.68rem', color: '#b91c1c', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Audit Anomali Lintas Pulau</div>
-                <strong style={{ fontSize: '1rem', color: '#4c0519' }}>Record Excel No. {selectedAnomalyInfo.target.No}</strong>
+          <div onClick={(event) => event.stopPropagation()} style={{ width: 'min(1180px, 97vw)', maxHeight: 'calc(100vh - 28px)', overflow: 'hidden', background: '#ffffff', borderRadius: '12px', boxShadow: '0 25px 60px rgba(15,23,42,0.35)', border: '1px solid #fecdd3', display: 'grid', gridTemplateColumns: '1.1fr 1fr' }}>
+            <div style={{ gridColumn: '1 / -1', padding: '0.85rem 1.1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #fee2e2', background: '#fff7f7' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <span
+                  style={{
+                    fontSize: '0.7rem',
+                    fontWeight: 800,
+                    padding: '0.2rem 0.55rem',
+                    borderRadius: '5px',
+                    background: selectedAnomalyInfo.anomalyBadge.bg,
+                    color: selectedAnomalyInfo.anomalyBadge.color,
+                    border: `1px solid ${selectedAnomalyInfo.anomalyBadge.border}`,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  {selectedAnomalyInfo.anomalyTitle}
+                </span>
+                <strong style={{ fontSize: '1.05rem', color: '#4c0519' }}>Audit Record Excel No. {selectedAnomalyInfo.target.No}</strong>
               </div>
-              <button type="button" onClick={() => setSelectedAnomalyTarget(null)} title="Tutup detail" aria-label="Tutup detail" style={{ border: 0, background: 'transparent', color: '#64748b', cursor: 'pointer' }}><X size={20} /></button>
+              <button type="button" onClick={() => setSelectedAnomalyTarget(null)} title="Tutup detail" aria-label="Tutup detail" style={{ border: 0, background: 'transparent', color: '#64748b', cursor: 'pointer', padding: '4px' }}><X size={22} /></button>
             </div>
-            <div style={{ minHeight: '560px', background: '#e2e8f0', position: 'relative' }}>
-              <div ref={anomalyMapRef} style={{ width: '100%', height: '100%', minHeight: '560px' }} />
-              <div style={{ position: 'absolute', left: '12px', bottom: '12px', zIndex: 500, padding: '0.45rem 0.6rem', borderRadius: '6px', background: 'rgba(255,255,255,0.94)', border: '1px solid #cbd5e1', fontSize: '0.68rem', color: '#334155' }}>
-                <span style={{ color: '#dc2626', fontWeight: 800 }}>● Excel</span> → <span style={{ color: '#2563eb', fontWeight: 800 }}>● Master</span>
+
+            {/* Left side: Mini Map Visualizer */}
+            <div style={{ minHeight: '580px', background: '#e2e8f0', position: 'relative' }}>
+              <div ref={anomalyMapRef} style={{ width: '100%', height: '100%', minHeight: '580px' }} />
+              <div style={{ position: 'absolute', left: '12px', bottom: '12px', zIndex: 500, padding: '0.5rem 0.75rem', borderRadius: '6px', background: 'rgba(255,255,255,0.96)', border: '1px solid #cbd5e1', fontSize: '0.72rem', color: '#334155', boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ color: '#dc2626', fontWeight: 800 }}>● Titik Asal Excel</span>
+                  <span>➔</span>
+                  <span style={{ color: '#2563eb', fontWeight: 800 }}>● Cabang Master</span>
+                </div>
+                {selectedAnomalyInfo.distanceKm > 0 && (
+                  <div style={{ marginTop: '0.25rem', fontWeight: 700, color: '#b91c1c' }}>
+                    Estimasi Jarak Garis Lurus: ~{selectedAnomalyInfo.distanceKm.toLocaleString('id-ID')} km
+                  </div>
+                )}
               </div>
             </div>
-            <div style={{ padding: '1rem', maxHeight: 'calc(100vh - 112px)', overflowY: 'auto', display: 'grid', gap: '0.8rem', fontSize: '0.76rem', color: '#334155' }}>
-              <div style={{ padding: '0.65rem 0.75rem', border: '1px solid #fecdd3', borderRadius: '7px', background: '#fff1f2' }}>
-                <strong style={{ color: '#9f1239' }}>Kesimpulan validasi</strong>
-                <div style={{ marginTop: '0.3rem' }}>Lokasi data upload dan Master tujuan berada di pulau berbeda. Ini adalah anomali mapping dan bukan alur Aceh → KIM.</div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.7rem' }}>
-                <div style={{ padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '7px' }}>
-                  <strong style={{ color: '#b91c1c' }}>Data upload Excel</strong>
-                  <div style={{ marginTop: '0.4rem' }}>No: {selectedAnomalyInfo.target.No}</div>
-                  <div>Wilayah: {selectedAnomalyInfo.target.Wilayah || '-'}</div>
-                  <div>Sandi Cabang: {selectedAnomalyInfo.target['Sandi Cabang'] || selectedAnomalyInfo.target.Sandi || selectedAnomalyInfo.target.Cabang || '-'}</div>
-                  <div>Branch Code: {selectedAnomalyInfo.target['Branch Code'] || '-'}</div>
-                  <div>Kode Cabang: {selectedAnomalyInfo.target['Kode Cabang'] || '-'}</div>
-                  <div>Nama: {selectedAnomalyInfo.target['Nama Outlet'] || '-'}</div>
-                  <div>Status: {selectedAnomalyInfo.target['Status Outlet'] || '-'}</div>
-                  <div>Alamat: {selectedAnomalyInfo.target.ALAMAT || '-'}</div>
-                  <div>Kode pos: {selectedAnomalyInfo.target['KODE POS'] || '-'}</div>
-                  <div>Kelurahan: {selectedAnomalyInfo.target.Kelurahan || '-'}</div>
-                  <div>Kecamatan: {selectedAnomalyInfo.target.Kecamatan || '-'}</div>
-                  <div>Kode Dati II: {selectedAnomalyInfo.target['Kode Dati II'] || '-'}</div>
-                  <div>Provinsi: {selectedAnomalyInfo.target.Provinsi || '-'}</div>
-                  <div>Dati II: {selectedAnomalyInfo.target['Dati II'] || '-'}</div>
-                  <div>Koordinat: {(() => { const origin = resolveTargetOriginCoordinates(selectedAnomalyInfo.target, resolvedCoords); return `${origin.lat.toFixed(6)}, ${origin.lng.toFixed(6)} (${origin.source})`; })()}</div>
+
+            {/* Right side: Detailed Specific Difference Table & Actions */}
+            <div style={{ padding: '1.1rem', maxHeight: 'calc(100vh - 110px)', overflowY: 'auto', display: 'grid', gap: '0.85rem', fontSize: '0.76rem', color: '#334155' }}>
+              
+              {/* Summary Banner */}
+              <div style={{ padding: '0.75rem 0.9rem', border: '1px solid #fecdd3', borderRadius: '8px', background: '#fff1f2' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#9f1239', fontWeight: 700, fontSize: '0.82rem' }}>
+                  <span>⚠️</span>
+                  <span>Rangkuman Evaluasi Logis</span>
                 </div>
-                <div style={{ padding: '0.7rem', border: '1px solid #cbd5e1', borderRadius: '7px' }}>
-                  <strong style={{ color: '#0369a1' }}>Master tujuan</strong>
-                  <div style={{ marginTop: '0.4rem' }}>Branch Code: {selectedAnomalyInfo.master['Branch Code'] || '-'}</div>
-                  <div>Wilayah: {selectedAnomalyInfo.master.Wilayah || '-'}</div>
-                  <div>Sandi Cabang: {selectedAnomalyInfo.master['Sandi Cabang'] || selectedAnomalyInfo.master.Sandi || selectedAnomalyInfo.master.Cabang || '-'}</div>
-                  <div>Kode Cabang: {selectedAnomalyInfo.master['Kode Cabang'] || '-'}</div>
-                  <div>Nama: {selectedAnomalyInfo.master['Nama Outlet'] || '-'}</div>
-                  <div>Status: {selectedAnomalyInfo.master['Status Outlet'] || '-'}</div>
-                  <div>Alamat: {selectedAnomalyInfo.master.ALAMAT || '-'}</div>
-                  <div>Kode pos: {selectedAnomalyInfo.master['KODE POS'] || '-'}</div>
-                  <div>Kelurahan: {selectedAnomalyInfo.master.Kelurahan || '-'}</div>
-                  <div>Kecamatan: {selectedAnomalyInfo.master.Kecamatan || '-'}</div>
-                  <div>Kode Dati II: {selectedAnomalyInfo.master['Kode Dati II'] || '-'}</div>
-                  <div>Provinsi: {selectedAnomalyInfo.master.Provinsi || '-'}</div>
-                  <div>Dati II: {selectedAnomalyInfo.master['Dati II'] || '-'}</div>
-                  <div>Koordinat pin: {(() => { const branch = resolveBranchCoordinates(selectedAnomalyInfo.master, resolvedCoords); return `${branch.lat.toFixed(6)}, ${branch.lng.toFixed(6)} (${branch.source})`; })()}</div>
+                <div style={{ marginTop: '0.35rem', lineHeight: '1.45', color: '#881337' }}>
+                  {selectedAnomalyInfo.anomalyType === 'BEDA_PULAU' && (
+                    <>Lokasi data upload Excel dan Master tujuan berada di <strong>pulau berbeda</strong> ({getIslandGroup(selectedAnomalyInfo.target.Provinsi)} vs {getIslandGroup(selectedAnomalyInfo.master.Provinsi)}). Ini mengindikasikan mismatch kode sandi/cabang.</>
+                  )}
+                  {selectedAnomalyInfo.anomalyType === 'BEDA_PROVINSI' && (
+                    <>Lokasi data upload Excel dan Master tujuan berada di <strong>provinsi berbeda</strong> ({selectedAnomalyInfo.target.Provinsi || '-'} vs {selectedAnomalyInfo.master.Provinsi || '-'}), dengan jarak estimasi <strong>~{Math.round(selectedAnomalyInfo.distanceKm)} km</strong>.</>
+                  )}
+                  {selectedAnomalyInfo.anomalyType === 'BEDA_KOTA_JAUH' && (
+                    <>Data upload Excel berada di <strong>{selectedAnomalyInfo.target['Dati II'] || '-'}</strong>, tetapi dicocokkan ke Master cabang di <strong>{selectedAnomalyInfo.master['Dati II'] || '-'}</strong> yang berjarak cukup jauh (<strong>~{Math.round(selectedAnomalyInfo.distanceKm)} km</strong>).</>
+                  )}
+                  {selectedAnomalyInfo.anomalyType === 'MISMATCH_WILAYAH' && (
+                    <>Lingkup Wilayah BNI asal (<strong>Wilayah {selectedAnomalyInfo.target.Wilayah || '-'}</strong>) berbeda dari cabang Master (<strong>Wilayah {selectedAnomalyInfo.master.Wilayah || '-'}</strong>).</>
+                  )}
                 </div>
               </div>
-              <div style={{ padding: '0.65rem 0.75rem', borderRadius: '7px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                <strong>Before → Seharusnya</strong>
-                <div style={{ marginTop: '0.3rem' }}><b>Yang salah:</b> data upload No. {selectedAnomalyInfo.target.No} ({selectedAnomalyInfo.target['Dati II'] || '-'}, {selectedAnomalyInfo.target.Provinsi || '-'}) dipetakan ke Branch Code {selectedAnomalyInfo.master['Branch Code'] || '-'} ({selectedAnomalyInfo.master['Dati II'] || '-'}, {selectedAnomalyInfo.master.Provinsi || '-'}).</div>
-                <div><b>Before:</b> KP {selectedAnomalyInfo.target['KODE POS'] || '-'} · {getIslandGroup(selectedAnomalyInfo.target.Provinsi)} → Master {getIslandGroup(selectedAnomalyInfo.master.Provinsi)}</div>
-                <div><b>Seharusnya:</b> record ini dicocokkan ke Master pada pulau yang sama dengan data upload.</div>
-                <div style={{ marginTop: '0.3rem', color: '#64748b' }}>Sumber validasi: kolom Excel upload, kolom Master, normalisasi provinsi, dan kelompok pulau. Garis merah menunjukkan relasi yang perlu diperiksa.</div>
+
+              {/* SPECIFIC COMPARISON TABLE */}
+              <div style={{ borderRadius: '8px', background: '#ffffff', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                <div style={{ padding: '0.55rem 0.8rem', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <strong style={{ color: '#1e293b', fontSize: '0.78rem' }}>Tabel Perbedaan Spesifik (Excel vs Master)</strong>
+                  <span style={{ fontSize: '0.68rem', color: '#64748b' }}>Record No. {selectedAnomalyInfo.target.No}</span>
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.72rem' }}>
+                  <thead>
+                    <tr style={{ background: '#f1f5f9', color: '#475569', textAlign: 'left', borderBottom: '1px solid #cbd5e1' }}>
+                      <th style={{ padding: '0.45rem 0.6rem', width: '22%' }}>Parameter / Field</th>
+                      <th style={{ padding: '0.45rem 0.6rem', width: '33%', color: '#b91c1c' }}>Data Excel (Upload)</th>
+                      <th style={{ padding: '0.45rem 0.6rem', width: '30%', color: '#0369a1' }}>Data Master (Cabang)</th>
+                      <th style={{ padding: '0.45rem 0.6rem', width: '15%', textAlign: 'center' }}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      {
+                        label: 'Wilayah BNI',
+                        excel: selectedAnomalyInfo.target.Wilayah ? `Wilayah ${selectedAnomalyInfo.target.Wilayah}` : '-',
+                        master: selectedAnomalyInfo.master.Wilayah ? `Wilayah ${selectedAnomalyInfo.master.Wilayah}` : '-',
+                        isDiff: cleanText(selectedAnomalyInfo.target.Wilayah) !== cleanText(selectedAnomalyInfo.master.Wilayah) && Boolean(selectedAnomalyInfo.target.Wilayah && selectedAnomalyInfo.master.Wilayah),
+                        diffNote: 'Beda Wilayah',
+                      },
+                      {
+                        label: 'Provinsi',
+                        excel: selectedAnomalyInfo.target.Provinsi || '-',
+                        master: selectedAnomalyInfo.master.Provinsi || '-',
+                        isDiff: cleanProvinsi(selectedAnomalyInfo.target.Provinsi) !== cleanProvinsi(selectedAnomalyInfo.master.Provinsi),
+                        diffNote: selectedAnomalyInfo.islandMismatch ? 'Beda Pulau' : 'Beda Provinsi',
+                      },
+                      {
+                        label: 'Pulau / Region',
+                        excel: getIslandGroup(selectedAnomalyInfo.target.Provinsi) || '-',
+                        master: getIslandGroup(selectedAnomalyInfo.master.Provinsi) || '-',
+                        isDiff: selectedAnomalyInfo.islandMismatch,
+                        diffNote: 'Beda Pulau',
+                      },
+                      {
+                        label: 'Kota / Dati II',
+                        excel: selectedAnomalyInfo.target['Dati II'] || '-',
+                        master: selectedAnomalyInfo.master['Dati II'] || '-',
+                        isDiff: cleanDati(selectedAnomalyInfo.target['Dati II']) !== cleanDati(selectedAnomalyInfo.master['Dati II']),
+                        diffNote: 'Beda Dati II',
+                      },
+                      {
+                        label: 'Kecamatan',
+                        excel: selectedAnomalyInfo.target.Kecamatan || '-',
+                        master: selectedAnomalyInfo.master.Kecamatan || '-',
+                        isDiff: cleanText(selectedAnomalyInfo.target.Kecamatan) !== cleanText(selectedAnomalyInfo.master.Kecamatan) && Boolean(selectedAnomalyInfo.target.Kecamatan && selectedAnomalyInfo.master.Kecamatan),
+                        diffNote: 'Beda Kecamatan',
+                      },
+                      {
+                        label: 'Kelurahan',
+                        excel: selectedAnomalyInfo.target.Kelurahan || '-',
+                        master: selectedAnomalyInfo.master.Kelurahan || '-',
+                        isDiff: cleanText(selectedAnomalyInfo.target.Kelurahan) !== cleanText(selectedAnomalyInfo.master.Kelurahan) && Boolean(selectedAnomalyInfo.target.Kelurahan && selectedAnomalyInfo.master.Kelurahan),
+                        diffNote: 'Beda Kelurahan',
+                      },
+                      {
+                        label: 'Kode Pos',
+                        excel: String(selectedAnomalyInfo.target['KODE POS'] || '-'),
+                        master: String(selectedAnomalyInfo.master['KODE POS'] || '-'),
+                        isDiff: String(selectedAnomalyInfo.target['KODE POS'] || '').trim() !== String(selectedAnomalyInfo.master['KODE POS'] || '').trim(),
+                        diffNote: 'Beda Kode Pos',
+                      },
+                      {
+                        label: 'Sandi Cabang / Code',
+                        excel: String(selectedAnomalyInfo.target['Sandi Cabang'] || selectedAnomalyInfo.target.Sandi || selectedAnomalyInfo.target['Branch Code'] || selectedAnomalyInfo.target['Kode Cabang'] || '-'),
+                        master: String(selectedAnomalyInfo.master['Sandi Cabang'] || selectedAnomalyInfo.master.Sandi || selectedAnomalyInfo.master['Branch Code'] || selectedAnomalyInfo.master['Kode Cabang'] || '-'),
+                        isDiff: false,
+                        diffNote: 'Sandi Cocok',
+                      },
+                      {
+                        label: 'Nama Outlet',
+                        excel: selectedAnomalyInfo.target['Nama Outlet'] || '-',
+                        master: selectedAnomalyInfo.master['Nama Outlet'] || '-',
+                        isDiff: cleanText(selectedAnomalyInfo.target['Nama Outlet']) !== cleanText(selectedAnomalyInfo.master['Nama Outlet']),
+                        diffNote: 'Beda Nama',
+                      },
+                      {
+                        label: 'Alamat',
+                        excel: selectedAnomalyInfo.target.ALAMAT || '-',
+                        master: selectedAnomalyInfo.master.ALAMAT || '-',
+                        isDiff: cleanText(selectedAnomalyInfo.target.ALAMAT) !== cleanText(selectedAnomalyInfo.master.ALAMAT),
+                        diffNote: 'Beda Alamat',
+                      },
+                      {
+                        label: 'Jarak Geografis',
+                        excel: (() => { const o = resolveTargetOriginCoordinates(selectedAnomalyInfo.target, resolvedCoords); return `${o.lat.toFixed(4)}, ${o.lng.toFixed(4)}`; })(),
+                        master: (() => { const b = resolveBranchCoordinates(selectedAnomalyInfo.master, resolvedCoords); return `${b.lat.toFixed(4)}, ${b.lng.toFixed(4)}`; })(),
+                        isDiff: selectedAnomalyInfo.distanceKm > 35,
+                        diffNote: selectedAnomalyInfo.distanceKm > 0 ? `~${Math.round(selectedAnomalyInfo.distanceKm)} km` : 'Sama',
+                      },
+                    ].map((row, idx) => (
+                      <tr
+                        key={row.label}
+                        style={{
+                          borderBottom: '1px solid #e2e8f0',
+                          background: row.isDiff ? (idx % 2 === 0 ? '#fff8f6' : '#fff5f5') : (idx % 2 === 0 ? '#ffffff' : '#f8fafc'),
+                        }}
+                      >
+                        <td style={{ padding: '0.4rem 0.6rem', fontWeight: 700, color: '#334155' }}>{row.label}</td>
+                        <td style={{ padding: '0.4rem 0.6rem', color: row.isDiff ? '#b91c1c' : '#1e293b', fontWeight: row.isDiff ? 600 : 400, wordBreak: 'break-word' }}>{row.excel}</td>
+                        <td style={{ padding: '0.4rem 0.6rem', color: row.isDiff ? '#0369a1' : '#1e293b', fontWeight: row.isDiff ? 600 : 400, wordBreak: 'break-word' }}>{row.master}</td>
+                        <td style={{ padding: '0.4rem 0.6rem', textAlign: 'center' }}>
+                          {row.isDiff ? (
+                            <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '0.1rem 0.4rem', borderRadius: '4px', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', whiteSpace: 'nowrap' }}>
+                              ❌ {row.diffNote}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '0.1rem 0.4rem', borderRadius: '4px', background: '#dcfce7', color: '#166534', border: '1px solid #86efac', whiteSpace: 'nowrap' }}>
+                              ✓ Sesuai
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
+
+              {/* Action Recommendations */}
+              <div style={{ padding: '0.65rem 0.85rem', borderRadius: '7px', background: '#f8fafc', border: '1px solid #e2e8f0', fontSize: '0.71rem', color: '#475569' }}>
+                <strong style={{ color: '#0f172a' }}>💡 Rekomendasi Perbaikan Data:</strong>
+                <ul style={{ margin: '0.35rem 0 0 1.1rem', padding: 0, lineHeight: 1.5 }}>
+                  <li>Periksa kembali input <strong>Sandi Cabang / Branch Code</strong> pada baris Excel ini. Kemungkinan terjadi salah input sandi sehingga mengarah ke cabang di kota/provinsi yang jauh.</li>
+                  <li>Jika transaksi ini memang milik nasabah/merchant lokal di <strong>{selectedAnomalyInfo.target['Dati II'] || 'wilayah asal'}</strong>, sesuaikan sandi cabang ke kantor cabang terdekat di <strong>{selectedAnomalyInfo.target['Dati II'] || selectedAnomalyInfo.target.Provinsi || 'wilayah tersebut'}</strong>.</li>
+                </ul>
+              </div>
+
             </div>
           </div>
         </div>
