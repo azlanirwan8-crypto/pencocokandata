@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Sparkles,
@@ -11,6 +11,8 @@ import {
   Info,
   ExternalLink,
   Phone,
+  ShieldCheck,
+  Award,
 } from 'lucide-react';
 import type { TargetRow, MasterRow, WilayahSetting } from '../../types';
 import type { CandidateOption } from '../../utils/recommender';
@@ -94,6 +96,8 @@ interface CandidateDetailModalProps {
   data: {
     targetRow: TargetRow;
     candidate: CandidateOption;
+    allCandidates?: CandidateOption[];
+    recommendationReason?: string;
   } | null;
   onApprove: (rowNo: number | string, master: MasterRow) => void;
   wilayahSettings?: WilayahSetting[];
@@ -106,9 +110,19 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
   onApprove,
   wilayahSettings = [],
 }) => {
+  const [selectedCand, setSelectedCand] = useState<CandidateOption | null>(null);
+
+  useEffect(() => {
+    if (data?.candidate) {
+      setSelectedCand(data.candidate);
+    }
+  }, [data]);
+
   if (!isOpen || !data) return null;
 
-  const { targetRow: r, candidate: cand } = data;
+  const { targetRow: r } = data;
+  const candidatesList = data.allCandidates && data.allCandidates.length > 0 ? data.allCandidates : [data.candidate];
+  const cand = selectedCand || data.candidate;
   const m = cand.master;
   const isTop1 = cand.rank === 1;
   const themeColor = isTop1 ? '#0ab39c' : cand.rank === 2 ? '#d97706' : '#3577f1';
@@ -209,7 +223,7 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
         className="glass-card"
         style={{
           width: '100%',
-          maxWidth: '720px',
+          maxWidth: '780px',
           maxHeight: '92vh',
           background: '#ffffff',
           borderRadius: '8px',
@@ -245,12 +259,15 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                 color: isTop1 ? '#0ab39c' : '#d97706',
               }}
             >
-              <Sparkles size={18} />
+              <Award size={18} />
             </div>
             <div>
               <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#212529', margin: 0 }}>
-                Detail Rekomendasi & Alasan Penilaian Skor
+                Detail Rekomendasi Cabang & Alasan Penilaian Skor
               </h3>
+              <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.1rem' }}>
+                Target Baris #{r.No} • {r['Nama Outlet'] || r.Cabang || 'Target'}
+              </div>
             </div>
           </div>
           <button
@@ -276,28 +293,37 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
         {/* Modal Body (Scrollable) */}
         <div style={{ padding: '1.25rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           
-          {/* Highlight Box: Cabang Terpilih & Skor */}
+          {/* Section: Rekomendasi Cabang & Pilihan Kandidat */}
           <div
             style={{
               background: isTop1 ? 'rgba(10, 179, 156, 0.05)' : 'rgba(247, 184, 75, 0.06)',
               border: isTop1 ? '1px solid rgba(10, 179, 156, 0.3)' : '1px solid rgba(247, 184, 75, 0.35)',
               borderRadius: '6px',
               padding: '0.85rem 1rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.6rem',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.4rem' }}>
-              <span
-                style={{
-                  padding: '0.18rem 0.6rem',
-                  borderRadius: '4px',
-                  fontSize: '0.74rem',
-                  fontWeight: 700,
-                  background: isTop1 ? 'rgba(10, 179, 156, 0.15)' : 'rgba(247, 184, 75, 0.2)',
-                  color: isTop1 ? '#0ab39c' : '#d97706',
-                }}
-              >
-                {isTop1 ? 'Pilihan 1 (Utama)' : `Pilihan ${cand.rank} (Alternatif)`}
-              </span>
+            {/* Header Rekomendasi Cabang */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#1e293b', fontWeight: 700, fontSize: '0.82rem' }}>
+                <Building2 size={15} color={themeColor} />
+                <span>Rekomendasi Cabang Master:</span>
+                <span
+                  style={{
+                    padding: '0.15rem 0.55rem',
+                    borderRadius: '4px',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    background: isTop1 ? 'rgba(10, 179, 156, 0.15)' : 'rgba(247, 184, 75, 0.2)',
+                    color: isTop1 ? '#0ab39c' : '#d97706',
+                  }}
+                >
+                  {isTop1 ? '⭐ Pilihan 1 (Utama)' : `Pilihan ${cand.rank} (Alternatif)`}
+                </span>
+              </div>
+
               <span
                 style={{
                   fontSize: '0.82rem',
@@ -312,7 +338,54 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
               </span>
             </div>
 
-            <div style={{ fontSize: '0.94rem', fontWeight: 700, color: '#212529' }}>
+            {/* Selector Tab Jika Ada Lebih dari 1 Rekomendasi */}
+            {candidatesList.length > 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', paddingTop: '0.2rem' }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b' }}>Ganti Pilihan:</span>
+                {candidatesList.map((c) => {
+                  const isSelected = c.rank === cand.rank;
+                  const btnColor = c.rank === 1 ? '#0ab39c' : c.rank === 2 ? '#d97706' : '#3577f1';
+                  return (
+                    <button
+                      key={c.rank}
+                      type="button"
+                      onClick={() => setSelectedCand(c)}
+                      style={{
+                        padding: '0.22rem 0.65rem',
+                        borderRadius: '9999px',
+                        fontSize: '0.72rem',
+                        fontWeight: isSelected ? 700 : 500,
+                        background: isSelected ? btnColor : '#ffffff',
+                        color: isSelected ? '#ffffff' : '#475569',
+                        border: `1px solid ${isSelected ? btnColor : '#cbd5e1'}`,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.3rem',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <span>{c.rank === 1 ? 'Pilihan 1 (Utama)' : `Pilihan ${c.rank}`}</span>
+                      <span
+                        style={{
+                          fontSize: '0.65rem',
+                          padding: '0.02rem 0.3rem',
+                          borderRadius: '9999px',
+                          background: isSelected ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.06)',
+                          color: isSelected ? '#ffffff' : '#64748b',
+                          fontWeight: 700,
+                        }}
+                      >
+                        {c.score}%
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Nama Cabang & Info Tag */}
+            <div style={{ fontSize: '0.96rem', fontWeight: 700, color: '#1e293b', marginTop: '0.1rem' }}>
               {m['Sandi Cabang'] || m.Cabang || m.Sandi || '-'}
               {m['Nama Outlet'] && (
                 <span style={{ fontSize: '0.86rem', color: '#405189', fontWeight: 600, marginLeft: '0.4rem' }}>
@@ -322,7 +395,7 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
             </div>
 
             {/* Branch Code & Wilayah Tag */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap', marginTop: '0.35rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
               {candWilayahInfo.branchCode && (
                 <span
                   className="code-cell"
@@ -357,6 +430,148 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
               >
                 <MapPin size={11} /> {candWilayahInfo.wilayahName}
               </span>
+
+              {m['Status Outlet'] && (
+                <span
+                  style={{
+                    fontSize: '0.72rem',
+                    padding: '0.12rem 0.55rem',
+                    borderRadius: '4px',
+                    background: '#dcfce7',
+                    color: '#15803d',
+                    border: '1px solid #bbf7d0',
+                    fontWeight: 700,
+                  }}
+                >
+                  Status: {m['Status Outlet']}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Section: Validasi Data PTEN (Penyelenggara Transfer Dana & Kliring) */}
+          <div
+            style={{
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+              borderRadius: '6px',
+              padding: '0.85rem 1rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.65rem',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#0f766e', fontWeight: 700, fontSize: '0.82rem' }}>
+                <ShieldCheck size={16} />
+                <span>Validasi Data PTEN & Sinkronisasi Kode Pos</span>
+              </div>
+              {/* Status PTEN Badge */}
+              <div>
+                {(() => {
+                  const rawStatus = String(r['CEK KODE POS + PTEN'] || '').toUpperCase().trim();
+                  const isMatch = rawStatus === 'COCOK' || rawStatus === 'SAME' || rawStatus === 'MATCH';
+                  const isDiff = rawStatus === 'DIFFERENT' || rawStatus === 'BEDA';
+
+                  if (isMatch) {
+                    return (
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.3rem',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          color: '#047857',
+                          background: '#d1fae5',
+                          border: '1px solid #a7f3d0',
+                          padding: '0.15rem 0.55rem',
+                          borderRadius: '4px',
+                        }}
+                      >
+                        <CheckCircle2 size={12} /> PTEN: Cocok / Valid
+                      </span>
+                    );
+                  }
+                  if (isDiff) {
+                    return (
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.3rem',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          color: '#b45309',
+                          background: '#fef3c7',
+                          border: '1px solid #fde68a',
+                          padding: '0.15rem 0.55rem',
+                          borderRadius: '4px',
+                        }}
+                      >
+                        <AlertTriangle size={12} /> PTEN: Berbeda / Perlu Cek
+                      </span>
+                    );
+                  }
+                  return (
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.3rem',
+                        fontSize: '0.72rem',
+                        fontWeight: 600,
+                        color: '#64748b',
+                        background: '#f1f5f9',
+                        border: '1px solid #e2e8f0',
+                        padding: '0.15rem 0.55rem',
+                        borderRadius: '4px',
+                      }}
+                    >
+                      <Info size={12} /> {r['CEK KODE POS + PTEN'] || 'Belum Validasi'}
+                    </span>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Grid Informasi Data PTEN */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+                gap: '0.55rem',
+                background: '#f0fdfa',
+                border: '1px solid #ccfbf1',
+                borderRadius: '6px',
+                padding: '0.65rem 0.85rem',
+                fontSize: '0.75rem',
+              }}
+            >
+              <div>
+                <div style={{ color: '#64748b', fontSize: '0.7rem', fontWeight: 600 }}>Kota PTEN:</div>
+                <div style={{ color: '#0f766e', fontWeight: 700 }}>
+                  {r['KOTA PTEN'] || <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>-</span>}
+                </div>
+              </div>
+              <div>
+                <div style={{ color: '#64748b', fontSize: '0.7rem', fontWeight: 600 }}>Kode Pos PTEN:</div>
+                <div style={{ color: '#0f766e', fontWeight: 700 }}>
+                  {r['KODE POS PTEN'] || <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>-</span>}
+                </div>
+              </div>
+              <div>
+                <div style={{ color: '#64748b', fontSize: '0.7rem', fontWeight: 600 }}>Cek Duplikat Kode Pos:</div>
+                <div style={{ color: '#334155', fontWeight: 600 }}>
+                  {r['CEK DUPLIKAT KODE POS'] || '-'}
+                </div>
+              </div>
+              <div>
+                <div style={{ color: '#64748b', fontSize: '0.7rem', fontWeight: 600 }}>Sumber Validasi:</div>
+                <div style={{ color: '#334155', fontWeight: 600 }}>
+                  {r['SUMBER DATA'] || 'Database Master PTEN'}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -778,7 +993,7 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                   }}
                 >
                   <Building2 size={14} />
-                  <span>Data Cabang Master Terpilih</span>
+                  <span>Rekomendasi Cabang Master ({isTop1 ? 'Pilihan 1 Utama' : `Pilihan ${cand.rank}`})</span>
                 </div>
 
                 {/* Body Baris Data Master */}

@@ -395,6 +395,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   const [selectedCandidateDetail, setSelectedCandidateDetail] = useState<{
     targetRow: TargetRow;
     candidate: CandidateOption;
+    allCandidates?: CandidateOption[];
+    recommendationReason?: string;
   } | null>(null);
   const [activeCandidateByRow, setActiveCandidateByRow] = useState<Record<string | number, number>>({});
   // Tracks selected role-mapping branch index (0-based) per row No
@@ -1965,7 +1967,14 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                     )}
                                     <button
                                       type="button"
-                                      onClick={() => setSelectedCandidateDetail({ targetRow: r, candidate: activeCand })}
+                                      onClick={() =>
+                                        setSelectedCandidateDetail({
+                                          targetRow: r,
+                                          candidate: activeCand,
+                                          allCandidates: candidates,
+                                          recommendationReason: rec?.reason || activeCand.reason,
+                                        })
+                                      }
                                       style={{
                                         display: 'inline-flex',
                                         alignItems: 'center',
