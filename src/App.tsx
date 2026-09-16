@@ -6,9 +6,7 @@ import { RegionalAnalyticsCharts } from './components/Dashboard/RegionalAnalytic
 import { MasterDuplicateChart } from './components/Dashboard/MasterDuplicateChart';
 import { IndonesiaBranchMap } from './components/Dashboard/IndonesiaBranchMap';
 import { DashboardMatchTable } from './components/Dashboard/DashboardMatchTable';
-import { MasterHealthCard } from './components/MasterData/MasterHealthCard';
-import { MasterDataGrid } from './components/MasterData/MasterDataGrid';
-import { MasterUploadModal } from './components/MasterData/MasterUploadModal';
+import { CabangManager } from './components/MasterData/CabangManager';
 import { TargetUploadModal } from './components/WorkingEngine/TargetUploadModal';
 import { ProgressBar } from './components/WorkingEngine/ProgressBar';
 import { TargetDataGrid } from './components/WorkingEngine/TargetDataGrid';
@@ -37,14 +35,12 @@ import {
 import { NeonDatabaseModal } from './components/NeonDatabaseModal';
 import { SnapshotModal, type WorkspaceSnapshot } from './components/SnapshotModal';
 import { DEFAULT_WILAYAH_DATA, normalizeWilayahItem } from './utils/defaultWilayah';
-import { Database, ShieldAlert, Filter, UploadCloud, RotateCcw, Layers } from 'lucide-react';
+import { Filter, UploadCloud, RotateCcw, Layers } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
-  const [masterSubTab, setMasterSubTab] = useState<'health' | 'grid'>('health');
   const [isNeonModalOpen, setIsNeonModalOpen] = useState<boolean>(false);
   const [isSnapshotModalOpen, setIsSnapshotModalOpen] = useState<boolean>(false);
-  const [isMasterUploadModalOpen, setIsMasterUploadModalOpen] = useState<boolean>(false);
   const [isTargetUploadModalOpen, setIsTargetUploadModalOpen] = useState<boolean>(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>('Baru saja');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
@@ -892,213 +888,13 @@ export const App: React.FC = () => {
 
           {/* MENU 2: DATA MASTER (MANAJEMEN REFERENSI CABANG) */}
           {activeTab === 'master' && (
-            <div>
-              {/* Top Action Card: Upload Button & Template & Reset */}
-              <div
-                className="glass-card"
-                style={{
-                  padding: '0.65rem 1.15rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: '0.75rem',
-                  marginBottom: '0',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <div
-                    style={{
-                      width: '38px',
-                      height: '38px',
-                      borderRadius: '6px',
-                      background: 'rgba(64, 81, 137, 0.1)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#405189',
-                    }}
-                  >
-                    <Database size={18} />
-                  </div>
-                  <div>
-                    <h3 style={{ fontSize: '0.96rem', fontWeight: 600, color: '#212529', margin: 0 }}>
-                      Master Data Cabang & Outlet
-                    </h3>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    onClick={() => setIsMasterUploadModalOpen(true)}
-                    id="btn-open-upload-master"
-                    style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.42rem 0.95rem' }}
-                  >
-                    <UploadCloud size={14} />
-                    <span>Upload Master Excel</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm"
-                    onClick={() => {
-                      if (window.confirm('Kosongkan data Master dari sesi ini?')) {
-                        handleResetMaster();
-                      }
-                    }}
-                    style={{ color: '#f06548', borderColor: 'rgba(240, 101, 72, 0.3)' }}
-                    title="Kosongkan seluruh data Master"
-                  >
-                    <RotateCcw size={13} />
-                    <span>Reset Master</span>
-                  </button>
-                </div>
-              </div>
-
-              {masterRows.length === 0 ? (
-                <div
-                  className="glass-card"
-                  style={{
-                    padding: '3.5rem 2rem',
-                    textAlign: 'center',
-                    borderRadius: '8px',
-                    border: '1px dashed #ced4da',
-                    background: '#ffffff',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '1rem',
-                  }}
-                >
-                  <div
-                    style={{
-                      width: '56px',
-                      height: '56px',
-                      borderRadius: '50%',
-                      background: 'rgba(64, 81, 137, 0.08)',
-                      color: '#405189',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Database size={28} />
-                  </div>
-                  <div>
-                    <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#212529', margin: '0 0 0.4rem' }}>
-                      Belum Ada Data Master Terunggah
-                    </h4>
-                    <p style={{ fontSize: '0.82rem', color: '#878a99', maxWidth: '420px', margin: 0, lineHeight: 1.5 }}>
-                      Silakan unggah berkas Excel master cabang resmi untuk mengaktifkan pemetaan dan verifikasi otomatis.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => setIsMasterUploadModalOpen(true)}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 1.25rem' }}
-                  >
-                    <UploadCloud size={16} />
-                    <span>Pilih Berkas Master Excel</span>
-                  </button>
-                </div>
-              ) : (
-                <div className="glass-card" style={{ padding: '0.85rem 1.15rem' }}>
-                  {/* Clean Tab Segment Navigation */}
-                  <div
-                    style={{
-                      display: 'inline-flex',
-                      background: '#f3f6f9',
-                      padding: '3px',
-                      borderRadius: '6px',
-                      border: '1px solid #e9ebec',
-                      marginBottom: '0.85rem',
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setMasterSubTab('health')}
-                      style={{
-                        padding: '0.4rem 0.95rem',
-                        fontSize: '0.8rem',
-                        fontWeight: masterSubTab === 'health' ? 700 : 500,
-                        color: masterSubTab === 'health' ? '#405189' : '#878a99',
-                        background: masterSubTab === 'health' ? '#ffffff' : 'transparent',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        boxShadow: masterSubTab === 'health' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
-                        transition: 'all 0.15s',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.4rem',
-                      }}
-                    >
-                      <ShieldAlert size={14} style={{ color: masterSubTab === 'health' ? '#405189' : '#878a99' }} />
-                      <span>Audit & Multi-Outlet</span>
-                      {masterHealth.multiOutletCount > 0 && (
-                        <span
-                          style={{
-                            background: '#f06548',
-                            color: '#ffffff',
-                            padding: '0.05rem 0.35rem',
-                            borderRadius: '10px',
-                            fontSize: '0.68rem',
-                            fontWeight: 700,
-                          }}
-                        >
-                          {masterHealth.multiOutletCount}
-                        </span>
-                      )}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setMasterSubTab('grid')}
-                      style={{
-                        padding: '0.4rem 0.95rem',
-                        fontSize: '0.8rem',
-                        fontWeight: masterSubTab === 'grid' ? 700 : 500,
-                        color: masterSubTab === 'grid' ? '#405189' : '#878a99',
-                        background: masterSubTab === 'grid' ? '#ffffff' : 'transparent',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        boxShadow: masterSubTab === 'grid' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
-                        transition: 'all 0.15s',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.4rem',
-                      }}
-                    >
-                      <Database size={14} style={{ color: masterSubTab === 'grid' ? '#405189' : '#878a99' }} />
-                      <span>Daftar Data Master</span>
-                      <span
-                        style={{
-                          background: masterSubTab === 'grid' ? '#eef0f7' : '#e9ebec',
-                          color: masterSubTab === 'grid' ? '#405189' : '#878a99',
-                          padding: '0.05rem 0.35rem',
-                          borderRadius: '10px',
-                          fontSize: '0.68rem',
-                          fontWeight: 600,
-                        }}
-                      >
-                        {masterRows.length.toLocaleString('id-ID')} Baris
-                      </span>
-                    </button>
-                  </div>
-
-                  {/* Sub-Tab Content inside Single Card */}
-                  {masterSubTab === 'health' ? (
-                    <MasterHealthCard health={masterHealth} />
-                  ) : (
-                    <MasterDataGrid masterRows={masterRows} />
-                  )}
-                </div>
-              )}
-            </div>
+            <CabangManager
+              masterRows={masterRows}
+              onMasterLoaded={handleMasterLoaded}
+              onResetMaster={handleResetMaster}
+              masterHealth={masterHealth}
+              wilayahSettings={wilayahSettings}
+            />
           )}
 
           {/* MENU 3: DATA YANG AKAN DICOCOKAN (WORKING & EXECUTION ENGINE) */}
@@ -1298,15 +1094,6 @@ export const App: React.FC = () => {
         isOpen={isNeonModalOpen}
         onClose={() => setIsNeonModalOpen(false)}
         onConnectedChange={setIsNeonConnected}
-      />
-
-      {/* Master Upload Modal */}
-      <MasterUploadModal
-        isOpen={isMasterUploadModalOpen}
-        onClose={() => setIsMasterUploadModalOpen(false)}
-        onMasterLoaded={handleMasterLoaded}
-        currentMasterCount={masterRows.length}
-        existingMasterRows={masterRows}
       />
 
       {/* Target Upload Modal */}
