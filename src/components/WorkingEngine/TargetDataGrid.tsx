@@ -2879,20 +2879,20 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                       {/* Kolom Tipe Unit & Alur Wondr Mapping Role */}
                       {!hiddenCols.has('RoleMapping') && (
                         <td style={{ padding: '0.4rem 0.55rem', verticalAlign: 'middle', textAlign: 'center' }}>
-                          {r.organisasiRole || r.tipeUnitRole || r.alurWondr ? (
+                          {r.organisasiRole || r.tipeUnitRole ? (
                             <div
                               style={{
                                 display: 'inline-flex',
                                 flexDirection: 'column',
-                                gap: '0.25rem',
+                                gap: '0.2rem',
                                 alignItems: 'center',
                                 background: '#fcfdfe',
                                 padding: '0.35rem 0.55rem',
                                 borderRadius: '6px',
                                 border: '1px solid #e9ecef',
-                                minWidth: '200px',
+                                minWidth: '180px',
                               }}
-                              title={`Unit: ${r.organisasiRole || '-'}\nTipe: ${r.tipeUnitRole || '-'}\nAlur: ${r.flowDescription || r.alurWondr || '-'}`}
+                              title={`Unit: ${r.organisasiRole || '-'}\nTipe: ${r.tipeUnitRole || '-'}`}
                             >
                               {/* Nama Unit di Mapping Role Database */}
                               <div
@@ -2909,8 +2909,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                 {r.organisasiRole || '-'}
                               </div>
 
-                              {/* Tipe Unit Badge + Alur Wondr */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+                              {/* Tipe Unit Badge */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', justifyContent: 'center' }}>
                                 <span
                                   style={{
                                     fontSize: '0.65rem',
@@ -2928,69 +2928,6 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                   }}
                                 >
                                   {r.tipeUnitRole || (r.organisasiRole ? 'Terpetakan' : '-')}
-                                </span>
-                                {r.alurWondr && (
-                                  <span
-                                    style={{
-                                      fontSize: '0.65rem',
-                                      fontWeight: 600,
-                                      color: '#475569',
-                                      background: '#f1f5f9',
-                                      padding: '0.08rem 0.35rem',
-                                      borderRadius: '3px',
-                                    }}
-                                  >
-                                    {r.alurWondr}
-                                  </span>
-                                )}
-                              </div>
-
-                              {/* Status Ketersediaan 3 Role & Total User */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.62rem', fontWeight: 700 }}>
-                                <span
-                                  style={{
-                                    padding: '0.05rem 0.28rem',
-                                    borderRadius: '2px',
-                                    background: (r.roleCabsal ?? 0) > 0 ? 'rgba(10, 179, 156, 0.15)' : '#f1f5f9',
-                                    color: (r.roleCabsal ?? 0) > 0 ? '#059669' : '#94a3b8',
-                                  }}
-                                  title={`Maker (Sales Cabang / QRS_CABSAL): ${r.roleCabsal ?? 0}`}
-                                >
-                                  M: {r.roleCabsal ?? 0}
-                                </span>
-                                <span
-                                  style={{
-                                    padding: '0.05rem 0.28rem',
-                                    borderRadius: '2px',
-                                    background: (r.roleCabapv1 ?? 0) > 0 ? 'rgba(10, 179, 156, 0.15)' : '#f1f5f9',
-                                    color: (r.roleCabapv1 ?? 0) > 0 ? '#059669' : '#94a3b8',
-                                  }}
-                                  title={`Checker (Verifikator Cabang / QRS_CABAPV1): ${r.roleCabapv1 ?? 0}`}
-                                >
-                                  C: {r.roleCabapv1 ?? 0}
-                                </span>
-                                <span
-                                  style={{
-                                    padding: '0.05rem 0.28rem',
-                                    borderRadius: '2px',
-                                    background: (r.roleCabapv2 ?? 0) > 0 ? 'rgba(10, 179, 156, 0.15)' : '#f1f5f9',
-                                    color: (r.roleCabapv2 ?? 0) > 0 ? '#059669' : '#94a3b8',
-                                  }}
-                                  title={`Signer (Penyetuju Cabang / QRS_CABAPV2): ${r.roleCabapv2 ?? 0}`}
-                                >
-                                  S: {r.roleCabapv2 ?? 0}
-                                </span>
-                                <span
-                                  style={{
-                                    padding: '0.05rem 0.32rem',
-                                    borderRadius: '2px',
-                                    background: 'rgba(64, 81, 137, 0.1)',
-                                    color: '#405189',
-                                    fontWeight: 700,
-                                  }}
-                                  title={`Grand Total Pegawai Fisik Unik di Unit ini: ${r.roleGrandTotal ?? 1} User`}
-                                >
-                                  Total: {r.roleGrandTotal ?? 1} User
                                 </span>
                               </div>
                             </div>
