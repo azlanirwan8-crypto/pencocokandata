@@ -427,8 +427,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           setIsComputingRecs(false);
         }
       },
-      35,
-      120
+      250,
+      30
     );
 
     cancelProgressiveRef.current = cancel;
@@ -763,6 +763,56 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     setPage(1);
   };
 
+
+  // Map Wilayah -> Sandi Cabang untuk format dropdown: "Sandi Cabang : Nama Wilayah"
+  const wilayahSandiMap = useMemo(() => {
+    const map = new Map();
+    if (wilayahSettings && wilayahSettings.length > 0) {
+      for (const s of wilayahSettings) {
+        const wNorm = formatWilayahName(s.wilayah || '').toLowerCase();
+        const kwNorm = formatWilayahName(s.kodeWilayah || '').toLowerCase();
+        if (s.sandiCabang) {
+          if (s.wilayah) map.set(String(s.wilayah).trim().toLowerCase(), String(s.sandiCabang).trim());
+          if (s.kodeWilayah) map.set(String(s.kodeWilayah).trim().toLowerCase(), String(s.sandiCabang).trim());
+          if (wNorm) map.set(wNorm, String(s.sandiCabang).trim());
+          if (kwNorm) map.set(kwNorm, String(s.sandiCabang).trim());
+        }
+      }
+    }
+    if (masterRows && masterRows.length > 0) {
+      for (const m of masterRows) {
+        const rawW = String(m.Wilayah || '').trim();
+        const s = String(m['Sandi Cabang'] || '').trim();
+        if (rawW && s) {
+          const wKey = rawW.toLowerCase();
+          const wNorm = formatWilayahName(rawW).toLowerCase();
+          if (!map.has(wKey)) map.set(wKey, s);
+          if (!map.has(wNorm)) map.set(wNorm, s);
+        }
+      }
+    }
+    if (rows && rows.length > 0) {
+      for (const r of rows) {
+        const rawW = String(r.Wilayah || '').trim();
+        const s = String(r['Sandi Cabang'] || '').trim();
+        if (rawW && s) {
+          const wKey = rawW.toLowerCase();
+          const wNorm = formatWilayahName(rawW).toLowerCase();
+          if (!map.has(wKey)) map.set(wKey, s);
+          if (!map.has(wNorm)) map.set(wNorm, s);
+        }
+      }
+    }
+    return map;
+  }, [wilayahSettings, masterRows, rows]);
+
+  const getWilayahDropdownLabel = (w: string) => {
+    const norm = formatWilayahName(w);
+    const key = String(w).trim().toLowerCase();
+    const sandi = wilayahSandiMap.get(key) || wilayahSandiMap.get(norm.toLowerCase()) || '';
+    return sandi ? (sandi + ' : ' + norm) : norm;
+  };
+
   return (
     <div className="glass-card" style={{ marginTop: '0.65rem', padding: '0.75rem 1.1rem' }}>
       {/* Top Header: Title & Matching Execution Button */}
@@ -1012,7 +1062,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               <option value="ALL">Semua Wilayah ({wilayahList.length})</option>
               {wilayahList.map((w) => (
                 <option key={w} value={w}>
-                  {formatWilayahName(w)}
+                  {getWilayahDropdownLabel(w)}
                 </option>
               ))}
             </select>
@@ -1535,7 +1585,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                     borderBottom: '1px solid #e9ebec',
                   }}
                 >
-                  Kandidat Rekomendasi Master (Top 2–3 Pilihan Terdekat)
+                  Kandidat Rekomendasi Master
                 </th>
                 {/* Kolom Rekomendasi Mapping Role - 3 Cabang Role Lengkap Terdekat */}
                 {roleMappingList.length > 0 && (
@@ -1555,9 +1605,6 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                       <Shield size={13} color="#059669" />
                       <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>Rekomendasi Cabang</span>
-                    </div>
-                    <div style={{ fontSize: '0.65rem', fontWeight: 500, color: '#6b7280', marginTop: '0.1rem' }}>
-                      3 Role Lengkap Terdekat (Alur Standar 3 Tahap)
                     </div>
                   </th>
                 )}
@@ -2122,9 +2169,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                         const activeRank = activeCandidateByRow[r.No] || 1;
                         const activeCand = candidates.find((c) => c.rank === activeRank) || candidates[0];
                         const activeMaster = activeCand?.master;
-                        const activeDati2 = activeMaster?.['Dati II'] || activeMaster?.Kota || r['Dati II'] || '';
                         const topRoles = findTopRoleMatchesByLocation(activeMaster, r, roleMappingList, masterRows, 3);
-                        const selectedIdx = selectedRoleByRow[r.No] ?? -1;
+                        const selectedIdx = selectedRoleByRow[r.No] ?? 0;
 
                         return (
                           <td
@@ -2143,10 +2189,6 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                               <span style={{ fontSize: '0.7rem', color: '#adb5bd' }}>Belum ada data role lengkap di pulau ini</span>
                             ) : (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.32rem' }}>
-                                {/* Header info lokasi */}
-                                <div style={{ fontSize: '0.63rem', fontWeight: 600, color: '#6b7280', marginBottom: '0.02rem' }}>
-                                  Pilihan {activeRank} — {activeDati2 || '-'} · Terdekat (1 Pulau)
-                                </div>
                                 {topRoles.map((item, rIdx) => {
                                   const { rec: role, distanceKm, sameIsland } = item;
                                   const isSelected = selectedIdx === rIdx;
