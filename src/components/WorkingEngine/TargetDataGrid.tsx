@@ -31,6 +31,8 @@ import {
 import { calculateRealDistance } from '../../utils/geoDistance';
 import { ProximityGuideModal } from './ProximityGuideModal';
 import { CandidateDetailModal } from './CandidateDetailModal';
+import { DEFAULT_PTEN_DATA } from '../PTENData/defaultPtenData';
+import type { PTENRecord } from '../PTENData/PTENManager';
 import { formatWilayahName, extractWilayahFromBranchCode, cleanKelurahan, cleanKecamatan, cleanText } from '../../utils/normalizer';
 
 export interface ColumnOption {
@@ -72,6 +74,7 @@ interface TargetDataGridProps {
   matchedDone?: boolean;
   wilayahSettings?: WilayahSetting[];
   roleMappingList?: RoleMappingRecord[];
+  ptenList?: PTENRecord[];
 }
 
 /**
@@ -258,6 +261,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   matchedDone = false,
   wilayahSettings = [],
   roleMappingList = [],
+  ptenList = [],
 }) => {
   // 3 Sub-Tabs State: 'upload' | 'recommendation' | 'matched'
   const [checkerTab, setCheckerTab] = useState<'upload' | 'recommendation' | 'matched'>('upload');
@@ -745,13 +749,23 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
 
   // Set kode pos PTEN untuk pencocokan instan O(1)
   const ptenKpSet = useMemo(() => {
-    const set = new Set();
+    const set = new Set<string>();
+    // 1. Dari Master PTEN Database (Semua Kode Pos PTEN Indonesia)
+    const list = (ptenList && ptenList.length > 0) ? ptenList : DEFAULT_PTEN_DATA;
+    if (list && list.length > 0) {
+      for (let i = 0; i < list.length; i++) {
+        const kp = String(list[i].kodePosPten || '').replace(/\D/g, '').trim();
+        if (kp && kp.length === 5) set.add(kp);
+      }
+    }
+    // 2. Dari Master Rows
     if (masterRows && masterRows.length > 0) {
       for (const m of masterRows) {
         const kp = String(m['KODE POS PTEN'] || m['KODE POS'] || '').replace(/\D/g, '').trim();
         if (kp && kp.length === 5) set.add(kp);
       }
     }
+    // 3. Dari Target Rows
     if (rows && rows.length > 0) {
       for (const r of rows) {
         const kpPten = String(r['KODE POS PTEN'] || '').replace(/\D/g, '').trim();
@@ -759,7 +773,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
       }
     }
     return set;
-  }, [masterRows, rows]);
+  }, [ptenList, masterRows, rows]);
 
   // Pre-aggregated count of rows per wilayah for current active tab (100% accurate match with table)
   const wilayahTabCountsMap = useMemo(() => {
@@ -2666,101 +2680,54 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
 
                       {/* Kolom Validasi PTEN */}
                       {!hiddenCols.has('PTEN') && (
-                        <td style={{ textAlign: 'center', padding: '0.4rem 0.55rem', verticalAlign: 'middle' }}>
+                        <td style={{ textAlign: 'center', padding: '0.4rem 0.55rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                           {(() => {
-                            const ptenStatus = String(r['CEK KODE POS + PTEN'] || '').toUpperCase();
-                            const fileCity = r['Dati II'] || '-';
-                            const ptenCity = r['KOTA PTEN'] || '-';
-                            const targetKp = r['KODE POS'] || '-';
+                            const targetKp = String(r['KODE POS'] || '').replace(/\D/g, '').trim();
+                            const rawStatus = String(r['CEK KODE POS + PTEN'] || '').toUpperCase().trim();
+                            const isMatch =
+                              rawStatus === 'COCOK' ||
+                              rawStatus === 'SAME' ||
+                              rawStatus === 'MATCH' ||
+                              (targetKp.length === 5 && ptenKpSet.has(targetKp));
 
-                            if (ptenStatus === 'SAME' || ptenStatus === 'COCOK') {
-                              return (
-                                <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
-                                  <span
-                                    style={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: '0.25rem',
-                                      padding: '0.12rem 0.45rem',
-                                      borderRadius: '4px',
-                                      background: 'rgba(10, 179, 156, 0.12)',
-                                      color: '#0ab39c',
-                                      fontSize: '0.68rem',
-                                      fontWeight: 700,
-                                    }}
-                                    title={`Kode Pos ${targetKp} cocok dengan Master PTEN: ${ptenCity}`}
-                                  >
-                                    ✓ Cocok PTEN
-                                  </span>
-                                  <span style={{ fontSize: '0.66rem', color: '#059669', fontWeight: 600 }}>
-                                    {ptenCity}
-                                  </span>
-                                </div>
-                              );
-                            }
-                            if (ptenStatus === 'DIFFERENT' || ptenStatus === 'TIDAK COCOK') {
-                              return (
-                                <div
-                                  style={{
-                                    display: 'inline-flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    gap: '0.2rem',
-                                    background: 'rgba(245, 158, 11, 0.08)',
-                                    padding: '0.3rem 0.5rem',
-                                    borderRadius: '5px',
-                                    border: '1px solid rgba(245, 158, 11, 0.25)',
-                                    minWidth: '150px',
-                                  }}
-                                  title={`Perbedaan Wilayah: Di File Excel "${fileCity}", sedangkan Master PTEN untuk Kode Pos ${targetKp} adalah "${ptenCity}"`}
-                                >
-                                  <span
-                                    style={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: '0.2rem',
-                                      padding: '0.06rem 0.38rem',
-                                      borderRadius: '3px',
-                                      background: 'rgba(217, 119, 6, 0.15)',
-                                      color: '#b45309',
-                                      fontSize: '0.66rem',
-                                      fontWeight: 700,
-                                    }}
-                                  >
-                                    ⚠️ Beda Kota ({ptenCity})
-                                  </span>
-                                  <div style={{ fontSize: '0.64rem', lineHeight: 1.3, textAlign: 'left', width: '100%' }}>
-                                    <div style={{ color: '#64748b' }}>
-                                      File: <strong style={{ color: '#d97706' }}>{fileCity}</strong>
-                                    </div>
-                                    <div style={{ color: '#64748b' }}>
-                                      PTEN: <strong style={{ color: '#059669' }}>{ptenCity}</strong>
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            }
-                            return (
-                              <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '0.15rem' }}>
-                                <span
-                                  style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    padding: '0.12rem 0.4rem',
-                                    borderRadius: '4px',
-                                    background: '#f3f6f9',
-                                    color: '#878a99',
-                                    fontSize: '0.66rem',
-                                    fontWeight: 500,
-                                  }}
-                                  title="Kode pos belum terdaftar di Master PTEN"
-                                >
-                                  Belum di PTEN
-                                </span>
-                                <span style={{ fontSize: '0.62rem', color: '#adb5bd' }}>
-                                  KP: {targetKp}
-                                </span>
-                              </div>
+                            return isMatch ? (
+                              <span
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.25rem',
+                                  fontSize: '0.68rem',
+                                  fontWeight: 700,
+                                  color: '#059669',
+                                  background: 'rgba(10, 179, 156, 0.12)',
+                                  border: '1px solid rgba(10, 179, 156, 0.3)',
+                                  borderRadius: '4px',
+                                  padding: '0.15rem 0.45rem',
+                                  whiteSpace: 'nowrap',
+                                }}
+                                title={`Kode Pos ${targetKp} cocok di database PTEN`}
+                              >
+                                <CheckCircle2 size={11} color="#059669" /> Match PTEN
+                              </span>
+                            ) : (
+                              <span
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.25rem',
+                                  fontSize: '0.68rem',
+                                  fontWeight: 600,
+                                  color: '#6b7280',
+                                  background: '#f3f4f6',
+                                  border: '1px solid #e5e7eb',
+                                  borderRadius: '4px',
+                                  padding: '0.15rem 0.45rem',
+                                  whiteSpace: 'nowrap',
+                                }}
+                                title={`Kode Pos ${targetKp || '-'} tidak ada data di database PTEN`}
+                              >
+                                Tidak Ada Data PTEN
+                              </span>
                             );
                           })()}
                         </td>

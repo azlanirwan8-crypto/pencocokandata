@@ -1210,6 +1210,7 @@ export const App: React.FC = () => {
                     onRevertRecommendation={handleRevertRecommendation}
                     wilayahSettings={wilayahSettings}
                     roleMappingList={roleMappingList}
+                    ptenList={ptenList}
                   />
 
                   <ExportAction
