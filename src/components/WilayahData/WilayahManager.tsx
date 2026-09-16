@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Map,
   Plus,
@@ -9,11 +9,23 @@ import {
   CheckCircle2,
   Info,
   Sparkles,
-  ArrowRight,
-  Database
+  Database,
+  Search,
+  Download,
+  Upload,
+  Edit,
+  Eye,
+  RefreshCw,
+  Building2,
+  MapPin,
+  Phone,
+  Layers,
+  X
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import type { WilayahSetting } from '../../types';
-import { loadWilayahFromNeon, saveWilayahToNeon } from '../../utils/neonSync';
+import { DEFAULT_WILAYAH_DATA, normalizeWilayahItem } from '../../utils/defaultWilayah';
+import { loadWilayahFromNeon, saveWilayahToNeon, checkNeonStatus } from '../../utils/neonSync';
 
 interface WilayahManagerProps {
   initialSettings?: WilayahSetting[];
@@ -24,194 +36,568 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
   initialSettings,
   onSettingsSaved,
 }) => {
-  const [settings, setSettings] = useState<WilayahSetting[]>(initialSettings || []);
-  const [isLoading, setIsLoading] = useState<boolean>(!initialSettings || initialSettings.length === 0);
+  const [settings, setSettings] = useState<WilayahSetting[]>(() => {
+    if (initialSettings && initialSettings.length > 0) {
+      return initialSettings.map((s, idx) => normalizeWilayahItem(s, idx));
+    }
+    return DEFAULT_WILAYAH_DATA;
+  });
+
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [selectedProvinsi, setSelectedProvinsi] = useState<string>('ALL');
+  const [isCloudConnected, setIsCloudConnected] = useState<boolean>(false);
 
+  // Modals state
+  const [modalMode, setModalMode] = useState<'create' | 'edit' | 'detail' | null>(null);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [formData, setFormData] = useState<WilayahSetting>({
+    wilayah: '',
+    sandiCabang: '',
+    branchCode: '',
+    kodeCabang: '',
+    namaOutlet: '',
+    statusOutlet: 'KANWIL',
+    alamat: '',
+    kodePos: '',
+    kelurahan: '',
+    kecamatan: '',
+    dati2: '',
+    provinsi: '',
+    telp: '',
+    kodeWilayah: '',
+    keterangan: '',
+  });
+
+  const [deleteTargetIndex, setDeleteTargetIndex] = useState<number | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync initialSettings if updated externally
   useEffect(() => {
     if (initialSettings && initialSettings.length > 0) {
-      setSettings(initialSettings);
-      setIsLoading(false);
-      return;
+      setSettings(initialSettings.map((s, idx) => normalizeWilayahItem(s, idx)));
     }
+  }, [initialSettings]);
 
-    const fetchSettings = async () => {
-      setIsLoading(true);
-      setError(null);
+  // Initial cloud check & auto-load/push on mount
+  useEffect(() => {
+    let isMounted = true;
+    const initData = async () => {
       try {
-        const data = await loadWilayahFromNeon();
-        if (data && Array.isArray(data)) {
-          setSettings(data);
-          onSettingsSaved?.(data);
-        } else {
-          setSettings([]);
+        const status = await checkNeonStatus();
+        if (isMounted) setIsCloudConnected(status.connected);
+
+        const cloudData = await loadWilayahFromNeon();
+        if (cloudData && Array.isArray(cloudData) && cloudData.length > 0) {
+          const normalized = cloudData.map((s, idx) => normalizeWilayahItem(s, idx));
+          if (isMounted) {
+            setSettings(normalized);
+            onSettingsSaved?.(normalized);
+          }
+        } else if (status.connected) {
+          // Cloud has no data yet: automatically push the complete 17 default records to cloud!
+          await saveWilayahToNeon(DEFAULT_WILAYAH_DATA);
+          if (isMounted) {
+            setSettings(DEFAULT_WILAYAH_DATA);
+            onSettingsSaved?.(DEFAULT_WILAYAH_DATA);
+          }
         }
       } catch (err) {
-        console.error('Gagal mengambil data wilayah:', err);
-        setError('Gagal memuat data wilayah dari server.');
-      } finally {
-        setIsLoading(false);
+        console.warn('Initial cloud wilayah sync:', err);
       }
     };
 
-    fetchSettings();
-  }, [initialSettings]);
+    initData();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
-  const handleAdd = () => {
-    setSettings(prev => [...prev, { kodeWilayah: '', keterangan: '' }]);
-  };
+  // Filtered settings
+  const filteredSettings = useMemo(() => {
+    return settings.filter((item) => {
+      const matchProvinsi =
+        selectedProvinsi === 'ALL' ||
+        item.provinsi?.toLowerCase() === selectedProvinsi.toLowerCase();
 
-  const handleRemove = (index: number) => {
-    setSettings(prev => prev.filter((_, i) => i !== index));
-  };
+      if (!matchProvinsi) return false;
 
-  const handleChange = (index: number, field: keyof WilayahSetting, value: string) => {
-    setSettings(prev => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], [field]: value };
-      return updated;
+      if (!searchTerm.trim()) return true;
+      const term = searchTerm.toLowerCase();
+
+      return (
+        item.wilayah?.toLowerCase().includes(term) ||
+        item.sandiCabang?.toLowerCase().includes(term) ||
+        item.branchCode?.toLowerCase().includes(term) ||
+        item.kodeCabang?.toLowerCase().includes(term) ||
+        item.namaOutlet?.toLowerCase().includes(term) ||
+        item.alamat?.toLowerCase().includes(term) ||
+        item.kodePos?.toLowerCase().includes(term) ||
+        item.kelurahan?.toLowerCase().includes(term) ||
+        item.kecamatan?.toLowerCase().includes(term) ||
+        item.dati2?.toLowerCase().includes(term) ||
+        item.provinsi?.toLowerCase().includes(term) ||
+        item.telp?.toLowerCase().includes(term)
+      );
     });
-  };
+  }, [settings, searchTerm, selectedProvinsi]);
 
-  const handleLoadSamples = () => {
-    const samples: WilayahSetting[] = [
-      { kodeWilayah: '01', keterangan: 'Wilayah 1' },
-      { kodeWilayah: '02', keterangan: 'Wilayah 2' },
-      { kodeWilayah: '03', keterangan: 'Wilayah 3' },
-      { kodeWilayah: '04', keterangan: 'Wilayah 4' },
-      { kodeWilayah: '05', keterangan: 'Wilayah 5' },
-    ];
-    setSettings(samples);
-  };
+  // Unique provinsi list for filter
+  const provinsiList = useMemo(() => {
+    const list = Array.from(
+      new Set(settings.map((s) => s.provinsi).filter(Boolean))
+    ).sort();
+    return list;
+  }, [settings]);
 
-  const handleSave = async () => {
-    // Validasi baris kosong
-    const emptyRows = settings.filter(
-      s => !s.kodeWilayah.trim() || !s.keterangan.trim()
-    );
-
-    if (emptyRows.length > 0) {
-      setError('Kode Wilayah dan Keterangan tidak boleh ada yang kosong.');
-      setTimeout(() => setError(null), 4000);
-      return;
-    }
-
+  // Handle saving all current data to database
+  const handleSaveToDatabase = async (currentSettings = settings) => {
     setIsSaving(true);
     setError(null);
     setSuccessMsg(null);
 
-    const success = await saveWilayahToNeon(settings);
-    setIsSaving(false);
+    try {
+      const normalized = currentSettings.map((s, idx) => normalizeWilayahItem(s, idx));
+      const success = await saveWilayahToNeon(normalized);
 
-    if (success) {
-      onSettingsSaved?.(settings);
-      setSuccessMsg('Data setting wilayah berhasil disimpan ke database cloud!');
-      setTimeout(() => setSuccessMsg(null), 3500);
-    } else {
-      setError('Gagal menyimpan perubahan ke Neon database.');
-      setTimeout(() => setError(null), 4000);
+      // Save locally regardless
+      onSettingsSaved?.(normalized);
+
+      if (success) {
+        setIsCloudConnected(true);
+        setSuccessMsg(`Berhasil menyimpan ${normalized.length} data wilayah ke Database Cloud!`);
+      } else {
+        setSuccessMsg(`Data wilayah tersimpan secara lokal di browser (${normalized.length} data).`);
+      }
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: any) {
+      setError(err.message || 'Gagal menyimpan data wilayah.');
+      setTimeout(() => setError(null), 5000);
+    } finally {
+      setIsSaving(false);
     }
   };
 
+  // Open Create Modal
+  const handleOpenCreate = () => {
+    const nextWilayahNum = settings.length > 0
+      ? Math.max(...settings.map((s) => parseInt(s.wilayah) || 0)) + 1
+      : 1;
+    const digit2 = String(nextWilayahNum).padStart(2, '0');
+
+    setFormData({
+      wilayah: String(nextWilayahNum),
+      sandiCabang: `6${digit2}`,
+      branchCode: `6${digit2}6${digit2}`,
+      kodeCabang: '',
+      namaOutlet: `WILAYAH ${digit2} - `,
+      statusOutlet: 'KANWIL',
+      alamat: '',
+      kodePos: '',
+      kelurahan: '',
+      kecamatan: '',
+      dati2: '',
+      provinsi: '',
+      telp: '',
+      kodeWilayah: digit2,
+      keterangan: `WILAYAH ${digit2}`,
+    });
+    setEditingIndex(null);
+    setModalMode('create');
+  };
+
+  // Open Edit Modal
+  const handleOpenEdit = (index: number) => {
+    const item = settings[index];
+    setFormData({ ...item });
+    setEditingIndex(index);
+    setModalMode('edit');
+  };
+
+  // Open Detail Modal
+  const handleOpenDetail = (index: number) => {
+    const item = settings[index];
+    setFormData({ ...item });
+    setEditingIndex(index);
+    setModalMode('detail');
+  };
+
+  // Submit Modal Form (Create / Edit)
+  const handleSubmitForm = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.wilayah.trim() || !formData.namaOutlet.trim()) {
+      alert('Kolom Wilayah dan Nama Outlet wajib diisi!');
+      return;
+    }
+
+    const normalized = normalizeWilayahItem(formData);
+    let updatedList: WilayahSetting[];
+
+    if (modalMode === 'edit' && editingIndex !== null) {
+      updatedList = settings.map((item, i) => (i === editingIndex ? normalized : item));
+    } else {
+      updatedList = [...settings, normalized];
+    }
+
+    setSettings(updatedList);
+    setModalMode(null);
+    handleSaveToDatabase(updatedList);
+  };
+
+  // Delete Record
+  const handleConfirmDelete = () => {
+    if (deleteTargetIndex === null) return;
+    const updated = settings.filter((_, idx) => idx !== deleteTargetIndex);
+    setSettings(updated);
+    setDeleteTargetIndex(null);
+    handleSaveToDatabase(updated);
+  };
+
+  // Reset to Default Standard 17 Records
+  const handleResetToDefault = () => {
+    setSettings(DEFAULT_WILAYAH_DATA);
+    setShowResetConfirm(false);
+    handleSaveToDatabase(DEFAULT_WILAYAH_DATA);
+  };
+
+  // Export to Excel
+  const handleExportExcel = () => {
+    const exportData = settings.map((item) => ({
+      Wilayah: item.wilayah,
+      'Sandi Cabang': item.sandiCabang,
+      'Branch Code': item.branchCode,
+      'Kode Cabang': item.kodeCabang,
+      'Nama Outlet': item.namaOutlet,
+      'Status Outlet': item.statusOutlet,
+      ALAMAT: item.alamat,
+      'KODE POS': item.kodePos,
+      Kelurahan: item.kelurahan,
+      Kecamatan: item.kecamatan,
+      'Dati II': item.dati2,
+      Provinsi: item.provinsi,
+      Telp: item.telp,
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Setting_Wilayah');
+    XLSX.writeFile(wb, `Data_Setting_Wilayah_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  // Import from Excel
+  const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsName = wb.SheetNames[0];
+        const ws = wb.Sheets[wsName];
+        const rawJson: any[] = XLSX.utils.sheet_to_json(ws);
+
+        if (!rawJson || rawJson.length === 0) {
+          alert('Berkas Excel kosong atau tidak terbaca.');
+          return;
+        }
+
+        const imported: WilayahSetting[] = rawJson.map((row, idx) => {
+          return normalizeWilayahItem({
+            wilayah: String(row['Wilayah'] || row['wilayah'] || idx + 1),
+            sandiCabang: String(row['Sandi Cabang'] || row['sandiCabang'] || row['Sandi'] || ''),
+            branchCode: String(row['Branch Code'] || row['branchCode'] || ''),
+            kodeCabang: String(row['Kode Cabang'] || row['kodeCabang'] || ''),
+            namaOutlet: String(row['Nama Outlet'] || row['namaOutlet'] || ''),
+            statusOutlet: String(row['Status Outlet'] || row['statusOutlet'] || 'KANWIL'),
+            alamat: String(row['ALAMAT'] || row['alamat'] || row['Alamat'] || ''),
+            kodePos: String(row['KODE POS'] || row['kodePos'] || row['Kode Pos'] || ''),
+            kelurahan: String(row['Kelurahan'] || row['kelurahan'] || ''),
+            kecamatan: String(row['Kecamatan'] || row['kecamatan'] || ''),
+            dati2: String(row['Dati II'] || row['dati2'] || row['Kota'] || ''),
+            provinsi: String(row['Provinsi'] || row['provinsi'] || ''),
+            telp: String(row['Telp'] || row['telp'] || row['Telepon'] || ''),
+          }, idx);
+        });
+
+        setSettings(imported);
+        handleSaveToDatabase(imported);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      } catch (err: any) {
+        alert('Gagal membaca format file Excel: ' + err.message);
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-      {/* Top Header Card (Velzon Section Header) */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '2rem' }}>
+      {/* Top Header Card */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
-          gap: '0.75rem',
-          marginBottom: '0.1rem',
+          gap: '0.85rem',
+          background: '#ffffff',
+          padding: '1.15rem 1.4rem',
+          borderRadius: '8px',
+          border: '1px solid #e9ebec',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
           <div
             style={{
-              width: '34px',
-              height: '34px',
-              borderRadius: '5px',
-              background: 'rgba(64, 81, 137, 0.1)',
+              width: '42px',
+              height: '42px',
+              borderRadius: '8px',
+              background: 'linear-gradient(135deg, rgba(64, 81, 137, 0.15) 0%, rgba(10, 179, 156, 0.15) 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: '#405189',
+              border: '1px solid rgba(64, 81, 137, 0.2)',
             }}
           >
-            <Map size={17} />
+            <Map size={22} />
           </div>
           <div>
-            <h3 style={{ fontSize: '0.96rem', fontWeight: 600, color: '#212529', margin: 0 }}>
-              Setting Wilayah
-            </h3>
-            <p style={{ fontSize: '0.76rem', color: '#878a99', margin: 0 }}>
-              Kelola pemetaan 2 digit kode branch ke nama wilayah untuk pengayaan otomatis file Excel.
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <h3 style={{ fontSize: '1.08rem', fontWeight: 700, color: '#212529', margin: 0 }}>
+                Master Setting Wilayah & Kanwil
+              </h3>
+              <span
+                style={{
+                  fontSize: '0.7rem',
+                  fontWeight: 600,
+                  padding: '0.15rem 0.5rem',
+                  borderRadius: '12px',
+                  background: isCloudConnected ? 'rgba(10, 179, 156, 0.12)' : 'rgba(240, 101, 72, 0.12)',
+                  color: isCloudConnected ? '#0ab39c' : '#f06548',
+                  border: isCloudConnected ? '1px solid rgba(10, 179, 156, 0.3)' : '1px solid rgba(240, 101, 72, 0.3)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                }}
+              >
+                <Database size={10} />
+                <span>{isCloudConnected ? 'Cloud DB Terhubung' : 'Lokal / Offline'}</span>
+              </span>
+            </div>
+            <p style={{ fontSize: '0.78rem', color: '#878a99', margin: '0.2rem 0 0' }}>
+              Kelola daftar lengkap 17 Kantor Wilayah, alamat, kode pos, dati II, dan pemetaan kode branch untuk sistem pencocokan data.
             </p>
           </div>
         </div>
 
-        {/* Action Buttons Toolbar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
-          {settings.length === 0 && !isLoading && (
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={handleLoadSamples}
-              title="Isi dengan contoh wilayah 1-5"
-              style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-            >
-              <Sparkles size={12} style={{ color: '#d68b0c' }} />
-              <span>Muat Contoh</span>
-            </button>
-          )}
+        {/* Top Actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImportExcel}
+            accept=".xlsx, .xls, .csv"
+            style={{ display: 'none' }}
+          />
 
           <button
             type="button"
             className="btn btn-outline btn-sm"
-            onClick={handleAdd}
+            onClick={() => fileInputRef.current?.click()}
+            title="Import berkas Excel data wilayah"
             style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
           >
-            <Plus size={13} />
-            <span>Tambah Wilayah</span>
+            <Upload size={13} />
+            <span>Impor Excel</span>
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={handleExportExcel}
+            title="Export daftar wilayah ke file Excel"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+          >
+            <Download size={13} />
+            <span>Ekspor Excel</span>
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={() => setShowResetConfirm(true)}
+            title="Kembalikan ke data 17 wilayah standar"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#d68b0c' }}
+          >
+            <RefreshCw size={13} />
+            <span>Reset Standar</span>
           </button>
 
           <button
             type="button"
             className="btn btn-primary btn-sm"
-            onClick={handleSave}
-            disabled={isLoading || isSaving}
+            onClick={handleOpenCreate}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+          >
+            <Plus size={14} />
+            <span>Tambah Wilayah</span>
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-success btn-sm"
+            onClick={() => handleSaveToDatabase()}
+            disabled={isSaving}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '0.35rem',
-              padding: '0.32rem 0.85rem',
+              backgroundColor: '#0ab39c',
+              borderColor: '#0ab39c',
+              color: '#ffffff',
             }}
           >
             {isSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-            <span>{isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}</span>
+            <span>{isSaving ? 'Menyimpan...' : 'Simpan & Push DB'}</span>
           </button>
         </div>
       </div>
 
-      {/* Alert Notifications */}
+      {/* KPI Stats Cards */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: '0.85rem',
+        }}
+      >
+        <div className="glass-card" style={{ padding: '0.9rem 1.15rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+          <div
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '8px',
+              background: 'rgba(64, 81, 137, 0.1)',
+              color: '#405189',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Building2 size={20} />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.72rem', color: '#878a99', fontWeight: 600, textTransform: 'uppercase' }}>
+              Total Kantor Wilayah
+            </div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#212529' }}>
+              {settings.length} <span style={{ fontSize: '0.75rem', fontWeight: 400, color: '#878a99' }}>Kanwil</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="glass-card" style={{ padding: '0.9rem 1.15rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+          <div
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '8px',
+              background: 'rgba(10, 179, 156, 0.1)',
+              color: '#0ab39c',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <MapPin size={20} />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.72rem', color: '#878a99', fontWeight: 600, textTransform: 'uppercase' }}>
+              Cakupan Provinsi
+            </div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#212529' }}>
+              {provinsiList.length} <span style={{ fontSize: '0.75rem', fontWeight: 400, color: '#878a99' }}>Provinsi</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="glass-card" style={{ padding: '0.9rem 1.15rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+          <div
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '8px',
+              background: 'rgba(41, 156, 219, 0.1)',
+              color: '#299cdb',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Layers size={20} />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.72rem', color: '#878a99', fontWeight: 600, textTransform: 'uppercase' }}>
+              Rentang Sandi Cabang
+            </div>
+            <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#212529', fontFamily: 'var(--font-mono)' }}>
+              {settings.length > 0
+                ? `${settings[0].sandiCabang || '601'} - ${settings[settings.length - 1].sandiCabang || '618'}`
+                : '-'}
+            </div>
+          </div>
+        </div>
+
+        <div className="glass-card" style={{ padding: '0.9rem 1.15rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+          <div
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '8px',
+              background: 'rgba(247, 184, 75, 0.12)',
+              color: '#f7b84b',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Sparkles size={20} />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.72rem', color: '#878a99', fontWeight: 600, textTransform: 'uppercase' }}>
+              Status Data
+            </div>
+            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#0ab39c', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <CheckCircle2 size={14} />
+              <span>Lengkap & Siap Pakai</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Notifications */}
       {error && (
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '0.5rem',
-            padding: '0.65rem 0.95rem',
-            borderRadius: '4px',
+            padding: '0.75rem 1rem',
+            borderRadius: '6px',
             background: 'rgba(240, 101, 72, 0.08)',
             border: '1px solid rgba(240, 101, 72, 0.25)',
             color: '#f06548',
-            fontSize: '0.78rem',
+            fontSize: '0.82rem',
           }}
         >
-          <AlertCircle size={15} style={{ flexShrink: 0 }} />
+          <AlertCircle size={16} style={{ flexShrink: 0 }} />
           <span>{error}</span>
         </div>
       )}
@@ -222,295 +608,359 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
             display: 'flex',
             alignItems: 'center',
             gap: '0.5rem',
-            padding: '0.65rem 0.95rem',
-            borderRadius: '4px',
+            padding: '0.75rem 1rem',
+            borderRadius: '6px',
             background: 'rgba(10, 179, 156, 0.08)',
             border: '1px solid rgba(10, 179, 156, 0.25)',
             color: '#0ab39c',
-            fontSize: '0.78rem',
+            fontSize: '0.82rem',
           }}
         >
-          <CheckCircle2 size={15} style={{ flexShrink: 0 }} />
+          <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
           <span>{successMsg}</span>
         </div>
       )}
 
-      {/* Main Card Container (Velzon Glass Card) */}
-      <div className="glass-card" style={{ padding: '1rem 1.25rem' }}>
-        {/* Table Sub-header */}
+      {/* Main Table Card */}
+      <div className="glass-card" style={{ padding: '1.15rem 1.35rem' }}>
+        {/* Table Search & Filter Bar */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             flexWrap: 'wrap',
-            gap: '0.5rem',
-            marginBottom: '0.75rem',
+            gap: '0.75rem',
+            marginBottom: '1rem',
           }}
         >
-          <div style={{ fontSize: '0.8rem', color: '#878a99' }}>
-            Total <strong style={{ color: '#212529' }}>{settings.length}</strong> aturan pemetaan wilayah aktif.
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flex: 1, minWidth: '280px', maxWidth: '600px' }}>
+            {/* Search Input */}
+            <div style={{ position: 'relative', flex: 1 }}>
+              <Search
+                size={15}
+                style={{
+                  position: 'absolute',
+                  left: '10px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: '#878a99',
+                }}
+              />
+              <input
+                type="text"
+                placeholder="Cari wilayah, nama outlet, alamat, kota, provinsi, kode pos..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '0.45rem 0.65rem 0.45rem 2.1rem',
+                  fontSize: '0.8rem',
+                  borderRadius: '5px',
+                  border: '1px solid #ced4da',
+                  outline: 'none',
+                  background: '#ffffff',
+                }}
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  style={{
+                    position: 'absolute',
+                    right: '8px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#878a99',
+                    padding: '2px',
+                  }}
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+
+            {/* Filter Provinsi */}
+            <select
+              value={selectedProvinsi}
+              onChange={(e) => setSelectedProvinsi(e.target.value)}
+              style={{
+                padding: '0.45rem 0.65rem',
+                fontSize: '0.8rem',
+                borderRadius: '5px',
+                border: '1px solid #ced4da',
+                outline: 'none',
+                background: '#ffffff',
+                color: '#495057',
+                cursor: 'pointer',
+              }}
+            >
+              <option value="ALL">Semua Provinsi ({provinsiList.length})</option>
+              {provinsiList.map((prov) => (
+                <option key={prov} value={prov}>
+                  {prov}
+                </option>
+              ))}
+            </select>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.72rem', color: '#0ab39c' }}>
-            <Database size={12} />
-            <span>Tersinkronisasi otomatis dengan Database Cloud</span>
+
+          <div style={{ fontSize: '0.8rem', color: '#878a99' }}>
+            Menampilkan <strong style={{ color: '#212529' }}>{filteredSettings.length}</strong> dari{' '}
+            <strong style={{ color: '#212529' }}>{settings.length}</strong> data wilayah
           </div>
         </div>
 
-        {/* Loading Spinner */}
-        {isLoading ? (
-          <div
-            style={{
-              padding: '3rem 1rem',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.65rem',
-              color: '#878a99',
-            }}
-          >
-            <Loader2 size={24} className="animate-spin" style={{ color: '#405189' }} />
-            <span style={{ fontSize: '0.8rem' }}>Memuat konfigurasi wilayah...</span>
-          </div>
-        ) : settings.length === 0 ? (
-          /* Empty State */
-          <div
-            style={{
-              padding: '2.5rem 1.5rem',
-              textAlign: 'center',
-              borderRadius: '6px',
-              border: '1px dashed #ced4da',
-              background: '#f8f9fa',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '0.6rem',
-            }}
-          >
-            <div
-              style={{
-                width: '42px',
-                height: '42px',
-                borderRadius: '50%',
-                background: 'rgba(64, 81, 137, 0.08)',
-                color: '#405189',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Map size={20} />
-            </div>
-            <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#212529', margin: 0 }}>
-              Belum Ada Aturan Wilayah
-            </h4>
-            <p style={{ fontSize: '0.77rem', color: '#878a99', maxWidth: '380px', margin: 0 }}>
-              Tambahkan aturan digit branch code untuk secara otomatis memetakan baris data Excel ke wilayah terkait.
-            </p>
-            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.4rem' }}>
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                onClick={handleLoadSamples}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-              >
-                <Sparkles size={12} style={{ color: '#d68b0c' }} />
-                <span>Muat Contoh (01 s/d 05)</span>
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={handleAdd}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-              >
-                <Plus size={13} />
-                <span>Tambah Wilayah Baru</span>
-              </button>
-            </div>
-          </div>
-        ) : (
-          /* Velzon Modern Table */
-          <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px' }}>
-            <table className="modern-table">
-              <thead>
+        {/* Data Table */}
+        <div
+          className="table-container"
+          style={{
+            border: '1px solid #e9ebec',
+            borderRadius: '6px',
+            overflowX: 'auto',
+            maxHeight: '620px',
+          }}
+        >
+          <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
+              <tr>
+                <th style={{ width: '40px', textAlign: 'center' }}>No</th>
+                <th style={{ width: '70px', textAlign: 'center' }}>Wilayah</th>
+                <th style={{ width: '85px', textAlign: 'center' }}>Sandi Cabang</th>
+                <th style={{ width: '95px', textAlign: 'center' }}>Branch Code</th>
+                <th style={{ width: '80px', textAlign: 'center' }}>Kode Cabang</th>
+                <th style={{ minWidth: '180px' }}>Nama Outlet</th>
+                <th style={{ width: '80px', textAlign: 'center' }}>Status</th>
+                <th style={{ minWidth: '240px' }}>Alamat</th>
+                <th style={{ width: '75px', textAlign: 'center' }}>Kode Pos</th>
+                <th style={{ minWidth: '140px' }}>Kelurahan / Kec.</th>
+                <th style={{ minWidth: '130px' }}>Dati II (Kota)</th>
+                <th style={{ minWidth: '120px' }}>Provinsi</th>
+                <th style={{ minWidth: '110px' }}>Telepon</th>
+                <th style={{ width: '85px', textAlign: 'center' }}>Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredSettings.length === 0 ? (
                 <tr>
-                  <th style={{ width: '45px', textAlign: 'center' }}>No</th>
-                  <th style={{ width: '220px' }}>Kode Wilayah (Digit Ke 2 & 3)</th>
-                  <th>Keterangan Wilayah</th>
-                  <th style={{ width: '180px' }}>Preview Pencocokan</th>
-                  <th style={{ width: '65px', textAlign: 'center' }}>Aksi</th>
+                  <td colSpan={14} style={{ textAlign: 'center', padding: '2.5rem 1rem', color: '#878a99' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                      <MapPin size={28} style={{ color: '#ced4da' }} />
+                      <span>Tidak ada data wilayah yang cocok dengan filter pencarian.</span>
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {settings.map((item, idx) => {
-                  const sampleCode = item.kodeWilayah ? `6${item.kodeWilayah}0012` : '6XX0012';
+              ) : (
+                filteredSettings.map((item, idx) => {
+                  const originalIndex = settings.indexOf(item);
                   return (
                     <tr
                       key={idx}
                       style={{
-                        background: idx % 2 === 0 ? '#fafbfe' : '#ffffff',
+                        background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd',
+                        transition: 'background 0.15s',
                       }}
                     >
-                      {/* Kolom No */}
-                      <td className="code-cell" style={{ textAlign: 'center', color: '#878a99' }}>
+                      {/* No */}
+                      <td style={{ textAlign: 'center', color: '#878a99', fontWeight: 500 }}>
                         {idx + 1}
                       </td>
 
-                      {/* Kolom Kode Wilayah */}
-                      <td>
-                        <input
-                          type="text"
-                          value={item.kodeWilayah}
-                          onChange={(e) => handleChange(idx, 'kodeWilayah', e.target.value.trim().toUpperCase())}
-                          placeholder="Misal: 01"
-                          maxLength={5}
+                      {/* Wilayah */}
+                      <td style={{ textAlign: 'center' }}>
+                        <span
+                          className="badge badge-level1"
                           style={{
-                            width: '100%',
-                            maxWidth: '180px',
-                            padding: '0.32rem 0.6rem',
-                            fontSize: '0.78rem',
-                            fontFamily: 'var(--font-mono)',
                             fontWeight: 700,
-                            borderRadius: '4px',
-                            border: '1px solid #ced4da',
-                            background: '#ffffff',
-                            color: '#405189',
-                            outline: 'none',
-                            transition: 'border-color 0.15s',
+                            padding: '0.2rem 0.45rem',
+                            fontSize: '0.72rem',
                           }}
-                          onFocus={(e) => (e.target.style.borderColor = '#405189')}
-                          onBlur={(e) => (e.target.style.borderColor = '#ced4da')}
-                        />
+                        >
+                          {item.wilayah}
+                        </span>
                       </td>
 
-                      {/* Kolom Keterangan Wilayah */}
-                      <td>
-                        <input
-                          type="text"
-                          value={item.keterangan}
-                          onChange={(e) => handleChange(idx, 'keterangan', e.target.value)}
-                          placeholder="Misal: Wilayah 1"
+                      {/* Sandi Cabang */}
+                      <td style={{ textAlign: 'center' }}>
+                        <span className="code-cell" style={{ fontWeight: 600, color: '#405189' }}>
+                          {item.sandiCabang || '-'}
+                        </span>
+                      </td>
+
+                      {/* Branch Code */}
+                      <td style={{ textAlign: 'center' }}>
+                        <span
+                          className="code-cell"
                           style={{
-                            width: '100%',
-                            padding: '0.32rem 0.6rem',
-                            fontSize: '0.78rem',
-                            borderRadius: '4px',
-                            border: '1px solid #ced4da',
-                            background: '#ffffff',
-                            color: '#212529',
-                            outline: 'none',
-                            transition: 'border-color 0.15s',
+                            background: 'rgba(64, 81, 137, 0.08)',
+                            color: '#405189',
+                            fontWeight: 700,
                           }}
-                          onFocus={(e) => (e.target.style.borderColor = '#405189')}
-                          onBlur={(e) => (e.target.style.borderColor = '#ced4da')}
-                        />
+                        >
+                          {item.branchCode || '-'}
+                        </span>
                       </td>
 
-                      {/* Kolom Preview Visual */}
+                      {/* Kode Cabang */}
+                      <td style={{ textAlign: 'center' }}>
+                        <span className="badge badge-match" style={{ fontWeight: 600 }}>
+                          {item.kodeCabang || '-'}
+                        </span>
+                      </td>
+
+                      {/* Nama Outlet */}
                       <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.72rem' }}>
-                          <span
-                            className="code-cell"
+                        <strong style={{ color: '#212529', display: 'block' }}>{item.namaOutlet}</strong>
+                      </td>
+
+                      {/* Status Outlet */}
+                      <td style={{ textAlign: 'center' }}>
+                        <span
+                          style={{
+                            padding: '0.15rem 0.4rem',
+                            borderRadius: '3px',
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                            background: '#e2e5e8',
+                            color: '#495057',
+                          }}
+                        >
+                          {item.statusOutlet || 'KANWIL'}
+                        </span>
+                      </td>
+
+                      {/* Alamat */}
+                      <td title={item.alamat} style={{ maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {item.alamat || '-'}
+                      </td>
+
+                      {/* Kode Pos */}
+                      <td style={{ textAlign: 'center' }}>
+                        <span
+                          className="code-cell"
+                          style={{
+                            background: '#e8f7f5',
+                            color: '#0ab39c',
+                            fontWeight: 700,
+                          }}
+                        >
+                          {item.kodePos || '-'}
+                        </span>
+                      </td>
+
+                      {/* Kelurahan / Kecamatan */}
+                      <td>
+                        <div style={{ color: '#212529', fontWeight: 500 }}>{item.kelurahan || '-'}</div>
+                        <div style={{ fontSize: '0.7rem', color: '#878a99' }}>{item.kecamatan}</div>
+                      </td>
+
+                      {/* Dati II */}
+                      <td style={{ color: '#495057' }}>{item.dati2 || '-'}</td>
+
+                      {/* Provinsi */}
+                      <td>
+                        <span
+                          style={{
+                            background: '#eff2f7',
+                            padding: '0.15rem 0.4rem',
+                            borderRadius: '3px',
+                            fontSize: '0.72rem',
+                            color: '#495057',
+                          }}
+                        >
+                          {item.provinsi || '-'}
+                        </span>
+                      </td>
+
+                      {/* Telp */}
+                      <td style={{ fontSize: '0.72rem', color: '#6c757d' }}>{item.telp || '-'}</td>
+
+                      {/* Aksi */}
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenDetail(originalIndex)}
+                            title="Lihat Detail Wilayah"
                             style={{
-                              background: '#f3f6f9',
-                              padding: '0.12rem 0.35rem',
-                              borderRadius: '3px',
-                              border: '1px solid #e9ebec',
-                              fontSize: '0.72rem',
+                              background: 'rgba(41, 156, 219, 0.1)',
+                              border: '1px solid rgba(41, 156, 219, 0.25)',
+                              color: '#299cdb',
+                              borderRadius: '4px',
+                              padding: '0.22rem 0.35rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
                             }}
                           >
-                            {sampleCode}
-                          </span>
-                          <ArrowRight size={11} style={{ color: '#878a99' }} />
-                          <span className="badge badge-match">
-                            {item.keterangan || 'Wilayah'}
-                          </span>
+                            <Eye size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(originalIndex)}
+                            title="Edit Wilayah"
+                            style={{
+                              background: 'rgba(64, 81, 137, 0.1)',
+                              border: '1px solid rgba(64, 81, 137, 0.25)',
+                              color: '#405189',
+                              borderRadius: '4px',
+                              padding: '0.22rem 0.35rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <Edit size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTargetIndex(originalIndex)}
+                            title="Hapus Wilayah"
+                            style={{
+                              background: 'rgba(240, 101, 72, 0.1)',
+                              border: '1px solid rgba(240, 101, 72, 0.25)',
+                              color: '#f06548',
+                              borderRadius: '4px',
+                              padding: '0.22rem 0.35rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <Trash2 size={12} />
+                          </button>
                         </div>
-                      </td>
-
-                      {/* Kolom Hapus */}
-                      <td style={{ textAlign: 'center' }}>
-                        <button
-                          type="button"
-                          onClick={() => handleRemove(idx)}
-                          title="Hapus baris ini"
-                          style={{
-                            background: 'rgba(240, 101, 72, 0.08)',
-                            border: '1px solid rgba(240, 101, 72, 0.25)',
-                            color: '#f06548',
-                            borderRadius: '4px',
-                            padding: '0.28rem 0.45rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'all 0.15s ease',
-                          }}
-                          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(240, 101, 72, 0.18)')}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(240, 101, 72, 0.08)')}
-                        >
-                          <Trash2 size={12} />
-                        </button>
                       </td>
                     </tr>
                   );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Action Tambah Baris di Bawah Tabel */}
-        {settings.length > 0 && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginTop: '0.75rem',
-            }}
-          >
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={handleAdd}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-            >
-              <Plus size={12} />
-              <span>Tambah Baris</span>
-            </button>
-
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={handleSave}
-              disabled={isLoading || isSaving}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-            >
-              {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-              <span>Simpan Perubahan</span>
-            </button>
-          </div>
-        )}
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* Information Box (Velzon Info Banner) */}
+      {/* Logic Information Box */}
       <div
         style={{
           background: 'rgba(64, 81, 137, 0.04)',
           border: '1px solid rgba(64, 81, 137, 0.15)',
-          borderRadius: '6px',
-          padding: '0.85rem 1.15rem',
+          borderRadius: '8px',
+          padding: '1rem 1.25rem',
           display: 'flex',
           alignItems: 'flex-start',
-          gap: '0.75rem',
+          gap: '0.85rem',
         }}
       >
         <div
           style={{
-            width: '28px',
-            height: '28px',
+            width: '32px',
+            height: '32px',
             borderRadius: '50%',
             background: 'rgba(64, 81, 137, 0.1)',
             display: 'flex',
@@ -521,54 +971,644 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
             marginTop: '0.1rem',
           }}
         >
-          <Info size={15} />
+          <Info size={18} />
         </div>
-        <div style={{ flex: 1, fontSize: '0.78rem', color: '#495057', lineHeight: '1.5' }}>
-          <strong style={{ color: '#212529', display: 'block', marginBottom: '0.2rem', fontSize: '0.82rem' }}>
-            Cara Kerja Logika Pemetaan Wilayah:
+        <div style={{ flex: 1, fontSize: '0.8rem', color: '#495057', lineHeight: '1.5' }}>
+          <strong style={{ color: '#212529', display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem' }}>
+            Logika & Otomasi Pengayaan Wilayah Berdasarkan Branch Code:
           </strong>
-          <p style={{ margin: '0 0 0.4rem' }}>
-            Pada saat berkas Excel diunggah (baik Data Master maupun Data Target Cek), sistem akan secara otomatis memeriksa kolom{' '}
-            <strong style={{ color: '#212529' }}>Branch Code / Kode Cabang</strong>.
+          <p style={{ margin: '0 0 0.5rem' }}>
+            Saat data Excel diunggah (Data Target / Data Master), sistem secara otomatis mengekstrak 2 digit (digit ke-2 dan ke-3) dari kolom{' '}
+            <strong style={{ color: '#212529' }}>Branch Code</strong> atau <strong style={{ color: '#212529' }}>Sandi Cabang</strong>.
+            Contoh: <code style={{ color: '#405189', fontWeight: 700 }}>60115601</code> atau <code style={{ color: '#405189', fontWeight: 700 }}>601601</code> menghasilkan kode <code style={{ color: '#0ab39c', fontWeight: 700 }}>01</code>, yang otomatis memetakan baris ke <strong style={{ color: '#212529' }}>WILAYAH 01 - MEDAN</strong>.
           </p>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              flexWrap: 'wrap',
-              background: '#ffffff',
-              padding: '0.45rem 0.75rem',
-              borderRadius: '4px',
-              border: '1px solid #e9ebec',
-              width: 'fit-content',
-            }}
-          >
-            <span>Contoh Branch Code:</span>
-            <span
-              className="code-cell"
-              style={{
-                background: '#f3f6f9',
-                padding: '0.12rem 0.4rem',
-                borderRadius: '3px',
-                border: '1px solid #ced4da',
-              }}
-            >
-              6<span style={{ color: '#0ab39c', fontWeight: 800, textDecoration: 'underline' }}>01</span>15601
-            </span>
-            <ArrowRight size={13} style={{ color: '#878a99' }} />
-            <span>Diekstrak digit ke-2 & ke-3:</span>
-            <span className="badge badge-level1" style={{ fontSize: '0.72rem' }}>
-              01
-            </span>
-            <ArrowRight size={13} style={{ color: '#878a99' }} />
-            <span>Otomatis diisi Wilayah:</span>
-            <span className="badge badge-match" style={{ fontSize: '0.72rem' }}>
-              Wilayah 1
-            </span>
-          </div>
         </div>
       </div>
+
+      {/* MODAL: Tambah / Edit Wilayah */}
+      {(modalMode === 'create' || modalMode === 'edit') && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1050,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '8px',
+              width: '100%',
+              maxWidth: '680px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+              border: '1px solid #e9ebec',
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: '1rem 1.25rem',
+                borderBottom: '1px solid #e9ebec',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Map size={18} style={{ color: '#405189' }} />
+                <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#212529' }}>
+                  {modalMode === 'create' ? 'Tambah Data Wilayah Baru' : `Edit Data Wilayah (${formData.namaOutlet})`}
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalMode(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#878a99' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body / Form */}
+            <form onSubmit={handleSubmitForm} style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.85rem' }}>
+                {/* Wilayah */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
+                    Nomor Wilayah <span style={{ color: '#f06548' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.wilayah}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const d2 = val.padStart(2, '0');
+                      setFormData((prev) => ({
+                        ...prev,
+                        wilayah: val,
+                        kodeWilayah: d2,
+                        sandiCabang: prev.sandiCabang || `6${d2}`,
+                        branchCode: prev.branchCode || `6${d2}6${d2}`,
+                      }));
+                    }}
+                    placeholder="Misal: 1, 2, 14"
+                    style={{
+                      width: '100%',
+                      padding: '0.45rem 0.65rem',
+                      fontSize: '0.8rem',
+                      borderRadius: '4px',
+                      border: '1px solid #ced4da',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                {/* Sandi Cabang */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
+                    Sandi Cabang
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.sandiCabang}
+                    onChange={(e) => setFormData({ ...formData, sandiCabang: e.target.value })}
+                    placeholder="Misal: 601"
+                    style={{
+                      width: '100%',
+                      padding: '0.45rem 0.65rem',
+                      fontSize: '0.8rem',
+                      borderRadius: '4px',
+                      border: '1px solid #ced4da',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                {/* Branch Code */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
+                    Branch Code (6 Digit)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.branchCode}
+                    onChange={(e) => setFormData({ ...formData, branchCode: e.target.value })}
+                    placeholder="Misal: 601601"
+                    style={{
+                      width: '100%',
+                      padding: '0.45rem 0.65rem',
+                      fontSize: '0.8rem',
+                      borderRadius: '4px',
+                      border: '1px solid #ced4da',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                {/* Kode Cabang */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
+                    Kode Cabang
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.kodeCabang}
+                    onChange={(e) => setFormData({ ...formData, kodeCabang: e.target.value.toUpperCase() })}
+                    placeholder="Misal: WMD, WPD"
+                    style={{
+                      width: '100%',
+                      padding: '0.45rem 0.65rem',
+                      fontSize: '0.8rem',
+                      borderRadius: '4px',
+                      border: '1px solid #ced4da',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                {/* Nama Outlet */}
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
+                    Nama Outlet / Kanwil <span style={{ color: '#f06548' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.namaOutlet}
+                    onChange={(e) => setFormData({ ...formData, namaOutlet: e.target.value, keterangan: e.target.value })}
+                    placeholder="Misal: WILAYAH 01 - MEDAN"
+                    style={{
+                      width: '100%',
+                      padding: '0.45rem 0.65rem',
+                      fontSize: '0.8rem',
+                      borderRadius: '4px',
+                      border: '1px solid #ced4da',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                {/* Status Outlet */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
+                    Status Outlet
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.statusOutlet}
+                    onChange={(e) => setFormData({ ...formData, statusOutlet: e.target.value.toUpperCase() })}
+                    placeholder="KANWIL"
+                    style={{
+                      width: '100%',
+                      padding: '0.45rem 0.65rem',
+                      fontSize: '0.8rem',
+                      borderRadius: '4px',
+                      border: '1px solid #ced4da',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                {/* Kode Pos */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
+                    Kode Pos
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.kodePos}
+                    onChange={(e) => setFormData({ ...formData, kodePos: e.target.value })}
+                    placeholder="Misal: 20151"
+                    style={{
+                      width: '100%',
+                      padding: '0.45rem 0.65rem',
+                      fontSize: '0.8rem',
+                      borderRadius: '4px',
+                      border: '1px solid #ced4da',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                {/* Alamat */}
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
+                    Alamat Lengkap
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={formData.alamat}
+                    onChange={(e) => setFormData({ ...formData, alamat: e.target.value })}
+                    placeholder="Misal: JL. PEMUDA NO. 12, LANTAI IV MEDAN"
+                    style={{
+                      width: '100%',
+                      padding: '0.45rem 0.65rem',
+                      fontSize: '0.8rem',
+                      borderRadius: '4px',
+                      border: '1px solid #ced4da',
+                      outline: 'none',
+                      resize: 'vertical',
+                    }}
+                  />
+                </div>
+
+                {/* Kelurahan */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
+                    Kelurahan
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.kelurahan}
+                    onChange={(e) => setFormData({ ...formData, kelurahan: e.target.value })}
+                    placeholder="Misal: Aur"
+                    style={{
+                      width: '100%',
+                      padding: '0.45rem 0.65rem',
+                      fontSize: '0.8rem',
+                      borderRadius: '4px',
+                      border: '1px solid #ced4da',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                {/* Kecamatan */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
+                    Kecamatan
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.kecamatan}
+                    onChange={(e) => setFormData({ ...formData, kecamatan: e.target.value })}
+                    placeholder="Misal: Medan Maimun"
+                    style={{
+                      width: '100%',
+                      padding: '0.45rem 0.65rem',
+                      fontSize: '0.8rem',
+                      borderRadius: '4px',
+                      border: '1px solid #ced4da',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                {/* Dati II */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
+                    Dati II (Kota / Kabupaten)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.dati2}
+                    onChange={(e) => setFormData({ ...formData, dati2: e.target.value })}
+                    placeholder="Misal: Kota Medan"
+                    style={{
+                      width: '100%',
+                      padding: '0.45rem 0.65rem',
+                      fontSize: '0.8rem',
+                      borderRadius: '4px',
+                      border: '1px solid #ced4da',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                {/* Provinsi */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
+                    Provinsi
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.provinsi}
+                    onChange={(e) => setFormData({ ...formData, provinsi: e.target.value })}
+                    placeholder="Misal: Sumatera Utara"
+                    style={{
+                      width: '100%',
+                      padding: '0.45rem 0.65rem',
+                      fontSize: '0.8rem',
+                      borderRadius: '4px',
+                      border: '1px solid #ced4da',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                {/* Telp */}
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
+                    Nomor Telepon
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.telp}
+                    onChange={(e) => setFormData({ ...formData, telp: e.target.value })}
+                    placeholder="Misal: 061-4538166"
+                    style={{
+                      width: '100%',
+                      padding: '0.45rem 0.65rem',
+                      fontSize: '0.8rem',
+                      borderRadius: '4px',
+                      border: '1px solid #ced4da',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  gap: '0.5rem',
+                  marginTop: '0.5rem',
+                  paddingTop: '0.75rem',
+                  borderTop: '1px solid #e9ebec',
+                }}
+              >
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setModalMode(null)}
+                >
+                  Batal
+                </button>
+                <button type="submit" className="btn btn-primary btn-sm">
+                  {modalMode === 'create' ? 'Tambah Data' : 'Simpan Perubahan'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Detail View */}
+      {modalMode === 'detail' && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1050,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '8px',
+              width: '100%',
+              maxWidth: '560px',
+              boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+              border: '1px solid #e9ebec',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                padding: '1rem 1.25rem',
+                borderBottom: '1px solid #e9ebec',
+                background: '#fafbfe',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Building2 size={18} style={{ color: '#405189' }} />
+                <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#212529' }}>
+                  {formData.namaOutlet}
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalMode(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#878a99' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.8rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                <div>
+                  <span style={{ color: '#878a99', display: 'block', fontSize: '0.72rem' }}>Wilayah</span>
+                  <span className="badge badge-level1" style={{ fontSize: '0.75rem' }}>{formData.wilayah}</span>
+                </div>
+                <div>
+                  <span style={{ color: '#878a99', display: 'block', fontSize: '0.72rem' }}>Kode Cabang</span>
+                  <span className="badge badge-match" style={{ fontSize: '0.75rem' }}>{formData.kodeCabang || '-'}</span>
+                </div>
+                <div>
+                  <span style={{ color: '#878a99', display: 'block', fontSize: '0.72rem' }}>Sandi Cabang</span>
+                  <strong style={{ fontFamily: 'var(--font-mono)' }}>{formData.sandiCabang || '-'}</strong>
+                </div>
+                <div>
+                  <span style={{ color: '#878a99', display: 'block', fontSize: '0.72rem' }}>Branch Code</span>
+                  <strong style={{ fontFamily: 'var(--font-mono)' }}>{formData.branchCode || '-'}</strong>
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid #e9ebec', paddingTop: '0.65rem' }}>
+                <span style={{ color: '#878a99', display: 'block', fontSize: '0.72rem' }}>Alamat Lengkap</span>
+                <div style={{ color: '#212529', fontWeight: 500, marginTop: '0.2rem' }}>{formData.alamat || '-'}</div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                <div>
+                  <span style={{ color: '#878a99', display: 'block', fontSize: '0.72rem' }}>Kelurahan / Kecamatan</span>
+                  <div>{formData.kelurahan || '-'} / {formData.kecamatan || '-'}</div>
+                </div>
+                <div>
+                  <span style={{ color: '#878a99', display: 'block', fontSize: '0.72rem' }}>Kode Pos</span>
+                  <span className="code-cell" style={{ background: '#e8f7f5', color: '#0ab39c', fontWeight: 700 }}>
+                    {formData.kodePos || '-'}
+                  </span>
+                </div>
+                <div>
+                  <span style={{ color: '#878a99', display: 'block', fontSize: '0.72rem' }}>Kota / Dati II</span>
+                  <div>{formData.dati2 || '-'}</div>
+                </div>
+                <div>
+                  <span style={{ color: '#878a99', display: 'block', fontSize: '0.72rem' }}>Provinsi</span>
+                  <div>{formData.provinsi || '-'}</div>
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid #e9ebec', paddingTop: '0.65rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Phone size={14} style={{ color: '#878a99' }} />
+                <span>Telepon: <strong>{formData.telp || '-'}</strong></span>
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: '0.75rem 1.25rem',
+                borderTop: '1px solid #e9ebec',
+                background: '#fafbfe',
+                display: 'flex',
+                justifyContent: 'flex-end',
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => setModalMode(null)}
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Konfirmasi Hapus */}
+      {deleteTargetIndex !== null && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1060,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '8px',
+              width: '100%',
+              maxWidth: '420px',
+              padding: '1.25rem',
+              boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+              textAlign: 'center',
+            }}
+          >
+            <div
+              style={{
+                width: '45px',
+                height: '45px',
+                borderRadius: '50%',
+                background: 'rgba(240, 101, 72, 0.1)',
+                color: '#f06548',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 0.75rem',
+              }}
+            >
+              <Trash2 size={22} />
+            </div>
+            <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#212529', margin: '0 0 0.4rem' }}>
+              Hapus Data Wilayah Ini?
+            </h4>
+            <p style={{ fontSize: '0.78rem', color: '#878a99', margin: '0 0 1.25rem' }}>
+              Data <strong style={{ color: '#212529' }}>{settings[deleteTargetIndex]?.namaOutlet}</strong> akan dihapus dari konfigurasi wilayah dan database.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => setDeleteTargetIndex(null)}
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger btn-sm"
+                onClick={handleConfirmDelete}
+                style={{ background: '#f06548', borderColor: '#f06548', color: '#ffffff' }}
+              >
+                Ya, Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Konfirmasi Reset Standar */}
+      {showResetConfirm && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1060,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '8px',
+              width: '100%',
+              maxWidth: '440px',
+              padding: '1.25rem',
+              boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+              textAlign: 'center',
+            }}
+          >
+            <div
+              style={{
+                width: '45px',
+                height: '45px',
+                borderRadius: '50%',
+                background: 'rgba(247, 184, 75, 0.15)',
+                color: '#d68b0c',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 0.75rem',
+              }}
+            >
+              <RefreshCw size={22} />
+            </div>
+            <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#212529', margin: '0 0 0.4rem' }}>
+              Reset ke 17 Wilayah Standar?
+            </h4>
+            <p style={{ fontSize: '0.78rem', color: '#878a99', margin: '0 0 1.25rem' }}>
+              Tindakan ini akan memulihkan konfigurasi lengkap 17 Kantor Wilayah (Wilayah 01 s/d Wilayah 18) sesuai master data resmi dan memperbarui database.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => setShowResetConfirm(false)}
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={handleResetToDefault}
+              >
+                Ya, Reset Standar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

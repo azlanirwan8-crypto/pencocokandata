@@ -21,8 +21,22 @@ export interface MasterRow {
 }
 
 export interface WilayahSetting {
-  kodeWilayah: string;
-  keterangan: string;
+  wilayah: string;
+  sandiCabang: string;
+  branchCode: string;
+  kodeCabang: string;
+  namaOutlet: string;
+  statusOutlet: string;
+  alamat: string;
+  kodePos: string;
+  kelurahan: string;
+  kecamatan: string;
+  dati2: string;
+  provinsi: string;
+  telp: string;
+  kodeWilayah?: string;
+  keterangan?: string;
+  [key: string]: any;
 }
 
 export interface TargetRow {

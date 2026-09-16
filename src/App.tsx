@@ -14,6 +14,8 @@ import { ProgressBar } from './components/WorkingEngine/ProgressBar';
 import { TargetDataGrid } from './components/WorkingEngine/TargetDataGrid';
 import { ExportAction } from './components/WorkingEngine/ExportAction';
 import { WilayahManager } from './components/WilayahData/WilayahManager';
+import { PTENManager } from './components/PTENData/PTENManager';
+import type { ActiveTab } from './components/Sidebar';
 
 import type { MasterRow, TargetRow, MatchingStats, WilayahStat, WilayahSetting } from './types';
 import type { RecommendationResult } from './utils/recommender';
@@ -33,10 +35,11 @@ import {
 } from './utils/neonSync';
 import { NeonDatabaseModal } from './components/NeonDatabaseModal';
 import { SnapshotModal, type WorkspaceSnapshot } from './components/SnapshotModal';
+import { DEFAULT_WILAYAH_DATA, normalizeWilayahItem } from './utils/defaultWilayah';
 import { Database, ShieldAlert, Filter, UploadCloud, RotateCcw, Layers } from 'lucide-react';
 
 export const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'master' | 'working' | 'wilayah'>('dashboard');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [masterSubTab, setMasterSubTab] = useState<'health' | 'grid'>('health');
   const [isNeonModalOpen, setIsNeonModalOpen] = useState<boolean>(false);
   const [isSnapshotModalOpen, setIsSnapshotModalOpen] = useState<boolean>(false);
@@ -70,7 +73,7 @@ export const App: React.FC = () => {
   const [targetRows, setTargetRows] = useState<TargetRow[]>([]);
   const [initialTargetCount, setInitialTargetCount] = useState<number>(0);
   const [targetFileName, setTargetFileName] = useState<string>('');
-  const [wilayahSettings, setWilayahSettings] = useState<WilayahSetting[]>([]);
+  const [wilayahSettings, setWilayahSettings] = useState<WilayahSetting[]>(DEFAULT_WILAYAH_DATA);
 
   // Matching Execution State
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -126,7 +129,11 @@ export const App: React.FC = () => {
         }
 
         if (savedWilayah && Array.isArray(savedWilayah) && savedWilayah.length > 0) {
-          setWilayahSettings(savedWilayah);
+          const normalized = savedWilayah.map((s, idx) => normalizeWilayahItem(s, idx));
+          setWilayahSettings(normalized);
+        } else {
+          setWilayahSettings(DEFAULT_WILAYAH_DATA);
+          setItem('wilayah_settings', DEFAULT_WILAYAH_DATA);
         }
       } catch (err) {
         console.warn('Local cache restore skipped:', err);
@@ -163,8 +170,9 @@ export const App: React.FC = () => {
           }
 
           if (neonWilayah.status === 'fulfilled' && neonWilayah.value && neonWilayah.value.length > 0) {
-            setWilayahSettings(neonWilayah.value);
-            setItem('wilayah_settings', neonWilayah.value);
+            const normalized = neonWilayah.value.map((s, idx) => normalizeWilayahItem(s, idx));
+            setWilayahSettings(normalized);
+            setItem('wilayah_settings', normalized);
           }
         } catch (cloudErr) {
           console.warn('Background Neon sync skipped:', cloudErr);
@@ -214,8 +222,9 @@ export const App: React.FC = () => {
     const set = new Set<string>();
     // 1. Dari Wilayah Settings (Setting Wilayah)
     wilayahSettings.forEach((s) => {
-      if (s.keterangan && s.keterangan.trim()) {
-        set.add(formatWilayahName(s.keterangan.trim()));
+      const label = s.keterangan || s.namaOutlet || (s.wilayah ? `Wilayah ${s.wilayah}` : '');
+      if (label && label.trim()) {
+        set.add(formatWilayahName(label.trim()));
       }
     });
     // 2. Dari Data Target
@@ -739,11 +748,14 @@ export const App: React.FC = () => {
 
   return (
     <div className="layout-wrapper">
-      {/* 1. Velzon Left Sidebar (Dashboard, Data Master, Data Cek) */}
+      {/* 1. Velzon Left Sidebar (Dashboard, Data Analisa, Data Master) */}
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         isCollapsed={isSidebarCollapsed}
+        masterCount={masterRows.length}
+        targetCount={targetRows.length}
+        wilayahCount={wilayahSettings.length}
       />
 
       {/* 2. Main Content Area */}
@@ -904,7 +916,7 @@ export const App: React.FC = () => {
                 </div>
                 <div>
                   <h3 style={{ fontSize: '0.96rem', fontWeight: 600, color: '#212529', margin: 0 }}>
-                    Data Master
+                    Master Data Cabang & Outlet
                   </h3>
                 </div>
               </div>
@@ -1124,7 +1136,7 @@ export const App: React.FC = () => {
                 </div>
                 <div>
                   <h3 style={{ fontSize: '0.92rem', fontWeight: 600, color: '#212529', margin: 0 }}>
-                    Data Target
+                    Data Analisa Pencocokan
                   </h3>
                 </div>
               </div>
@@ -1270,7 +1282,7 @@ export const App: React.FC = () => {
             )}
           </div>
 
-          {/* MENU 4: SETTING WILAYAH */}
+          {/* MENU MASTER: SETTING WILAYAH */}
           <div style={{ display: activeTab === 'wilayah' ? 'contents' : 'none' }}>
             <WilayahManager
               initialSettings={wilayahSettings}
@@ -1279,6 +1291,11 @@ export const App: React.FC = () => {
                 setItem('wilayah_settings', newSettings);
               }}
             />
+          </div>
+
+          {/* MENU MASTER: DATA PTEN */}
+          <div style={{ display: activeTab === 'pten' ? 'contents' : 'none' }}>
+            <PTENManager targetRows={targetRows} masterRows={masterRows} />
           </div>
         </main>
       </div>

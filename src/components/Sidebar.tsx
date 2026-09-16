@@ -1,17 +1,46 @@
-import React from 'react';
-import { LayoutDashboard, Database, FileCheck, Layers, Map } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+  LayoutDashboard,
+  Database,
+  FileCheck,
+  Layers,
+  Map,
+  ShieldCheck,
+  Store,
+  ChevronDown,
+  ChevronRight
+} from 'lucide-react';
+
+export type ActiveTab = 'dashboard' | 'working' | 'wilayah' | 'pten' | 'master';
 
 interface SidebarProps {
-  activeTab: 'dashboard' | 'master' | 'working' | 'wilayah';
-  setActiveTab: (tab: 'dashboard' | 'master' | 'working' | 'wilayah') => void;
+  activeTab: ActiveTab;
+  setActiveTab: (tab: ActiveTab) => void;
   isCollapsed: boolean;
+  masterCount?: number;
+  targetCount?: number;
+  wilayahCount?: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
   setActiveTab,
   isCollapsed,
+  masterCount,
+  targetCount,
+  wilayahCount,
 }) => {
+  // Is Data Master submenu expanded?
+  const isMasterActive = activeTab === 'master' || activeTab === 'wilayah' || activeTab === 'pten';
+  const [isMasterOpen, setIsMasterOpen] = useState<boolean>(true);
+
+  // Auto-expand Data Master when one of its children becomes active
+  useEffect(() => {
+    if (isMasterActive) {
+      setIsMasterOpen(true);
+    }
+  }, [isMasterActive]);
+
   return (
     <aside className={`app-sidebar ${isCollapsed ? 'collapsed' : ''}`} id="app-sidebar">
       {/* Brand Header */}
@@ -26,7 +55,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Navigation Menu */}
       <div className="sidebar-menu-wrapper">
-        <div className="sidebar-menu-title">MENU</div>
+        <div className="sidebar-menu-title">MENU UTAMA</div>
         <nav className="sidebar-nav">
           {/* 1. Dashboard */}
           <button
@@ -37,51 +66,108 @@ export const Sidebar: React.FC<SidebarProps> = ({
             title="Dashboard"
           >
             <div className="nav-item-icon">
-              <LayoutDashboard size={18} />
+              <LayoutDashboard size={17} />
             </div>
             <span className="nav-item-label">Dashboard</span>
           </button>
 
-          {/* 2. Data Master */}
-          <button
-            type="button"
-            className={`sidebar-nav-item ${activeTab === 'master' ? 'active' : ''}`}
-            onClick={() => setActiveTab('master')}
-            id="sidebar-btn-master"
-            title="Data Master"
-          >
-            <div className="nav-item-icon">
-              <Database size={18} />
-            </div>
-            <span className="nav-item-label">Data Master</span>
-          </button>
-
-          {/* 3. Data Cek */}
+          {/* 2. Data Analisa (Sebelumnya Data Cek) */}
           <button
             type="button"
             className={`sidebar-nav-item ${activeTab === 'working' ? 'active' : ''}`}
             onClick={() => setActiveTab('working')}
             id="sidebar-btn-working"
-            title="Data Cek"
+            title="Data Analisa Pencocokan"
           >
             <div className="nav-item-icon">
-              <FileCheck size={18} />
+              <FileCheck size={17} />
             </div>
-            <span className="nav-item-label">Data Cek</span>
+            <span className="nav-item-label">Data Analisa</span>
+            {targetCount !== undefined && targetCount > 0 && (
+              <span className="sidebar-badge badge-target">{targetCount}</span>
+            )}
           </button>
-          {/* 4. Setting Wilayah */}
-          <button
-            type="button"
-            className={`sidebar-nav-item ${activeTab === 'wilayah' ? 'active' : ''}`}
-            onClick={() => setActiveTab('wilayah')}
-            id="sidebar-btn-wilayah"
-            title="Setting Wilayah"
-          >
-            <div className="nav-item-icon">
-              <Map size={18} />
-            </div>
-            <span className="nav-item-label">Setting Wilayah</span>
-          </button>
+
+          {/* 3. Data Master (Collapsible Parent) */}
+          <div>
+            <button
+              type="button"
+              className={`sidebar-nav-item ${isMasterActive ? 'active' : ''}`}
+              onClick={() => {
+                if (!isMasterOpen) {
+                  setIsMasterOpen(true);
+                  // If opening and not already in a master tab, default to 'wilayah' or 'master'
+                  if (!isMasterActive) setActiveTab('wilayah');
+                } else {
+                  setIsMasterOpen(!isMasterOpen);
+                }
+              }}
+              id="sidebar-btn-datamaster"
+              title="Data Master (Wilayah, PTEN, Cabang)"
+              style={{ justifyContent: 'space-between' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <div className="nav-item-icon">
+                  <Database size={17} />
+                </div>
+                <span className="nav-item-label">Data Master</span>
+              </div>
+              <div style={{ color: '#8c9cd0', display: 'flex', alignItems: 'center' }}>
+                {isMasterOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </div>
+            </button>
+
+            {/* Submenu Data Master */}
+            {isMasterOpen && (
+              <div className="sidebar-submenu">
+                {/* 3.a. Wilayah */}
+                <button
+                  type="button"
+                  className={`sidebar-sub-item ${activeTab === 'wilayah' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('wilayah')}
+                  id="sidebar-btn-wilayah"
+                  title="Master Setting Wilayah"
+                >
+                  <Map size={14} />
+                  <span>Wilayah</span>
+                  {wilayahCount !== undefined && wilayahCount > 0 && (
+                    <span style={{ marginLeft: 'auto', fontSize: '0.65rem', opacity: 0.7 }}>
+                      {wilayahCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* 3.b. PTEN */}
+                <button
+                  type="button"
+                  className={`sidebar-sub-item ${activeTab === 'pten' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('pten')}
+                  id="sidebar-btn-pten"
+                  title="Master Data PTEN"
+                >
+                  <ShieldCheck size={14} />
+                  <span>PTEN</span>
+                </button>
+
+                {/* 3.c. Cabang (Pengganti Data Master) */}
+                <button
+                  type="button"
+                  className={`sidebar-sub-item ${activeTab === 'master' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('master')}
+                  id="sidebar-btn-master"
+                  title="Master Data Cabang & Outlet"
+                >
+                  <Store size={14} />
+                  <span>Cabang</span>
+                  {masterCount !== undefined && masterCount > 0 && (
+                    <span style={{ marginLeft: 'auto', fontSize: '0.65rem', opacity: 0.7 }}>
+                      {masterCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
         </nav>
       </div>
     </aside>

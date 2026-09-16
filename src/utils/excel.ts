@@ -256,9 +256,13 @@ export async function parseExcelFile<T>(file: File, wilayahSettings?: WilayahSet
           const branchCode = item['Branch Code'] || item['Kode Cabang'] || '';
           if (branchCode && branchCode.length >= 3 && wSettings.length > 0) {
             const digit2and3 = branchCode.substring(1, 3);
-            const matchedWilayah = wSettings.find(w => w.kodeWilayah === digit2and3);
+            const matchedWilayah = wSettings.find(w => {
+              const kw = w.kodeWilayah || (w.wilayah ? String(w.wilayah).padStart(2, '0') : '');
+              const sc = w.sandiCabang ? String(w.sandiCabang).substring(1, 3) : '';
+              return kw.toUpperCase() === digit2and3.toUpperCase() || sc.toUpperCase() === digit2and3.toUpperCase();
+            });
             if (matchedWilayah) {
-              item['Wilayah'] = matchedWilayah.keterangan;
+              item['Wilayah'] = matchedWilayah.keterangan || matchedWilayah.namaOutlet || `Wilayah ${matchedWilayah.wilayah || digit2and3}`;
             }
           }
 

@@ -526,14 +526,22 @@ export function extractWilayahFromBranchCode(
 
   if (bc.length >= 3) {
     const code = bc.substring(1, 3);
-    const rule = settings.find(
-      (s) => s.kodeWilayah.trim().toUpperCase() === code.toUpperCase()
-    );
-    if (rule && rule.keterangan) {
+    const rule = settings.find((s) => {
+      const kw = s.kodeWilayah || (s.wilayah ? String(s.wilayah).padStart(2, '0') : '');
+      const sc = s.sandiCabang ? s.sandiCabang.substring(1, 3) : '';
+      return (
+        (kw && kw.toUpperCase() === code.toUpperCase()) ||
+        (sc && sc.toUpperCase() === code.toUpperCase())
+      );
+    });
+
+    if (rule) {
+      const name = rule.keterangan || rule.namaOutlet || `Wilayah ${rule.wilayah || code}`;
+      const finalCode = rule.kodeWilayah || (rule.wilayah ? String(rule.wilayah).padStart(2, '0') : code);
       return {
         branchCode: bc,
-        kodeWilayah: rule.kodeWilayah,
-        wilayahName: rule.keterangan,
+        kodeWilayah: finalCode,
+        wilayahName: name,
         isMatched: true,
       };
     }
