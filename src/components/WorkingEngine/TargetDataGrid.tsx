@@ -3045,6 +3045,52 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                     </span>
                                   )}
                                 </div>
+
+                                {/* Penjelasan Langsung Apa yang Seharusnya Master Jika Beda */}
+                                {audit.hasMaster && audit.nameStatus === 'different' && (
+                                  <div
+                                    style={{
+                                      fontSize: '0.62rem',
+                                      fontWeight: 600,
+                                      color: '#b91c1c',
+                                      background: '#fee2e2',
+                                      padding: '0.1rem 0.35rem',
+                                      borderRadius: '3px',
+                                      border: '1px solid #fca5a5',
+                                      marginTop: '0.1rem',
+                                      maxWidth: '220px',
+                                      textAlign: 'center',
+                                      lineHeight: 1.25,
+                                      whiteSpace: 'normal',
+                                    }}
+                                    title={`Unit Role (${effectiveRoleOrg}) berbeda dengan data Master (${audit.masterDisplay})`}
+                                  >
+                                    Master: <strong>{audit.masterDisplay}</strong>
+                                  </div>
+                                )}
+
+                                {/* Keterangan Tambahan jika Cabang Induk Sama */}
+                                {audit.hasMaster && audit.nameStatus === 'parent_match' && (
+                                  <div
+                                    style={{
+                                      fontSize: '0.61rem',
+                                      fontWeight: 500,
+                                      color: '#0369a1',
+                                      background: '#e0f2fe',
+                                      padding: '0.08rem 0.35rem',
+                                      borderRadius: '3px',
+                                      border: '1px solid #bae6fd',
+                                      marginTop: '0.1rem',
+                                      maxWidth: '220px',
+                                      textAlign: 'center',
+                                      lineHeight: 1.2,
+                                      whiteSpace: 'normal',
+                                    }}
+                                    title={`Induk Cabang Sesuai: ${audit.masterDisplay}`}
+                                  >
+                                    Induk Master: {audit.masterDisplay}
+                                  </div>
+                                )}
                               </div>
                             );
                           })()}

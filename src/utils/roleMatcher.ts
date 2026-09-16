@@ -264,16 +264,40 @@ export function resolveRoleMappingForBranch(
   return null;
 }
 
+/**
+ * Standarisasi singkatan nama pahlawan, jalan, dan istilah umum perbankan di Indonesia
+ */
+export function normalizeIndonesianBranchAliases(str: string): string {
+  if (!str) return '';
+  let s = str.toUpperCase().trim();
+  s = s.replace(/\b(ACHMAD|ACH\.|ACH|AHM\.|AHM)\b/g, 'AHMAD');
+  s = s.replace(/\bA\s+YANI\b|\bA\.?\s*YANI\b/g, 'AHMAD YANI');
+  s = s.replace(/\b(JEND\.|JENDERAL|JEND)\b/g, '');
+  s = s.replace(/\b(LETJEN\.|LETJEN|MAYJEN\.|MAYJEN|KOLONEL|KOL\.)\b/g, '');
+  s = s.replace(/\b(M\.?\s*T\.?\s*HARYONO|MT\s+HARYONO)\b/g, 'MT HARYONO');
+  s = s.replace(/\b(T\.?\s*B\.?\s*SIMATUPANG|TB\s+SIMATUPANG)\b/g, 'TB SIMATUPANG');
+  s = s.replace(/\b(H\.?\s*R\.?\s*RASUNA\s+SAID|HR\s+RASUNA\s+SAID)\b/g, 'RASUNA SAID');
+  s = s.replace(/\b(M\.?\s*H\.?\s*THAMRIN|MH\s+THAMRIN)\b/g, 'THAMRIN');
+  s = s.replace(/\b(S\.?\s*PARMAN)\b/g, 'S PARMAN');
+  s = s.replace(/\b(GATSU|GATOT\s+SUBROTO)\b/g, 'GATOT SUBROTO');
+  s = s.replace(/\b(P\.?\s*DIPONEGORO)\b/g, 'DIPONEGORO');
+  s = s.replace(/\b(I\.?\s*BONJOL)\b/g, 'IMAM BONJOL');
+  s = s.replace(/\b(SULTAN\s+HASANUDDIN)\b/g, 'HASANUDDIN');
+  return s.replace(/\s+/g, ' ').trim();
+}
+
 export interface RoleMasterAuditResult {
   hasRole: boolean;
   hasMaster: boolean;
   isNameMatched: boolean;
   isTypeMatched: boolean;
   isFullyConsistent: boolean;
-  nameStatus: 'exact' | 'similar' | 'different' | 'none';
+  nameStatus: 'exact' | 'similar' | 'parent_match' | 'different' | 'none';
   typeStatus: 'match' | 'mismatch' | 'none';
   masterType: 'KC' | 'KCP' | 'UNKNOWN';
   roleType: 'KC' | 'KCP' | 'UNKNOWN';
+  masterDisplay: string;
+  roleDisplay: string;
   badgeLabel: string;
   badgeColor: string;
   badgeBg: string;
@@ -286,7 +310,7 @@ export interface RoleMasterAuditResult {
 /**
  * Membandingkan keselarasan Nama Outlet (Master), Status Outlet (Master), dan Cabang (Master)
  * dengan Data Mapping Role BNI (organisasiRole & tipeUnitRole).
- * Memberikan evaluasi ketat, warna status, dan tooltip peringatan jika terdapat ketidakcocokan.
+ * Memberikan evaluasi ketat, warna status, informasi yang jelas (apa master seharusnya), dan tooltip.
  */
 export function auditRoleMasterConsistency(row: {
   'Nama Outlet'?: string;
@@ -302,6 +326,9 @@ export function auditRoleMasterConsistency(row: {
   const roleOrgRaw = String(row.organisasiRole || '').trim();
   const roleTipeRaw = String(row.tipeUnitRole || '').trim();
 
+  const masterDisplay = [masterCabangRaw, masterOutletRaw].filter(Boolean).join(' - ') || '-';
+  const roleDisplay = roleOrgRaw || '-';
+
   const hasMaster = Boolean(masterOutletRaw || masterCabangRaw);
   const hasRole = Boolean(roleOrgRaw);
 
@@ -316,6 +343,8 @@ export function auditRoleMasterConsistency(row: {
       typeStatus: 'none',
       masterType: 'UNKNOWN',
       roleType: 'UNKNOWN',
+      masterDisplay,
+      roleDisplay,
       badgeLabel: '-',
       badgeColor: '#878a99',
       badgeBg: '#f3f4f6',
@@ -337,6 +366,8 @@ export function auditRoleMasterConsistency(row: {
       typeStatus: 'none',
       masterType: 'UNKNOWN',
       roleType: 'UNKNOWN',
+      masterDisplay,
+      roleDisplay,
       badgeLabel: hasRole ? 'Belum Ada Master' : 'Belum Terpetakan',
       badgeColor: '#6b7280',
       badgeBg: '#f3f4f6',
@@ -367,7 +398,6 @@ export function auditRoleMasterConsistency(row: {
   ) {
     masterType = 'KCP';
   } else {
-    // Coba tebak dari teks nama outlet & cabang
     const combinedMasterText = `${masterOutletRaw} ${masterCabangRaw}`.toUpperCase();
     if (/\b(KCP|KK|KAS|KLN|PEMBANTU)\b/.test(combinedMasterText)) {
       masterType = 'KCP';
@@ -384,115 +414,158 @@ export function auditRoleMasterConsistency(row: {
     roleType = 'KCP';
   }
 
-  // 3. Evaluasi Keselarasan Nama Unit
-  const cleanOutlet = normalizeBranchName(masterOutletRaw);
-  const cleanCabang = normalizeBranchName(masterCabangRaw);
-  const cleanRoleOrg = normalizeBranchName(roleOrgRaw);
-
-  let nameStatus: 'exact' | 'similar' | 'different' | 'none' = 'different';
+  // 3. Evaluasi Keselarasan Nama Unit (dengan normalisasi singkatan Indonesia)
+  const cleanOutlet = normalizeIndonesianBranchAliases(normalizeBranchName(masterOutletRaw));
+  const cleanCabang = normalizeIndonesianBranchAliases(normalizeBranchName(masterCabangRaw));
+  const cleanRoleOrg = normalizeIndonesianBranchAliases(normalizeBranchName(roleOrgRaw));
 
   let roleParentClean = '';
   let roleSubClean = '';
   if (roleOrgRaw.toUpperCase().includes(' - ')) {
     const parts = roleOrgRaw.toUpperCase().split(' - ');
-    roleParentClean = normalizeBranchName(parts[0] || '');
-    roleSubClean = normalizeBranchName(parts[1] || '');
+    roleParentClean = normalizeIndonesianBranchAliases(normalizeBranchName(parts[0] || ''));
+    roleSubClean = normalizeIndonesianBranchAliases(normalizeBranchName(parts[1] || ''));
   }
 
-  // Cek apakah ada kecocokan nama
+  // A. Exact Name Match
   const isExactOrgMatch =
     (cleanOutlet && cleanRoleOrg === cleanOutlet) ||
     (cleanCabang && cleanRoleOrg === cleanCabang);
 
+  // B. Sub-Branch Match (e.g. A Yani matches Ahmad Yani)
   const isSubMatch =
     (cleanOutlet && roleSubClean && (roleSubClean.includes(cleanOutlet) || cleanOutlet.includes(roleSubClean))) ||
-    (cleanCabang && roleParentClean && (roleParentClean.includes(cleanCabang) || cleanCabang.includes(roleParentClean)));
+    (cleanCabang && roleSubClean && (roleSubClean.includes(cleanCabang) || cleanCabang.includes(roleSubClean)));
 
+  // C. Parent Branch Match (e.g. Samarinda matches Samarinda)
+  const isParentMatch =
+    (cleanCabang && roleParentClean && (roleParentClean.includes(cleanCabang) || cleanCabang.includes(roleParentClean))) ||
+    (cleanOutlet && roleParentClean && (roleParentClean.includes(cleanOutlet) || cleanOutlet.includes(roleParentClean)));
+
+  // D. Substring Containment
   const isSubstringMatch =
     (cleanOutlet && cleanOutlet.length >= 3 && cleanRoleOrg.includes(cleanOutlet)) ||
     (cleanCabang && cleanCabang.length >= 3 && cleanRoleOrg.includes(cleanCabang));
 
+  let nameStatus: 'exact' | 'similar' | 'parent_match' | 'different' | 'none' = 'different';
+
   if (isExactOrgMatch || (cleanOutlet && cleanCabang && roleParentClean.includes(cleanCabang) && roleSubClean.includes(cleanOutlet))) {
     nameStatus = 'exact';
-  } else if (isSubMatch || isSubstringMatch) {
+  } else if (isSubMatch) {
+    nameStatus = 'similar';
+  } else if (isParentMatch) {
+    nameStatus = 'parent_match';
+  } else if (isSubstringMatch) {
     nameStatus = 'similar';
   } else {
     nameStatus = 'different';
   }
 
-  const isNameMatched = nameStatus === 'exact' || nameStatus === 'similar';
+  const isNameMatched = nameStatus !== 'different';
 
   // 4. Evaluasi Keselarasan Tipe Unit
   let typeStatus: 'match' | 'mismatch' | 'none' = 'none';
   if (masterType !== 'UNKNOWN' && roleType !== 'UNKNOWN') {
     typeStatus = masterType === roleType ? 'match' : 'mismatch';
   } else {
-    typeStatus = 'match'; // Netral jika master status tidak spesifik KC/KCP
+    typeStatus = 'match';
   }
 
   const isTypeMatched = typeStatus !== 'mismatch';
-  const isFullyConsistent = isNameMatched && isTypeMatched;
+  const isFullyConsistent = (nameStatus === 'exact' || nameStatus === 'similar') && isTypeMatched;
 
   // 5. Tentukan Gaya Warna, Pesan, dan Tooltip
   if (isFullyConsistent) {
     return {
       hasRole: true,
       hasMaster: true,
-      isNameMatched: true,
+      isNameMatched,
       isTypeMatched: true,
       isFullyConsistent: true,
       nameStatus,
       typeStatus,
       masterType,
       roleType,
+      masterDisplay,
+      roleDisplay,
       badgeLabel: '✓ Sesuai Master',
       badgeColor: '#059669',
       badgeBg: 'rgba(16, 185, 129, 0.1)',
       badgeBorder: 'rgba(16, 185, 129, 0.3)',
       cardBg: '#fcfdfe',
       cardBorder: '#e2e8f0',
-      tooltip: `✓ Unit & Status sesuai Master (Cabang: ${masterCabangRaw || '-'}, Outlet: ${masterOutletRaw || '-'}, Status: ${masterStatusRaw || '-'})`,
+      tooltip: `✓ Unit & Status sesuai Master (Master: ${masterDisplay})`,
     };
   }
 
+  // Jika Cabang Induk Sama (e.g. Master Samarinda ↔ Role Samarinda - A Yani)
+  if (nameStatus === 'parent_match') {
+    return {
+      hasRole: true,
+      hasMaster: true,
+      isNameMatched,
+      isTypeMatched,
+      isFullyConsistent: isTypeMatched,
+      nameStatus: 'parent_match',
+      typeStatus,
+      masterType,
+      roleType,
+      masterDisplay,
+      roleDisplay,
+      badgeLabel: `✓ Induk ${masterCabangRaw || cleanCabang}`,
+      badgeColor: '#0284c7',
+      badgeBg: 'rgba(14, 165, 233, 0.1)',
+      badgeBorder: 'rgba(14, 165, 233, 0.3)',
+      cardBg: '#f0f9ff',
+      cardBorder: '#bae6fd',
+      tooltip: `✓ Cabang Induk Sesuai: ${masterCabangRaw || cleanCabang} (Master: ${masterDisplay} | Role: ${roleDisplay})`,
+    };
+  }
+
+  // Jika Nama Benar-benar Berbeda
   if (nameStatus === 'different') {
     return {
       hasRole: true,
       hasMaster: true,
-      isNameMatched: false,
+      isNameMatched,
       isTypeMatched,
       isFullyConsistent: false,
       nameStatus,
       typeStatus,
       masterType,
       roleType,
+      masterDisplay,
+      roleDisplay,
       badgeLabel: '⚠️ Unit Beda dgn Master',
       badgeColor: '#dc2626',
       badgeBg: 'rgba(239, 68, 68, 0.1)',
       badgeBorder: 'rgba(239, 68, 68, 0.3)',
       cardBg: 'rgba(239, 68, 68, 0.03)',
       cardBorder: '#fca5a5',
-      tooltip: `⚠️ Nama Unit Mapping Role (${roleOrgRaw}) berbeda dengan Master Outlet (${[masterCabangRaw, masterOutletRaw].filter(Boolean).join(' / ')})`,
+      tooltip: `⚠️ Nama Unit Mapping Role (${roleOrgRaw}) berbeda dengan Master (${masterDisplay}). Seharusnya Master: ${masterDisplay}`,
     };
   }
 
-  // Kasus Beda Tipe (Nama serupa tapi Master KC vs Role KCP atau sebaliknya)
+  // Kasus Beda Tipe
   return {
     hasRole: true,
     hasMaster: true,
-    isNameMatched: true,
+    isNameMatched,
     isTypeMatched: false,
     isFullyConsistent: false,
     nameStatus,
     typeStatus,
     masterType,
     roleType,
+    masterDisplay,
+    roleDisplay,
     badgeLabel: `⚠️ Beda Tipe (${masterType} vs ${roleType})`,
     badgeColor: '#d97706',
     badgeBg: 'rgba(245, 158, 11, 0.12)',
     badgeBorder: 'rgba(245, 158, 11, 0.35)',
     cardBg: 'rgba(245, 158, 11, 0.03)',
     cardBorder: '#fcd34d',
-    tooltip: `⚠️ Tipe unit berbeda: Master berstatus ${masterType} (${masterStatusRaw || '-'}), sedangkan Role berstatus ${roleType} (${roleTipeRaw || '-'})`,
+    tooltip: `⚠️ Tipe unit berbeda: Master berstatus ${masterType} (${masterStatusRaw || '-'}), sedangkan Role berstatus ${roleType} (${roleTipeRaw || '-'}). Master: ${masterDisplay}`,
   };
 }
+
