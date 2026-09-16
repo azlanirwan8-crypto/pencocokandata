@@ -75,7 +75,7 @@ interface TargetDataGridProps {
   roleMappingList?: RoleMappingRecord[];
 }
 
-/** Koordinat pusat kota (lat, lng) dan pulau untuk semua branch office BNI yang ada di mapping */
+/** Koordinat pusat kota (lat, lng) dan pulau — mencakup semua kota branch BNI di seluruh Indonesia */
 const CITY_GEO: Record<string, { lat: number; lng: number; island: string }> = {
   // ── JAWA ──────────────────────────────────────────────────────────────────
   JAKARTA: { lat: -6.2088, lng: 106.8456, island: 'Jawa' },
@@ -89,18 +89,32 @@ const CITY_GEO: Record<string, { lat: number; lng: number; island: string }> = {
   BEKASI: { lat: -6.2383, lng: 106.9756, island: 'Jawa' },
   DEPOK: { lat: -6.4025, lng: 106.7942, island: 'Jawa' },
   TANGERANG: { lat: -6.1783, lng: 106.6319, island: 'Jawa' },
+  SERPONG: { lat: -6.3192, lng: 106.6665, island: 'Jawa' },
+  SERANG: { lat: -6.1139, lng: 106.1502, island: 'Jawa' },
+  CILEGON: { lat: -6.0026, lng: 106.0024, island: 'Jawa' },
   BANDUNG: { lat: -6.9175, lng: 107.6191, island: 'Jawa' },
   'BANDUNG ASIA AFRIKA': { lat: -6.9210, lng: 107.6068, island: 'Jawa' },
+  CIMAHI: { lat: -6.8724, lng: 107.5399, island: 'Jawa' },
   CIREBON: { lat: -6.7063, lng: 108.5571, island: 'Jawa' },
   TASIKMALAYA: { lat: -7.3274, lng: 108.2207, island: 'Jawa' },
   BANJAR: { lat: -7.3673, lng: 108.5400, island: 'Jawa' },
   SUKABUMI: { lat: -6.9177, lng: 106.9280, island: 'Jawa' },
   KARAWANG: { lat: -6.3219, lng: 107.3387, island: 'Jawa' },
+  PURWAKARTA: { lat: -6.5564, lng: 107.4485, island: 'Jawa' },
+  SUBANG: { lat: -6.5704, lng: 107.7594, island: 'Jawa' },
+  INDRAMAYU: { lat: -6.3265, lng: 108.3199, island: 'Jawa' },
   SEMARANG: { lat: -7.0051, lng: 110.4381, island: 'Jawa' },
   'SEMARANG BRIGJEN SUDIARTO': { lat: -6.9748, lng: 110.4487, island: 'Jawa' },
   SOLO: { lat: -7.5755, lng: 110.8243, island: 'Jawa' },
   SURAKARTA: { lat: -7.5755, lng: 110.8243, island: 'Jawa' },
   YOGYAKARTA: { lat: -7.7956, lng: 110.3695, island: 'Jawa' },
+  KLATEN: { lat: -7.7058, lng: 110.5983, island: 'Jawa' },
+  SALATIGA: { lat: -7.3306, lng: 110.5084, island: 'Jawa' },
+  PEKALONGAN: { lat: -6.8886, lng: 109.6753, island: 'Jawa' },
+  TEGAL: { lat: -6.8696, lng: 109.1402, island: 'Jawa' },
+  PURWOKERTO: { lat: -7.4217, lng: 109.2340, island: 'Jawa' },
+  CILACAP: { lat: -7.7267, lng: 109.0065, island: 'Jawa' },
+  KEBUMEN: { lat: -7.6680, lng: 109.6520, island: 'Jawa' },
   SURABAYA: { lat: -7.2575, lng: 112.7521, island: 'Jawa' },
   'SURABAYA BASUKI RAHMAT': { lat: -7.2619, lng: 112.7391, island: 'Jawa' },
   MALANG: { lat: -7.9666, lng: 112.6326, island: 'Jawa' },
@@ -110,49 +124,141 @@ const CITY_GEO: Record<string, { lat: number; lng: number; island: string }> = {
   MADIUN: { lat: -7.6298, lng: 111.5243, island: 'Jawa' },
   JEMBER: { lat: -8.1845, lng: 113.6882, island: 'Jawa' },
   BANYUWANGI: { lat: -8.2192, lng: 114.3691, island: 'Jawa' },
+  PROBOLINGGO: { lat: -7.7543, lng: 113.2159, island: 'Jawa' },
+  JOMBANG: { lat: -7.5466, lng: 112.2384, island: 'Jawa' },
+  MOJOKERTO: { lat: -7.4700, lng: 112.4333, island: 'Jawa' },
+  BLITAR: { lat: -8.0952, lng: 112.1683, island: 'Jawa' },
+  TULUNGAGUNG: { lat: -8.0652, lng: 111.9026, island: 'Jawa' },
+  GRESIK: { lat: -7.1566, lng: 112.6522, island: 'Jawa' },
+  LAMONGAN: { lat: -7.1176, lng: 112.4157, island: 'Jawa' },
+  TUBAN: { lat: -6.8993, lng: 112.0483, island: 'Jawa' },
+  BOJONEGORO: { lat: -7.1506, lng: 111.8815, island: 'Jawa' },
+  NGAWI: { lat: -7.4055, lng: 111.4448, island: 'Jawa' },
+  MAGETAN: { lat: -7.6481, lng: 111.3281, island: 'Jawa' },
+  PONOROGO: { lat: -7.8654, lng: 111.4663, island: 'Jawa' },
+  PACITAN: { lat: -8.1849, lng: 111.1020, island: 'Jawa' },
+  PAMEKASAN: { lat: -7.1589, lng: 113.4703, island: 'Jawa' },
+  BANGKALAN: { lat: -7.0465, lng: 112.7303, island: 'Jawa' },
+  SUMENEP: { lat: -6.9912, lng: 113.8637, island: 'Jawa' },
   // ── SUMATERA ──────────────────────────────────────────────────────────────
   MEDAN: { lat: 3.5952, lng: 98.6722, island: 'Sumatera' },
   'MEDAN BALAI KOTA': { lat: 3.5862, lng: 98.6764, island: 'Sumatera' },
+  BALIGE: { lat: 2.3279, lng: 99.0655, island: 'Sumatera' },
+  DOLOK: { lat: 2.6700, lng: 99.0500, island: 'Sumatera' },
+  'DOLOK SANGGUL': { lat: 2.3600, lng: 98.6700, island: 'Sumatera' },
+  TARUTUNG: { lat: 2.0155, lng: 98.9777, island: 'Sumatera' },
+  SIBOLGA: { lat: 1.7406, lng: 98.7792, island: 'Sumatera' },
+  GUNUNGSITOLI: { lat: 1.2892, lng: 97.5753, island: 'Sumatera' },
+  'NIAS': { lat: 1.1438, lng: 97.5737, island: 'Sumatera' },
+  LUBUK: { lat: 0.3017, lng: 100.1929, island: 'Sumatera' },
+  PENYABUNGAN: { lat: 0.9898, lng: 99.4736, island: 'Sumatera' },
+  MANDAILING: { lat: 0.9898, lng: 99.4736, island: 'Sumatera' },
+  PADANGSIDIMPUAN: { lat: 1.3788, lng: 99.2716, island: 'Sumatera' },
   PALEMBANG: { lat: -2.9761, lng: 104.7754, island: 'Sumatera' },
   PADANG: { lat: -0.9493, lng: 100.3543, island: 'Sumatera' },
   PEKANBARU: { lat: 0.5071, lng: 101.4478, island: 'Sumatera' },
+  DUMAI: { lat: 1.6667, lng: 101.4500, island: 'Sumatera' },
   BATAM: { lat: 1.1301, lng: 104.0529, island: 'Sumatera' },
+  TANJUNGPINANG: { lat: 0.9187, lng: 104.4571, island: 'Sumatera' },
   JAMBI: { lat: -1.6101, lng: 103.6131, island: 'Sumatera' },
-  BANDA_ACEH: { lat: 5.5483, lng: 95.3238, island: 'Sumatera' },
+  MUARA: { lat: -1.9885, lng: 103.1428, island: 'Sumatera' },
+  BANGKO: { lat: -2.0822, lng: 102.4737, island: 'Sumatera' },
   ACEH: { lat: 5.5483, lng: 95.3238, island: 'Sumatera' },
-  BANDAR_LAMPUNG: { lat: -5.4295, lng: 105.2610, island: 'Sumatera' },
+  'BANDA ACEH': { lat: 5.5483, lng: 95.3238, island: 'Sumatera' },
+  LANGSA: { lat: 4.4684, lng: 97.9680, island: 'Sumatera' },
+  LHOKSEUMAWE: { lat: 5.1801, lng: 97.1490, island: 'Sumatera' },
+  MEULABOH: { lat: 4.1367, lng: 96.1297, island: 'Sumatera' },
   LAMPUNG: { lat: -5.4295, lng: 105.2610, island: 'Sumatera' },
+  'BANDAR LAMPUNG': { lat: -5.4295, lng: 105.2610, island: 'Sumatera' },
+  METRO: { lat: -5.1085, lng: 105.3068, island: 'Sumatera' },
   BENGKULU: { lat: -3.7928, lng: 102.2608, island: 'Sumatera' },
+  'LUBUK LINGGAU': { lat: -3.2986, lng: 102.8673, island: 'Sumatera' },
+  PRABUMULIH: { lat: -3.4339, lng: 104.2391, island: 'Sumatera' },
+  BATURAJA: { lat: -4.1286, lng: 104.1692, island: 'Sumatera' },
+  LAHAT: { lat: -3.7897, lng: 103.5391, island: 'Sumatera' },
+  PANGKALPINANG: { lat: -2.1338, lng: 106.1175, island: 'Sumatera' },
+  BANGKA: { lat: -2.1338, lng: 106.1175, island: 'Sumatera' },
+  BELITUNG: { lat: -2.7386, lng: 107.6156, island: 'Sumatera' },
   RANTAUPRAPAT: { lat: 2.0948, lng: 99.8308, island: 'Sumatera' },
   KISARAN: { lat: 2.9826, lng: 99.6100, island: 'Sumatera' },
   'PEMATANG SIANTAR': { lat: 2.9598, lng: 99.0687, island: 'Sumatera' },
   'TEBING TINGGI': { lat: 3.3272, lng: 99.1625, island: 'Sumatera' },
+  BINJAI: { lat: 3.6024, lng: 98.4869, island: 'Sumatera' },
+  STABAT: { lat: 3.9061, lng: 98.4499, island: 'Sumatera' },
+  'LUBUK PAKAM': { lat: 3.5490, lng: 98.8528, island: 'Sumatera' },
   // ── KALIMANTAN ────────────────────────────────────────────────────────────
   BALIKPAPAN: { lat: -1.2654, lng: 116.8312, island: 'Kalimantan' },
   SAMARINDA: { lat: -0.5022, lng: 117.1536, island: 'Kalimantan' },
+  BONTANG: { lat: 0.1289, lng: 117.5000, island: 'Kalimantan' },
+  TARAKAN: { lat: 3.3000, lng: 117.6333, island: 'Kalimantan' },
   BANJARMASIN: { lat: -3.3186, lng: 114.5944, island: 'Kalimantan' },
+  BANJARBARU: { lat: -3.4427, lng: 114.8384, island: 'Kalimantan' },
+  MARTAPURA: { lat: -3.4157, lng: 114.8600, island: 'Kalimantan' },
   PONTIANAK: { lat: -0.0263, lng: 109.3425, island: 'Kalimantan' },
+  SINGKAWANG: { lat: 0.9090, lng: 108.9763, island: 'Kalimantan' },
   PALANGKARAYA: { lat: -2.2096, lng: 113.9136, island: 'Kalimantan' },
+  SAMPIT: { lat: -2.5336, lng: 112.9517, island: 'Kalimantan' },
+  PANGKALAN: { lat: -2.7058, lng: 111.6177, island: 'Kalimantan' },
   // ── SULAWESI ──────────────────────────────────────────────────────────────
   MAKASSAR: { lat: -5.1477, lng: 119.4327, island: 'Sulawesi' },
+  MAROS: { lat: -5.0133, lng: 119.5780, island: 'Sulawesi' },
+  GOWA: { lat: -5.2931, lng: 119.4344, island: 'Sulawesi' },
+  PAREPARE: { lat: -4.0135, lng: 119.6285, island: 'Sulawesi' },
+  PALOPO: { lat: -2.9928, lng: 120.1974, island: 'Sulawesi' },
+  BONE: { lat: -4.5427, lng: 120.3644, island: 'Sulawesi' },
+  WATAMPONE: { lat: -4.5427, lng: 120.3644, island: 'Sulawesi' },
   MANADO: { lat: 1.4748, lng: 124.8421, island: 'Sulawesi' },
-  PALU: { lat: -0.8917, lng: 119.8707, island: 'Sulawesi' },
-  KENDARI: { lat: -3.9985, lng: 122.5130, island: 'Sulawesi' },
+  BITUNG: { lat: 1.4433, lng: 125.1893, island: 'Sulawesi' },
+  TOMOHON: { lat: 1.3248, lng: 124.8297, island: 'Sulawesi' },
+  KOTAMOBAGU: { lat: 0.7280, lng: 124.3089, island: 'Sulawesi' },
   GORONTALO: { lat: 0.5387, lng: 123.0595, island: 'Sulawesi' },
+  PALU: { lat: -0.8917, lng: 119.8707, island: 'Sulawesi' },
+  DONGGALA: { lat: -0.6906, lng: 119.7311, island: 'Sulawesi' },
+  KENDARI: { lat: -3.9985, lng: 122.5130, island: 'Sulawesi' },
+  BAUBAU: { lat: -5.4667, lng: 122.6183, island: 'Sulawesi' },
+  KOLAKA: { lat: -4.0534, lng: 121.5838, island: 'Sulawesi' },
+  MAMUJU: { lat: -2.6742, lng: 118.8840, island: 'Sulawesi' },
   // ── BALI ──────────────────────────────────────────────────────────────────
   DENPASAR: { lat: -8.6705, lng: 115.2126, island: 'Bali' },
   'DENPASAR RENON': { lat: -8.6784, lng: 115.2215, island: 'Bali' },
+  BADUNG: { lat: -8.5795, lng: 115.1892, island: 'Bali' },
+  KUTA: { lat: -8.7180, lng: 115.1686, island: 'Bali' },
+  GIANYAR: { lat: -8.5369, lng: 115.3321, island: 'Bali' },
+  SINGARAJA: { lat: -8.1120, lng: 115.0889, island: 'Bali' },
+  TABANAN: { lat: -8.5395, lng: 115.1258, island: 'Bali' },
   // ── NUSA TENGGARA ─────────────────────────────────────────────────────────
   MATARAM: { lat: -8.5833, lng: 116.1167, island: 'Lombok' },
+  PAGUTAN: { lat: -8.6000, lng: 116.1200, island: 'Lombok' },
+  PRAYA: { lat: -8.7208, lng: 116.2932, island: 'Lombok' },
+  SELONG: { lat: -8.6481, lng: 116.5111, island: 'Lombok' },
+  SUMBAWA: { lat: -8.4897, lng: 117.4165, island: 'Sumbawa' },
+  DOMPU: { lat: -8.5282, lng: 118.4619, island: 'Sumbawa' },
+  BIMA: { lat: -8.4573, lng: 118.7274, island: 'Sumbawa' },
   KUPANG: { lat: -10.1772, lng: 123.6070, island: 'NTT' },
+  ATAMBUA: { lat: -9.1063, lng: 124.8940, island: 'NTT' },
+  SOE: { lat: -9.8581, lng: 124.2829, island: 'NTT' },
   ENDE: { lat: -8.8432, lng: 121.6573, island: 'NTT' },
+  MAUMERE: { lat: -8.6208, lng: 122.2103, island: 'NTT' },
+  LABUAN: { lat: -8.5147, lng: 119.8892, island: 'NTT' },
+  WAINGAPU: { lat: -9.6564, lng: 120.2700, island: 'NTT' },
   // ── MALUKU ────────────────────────────────────────────────────────────────
   AMBON: { lat: -3.6954, lng: 128.1814, island: 'Maluku' },
+  TUAL: { lat: -5.6395, lng: 132.7498, island: 'Maluku' },
+  BURU: { lat: -3.4500, lng: 126.6000, island: 'Maluku' },
+  'KEPULAUAN ARU': { lat: -6.2000, lng: 134.5000, island: 'Maluku' },
+  'MALUKU TENGGARA': { lat: -5.6395, lng: 132.7498, island: 'Maluku' },
   TERNATE: { lat: 0.7821, lng: 127.3787, island: 'Maluku Utara' },
+  SOFIFI: { lat: 0.7423, lng: 127.5611, island: 'Maluku Utara' },
   // ── PAPUA ─────────────────────────────────────────────────────────────────
   JAYAPURA: { lat: -2.5337, lng: 140.7181, island: 'Papua' },
+  SENTANI: { lat: -2.5795, lng: 140.5182, island: 'Papua' },
+  MERAUKE: { lat: -8.4888, lng: 140.4018, island: 'Papua' },
+  WAMENA: { lat: -4.0891, lng: 138.9451, island: 'Papua' },
+  TIMIKA: { lat: -4.5323, lng: 136.8875, island: 'Papua' },
+  NABIRE: { lat: -3.3618, lng: 135.4950, island: 'Papua' },
   MANOKWARI: { lat: -0.8670, lng: 134.0806, island: 'Papua Barat' },
   SORONG: { lat: -0.8767, lng: 131.2520, island: 'Papua Barat' },
+  FAKFAK: { lat: -2.9214, lng: 132.2667, island: 'Papua Barat' },
 };
 
 /** Haversine distance (km) antara dua titik koordinat */
@@ -175,18 +281,38 @@ function extractCityFromOrgName(orgName: string): string {
     .trim();
 }
 
-/** Lookup koordinat kota — coba exact match dulu, lalu first-token match */
+/** Lookup koordinat kota — exact → first-token → partial-scan → token-intersection */
 function lookupCityGeo(cityName: string): { lat: number; lng: number; island: string } | null {
   if (!cityName) return null;
   const key = cityName.toUpperCase().trim();
+  if (!key) return null;
+
+  // 1. Exact match
   if (CITY_GEO[key]) return CITY_GEO[key];
-  // First token (e.g. "JAKARTA" from "JAKARTA PUSAT")
-  const firstToken = key.split(/\s+/)[0];
-  if (firstToken && CITY_GEO[firstToken]) return CITY_GEO[firstToken];
-  // Partial match scan
-  for (const [k, v] of Object.entries(CITY_GEO)) {
-    if (key.startsWith(k) || k.startsWith(key)) return v;
+
+  // 2. Multi-word prefix: try progressively shorter prefixes (longest first)
+  const tokens = key.split(/\s+/);
+  for (let len = tokens.length; len >= 1; len--) {
+    const prefix = tokens.slice(0, len).join(' ');
+    if (prefix.length >= 3 && CITY_GEO[prefix]) return CITY_GEO[prefix];
   }
+
+  // 3. Partial scan: database key starts with query OR query starts with db key
+  let bestMatch: { lat: number; lng: number; island: string } | null = null;
+  let bestLen = 0;
+  for (const [k, v] of Object.entries(CITY_GEO)) {
+    if ((key.startsWith(k) || k.startsWith(key)) && k.length > bestLen) {
+      bestLen = k.length;
+      bestMatch = v;
+    }
+  }
+  if (bestMatch) return bestMatch;
+
+  // 4. Token-intersection: any single token >= 4 chars matches a db key
+  for (const token of tokens) {
+    if (token.length >= 4 && CITY_GEO[token]) return CITY_GEO[token];
+  }
+
   return null;
 }
 
@@ -216,10 +342,12 @@ function findTopRoleMatchesByLocation(
   );
   if (fullRoleList.length === 0) return [];
 
-  // Resolve candidate's geo
+  // Resolve candidate's geo — handle "Kota Administrasi", "Kabupaten", etc.
   const candidateCity = String(activeCandidateDati2 || '')
     .toUpperCase()
-    .replace(/^(KOTA|KABUPATEN|KAB)\s+/i, '')
+    // Hapus prefix: "Kota Administrasi", "Kota", "Kabupaten", "Kab."
+    .replace(/^KOTA\s+ADMINISTRASI\s+/i, '')
+    .replace(/^(KOTA|KABUPATEN|KAB\.?)\s+/i, '')
     .trim();
   const candidateGeo = lookupCityGeo(candidateCity) ||
     lookupCityGeo(String(activeProvinsi || '').replace(/^PROVINSI\s*/i, '').trim());
