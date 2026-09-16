@@ -20,6 +20,7 @@ import {
   ChevronsRight,
   Info,
   Check,
+  Filter,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { getItem, setItem } from '../../utils/storage';
@@ -130,35 +131,35 @@ export function getUnitCategory(orgName: string): 'KC' | 'KCP' {
   return 'KC';
 }
 
-// Helper: Rekomendasi Alur Wondr Merchant
+// Helper: Rekomendasi Alur Wondr Merchant dengan bahasa umum
 export function getWondrRecommendation(record: RoleMappingRecord) {
   const isKc = getUnitCategory(record.organisasiTujuan) === 'KC';
   const hasFullRoles = record.qrsCabsal === 1 && record.qrsCabapv1 === 1 && record.qrsCabapv2 === 1;
 
   if (isKc && hasFullRoles) {
     return {
-      tier: 'Standard 3-Tier',
-      flow: 'Sales (Maker) ➔ Verifikator (APV1) ➔ Penyetuju (APV2)',
+      tier: 'Alur Standar 3 Tahap',
+      flow: 'Sales ➔ Verifikator ➔ Penyetuju',
       badgeColor: '#0ab39c',
       badgeBg: 'rgba(10, 179, 156, 0.1)',
-      desc: 'Lengkap 3 Role: Siap Onboarding Standar 3-Tier Wondr Merchant.',
+      desc: '3 Peran Lengkap: Siap digunakan langsung untuk pendaftaran Wondr Merchant.',
     };
   }
   if (isKc) {
     return {
       tier: 'Cabang Induk (Khusus)',
-      flow: 'Sales Cabang ➔ Penyetuju (CABAPV2)',
+      flow: 'Sales ➔ Penyetuju Langsung',
       badgeColor: '#405189',
       badgeBg: 'rgba(64, 81, 137, 0.1)',
-      desc: 'Cabang Induk dengan konfigurasi role spesifik.',
+      desc: 'Cabang Induk dengan pengaturan peran verifikator khusus.',
     };
   }
   return {
-    tier: 'Outlet / 2-Tier',
-    flow: 'Sales Outlet ➔ Penyetuju Cabang (Bypass / KC Review)',
+    tier: 'Alur Outlet (2 Tahap)',
+    flow: 'Sales Outlet ➔ Penyetuju Cabang (Langsung / Review Cabang Induk)',
     badgeColor: '#299cdb',
     badgeBg: 'rgba(41, 156, 219, 0.1)',
-    desc: 'Outlet / KCP tanpa APV1: Alur approval diarahkan ke Penyetuju atau KC Pembina.',
+    desc: 'Outlet tanpa verifikator: Persetujuan langsung ke Penyetuju atau dialihkan ke Cabang Pembina.',
   };
 }
 
@@ -166,7 +167,7 @@ export const RoleMappingManager: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<'list' | 'wondr'>('list');
   const [roleList, setRoleList] = useState<RoleMappingRecord[]>(DEFAULT_ROLE_MAPPING_DATA);
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [filterUnit, setFilterUnit] = useState<string>('ALL');
+  const [filterUnit, setFilterUnit] = useState<'ALL' | 'FULL' | 'KCP' | 'KC'>('ALL');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -262,7 +263,7 @@ export const RoleMappingManager: React.FC = () => {
     };
   }, [roleList]);
 
-  // Filtered Role List (Cleaned without SoD Filter)
+  // Filtered Role List
   const filteredList = useMemo(() => {
     return roleList.filter((r) => {
       const unitType = getUnitCategory(r.organisasiTujuan);
@@ -278,6 +279,11 @@ export const RoleMappingManager: React.FC = () => {
       );
     });
   }, [roleList, filterUnit, searchTerm]);
+
+  // Reset page when filter or search changes
+  useEffect(() => {
+    setPage(1);
+  }, [filterUnit, searchTerm]);
 
   // Pagination Calculations
   const totalPages = pageSize === 'ALL' ? 1 : Math.max(1, Math.ceil(filteredList.length / pageSize));
@@ -309,6 +315,11 @@ export const RoleMappingManager: React.FC = () => {
     if (end < total - 1) pages.push('ell-end');
     pages.push(total);
     return pages;
+  };
+
+  // Card click handler for filtering
+  const handleCardClick = (filterType: 'ALL' | 'FULL' | 'KCP' | 'KC') => {
+    setFilterUnit(filterType);
   };
 
   // Import Excel Handler
@@ -344,14 +355,12 @@ export const RoleMappingManager: React.FC = () => {
           const rawCabapv1 = String(row['QRS_CABAPV1'] || row['Verifikator Cabang'] || row['CABAPV1'] || '').trim();
           const rawCabapv2 = String(row['QRS_CABAPV2'] || row['Penyetuju Cabang'] || row['CABAPV2'] || '').trim();
           
-          // Parsing Checkbox status: 1 if checked/active, 0 if unchecked
           const cabsal = rawCabsal === '1' || rawCabsal.toLowerCase() === 'true' || rawCabsal.toLowerCase() === 'ya' || Number(rawCabsal) > 0 ? 1 : 0;
           const cabapv1 = rawCabapv1 === '1' || rawCabapv1.toLowerCase() === 'true' || rawCabapv1.toLowerCase() === 'ya' || Number(rawCabapv1) > 0 ? 1 : 0;
           const cabapv2 = rawCabapv2 === '1' || rawCabapv2.toLowerCase() === 'true' || rawCabapv2.toLowerCase() === 'ya' || Number(rawCabapv2) > 0 ? 1 : 0;
           
-          // Distinct User Grand Total
           const parsedGrandTotal = parseInt(String(row['Grand Total'] || row['GRAND TOTAL'] || row['Total'] || row['Total User'] || '1'), 10);
-          const grandTotal = isNaN(parsedGrandTotal) || parsedGrandTotal <= 0 ? (cabsal + cabapv1 + cabapv2 > 0 ? 1 : 1) : parsedGrandTotal;
+          const grandTotal = isNaN(parsedGrandTotal) || parsedGrandTotal <= 0 ? 1 : parsedGrandTotal;
 
           return {
             organisasiTujuan: org,
@@ -556,7 +565,7 @@ export const RoleMappingManager: React.FC = () => {
               Master Mapping Role & Unit BNI
             </h3>
             <p style={{ fontSize: '0.82rem', color: '#878a99', margin: '0.2rem 0 0' }}>
-              List Cabang & Outlet BNI se-Indonesia serta pemetaan role (Sales, Verifikator, Penyetuju) untuk Wondr Merchant.
+              Daftar Cabang & Outlet BNI se-Indonesia beserta pemetaan peran untuk alur aplikasi Wondr Merchant.
             </p>
           </div>
         </div>
@@ -696,9 +705,9 @@ export const RoleMappingManager: React.FC = () => {
             List Cabang & Outlet BNI se-Indonesia untuk Mapping Wondr Merchant
           </h4>
           <p style={{ fontSize: '0.82rem', color: '#4a5568', margin: 0, lineHeight: 1.55 }}>
-            Berikut list <strong>Cabang dan Outlet BNI se-Indonesia</strong> dan pemetaan role-nya. 
-            Dari total <strong>{stats.totalOrganisasi.toLocaleString('id-ID')} Unit Kerja</strong>, yang <strong>lengkap 3 role-nya</strong> ada <strong>{stats.totalFullRoles.toLocaleString('id-ID')} Cabang Induk (KC)</strong>. 
-            Data ini dapat langsung dijadikan bahan rujukan untuk matriks approval dan workflow aplikasi <strong>Wondr Merchant</strong>.
+            Berikut list <strong>Cabang dan Outlet BNI se-Indonesia</strong> dan pemetaan perannya. 
+            Dari total <strong>{stats.totalOrganisasi.toLocaleString('id-ID')} Unit Kerja</strong>, yang <strong>lengkap 3 role-nya</strong> ada <strong>{stats.totalFullRoles.toLocaleString('id-ID')} Cabang Utama (KC)</strong>. 
+            Data ini dapat langsung dijadikan acuan alur persetujuan untuk aplikasi <strong>Wondr Merchant</strong>.
           </p>
         </div>
       </div>
@@ -752,7 +761,7 @@ export const RoleMappingManager: React.FC = () => {
         </div>
       )}
 
-      {/* 4 Focused Cards: Cabang, Role Lengkap (192), Outlet, Grand Total */}
+      {/* 4 Focused Clickable Cards: Klik untuk filter data di tabel */}
       <div
         style={{
           display: 'grid',
@@ -760,28 +769,40 @@ export const RoleMappingManager: React.FC = () => {
           gap: '1rem',
         }}
       >
-        {/* Card 1: Total Unit Kerja */}
+        {/* Card 1: Total Unit Kerja (Klik -> Filter ALL) */}
         <div
+          onClick={() => handleCardClick('ALL')}
           style={{
             background: '#ffffff',
             borderRadius: '8px',
             padding: '1rem 1.25rem',
-            border: '1px solid #e9ebec',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+            border: filterUnit === 'ALL' ? '2px solid #405189' : '1px solid #e9ebec',
+            boxShadow: filterUnit === 'ALL' ? '0 3px 8px rgba(64, 81, 137, 0.15)' : '0 1px 2px rgba(0,0,0,0.04)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            cursor: 'pointer',
+            transition: 'all 0.18s ease-in-out',
+            transform: filterUnit === 'ALL' ? 'translateY(-2px)' : 'none',
           }}
+          title="Klik untuk melihat Semua Cabang & Outlet"
         >
           <div>
-            <div style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Total Cabang & Outlet
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Total Cabang & Outlet
+              </span>
+              {filterUnit === 'ALL' && (
+                <span style={{ fontSize: '0.62rem', background: '#405189', color: '#ffffff', padding: '0.05rem 0.35rem', borderRadius: '3px', fontWeight: 700 }}>
+                  Aktif
+                </span>
+              )}
             </div>
             <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#212529', marginTop: '0.25rem' }}>
               {stats.totalOrganisasi.toLocaleString('id-ID')}
             </div>
             <div style={{ fontSize: '0.72rem', color: '#878a99', marginTop: '0.2rem' }}>
-              {stats.totalKc} Cabang Induk · {stats.totalKcp} Sub Branch
+              {stats.totalKc} Cabang Utama · {stats.totalKcp} Outlet
             </div>
           </div>
           <div
@@ -789,39 +810,52 @@ export const RoleMappingManager: React.FC = () => {
               width: '44px',
               height: '44px',
               borderRadius: '8px',
-              background: 'rgba(64, 81, 137, 0.1)',
+              background: filterUnit === 'ALL' ? '#405189' : 'rgba(64, 81, 137, 0.1)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#405189',
+              color: filterUnit === 'ALL' ? '#ffffff' : '#405189',
+              transition: 'all 0.18s',
             }}
           >
             <Building2 size={22} />
           </div>
         </div>
 
-        {/* Card 2: Role Lengkap (3 Role / 192 Cabang Induk) */}
+        {/* Card 2: Role Lengkap (Klik -> Filter FULL) */}
         <div
+          onClick={() => handleCardClick('FULL')}
           style={{
             background: '#ffffff',
             borderRadius: '8px',
             padding: '1rem 1.25rem',
-            border: '1px solid #e9ebec',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+            border: filterUnit === 'FULL' ? '2px solid #0ab39c' : '1px solid #e9ebec',
+            boxShadow: filterUnit === 'FULL' ? '0 3px 8px rgba(10, 179, 156, 0.18)' : '0 1px 2px rgba(0,0,0,0.04)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            cursor: 'pointer',
+            transition: 'all 0.18s ease-in-out',
+            transform: filterUnit === 'FULL' ? 'translateY(-2px)' : 'none',
           }}
+          title="Klik untuk hanya melihat Cabang dengan 3 Role Lengkap"
         >
           <div>
-            <div style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Cabang Role Lengkap (3 Role)
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Cabang 3 Role Lengkap
+              </span>
+              {filterUnit === 'FULL' && (
+                <span style={{ fontSize: '0.62rem', background: '#0ab39c', color: '#ffffff', padding: '0.05rem 0.35rem', borderRadius: '3px', fontWeight: 700 }}>
+                  Aktif
+                </span>
+              )}
             </div>
             <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#0ab39c', marginTop: '0.25rem' }}>
               {stats.totalFullRoles.toLocaleString('id-ID')}
             </div>
             <div style={{ fontSize: '0.72rem', color: '#0ab39c', fontWeight: 600, marginTop: '0.2rem' }}>
-              Siap Onboarding 3-Tier Wondr
+              Siap Alur Standar Wondr (Klik Filter)
             </div>
           </div>
           <div
@@ -829,39 +863,52 @@ export const RoleMappingManager: React.FC = () => {
               width: '44px',
               height: '44px',
               borderRadius: '8px',
-              background: 'rgba(10, 179, 156, 0.1)',
+              background: filterUnit === 'FULL' ? '#0ab39c' : 'rgba(10, 179, 156, 0.1)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#0ab39c',
+              color: filterUnit === 'FULL' ? '#ffffff' : '#0ab39c',
+              transition: 'all 0.18s',
             }}
           >
             <CheckCircle2 size={22} />
           </div>
         </div>
 
-        {/* Card 3: Outlet / Sub Branch (2 Role) */}
+        {/* Card 3: Outlet / Sub Branch (Klik -> Filter KCP) */}
         <div
+          onClick={() => handleCardClick('KCP')}
           style={{
             background: '#ffffff',
             borderRadius: '8px',
             padding: '1rem 1.25rem',
-            border: '1px solid #e9ebec',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+            border: filterUnit === 'KCP' ? '2px solid #299cdb' : '1px solid #e9ebec',
+            boxShadow: filterUnit === 'KCP' ? '0 3px 8px rgba(41, 156, 219, 0.18)' : '0 1px 2px rgba(0,0,0,0.04)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            cursor: 'pointer',
+            transition: 'all 0.18s ease-in-out',
+            transform: filterUnit === 'KCP' ? 'translateY(-2px)' : 'none',
           }}
+          title="Klik untuk hanya melihat Outlet / Sub Branch (KCP)"
         >
           <div>
-            <div style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Outlet / Sub Branch (2 Role)
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Outlet / Sub Branch (2 Role)
+              </span>
+              {filterUnit === 'KCP' && (
+                <span style={{ fontSize: '0.62rem', background: '#299cdb', color: '#ffffff', padding: '0.05rem 0.35rem', borderRadius: '3px', fontWeight: 700 }}>
+                  Aktif
+                </span>
+              )}
             </div>
             <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#299cdb', marginTop: '0.25rem' }}>
               {stats.totalKcp.toLocaleString('id-ID')}
             </div>
             <div style={{ fontSize: '0.72rem', color: '#878a99', marginTop: '0.2rem' }}>
-              Sales & Penyetuju (Bypass/Review)
+              Sales & Penyetuju (Klik Filter)
             </div>
           </div>
           <div
@@ -869,39 +916,52 @@ export const RoleMappingManager: React.FC = () => {
               width: '44px',
               height: '44px',
               borderRadius: '8px',
-              background: 'rgba(41, 156, 219, 0.1)',
+              background: filterUnit === 'KCP' ? '#299cdb' : 'rgba(41, 156, 219, 0.1)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#299cdb',
+              color: filterUnit === 'KCP' ? '#ffffff' : '#299cdb',
+              transition: 'all 0.18s',
             }}
           >
             <GitBranch size={22} />
           </div>
         </div>
 
-        {/* Card 4: Total Grand Total (Distinct User) */}
+        {/* Card 4: Cabang Utama / KC (Klik -> Filter KC) */}
         <div
+          onClick={() => handleCardClick('KC')}
           style={{
             background: '#ffffff',
             borderRadius: '8px',
             padding: '1rem 1.25rem',
-            border: '1px solid #e9ebec',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+            border: filterUnit === 'KC' ? '2px solid #f7b84b' : '1px solid #e9ebec',
+            boxShadow: filterUnit === 'KC' ? '0 3px 8px rgba(247, 184, 75, 0.25)' : '0 1px 2px rgba(0,0,0,0.04)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            cursor: 'pointer',
+            transition: 'all 0.18s ease-in-out',
+            transform: filterUnit === 'KC' ? 'translateY(-2px)' : 'none',
           }}
+          title="Klik untuk hanya melihat Cabang Utama (KC Induk)"
         >
           <div>
-            <div style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Grand Total Pegawai Fisik
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Cabang Utama (KC Induk)
+              </span>
+              {filterUnit === 'KC' && (
+                <span style={{ fontSize: '0.62rem', background: '#d68b0c', color: '#ffffff', padding: '0.05rem 0.35rem', borderRadius: '3px', fontWeight: 700 }}>
+                  Aktif
+                </span>
+              )}
             </div>
-            <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#405189', marginTop: '0.25rem' }}>
-              {stats.totalDistinctUsers.toLocaleString('id-ID')}
+            <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#d68b0c', marginTop: '0.25rem' }}>
+              {stats.totalKc.toLocaleString('id-ID')}
             </div>
             <div style={{ fontSize: '0.72rem', color: '#878a99', marginTop: '0.2rem' }}>
-              Distinct User ID Terpetakan
+              Total {stats.totalDistinctUsers.toLocaleString('id-ID')} Pegawai (Klik Filter)
             </div>
           </div>
           <div
@@ -909,11 +969,12 @@ export const RoleMappingManager: React.FC = () => {
               width: '44px',
               height: '44px',
               borderRadius: '8px',
-              background: 'rgba(64, 81, 137, 0.1)',
+              background: filterUnit === 'KC' ? '#d68b0c' : 'rgba(247, 184, 75, 0.15)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#405189',
+              color: filterUnit === 'KC' ? '#ffffff' : '#d68b0c',
+              transition: 'all 0.18s',
             }}
           >
             <Users size={22} />
@@ -1031,7 +1092,7 @@ export const RoleMappingManager: React.FC = () => {
                   fontWeight: 600,
                 }}
               >
-                {roleList.length.toLocaleString('id-ID')}
+                {filteredList.length.toLocaleString('id-ID')}
               </span>
             </button>
 
@@ -1059,9 +1120,55 @@ export const RoleMappingManager: React.FC = () => {
             </button>
           </div>
 
+          {/* Active Filter Indicator Badge */}
+          {filterUnit !== 'ALL' && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                background: '#f8f9fa',
+                padding: '0.4rem 0.75rem',
+                borderRadius: '5px',
+                border: '1px solid #e9ebec',
+                fontSize: '0.78rem',
+                marginBottom: '0.85rem',
+                color: '#495057',
+              }}
+            >
+              <Filter size={14} color="#405189" />
+              <span>
+                Menampilkan filter:{' '}
+                <strong>
+                  {filterUnit === 'FULL' && 'Cabang 3 Role Lengkap'}
+                  {filterUnit === 'KCP' && 'Outlet / Sub Branch (KCP)'}
+                  {filterUnit === 'KC' && 'Cabang Utama (KC Induk)'}
+                </strong>{' '}
+                ({filteredList.length} data ditemukan)
+              </span>
+              <button
+                type="button"
+                onClick={() => setFilterUnit('ALL')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#f06548',
+                  fontSize: '0.76rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  padding: '0 0.3rem',
+                  textDecoration: 'underline',
+                  marginLeft: 'auto',
+                }}
+              >
+                Reset Filter (Lihat Semua)
+              </button>
+            </div>
+          )}
+
           {activeSubTab === 'list' ? (
             <>
-              {/* Filter Toolbar without SoD filter */}
+              {/* Filter Toolbar */}
               <div
                 style={{
                   display: 'flex',
@@ -1094,10 +1201,10 @@ export const RoleMappingManager: React.FC = () => {
                     />
                   </div>
 
-                  {/* Unit Filter */}
+                  {/* Unit Filter Dropdown */}
                   <select
                     value={filterUnit}
-                    onChange={(e) => setFilterUnit(e.target.value)}
+                    onChange={(e) => setFilterUnit(e.target.value as any)}
                     style={{
                       padding: '0.45rem 0.75rem',
                       fontSize: '0.8rem',
@@ -1108,10 +1215,10 @@ export const RoleMappingManager: React.FC = () => {
                       cursor: 'pointer',
                     }}
                   >
-                    <option value="ALL">Semua Tipe Unit</option>
-                    <option value="FULL">Role Lengkap (3 Role / KC)</option>
-                    <option value="KC">Cabang Induk (KC)</option>
-                    <option value="KCP">Sub Branch / KCP</option>
+                    <option value="ALL">Semua Unit Kerja</option>
+                    <option value="FULL">Cabang 3 Role Lengkap</option>
+                    <option value="KC">Cabang Utama (KC)</option>
+                    <option value="KCP">Outlet / Sub Branch (KCP)</option>
                   </select>
                 </div>
 
@@ -1166,7 +1273,7 @@ export const RoleMappingManager: React.FC = () => {
                       </th>
                       <th style={{ width: '110px', textAlign: 'center' }}>
                         <div>Grand Total</div>
-                        <div style={{ fontSize: '0.68rem', fontWeight: 500, color: '#878a99' }}>Distinct User</div>
+                        <div style={{ fontSize: '0.68rem', fontWeight: 500, color: '#878a99' }}>Jumlah Pegawai</div>
                       </th>
                       <th style={{ width: '180px', textAlign: 'center' }}>Alur Wondr</th>
                       <th style={{ width: '95px', textAlign: 'center' }}>AKSI</th>
@@ -1205,7 +1312,7 @@ export const RoleMappingManager: React.FC = () => {
                                   color: isKc ? '#405189' : '#299cdb',
                                 }}
                               >
-                                {isKc ? 'Cabang Induk' : 'Sub Branch'}
+                                {isKc ? 'Cabang Utama' : 'Outlet'}
                               </span>
                             </td>
 
@@ -1290,7 +1397,7 @@ export const RoleMappingManager: React.FC = () => {
                                   padding: '0.2rem 0.65rem',
                                   borderRadius: '4px',
                                 }}
-                                title={`${item.grandTotal} Distinct User Fisik`}
+                                title={`${item.grandTotal} Pegawai Fisik`}
                               >
                                 {item.grandTotal}
                               </span>
@@ -1481,9 +1588,9 @@ export const RoleMappingManager: React.FC = () => {
               )}
             </>
           ) : (
-            /* Wondr Workflow Guide View */
+            /* Wondr Workflow Guide View with Clickable Cards & Clear Explanations */
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              {/* Insight Explanation Card */}
+              {/* Insight Explanation Cards (Clickable) */}
               <div
                 style={{
                   background: 'linear-gradient(135deg, rgba(64, 81, 137, 0.05) 0%, rgba(41, 156, 219, 0.05) 100%)',
@@ -1492,51 +1599,133 @@ export const RoleMappingManager: React.FC = () => {
                   padding: '1.25rem',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                  <Building2 size={18} color="#405189" />
-                  <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#405189' }}>
-                    Struktur Unit Kerja & Rekomendasi Mapping Wondr Merchant
-                  </h4>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Building2 size={18} color="#405189" />
+                    <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#405189' }}>
+                      Panduan Struktur Unit Kerja & Alur Pendaftaran Wondr Merchant
+                    </h4>
+                  </div>
+                  <span style={{ fontSize: '0.72rem', color: '#878a99' }}>Klik kartu di bawah untuk memfilter daftar:</span>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '0.85rem', fontSize: '0.78rem' }}>
-                  <div style={{ background: '#ffffff', padding: '0.85rem', borderRadius: '6px', border: '1px solid #e9ebec' }}>
-                    <div style={{ fontWeight: 700, color: '#0ab39c', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <CheckCircle2 size={15} color="#0ab39c" />
-                      <span>1. Cabang Induk / KC ({stats.totalFullRoles} Cabang Lengkap)</span>
+                  {/* Card 1: Cabang Utama (FULL) */}
+                  <div
+                    onClick={() => handleCardClick('FULL')}
+                    style={{
+                      background: '#ffffff',
+                      padding: '0.95rem',
+                      borderRadius: '6px',
+                      border: filterUnit === 'FULL' ? '2px solid #0ab39c' : '1px solid #e9ebec',
+                      boxShadow: filterUnit === 'FULL' ? '0 2px 6px rgba(10, 179, 156, 0.15)' : 'none',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                    }}
+                    title="Klik untuk melihat hanya Cabang dengan 3 Role Lengkap"
+                  >
+                    <div style={{ fontWeight: 700, color: '#0ab39c', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <CheckCircle2 size={16} color="#0ab39c" />
+                        <span>1. Cabang Utama / KC ({stats.totalFullRoles} Cabang Lengkap)</span>
+                      </div>
+                      {filterUnit === 'FULL' && (
+                        <span style={{ fontSize: '0.62rem', background: '#0ab39c', color: '#fff', padding: '0.05rem 0.35rem', borderRadius: '3px' }}>
+                          Terpilih
+                        </span>
+                      )}
                     </div>
-                    <p style={{ margin: 0, color: '#6c757d', lineHeight: 1.5 }}>
-                      Pola nama <code>[NAMA KOTA] BRANCH OFFICE</code> (tanpa strip). Memiliki 3 role lengkap (Sales/Maker, Verifikator/APV1, Penyetuju/APV2) sehingga langsung dapat dipetakan ke <strong>Standard 3-Tier Onboarding Workflow</strong>.
+                    <p style={{ margin: 0, color: '#495057', lineHeight: 1.55 }}>
+                      Format nama <code>[NAMA KOTA] BRANCH OFFICE</code>. Memiliki 3 peran lengkap (Sales, Verifikator, dan Penyetuju). Sangat siap digunakan untuk alur pendaftaran standar 3 tahap di aplikasi Wondr Merchant.
                     </p>
                   </div>
 
-                  <div style={{ background: '#ffffff', padding: '0.85rem', borderRadius: '6px', border: '1px solid #e9ebec' }}>
-                    <div style={{ fontWeight: 700, color: '#299cdb', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <GitBranch size={15} color="#299cdb" />
-                      <span>2. Outlet / Sub Branch KCP ({stats.totalKcp} Unit)</span>
+                  {/* Card 2: Outlet / Sub Branch (KCP) */}
+                  <div
+                    onClick={() => handleCardClick('KCP')}
+                    style={{
+                      background: '#ffffff',
+                      padding: '0.95rem',
+                      borderRadius: '6px',
+                      border: filterUnit === 'KCP' ? '2px solid #299cdb' : '1px solid #e9ebec',
+                      boxShadow: filterUnit === 'KCP' ? '0 2px 6px rgba(41, 156, 219, 0.15)' : 'none',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                    }}
+                    title="Klik untuk melihat hanya Outlet / Sub Branch (KCP)"
+                  >
+                    <div style={{ fontWeight: 700, color: '#299cdb', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <GitBranch size={16} color="#299cdb" />
+                        <span>2. Outlet / Sub Branch KCP ({stats.totalKcp} Unit)</span>
+                      </div>
+                      {filterUnit === 'KCP' && (
+                        <span style={{ fontSize: '0.62rem', background: '#299cdb', color: '#fff', padding: '0.05rem 0.35rem', borderRadius: '3px' }}>
+                          Terpilih
+                        </span>
+                      )}
                     </div>
-                    <p style={{ margin: 0, color: '#6c757d', lineHeight: 1.5 }}>
-                      Pola nama <code>[KC INDUK] - [OUTLET] SUB BRANCH</code>. Tidak memiliki role Verifikator (<code>QRS_CABAPV1</code>). Approval langsung loncat (Bypass) ke Approver Cabang atau diarahkan ke Cabang Induk pembina.
+                    <p style={{ margin: 0, color: '#495057', lineHeight: 1.55 }}>
+                      Format nama <code>[KC INDUK] - [OUTLET] SUB BRANCH</code>. Hanya memiliki 2 peran (Sales dan Penyetuju, tanpa Verifikator). Alur persetujuan dapat langsung ke Penyetuju atau dialihkan ke Cabang Pembina.
                     </p>
                   </div>
 
-                  <div style={{ background: '#ffffff', padding: '0.85rem', borderRadius: '6px', border: '1px solid #e9ebec' }}>
-                    <div style={{ fontWeight: 700, color: '#405189', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <Users size={15} color="#405189" />
-                      <span>3. Kolom Grand Total (Distinct User ID)</span>
+                  {/* Card 3: Grand Total Pegawai (ALL) */}
+                  <div
+                    onClick={() => handleCardClick('ALL')}
+                    style={{
+                      background: '#ffffff',
+                      padding: '0.95rem',
+                      borderRadius: '6px',
+                      border: filterUnit === 'ALL' ? '2px solid #405189' : '1px solid #e9ebec',
+                      boxShadow: filterUnit === 'ALL' ? '0 2px 6px rgba(64, 81, 137, 0.15)' : 'none',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                    }}
+                    title="Klik untuk melihat Semua Data Cabang & Outlet"
+                  >
+                    <div style={{ fontWeight: 700, color: '#405189', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <Users size={16} color="#405189" />
+                        <span>3. Makna Kolom Grand Total (Jumlah Pegawai)</span>
+                      </div>
+                      {filterUnit === 'ALL' && (
+                        <span style={{ fontSize: '0.62rem', background: '#405189', color: '#fff', padding: '0.05rem 0.35rem', borderRadius: '3px' }}>
+                          Semua
+                        </span>
+                      )}
                     </div>
-                    <p style={{ margin: 0, color: '#6c757d', lineHeight: 1.5 }}>
-                      Menunjukkan jumlah user/pegawai fisik unik yang bertugas di unit tersebut. Jika bernilai 1 berarti ada perangkapan akun, sedangkan $\ge 2$ berarti terdapat pemisahan pegawai fisik.
+                    <p style={{ margin: 0, color: '#495057', lineHeight: 1.55 }}>
+                      Menampilkan total banyaknya orang atau pegawai yang bertugas di unit tersebut. Angka 1 berarti semua tugas dipegang oleh 1 orang, sedangkan 2 atau 3 berarti peran sales dan persetujuan dipegang oleh staf yang berbeda.
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Breakdown Table */}
+              {/* Breakdown Table in Panduan Tab */}
               <div>
-                <h4 style={{ fontSize: '0.92rem', fontWeight: 700, color: '#212529', margin: '0 0 0.65rem' }}>
-                  Daftar Alur Onboarding Wondr Merchant per Unit
-                </h4>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
+                  <h4 style={{ fontSize: '0.92rem', fontWeight: 700, color: '#212529', margin: 0 }}>
+                    Daftar Alur Pendaftaran Wondr Merchant per Unit Kerja ({filteredList.length.toLocaleString('id-ID')} unit)
+                  </h4>
+                  {filterUnit !== 'ALL' && (
+                    <button
+                      type="button"
+                      onClick={() => setFilterUnit('ALL')}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#405189',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Tampilkan Semua Unit
+                    </button>
+                  )}
+                </div>
+
                 <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', overflowX: 'auto', maxHeight: '480px' }}>
                   <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
                     <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
@@ -1544,62 +1733,171 @@ export const RoleMappingManager: React.FC = () => {
                         <th style={{ width: '45px', textAlign: 'center' }}>No</th>
                         <th>Organisasi Tujuan</th>
                         <th style={{ width: '130px', textAlign: 'center' }}>Struktur Unit</th>
-                        <th style={{ width: '110px', textAlign: 'center' }}>Distinct User</th>
-                        <th>Alur Workflow Onboarding Wondr</th>
+                        <th style={{ width: '120px', textAlign: 'center' }}>Jumlah Pegawai</th>
+                        <th>Alur Persetujuan Wondr Merchant</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {roleList.map((item, idx) => {
-                        const isKc = getUnitCategory(item.organisasiTujuan) === 'KC';
-                        const wondr = getWondrRecommendation(item);
+                      {paginatedRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: '#878a99' }}>
+                            Tidak ada data yang cocok dengan filter.
+                          </td>
+                        </tr>
+                      ) : (
+                        paginatedRows.map((item, idx) => {
+                          const isKc = getUnitCategory(item.organisasiTujuan) === 'KC';
+                          const wondr = getWondrRecommendation(item);
+                          const displayNo = pageSize === 'ALL' ? idx + 1 : (page - 1) * (pageSize as number) + idx + 1;
 
-                        return (
-                          <tr key={idx} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
-                            <td style={{ textAlign: 'center', color: '#878a99' }}>{idx + 1}</td>
-                            <td style={{ fontWeight: 600, color: '#212529' }}>{item.organisasiTujuan}</td>
-                            <td style={{ textAlign: 'center' }}>
-                              <span
-                                style={{
-                                  fontSize: '0.68rem',
-                                  fontWeight: 700,
-                                  padding: '0.15rem 0.45rem',
-                                  borderRadius: '4px',
-                                  background: isKc ? 'rgba(64, 81, 137, 0.1)' : 'rgba(41, 156, 219, 0.1)',
-                                  color: isKc ? '#405189' : '#299cdb',
-                                }}
-                              >
-                                {isKc ? 'Cabang Induk (KC)' : 'Sub Branch (KCP)'}
-                              </span>
-                            </td>
-                            <td style={{ textAlign: 'center' }}>
-                              <strong>{item.grandTotal} User</strong>
-                            </td>
-                            <td>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          return (
+                            <tr key={idx} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
+                              <td style={{ textAlign: 'center', color: '#878a99' }}>{displayNo}</td>
+                              <td style={{ fontWeight: 600, color: '#212529' }}>{item.organisasiTujuan}</td>
+                              <td style={{ textAlign: 'center' }}>
                                 <span
                                   style={{
-                                    display: 'inline-block',
-                                    padding: '0.15rem 0.45rem',
-                                    borderRadius: '4px',
                                     fontSize: '0.68rem',
                                     fontWeight: 700,
-                                    background: wondr.badgeBg,
-                                    color: wondr.badgeColor,
+                                    padding: '0.15rem 0.45rem',
+                                    borderRadius: '4px',
+                                    background: isKc ? 'rgba(64, 81, 137, 0.1)' : 'rgba(41, 156, 219, 0.1)',
+                                    color: isKc ? '#405189' : '#299cdb',
                                   }}
                                 >
-                                  {wondr.tier}
+                                  {isKc ? 'Cabang Utama' : 'Outlet (KCP)'}
                                 </span>
-                                <span style={{ fontSize: '0.76rem', color: '#495057', fontWeight: 600 }}>
-                                  {wondr.flow}
-                                </span>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                              </td>
+                              <td style={{ textAlign: 'center' }}>
+                                <strong>{item.grandTotal} Orang</strong>
+                              </td>
+                              <td>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                  <span
+                                    style={{
+                                      display: 'inline-block',
+                                      padding: '0.15rem 0.45rem',
+                                      borderRadius: '4px',
+                                      fontSize: '0.68rem',
+                                      fontWeight: 700,
+                                      background: wondr.badgeBg,
+                                      color: wondr.badgeColor,
+                                    }}
+                                  >
+                                    {wondr.tier}
+                                  </span>
+                                  <span style={{ fontSize: '0.76rem', color: '#495057', fontWeight: 600 }}>
+                                    {wondr.flow}
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
                     </tbody>
                   </table>
                 </div>
+
+                {/* Pagination Footer in Panduan Tab */}
+                {pageSize !== 'ALL' && totalPages > 1 && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '0.75rem',
+                      marginTop: '0.85rem',
+                      paddingTop: '0.75rem',
+                      borderTop: '1px solid #e9ebec',
+                    }}
+                  >
+                    <span style={{ fontSize: '0.78rem', color: '#878a99' }}>
+                      Menampilkan <strong>{((page - 1) * (pageSize as number)) + 1}</strong> -{' '}
+                      <strong>{Math.min(page * (pageSize as number), filteredList.length)}</strong> dari{' '}
+                      <strong>{filteredList.length.toLocaleString('id-ID')}</strong> entri
+                    </span>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        onClick={() => setPage(1)}
+                        disabled={page === 1}
+                        title="Halaman Pertama"
+                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.74rem' }}
+                      >
+                        <ChevronsLeft size={13} />
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        disabled={page === 1}
+                        title="Halaman Sebelumnya"
+                        style={{ padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}
+                      >
+                        <ChevronLeft size={13} />
+                      </button>
+
+                      {getPaginationRange(page, totalPages).map((p, idx) => {
+                        if (p === 'ell-start' || p === 'ell-end') {
+                          return (
+                            <span key={`ell-${idx}`} style={{ padding: '0 0.35rem', color: '#878a99', fontSize: '0.75rem' }}>
+                              ...
+                            </span>
+                          );
+                        }
+                        return (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => setPage(p as number)}
+                            style={{
+                              minWidth: '28px',
+                              height: '28px',
+                              padding: '0 0.4rem',
+                              fontSize: '0.74rem',
+                              fontWeight: page === p ? 700 : 500,
+                              borderRadius: '4px',
+                              border: page === p ? '1px solid #405189' : '1px solid #ced4da',
+                              background: page === p ? '#405189' : '#ffffff',
+                              color: page === p ? '#ffffff' : '#495057',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s',
+                            }}
+                          >
+                            {p}
+                          </button>
+                        );
+                      })}
+
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={page === totalPages}
+                        title="Halaman Berikutnya"
+                        style={{ padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}
+                      >
+                        <ChevronRight size={13} />
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        onClick={() => setPage(totalPages)}
+                        disabled={page === totalPages}
+                        title="Halaman Terakhir"
+                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.74rem' }}
+                      >
+                        <ChevronsRight size={13} />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1782,7 +2080,7 @@ export const RoleMappingManager: React.FC = () => {
               {/* Clean Grand Total Input */}
               <div>
                 <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#495057', marginBottom: '0.35rem' }}>
-                  Grand Total (Jumlah Pegawai / Distinct User) <span style={{ color: '#f06548' }}>*</span>
+                  Grand Total (Jumlah Pegawai) <span style={{ color: '#f06548' }}>*</span>
                 </label>
                 <input
                   type="number"
