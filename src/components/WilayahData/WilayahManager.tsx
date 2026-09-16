@@ -787,24 +787,6 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
                 <option value="ALL">Lihat Semua ({filteredSettings.length})</option>
               </select>
             </div>
-
-            <div style={{ fontSize: '0.8rem', color: '#878a99' }}>
-              Menampilkan{' '}
-              <strong style={{ color: '#212529' }}>
-                {filteredSettings.length === 0
-                  ? 0
-                  : pageSize === 'ALL'
-                  ? 1
-                  : (currentPage - 1) * (pageSize as number) + 1}
-              </strong>{' '}
-              -{' '}
-              <strong style={{ color: '#212529' }}>
-                {pageSize === 'ALL'
-                  ? filteredSettings.length
-                  : Math.min(currentPage * (pageSize as number), filteredSettings.length)}
-              </strong>{' '}
-              dari <strong style={{ color: '#212529' }}>{filteredSettings.length}</strong> data wilayah
-            </div>
           </div>
         </div>
 
@@ -1086,28 +1068,70 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
                 <ChevronLeft size={13} />
               </button>
 
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
-                <button
-                  key={pageNum}
-                  type="button"
-                  onClick={() => setCurrentPage(pageNum)}
-                  style={{
-                    minWidth: '28px',
-                    height: '28px',
-                    padding: '0 0.4rem',
-                    fontSize: '0.74rem',
-                    fontWeight: currentPage === pageNum ? 700 : 500,
-                    borderRadius: '4px',
-                    border: currentPage === pageNum ? '1px solid #405189' : '1px solid #ced4da',
-                    background: currentPage === pageNum ? '#405189' : '#ffffff',
-                    color: currentPage === pageNum ? '#ffffff' : '#495057',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  {pageNum}
-                </button>
-              ))}
+              {(() => {
+                const getPaginationRange = (curr: number, total: number): (number | string)[] => {
+                  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+                  const pages: (number | string)[] = [1];
+                  let start = Math.max(2, curr - 1);
+                  let end = Math.min(total - 1, curr + 1);
+                  if (curr <= 3) {
+                    start = 2;
+                    end = 4;
+                  } else if (curr >= total - 2) {
+                    start = total - 3;
+                    end = total - 1;
+                  }
+                  if (start > 2) pages.push('ell-start');
+                  for (let i = start; i <= end; i++) pages.push(i);
+                  if (end < total - 1) pages.push('ell-end');
+                  pages.push(total);
+                  return pages;
+                };
+
+                return getPaginationRange(currentPage, totalPages).map((p, idx) => {
+                  if (typeof p === 'string') {
+                    return (
+                      <span
+                        key={p + idx}
+                        style={{
+                          minWidth: '22px',
+                          height: '28px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '0.74rem',
+                          color: '#878a99',
+                          userSelect: 'none',
+                        }}
+                      >
+                        ...
+                      </span>
+                    );
+                  }
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setCurrentPage(p)}
+                      style={{
+                        minWidth: '28px',
+                        height: '28px',
+                        padding: '0 0.4rem',
+                        fontSize: '0.74rem',
+                        fontWeight: currentPage === p ? 700 : 500,
+                        borderRadius: '4px',
+                        border: currentPage === p ? '1px solid #405189' : '1px solid #ced4da',
+                        background: currentPage === p ? '#405189' : '#ffffff',
+                        color: currentPage === p ? '#ffffff' : '#495057',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {p}
+                    </button>
+                  );
+                });
+              })()}
 
               <button
                 type="button"

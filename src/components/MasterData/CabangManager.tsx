@@ -842,24 +842,6 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
                   <option value="ALL">Lihat Semua ({filteredRows.length})</option>
                 </select>
               </div>
-
-              <div style={{ fontSize: '0.8rem', color: '#878a99' }}>
-                Menampilkan{' '}
-                <strong style={{ color: '#212529' }}>
-                  {filteredRows.length === 0
-                    ? 0
-                    : pageSize === 'ALL'
-                    ? 1
-                    : (page - 1) * (pageSize as number) + 1}
-                </strong>{' '}
-                -{' '}
-                <strong style={{ color: '#212529' }}>
-                  {pageSize === 'ALL'
-                    ? filteredRows.length
-                    : Math.min(page * (pageSize as number), filteredRows.length)}
-                </strong>{' '}
-                dari <strong style={{ color: '#212529' }}>{filteredRows.length.toLocaleString('id-ID')}</strong> data master
-              </div>
             </div>
           </div>
 
@@ -1046,27 +1028,70 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
                   <ChevronLeft size={13} />
                 </button>
 
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
-                  <button
-                    key={pageNum}
-                    type="button"
-                    onClick={() => setPage(pageNum)}
-                    style={{
-                      minWidth: '28px',
-                      height: '28px',
-                      padding: '0 0.4rem',
-                      fontSize: '0.74rem',
-                      fontWeight: page === pageNum ? 700 : 500,
-                      borderRadius: '4px',
-                      border: page === pageNum ? '1px solid #405189' : '1px solid #ced4da',
-                      background: page === pageNum ? '#405189' : '#ffffff',
-                      color: page === pageNum ? '#ffffff' : '#495057',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {pageNum}
-                  </button>
-                ))}
+                {(() => {
+                  const getPaginationRange = (curr: number, total: number): (number | string)[] => {
+                    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+                    const pages: (number | string)[] = [1];
+                    let start = Math.max(2, curr - 1);
+                    let end = Math.min(total - 1, curr + 1);
+                    if (curr <= 3) {
+                      start = 2;
+                      end = 4;
+                    } else if (curr >= total - 2) {
+                      start = total - 3;
+                      end = total - 1;
+                    }
+                    if (start > 2) pages.push('ell-start');
+                    for (let i = start; i <= end; i++) pages.push(i);
+                    if (end < total - 1) pages.push('ell-end');
+                    pages.push(total);
+                    return pages;
+                  };
+
+                  return getPaginationRange(page, totalPages).map((p, idx) => {
+                    if (typeof p === 'string') {
+                      return (
+                        <span
+                          key={p + idx}
+                          style={{
+                            minWidth: '22px',
+                            height: '28px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.74rem',
+                            color: '#878a99',
+                            userSelect: 'none',
+                          }}
+                        >
+                          ...
+                        </span>
+                      );
+                    }
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setPage(p)}
+                        style={{
+                          minWidth: '28px',
+                          height: '28px',
+                          padding: '0 0.4rem',
+                          fontSize: '0.74rem',
+                          fontWeight: page === p ? 700 : 500,
+                          borderRadius: '4px',
+                          border: page === p ? '1px solid #405189' : '1px solid #ced4da',
+                          background: page === p ? '#405189' : '#ffffff',
+                          color: page === p ? '#ffffff' : '#495057',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        {p}
+                      </button>
+                    );
+                  });
+                })()}
 
                 <button
                   type="button"
