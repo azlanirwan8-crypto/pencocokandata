@@ -72,6 +72,8 @@ export const App: React.FC = () => {
   const [initialTargetCount, setInitialTargetCount] = useState<number>(0);
   const [targetFileName, setTargetFileName] = useState<string>('');
   const [wilayahSettings, setWilayahSettings] = useState<WilayahSetting[]>(DEFAULT_WILAYAH_DATA);
+  const [ptenCount, setPtenCount] = useState<number>(0);
+  const [roleMappingCount, setRoleMappingCount] = useState<number>(12);
 
   // Matching Execution State
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -96,6 +98,24 @@ export const App: React.FC = () => {
     return analyzeMasterHealth(masterRows, masterIndex);
   }, [masterRows, masterIndex]);
 
+  // Function to refresh PTEN and Role Mapping counts
+  const refreshMasterCounts = async () => {
+    try {
+      const [savedPten, savedRoleMapping] = await Promise.all([
+        getItem<any[]>('pten_records').catch(() => null),
+        getItem<any[]>('role_mapping_data').catch(() => null),
+      ]);
+      if (savedPten && Array.isArray(savedPten)) {
+        setPtenCount(savedPten.length);
+      }
+      if (savedRoleMapping && Array.isArray(savedRoleMapping)) {
+        setRoleMappingCount(savedRoleMapping.length);
+      }
+    } catch (e) {
+      console.warn('Count refresh warning:', e);
+    }
+  };
+
   // Restore persisted data (Instant Cache-First + Parallel Cloud Revalidation)
   useEffect(() => {
     const restoreSavedData = async () => {
@@ -104,7 +124,7 @@ export const App: React.FC = () => {
       // Read local IndexedDB immediately in parallel so the UI is ready instantly
       // -----------------------------------------------------------------------
       try {
-        const [savedMaster, savedTarget, savedWilayah] = await Promise.all([
+        const [savedMaster, savedTarget, savedWilayah, savedPten, savedRoleMapping] = await Promise.all([
           getItem<{ rows: MasterRow[]; fileName: string }>('master_data').catch(() => null),
           getItem<{
             rows: TargetRow[];
@@ -113,6 +133,8 @@ export const App: React.FC = () => {
             matchedDone: boolean;
           }>('target_data').catch(() => null),
           getItem<WilayahSetting[]>('wilayah_settings').catch(() => null),
+          getItem<any[]>('pten_records').catch(() => null),
+          getItem<any[]>('role_mapping_data').catch(() => null),
         ]);
 
         if (savedMaster && savedMaster.rows && savedMaster.rows.length > 0) {
@@ -133,6 +155,14 @@ export const App: React.FC = () => {
         } else {
           setWilayahSettings(DEFAULT_WILAYAH_DATA);
           setItem('wilayah_settings', DEFAULT_WILAYAH_DATA);
+        }
+
+        if (savedPten && Array.isArray(savedPten)) {
+          setPtenCount(savedPten.length);
+        }
+
+        if (savedRoleMapping && Array.isArray(savedRoleMapping)) {
+          setRoleMappingCount(savedRoleMapping.length);
         }
       } catch (err) {
         console.warn('Local cache restore skipped:', err);
@@ -752,11 +782,16 @@ export const App: React.FC = () => {
       {/* 1. Velzon Left Sidebar (Dashboard, Data Analisa, Data Master) */}
       <Sidebar
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={(tab) => {
+          setActiveTab(tab);
+          refreshMasterCounts();
+        }}
         isCollapsed={isSidebarCollapsed}
         masterCount={masterRows.length}
         targetCount={targetRows.length}
         wilayahCount={wilayahSettings.length}
+        ptenCount={ptenCount}
+        roleMappingCount={roleMappingCount}
       />
 
       {/* 2. Main Content Area */}

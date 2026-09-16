@@ -176,6 +176,14 @@ body {
   display: none;
 }
 
+.app-sidebar.collapsed:not(:hover) .sidebar-submenu {
+  display: none !important;
+}
+
+.app-sidebar.collapsed:not(:hover) .nav-item-collapse-icon {
+  display: none !important;
+}
+
 .app-sidebar.collapsed:not(:hover) .sidebar-nav {
   padding: 0.4rem 0.3rem;
 }
@@ -330,6 +338,22 @@ body {
 
 .badge-target {
   background: rgba(10, 179, 156, 0.25);
+  color: #0ab39c;
+}
+
+.sidebar-sub-badge {
+  margin-left: auto;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #8c9cd0;
+  font-family: var(--font-mono);
+}
+
+.sidebar-sub-item.active .sidebar-sub-badge {
+  background: rgba(10, 179, 156, 0.2);
   color: #0ab39c;
 }
 

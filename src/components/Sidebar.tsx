@@ -21,6 +21,8 @@ interface SidebarProps {
   masterCount?: number;
   targetCount?: number;
   wilayahCount?: number;
+  ptenCount?: number;
+  roleMappingCount?: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -30,6 +32,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   masterCount,
   targetCount,
   wilayahCount,
+  ptenCount,
+  roleMappingCount,
 }) => {
   // Is Data Master submenu expanded?
   const isMasterActive = activeTab === 'master' || activeTab === 'wilayah' || activeTab === 'pten' || activeTab === 'mapping_role';
@@ -72,7 +76,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span className="nav-item-label">Dashboard</span>
           </button>
 
-          {/* 2. Data Analisa (Sebelumnya Data Cek) */}
+          {/* 2. Data Analisa */}
           <button
             type="button"
             className={`sidebar-nav-item ${activeTab === 'working' ? 'active' : ''}`}
@@ -112,12 +116,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
                 <span className="nav-item-label">Data Master</span>
               </div>
-              <div style={{ color: '#8c9cd0', display: 'flex', alignItems: 'center' }}>
+              <div className="nav-item-collapse-icon" style={{ color: '#8c9cd0', display: 'flex', alignItems: 'center' }}>
                 {isMasterOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               </div>
             </button>
 
-            {/* Submenu Data Master */}
+            {/* Submenu Data Master: Clean list with full counters */}
             {isMasterOpen && (
               <div className="sidebar-submenu">
                 {/* 3.a. Wilayah */}
@@ -131,8 +135,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <Map size={14} />
                   <span>Wilayah</span>
                   {wilayahCount !== undefined && wilayahCount > 0 && (
-                    <span style={{ marginLeft: 'auto', fontSize: '0.65rem', opacity: 0.7 }}>
-                      {wilayahCount}
+                    <span className="sidebar-sub-badge">
+                      {wilayahCount.toLocaleString('id-ID')}
                     </span>
                   )}
                 </button>
@@ -147,9 +151,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 >
                   <ShieldCheck size={14} />
                   <span>PTEN</span>
+                  {ptenCount !== undefined && ptenCount > 0 ? (
+                    <span className="sidebar-sub-badge">
+                      {ptenCount.toLocaleString('id-ID')}
+                    </span>
+                  ) : null}
                 </button>
 
-                {/* 3.c. Cabang (Pengganti Data Master) */}
+                {/* 3.c. Cabang */}
                 <button
                   type="button"
                   className={`sidebar-sub-item ${activeTab === 'master' ? 'active' : ''}`}
@@ -160,8 +169,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <Store size={14} />
                   <span>Cabang</span>
                   {masterCount !== undefined && masterCount > 0 && (
-                    <span style={{ marginLeft: 'auto', fontSize: '0.65rem', opacity: 0.7 }}>
-                      {masterCount}
+                    <span className="sidebar-sub-badge">
+                      {masterCount.toLocaleString('id-ID')}
                     </span>
                   )}
                 </button>
@@ -176,6 +185,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 >
                   <Users size={14} />
                   <span>Mapping Role</span>
+                  {roleMappingCount !== undefined && roleMappingCount > 0 ? (
+                    <span className="sidebar-sub-badge">
+                      {roleMappingCount.toLocaleString('id-ID')}
+                    </span>
+                  ) : null}
                 </button>
               </div>
             )}
