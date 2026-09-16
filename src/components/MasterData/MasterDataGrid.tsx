@@ -10,7 +10,7 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
   const [searchTerm, setSearchTerm] = useState('');
   const [searchBy, setSearchBy] = useState<string>('all');
   const [page, setPage] = useState(1);
-  const pageSize = 15;
+  const [pageSize, setPageSize] = useState<number | 'ALL'>(10);
 
   const hasCombinedSandiCabang = useMemo(() => {
     return masterRows.some(r => r['Sandi Cabang'] && (!r.Sandi || r.Sandi === r['Sandi Cabang']));
@@ -66,8 +66,9 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
     });
   }, [masterRows, searchTerm, searchBy]);
 
-  const totalPages = Math.ceil(filteredRows.length / pageSize) || 1;
+  const totalPages = pageSize === 'ALL' ? 1 : Math.ceil(filteredRows.length / pageSize) || 1;
   const paginatedRows = useMemo(() => {
+    if (pageSize === 'ALL') return filteredRows;
     const start = (page - 1) * pageSize;
     return filteredRows.slice(start, start + pageSize);
   }, [filteredRows, page, pageSize]);
@@ -78,8 +79,38 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
     <div style={{ marginTop: '0.5rem' }}>
       {/* Toolbar Pencarian & Info Entri Master */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
-        <div style={{ fontSize: '0.8rem', color: '#878a99' }}>
-          Menampilkan <strong style={{ color: '#212529' }}>{filteredRows.length.toLocaleString('id-ID')}</strong> entri terfilter dari total <strong style={{ color: '#212529' }}>{masterRows.length.toLocaleString('id-ID')}</strong> baris master aktif.
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.78rem', color: '#878a99' }}>
+            <span>Tampilkan:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                const val = e.target.value === 'ALL' ? 'ALL' : Number(e.target.value);
+                setPageSize(val);
+                setPage(1);
+              }}
+              style={{
+                padding: '0.3rem 0.5rem',
+                fontSize: '0.78rem',
+                borderRadius: '4px',
+                border: '1px solid #ced4da',
+                outline: 'none',
+                background: '#ffffff',
+                color: '#495057',
+                cursor: 'pointer',
+              }}
+            >
+              <option value={10}>10 Baris</option>
+              <option value={25}>25 Baris</option>
+              <option value={50}>50 Baris</option>
+              <option value={100}>100 Baris</option>
+              <option value="ALL">Lihat Semua ({filteredRows.length})</option>
+            </select>
+          </div>
+
+          <div style={{ fontSize: '0.8rem', color: '#878a99' }}>
+            Menampilkan <strong style={{ color: '#212529' }}>{filteredRows.length.toLocaleString('id-ID')}</strong> entri terfilter dari total <strong style={{ color: '#212529' }}>{masterRows.length.toLocaleString('id-ID')}</strong> baris master aktif.
+          </div>
         </div>
 
         {/* Clean Velzon Search & Filter By Toolbar */}
@@ -126,90 +157,90 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
               }}
               style={{ width: '230px', paddingRight: searchTerm ? '2rem' : '0.85rem' }}
             />
-          {searchTerm && (
-            <button
-              type="button"
-              onClick={() => setSearchTerm('')}
-              style={{
-                position: 'absolute',
-                right: '0.5rem',
-                background: 'transparent',
-                border: 'none',
-                color: '#878a99',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-              }}
-            >
-              <X size={13} />
-            </button>
-          )}
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                style={{
+                  position: 'absolute',
+                  right: '0.5rem',
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#878a99',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                <X size={13} />
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Clean Table Container */}
-      <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px' }}>
-        <table className="modern-table">
-          <thead>
+      {/* Modern High-Performance Table Container */}
+      <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', overflowX: 'auto', maxHeight: '580px' }}>
+        <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
+          <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
             <tr>
-              <th style={{ width: '50px', textAlign: 'center' }}>No</th>
-              <th>Wilayah</th>
+              <th style={{ width: '40px', textAlign: 'center' }}>No</th>
+              <th style={{ width: '60px', textAlign: 'center' }}>Wilayah</th>
               {hasCombinedSandiCabang ? (
-                <th style={{ minWidth: '180px' }}>Sandi Cabang</th>
+                <th>Sandi & Nama Cabang</th>
               ) : (
                 <>
-                  <th>Sandi</th>
-                  <th style={{ minWidth: '160px' }}>Cabang</th>
+                  <th style={{ width: '85px', textAlign: 'center' }}>Sandi</th>
+                  <th>Cabang</th>
                 </>
               )}
               <th>Nama Outlet</th>
-              <th>Branch Code</th>
-              <th>Kode Cabang</th>
-              <th>Status</th>
-              <th style={{ color: '#405189' }}>KODE POS</th>
+              <th style={{ width: '95px', textAlign: 'center' }}>Branch Code</th>
+              <th style={{ width: '85px', textAlign: 'center' }}>Kode Cabang</th>
+              <th style={{ width: '80px', textAlign: 'center' }}>Status</th>
+              <th style={{ width: '75px', textAlign: 'center' }}>KODE POS</th>
               <th>Kecamatan</th>
               <th>Kelurahan</th>
               <th>Dati II</th>
-              <th style={{ minWidth: '220px' }}>ALAMAT</th>
-              <th>Telepon</th>
+              <th>ALAMAT</th>
+              <th style={{ width: '110px' }}>Telepon</th>
             </tr>
           </thead>
           <tbody>
             {paginatedRows.length === 0 ? (
               <tr>
-                <td colSpan={14} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
-                  Tidak ada data yang cocok dengan kata kunci "{searchTerm}".
+                <td colSpan={hasCombinedSandiCabang ? 12 : 13} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
+                  Tidak ada data master yang cocok dengan pencarian "{searchTerm}".
                 </td>
               </tr>
             ) : (
               paginatedRows.map((r, idx) => {
-                const globalIndex = (page - 1) * pageSize + idx + 1;
+                const globalIdx = pageSize === 'ALL' ? idx + 1 : (page - 1) * (pageSize as number) + idx + 1;
                 return (
-                  <tr key={`${r['KODE POS']}-${idx}`} style={{ background: idx % 2 === 0 ? '#fafbfe' : '#ffffff' }}>
-                    <td className="code-cell" style={{ textAlign: 'center', color: '#878a99' }}>
-                      {globalIndex}
+                  <tr key={idx} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
+                    <td style={{ textAlign: 'center', color: '#878a99' }}>{globalIdx}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span className="badge badge-level1">{r.Wilayah || '-'}</span>
                     </td>
-                    <td><span style={{ color: '#495057' }}>{r.Wilayah || '-'}</span></td>
                     {hasCombinedSandiCabang ? (
                       <td>
                         <strong style={{ color: '#212529', fontWeight: 600 }}>
-                          {r['Sandi Cabang'] || r.Cabang || '-'}
+                          {r['Sandi Cabang'] || r.Sandi || '-'}
                         </strong>
                       </td>
                     ) : (
                       <>
-                        <td className="code-cell">{r.Sandi || '-'}</td>
+                        <td className="code-cell" style={{ textAlign: 'center' }}>{r.Sandi || '-'}</td>
                         <td><strong style={{ color: '#212529', fontWeight: 600 }}>{r.Cabang || '-'}</strong></td>
                       </>
                     )}
                     <td style={{ color: '#405189', fontWeight: 500 }}>{r['Nama Outlet'] || '-'}</td>
-                    <td className="code-cell">{r['Branch Code'] || '-'}</td>
-                    <td className="code-cell">{r['Kode Cabang'] || '-'}</td>
-                    <td>
+                    <td className="code-cell" style={{ textAlign: 'center' }}>{r['Branch Code'] || '-'}</td>
+                    <td className="code-cell" style={{ textAlign: 'center' }}>{r['Kode Cabang'] || '-'}</td>
+                    <td style={{ textAlign: 'center' }}>
                       <span className="badge badge-match">{r['Status Outlet'] || 'Aktif'}</span>
                     </td>
-                    <td className="code-cell" style={{ color: '#405189', fontWeight: 700 }}>
+                    <td className="code-cell" style={{ color: '#405189', fontWeight: 700, textAlign: 'center' }}>
                       {r['KODE POS']}
                     </td>
                     <td>{r.Kecamatan || '-'}</td>
@@ -228,34 +259,36 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
       </div>
 
       {/* Clean Pagination Bar */}
-      <div className="pagination-row" style={{ marginTop: '0.75rem', paddingTop: '0.5rem' }}>
-        <div style={{ fontSize: '0.78rem', color: '#878a99' }}>
-          Menampilkan {(page - 1) * pageSize + 1} - {Math.min(page * pageSize, filteredRows.length)} dari {filteredRows.length.toLocaleString('id-ID')} baris
+      {pageSize !== 'ALL' && totalPages > 1 && (
+        <div className="pagination-row" style={{ marginTop: '0.75rem', paddingTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div style={{ fontSize: '0.78rem', color: '#878a99' }}>
+            Menampilkan {(page - 1) * (pageSize as number) + 1} - {Math.min(page * (pageSize as number), filteredRows.length)} dari {filteredRows.length.toLocaleString('id-ID')} baris
+          </div>
+          <div className="pagination-controls" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              disabled={page <= 1}
+              onClick={() => setPage(p => Math.max(p - 1, 1))}
+            >
+              <ChevronLeft size={13} />
+              <span>Sebelumnya</span>
+            </button>
+            <span style={{ padding: '0 0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: '#495057' }}>
+              {page} / {totalPages}
+            </span>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              disabled={page >= totalPages}
+              onClick={() => setPage(p => Math.min(p + 1, totalPages))}
+            >
+              <span>Berikutnya</span>
+              <ChevronRight size={13} />
+            </button>
+          </div>
         </div>
-        <div className="pagination-controls">
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            disabled={page <= 1}
-            onClick={() => setPage(p => Math.max(p - 1, 1))}
-          >
-            <ChevronLeft size={13} />
-            <span>Sebelumnya</span>
-          </button>
-          <span style={{ padding: '0 0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: '#495057' }}>
-            {page} / {totalPages}
-          </span>
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            disabled={page >= totalPages}
-            onClick={() => setPage(p => Math.min(p + 1, totalPages))}
-          >
-            <span>Berikutnya</span>
-            <ChevronRight size={13} />
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   );
 };

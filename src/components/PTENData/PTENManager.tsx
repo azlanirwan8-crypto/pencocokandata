@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   ShieldCheck,
   Search,
@@ -7,7 +7,11 @@ import {
   Download,
   Layers,
   Eye,
-  X
+  X,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import type { TargetRow, MasterRow } from '../../types';
@@ -63,6 +67,12 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [detailRow, setDetailRow] = useState<any | null>(null);
 
+  // Pagination states (Default 10)
+  const [masterPage, setMasterPage] = useState<number>(1);
+  const [masterPageSize, setMasterPageSize] = useState<number | 'ALL'>(10);
+  const [auditPage, setAuditPage] = useState<number>(1);
+  const [auditPageSize, setAuditPageSize] = useState<number | 'ALL'>(10);
+
   // Analisa Audit PTEN dari Target Data
   const auditAnalysis = useMemo(() => {
     let same = 0;
@@ -108,6 +118,30 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
       );
     });
   }, [ptenList, searchTerm]);
+
+  // Master pagination
+  const totalMasterPages = masterPageSize === 'ALL' ? 1 : Math.max(1, Math.ceil(filteredPten.length / masterPageSize));
+  useEffect(() => {
+    if (masterPage > totalMasterPages) setMasterPage(1);
+  }, [totalMasterPages, masterPage]);
+
+  const paginatedPten = useMemo(() => {
+    if (masterPageSize === 'ALL') return filteredPten;
+    const start = (masterPage - 1) * masterPageSize;
+    return filteredPten.slice(start, start + masterPageSize);
+  }, [filteredPten, masterPage, masterPageSize]);
+
+  // Audit pagination
+  const totalAuditPages = auditPageSize === 'ALL' ? 1 : Math.max(1, Math.ceil(auditAnalysis.diffRows.length / auditPageSize));
+  useEffect(() => {
+    if (auditPage > totalAuditPages) setAuditPage(1);
+  }, [totalAuditPages, auditPage]);
+
+  const paginatedAuditRows = useMemo(() => {
+    if (auditPageSize === 'ALL') return auditAnalysis.diffRows;
+    const start = (auditPage - 1) * auditPageSize;
+    return auditAnalysis.diffRows.slice(start, start + auditPageSize);
+  }, [auditAnalysis.diffRows, auditPage, auditPageSize]);
 
   // Export PTEN Master
   const handleExport = () => {
@@ -382,7 +416,10 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
                 type="text"
                 placeholder="Cari kode pos PTEN, kota, provinsi, keterangan..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setMasterPage(1);
+                }}
                 style={{
                   width: '100%',
                   padding: '0.45rem 0.65rem 0.45rem 2.1rem',
@@ -395,8 +432,51 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
               />
             </div>
 
-            <div style={{ fontSize: '0.8rem', color: '#878a99' }}>
-              Total <strong style={{ color: '#212529' }}>{filteredPten.length}</strong> master referensi PTEN
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.78rem', color: '#878a99' }}>
+                <span>Tampilkan:</span>
+                <select
+                  value={masterPageSize}
+                  onChange={(e) => {
+                    const val = e.target.value === 'ALL' ? 'ALL' : Number(e.target.value);
+                    setMasterPageSize(val);
+                    setMasterPage(1);
+                  }}
+                  style={{
+                    padding: '0.3rem 0.5rem',
+                    fontSize: '0.78rem',
+                    borderRadius: '4px',
+                    border: '1px solid #ced4da',
+                    outline: 'none',
+                    background: '#ffffff',
+                    color: '#495057',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value={10}>10 Baris</option>
+                  <option value={25}>25 Baris</option>
+                  <option value={50}>50 Baris</option>
+                  <option value="ALL">Lihat Semua ({filteredPten.length})</option>
+                </select>
+              </div>
+
+              <div style={{ fontSize: '0.8rem', color: '#878a99' }}>
+                Menampilkan{' '}
+                <strong style={{ color: '#212529' }}>
+                  {filteredPten.length === 0
+                    ? 0
+                    : masterPageSize === 'ALL'
+                    ? 1
+                    : (masterPage - 1) * (masterPageSize as number) + 1}
+                </strong>{' '}
+                -{' '}
+                <strong style={{ color: '#212529' }}>
+                  {masterPageSize === 'ALL'
+                    ? filteredPten.length
+                    : Math.min(masterPage * (masterPageSize as number), filteredPten.length)}
+                </strong>{' '}
+                dari <strong style={{ color: '#212529' }}>{filteredPten.length}</strong> master referensi PTEN
+              </div>
             </div>
           </div>
 
@@ -414,38 +494,174 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {filteredPten.map((item, idx) => (
-                  <tr key={idx} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
-                    <td style={{ textAlign: 'center', color: '#878a99' }}>{idx + 1}</td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span className="code-cell" style={{ background: '#fff9e6', color: '#d68b0c', fontWeight: 700 }}>
-                        {item.kodePosPten}
-                      </span>
-                    </td>
-                    <td style={{ fontWeight: 600, color: '#212529' }}>{item.kotaPten}</td>
-                    <td style={{ color: '#495057' }}>{item.provinsiPten}</td>
-                    <td style={{ color: '#6c757d' }}>{item.keterangan}</td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span className="badge badge-match" style={{ fontSize: '0.7rem' }}>
-                        {item.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {paginatedPten.map((item, idx) => {
+                  const displayRowNo =
+                    masterPageSize === 'ALL'
+                      ? idx + 1
+                      : (masterPage - 1) * (masterPageSize as number) + idx + 1;
+
+                  return (
+                    <tr key={idx} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
+                      <td style={{ textAlign: 'center', color: '#878a99' }}>{displayRowNo}</td>
+                      <td style={{ textAlign: 'center' }}>
+                        <span className="code-cell" style={{ background: '#fff9e6', color: '#d68b0c', fontWeight: 700 }}>
+                          {item.kodePosPten}
+                        </span>
+                      </td>
+                      <td style={{ fontWeight: 600, color: '#212529' }}>{item.kotaPten}</td>
+                      <td style={{ color: '#495057' }}>{item.provinsiPten}</td>
+                      <td style={{ color: '#6c757d' }}>{item.keterangan}</td>
+                      <td style={{ textAlign: 'center' }}>
+                        <span className="badge badge-match" style={{ fontSize: '0.7rem' }}>
+                          {item.status}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
+
+          {/* Master Pagination Footer */}
+          {masterPageSize !== 'ALL' && totalMasterPages > 1 && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '0.75rem',
+                marginTop: '1rem',
+                paddingTop: '0.75rem',
+                borderTop: '1px solid #e9ebec',
+              }}
+            >
+              <div style={{ fontSize: '0.78rem', color: '#878a99' }}>
+                Halaman <strong style={{ color: '#212529' }}>{masterPage}</strong> dari{' '}
+                <strong style={{ color: '#212529' }}>{totalMasterPages}</strong>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setMasterPage(1)}
+                  disabled={masterPage === 1}
+                  title="Halaman Pertama"
+                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.74rem' }}
+                >
+                  <ChevronsLeft size={13} />
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setMasterPage((p) => Math.max(1, p - 1))}
+                  disabled={masterPage === 1}
+                  title="Halaman Sebelumnya"
+                  style={{ padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}
+                >
+                  <ChevronLeft size={13} />
+                </button>
+
+                {Array.from({ length: totalMasterPages }, (_, i) => i + 1).map((pageNum) => (
+                  <button
+                    key={pageNum}
+                    type="button"
+                    onClick={() => setMasterPage(pageNum)}
+                    style={{
+                      minWidth: '28px',
+                      height: '28px',
+                      padding: '0 0.4rem',
+                      fontSize: '0.74rem',
+                      fontWeight: masterPage === pageNum ? 700 : 500,
+                      borderRadius: '4px',
+                      border: masterPage === pageNum ? '1px solid #405189' : '1px solid #ced4da',
+                      background: masterPage === pageNum ? '#405189' : '#ffffff',
+                      color: masterPage === pageNum ? '#ffffff' : '#495057',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {pageNum}
+                  </button>
+                ))}
+
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setMasterPage((p) => Math.min(totalMasterPages, p + 1))}
+                  disabled={masterPage === totalMasterPages}
+                  title="Halaman Berikutnya"
+                  style={{ padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}
+                >
+                  <ChevronRight size={13} />
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setMasterPage(totalMasterPages)}
+                  disabled={masterPage === totalMasterPages}
+                  title="Halaman Terakhir"
+                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.74rem' }}
+                >
+                  <ChevronsRight size={13} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         /* Audit View: Perbedaan Kode Pos PTEN */
         <div className="glass-card" style={{ padding: '1.15rem 1.35rem' }}>
-          <div style={{ marginBottom: '1rem' }}>
-            <h4 style={{ fontSize: '0.92rem', fontWeight: 700, color: '#212529', margin: '0 0 0.25rem' }}>
-              Daftar Baris dengan Perbedaan Kode Pos PTEN ({auditAnalysis.diffRows.length} Data)
-            </h4>
-            <p style={{ fontSize: '0.76rem', color: '#878a99', margin: 0 }}>
-              Baris di bawah memiliki perbedaan antara kolom <strong>KODE POS</strong> dan <strong>KODE POS PTEN</strong> pada data target.
-            </p>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '0.75rem',
+              marginBottom: '1rem',
+            }}
+          >
+            <div>
+              <h4 style={{ fontSize: '0.92rem', fontWeight: 700, color: '#212529', margin: '0 0 0.25rem' }}>
+                Daftar Baris dengan Perbedaan Kode Pos PTEN ({auditAnalysis.diffRows.length} Data)
+              </h4>
+              <p style={{ fontSize: '0.76rem', color: '#878a99', margin: 0 }}>
+                Baris di bawah memiliki perbedaan antara kolom <strong>KODE POS</strong> dan <strong>KODE POS PTEN</strong> pada data target.
+              </p>
+            </div>
+
+            {auditAnalysis.diffRows.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.78rem', color: '#878a99' }}>
+                <span>Tampilkan:</span>
+                <select
+                  value={auditPageSize}
+                  onChange={(e) => {
+                    const val = e.target.value === 'ALL' ? 'ALL' : Number(e.target.value);
+                    setAuditPageSize(val);
+                    setAuditPage(1);
+                  }}
+                  style={{
+                    padding: '0.3rem 0.5rem',
+                    fontSize: '0.78rem',
+                    borderRadius: '4px',
+                    border: '1px solid #ced4da',
+                    outline: 'none',
+                    background: '#ffffff',
+                    color: '#495057',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value={10}>10 Baris</option>
+                  <option value={25}>25 Baris</option>
+                  <option value={50}>50 Baris</option>
+                  <option value="ALL">Lihat Semua ({auditAnalysis.diffRows.length})</option>
+                </select>
+              </div>
+            )}
           </div>
 
           {auditAnalysis.diffRows.length === 0 ? (
@@ -457,73 +673,171 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
               </div>
             </div>
           ) : (
-            <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', overflowX: 'auto' }}>
-              <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
-                <thead>
-                  <tr>
-                    <th style={{ width: '40px', textAlign: 'center' }}>No</th>
-                    <th>Wilayah</th>
-                    <th>Nama Outlet / Cabang</th>
-                    <th>Alamat</th>
-                    <th style={{ width: '110px', textAlign: 'center' }}>Kode Pos Target</th>
-                    <th style={{ width: '120px', textAlign: 'center' }}>Kode Pos PTEN</th>
-                    <th style={{ width: '130px', textAlign: 'center' }}>Status PTEN</th>
-                    <th style={{ width: '80px', textAlign: 'center' }}>Aksi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {auditAnalysis.diffRows.map((r, idx) => (
-                    <tr key={idx} style={{ background: '#fffcf5' }}>
-                      <td style={{ textAlign: 'center', color: '#878a99' }}>{idx + 1}</td>
-                      <td>
-                        <span className="badge badge-level1">{r.Wilayah || '-'}</span>
-                      </td>
-                      <td style={{ fontWeight: 600, color: '#212529' }}>
-                        {r['Nama Outlet'] || r.Cabang || r['Sandi Cabang'] || '-'}
-                      </td>
-                      <td style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {r.ALAMAT || '-'}
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <span className="code-cell" style={{ background: '#e8f7f5', color: '#0ab39c', fontWeight: 700 }}>
-                          {r['KODE POS'] || '-'}
-                        </span>
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <span className="code-cell" style={{ background: '#fff0ee', color: '#f06548', fontWeight: 700 }}>
-                          {r['KODE POS PTEN'] || '-'}
-                        </span>
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <span
-                          style={{
-                            padding: '0.15rem 0.5rem',
-                            borderRadius: '4px',
-                            fontSize: '0.7rem',
-                            fontWeight: 700,
-                            background: 'rgba(240, 101, 72, 0.1)',
-                            color: '#f06548',
-                            border: '1px solid rgba(240, 101, 72, 0.3)',
-                          }}
-                        >
-                          TIDAK COCOK
-                        </span>
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <button
-                          type="button"
-                          onClick={() => setDetailRow(r)}
-                          className="btn btn-outline btn-sm"
-                          style={{ padding: '0.2rem 0.45rem', fontSize: '0.72rem' }}
-                        >
-                          <Eye size={12} />
-                        </button>
-                      </td>
+            <>
+              <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', overflowX: 'auto' }}>
+                <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: '40px', textAlign: 'center' }}>No</th>
+                      <th>Wilayah</th>
+                      <th>Nama Outlet / Cabang</th>
+                      <th>Alamat</th>
+                      <th style={{ width: '110px', textAlign: 'center' }}>Kode Pos Target</th>
+                      <th style={{ width: '120px', textAlign: 'center' }}>Kode Pos PTEN</th>
+                      <th style={{ width: '130px', textAlign: 'center' }}>Status PTEN</th>
+                      <th style={{ width: '80px', textAlign: 'center' }}>Aksi</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {paginatedAuditRows.map((r, idx) => {
+                      const displayRowNo =
+                        auditPageSize === 'ALL'
+                          ? idx + 1
+                          : (auditPage - 1) * (auditPageSize as number) + idx + 1;
+
+                      return (
+                        <tr key={idx} style={{ background: '#fffcf5' }}>
+                          <td style={{ textAlign: 'center', color: '#878a99' }}>{displayRowNo}</td>
+                          <td>
+                            <span className="badge badge-level1">{r.Wilayah || '-'}</span>
+                          </td>
+                          <td style={{ fontWeight: 600, color: '#212529' }}>
+                            {r['Nama Outlet'] || r.Cabang || r['Sandi Cabang'] || '-'}
+                          </td>
+                          <td style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {r.ALAMAT || '-'}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <span className="code-cell" style={{ background: '#e8f7f5', color: '#0ab39c', fontWeight: 700 }}>
+                              {r['KODE POS'] || '-'}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <span className="code-cell" style={{ background: '#fff0ee', color: '#f06548', fontWeight: 700 }}>
+                              {r['KODE POS PTEN'] || '-'}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <span
+                              style={{
+                                padding: '0.15rem 0.5rem',
+                                borderRadius: '4px',
+                                fontSize: '0.7rem',
+                                fontWeight: 700,
+                                background: 'rgba(240, 101, 72, 0.1)',
+                                color: '#f06548',
+                                border: '1px solid rgba(240, 101, 72, 0.3)',
+                              }}
+                            >
+                              TIDAK COCOK
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              onClick={() => setDetailRow(r)}
+                              className="btn btn-outline btn-sm"
+                              style={{ padding: '0.2rem 0.45rem', fontSize: '0.72rem' }}
+                            >
+                              <Eye size={12} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Audit Pagination Footer */}
+              {auditPageSize !== 'ALL' && totalAuditPages > 1 && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '0.75rem',
+                    marginTop: '1rem',
+                    paddingTop: '0.75rem',
+                    borderTop: '1px solid #e9ebec',
+                  }}
+                >
+                  <div style={{ fontSize: '0.78rem', color: '#878a99' }}>
+                    Halaman <strong style={{ color: '#212529' }}>{auditPage}</strong> dari{' '}
+                    <strong style={{ color: '#212529' }}>{totalAuditPages}</strong>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      onClick={() => setAuditPage(1)}
+                      disabled={auditPage === 1}
+                      title="Halaman Pertama"
+                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.74rem' }}
+                    >
+                      <ChevronsLeft size={13} />
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      onClick={() => setAuditPage((p) => Math.max(1, p - 1))}
+                      disabled={auditPage === 1}
+                      title="Halaman Sebelumnya"
+                      style={{ padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}
+                    >
+                      <ChevronLeft size={13} />
+                    </button>
+
+                    {Array.from({ length: totalAuditPages }, (_, i) => i + 1).map((pageNum) => (
+                      <button
+                        key={pageNum}
+                        type="button"
+                        onClick={() => setAuditPage(pageNum)}
+                        style={{
+                          minWidth: '28px',
+                          height: '28px',
+                          padding: '0 0.4rem',
+                          fontSize: '0.74rem',
+                          fontWeight: auditPage === pageNum ? 700 : 500,
+                          borderRadius: '4px',
+                          border: auditPage === pageNum ? '1px solid #405189' : '1px solid #ced4da',
+                          background: auditPage === pageNum ? '#405189' : '#ffffff',
+                          color: auditPage === pageNum ? '#ffffff' : '#495057',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {pageNum}
+                      </button>
+                    ))}
+
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      onClick={() => setAuditPage((p) => Math.min(totalAuditPages, p + 1))}
+                      disabled={auditPage === totalAuditPages}
+                      title="Halaman Berikutnya"
+                      style={{ padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}
+                    >
+                      <ChevronRight size={13} />
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      onClick={() => setAuditPage(totalAuditPages)}
+                      disabled={auditPage === totalAuditPages}
+                      title="Halaman Terakhir"
+                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.74rem' }}
+                    >
+                      <ChevronsRight size={13} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

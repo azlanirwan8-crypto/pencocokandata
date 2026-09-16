@@ -90,7 +90,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   // 3 Sub-Tabs State: 'upload' | 'recommendation' | 'matched'
   const [checkerTab, setCheckerTab] = useState<'upload' | 'recommendation' | 'matched'>('upload');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<number | 'all'>(15);
+  const [pageSize, setPageSize] = useState<number | 'all'>(10);
   const effectivePageSize = useMemo(() => (pageSize === 'all' ? 999999 : pageSize), [pageSize]);
 
   // Multi-Selection State for Recommendations Tab

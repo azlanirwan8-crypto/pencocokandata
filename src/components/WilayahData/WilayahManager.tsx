@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   Info,
   Sparkles,
-  Database,
   Search,
   Download,
   Upload,
@@ -20,7 +19,11 @@ import {
   MapPin,
   Phone,
   Layers,
-  X
+  X,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import type { WilayahSetting } from '../../types';
@@ -48,7 +51,10 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedProvinsi, setSelectedProvinsi] = useState<string>('ALL');
-  const [isCloudConnected, setIsCloudConnected] = useState<boolean>(false);
+  
+  // Pagination State (Default 10 data per halaman)
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number | 'ALL'>(10);
 
   // Modals state
   const [modalMode, setModalMode] = useState<'create' | 'edit' | 'detail' | null>(null);
@@ -83,13 +89,12 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
     }
   }, [initialSettings]);
 
-  // Initial cloud check & auto-load/push on mount
+  // Initial cloud check & auto-load/push on mount silently in background
   useEffect(() => {
     let isMounted = true;
     const initData = async () => {
       try {
         const status = await checkNeonStatus();
-        if (isMounted) setIsCloudConnected(status.connected);
 
         const cloudData = await loadWilayahFromNeon();
         if (cloudData && Array.isArray(cloudData) && cloudData.length > 0) {
@@ -122,7 +127,7 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
     return settings.filter((item) => {
       const matchProvinsi =
         selectedProvinsi === 'ALL' ||
-        item.provinsi?.toLowerCase() === selectedProvinsi.toLowerCase();
+        (item.provinsi || '').toLowerCase() === selectedProvinsi.toLowerCase();
 
       if (!matchProvinsi) return false;
 
@@ -130,29 +135,84 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
       const term = searchTerm.toLowerCase();
 
       return (
-        item.wilayah?.toLowerCase().includes(term) ||
-        item.sandiCabang?.toLowerCase().includes(term) ||
-        item.branchCode?.toLowerCase().includes(term) ||
-        item.kodeCabang?.toLowerCase().includes(term) ||
-        item.namaOutlet?.toLowerCase().includes(term) ||
-        item.alamat?.toLowerCase().includes(term) ||
-        item.kodePos?.toLowerCase().includes(term) ||
-        item.kelurahan?.toLowerCase().includes(term) ||
-        item.kecamatan?.toLowerCase().includes(term) ||
-        item.dati2?.toLowerCase().includes(term) ||
-        item.provinsi?.toLowerCase().includes(term) ||
-        item.telp?.toLowerCase().includes(term)
+        (item.wilayah || '').toLowerCase().includes(term) ||
+        (item.sandiCabang || '').toLowerCase().includes(term) ||
+        (item.branchCode || '').toLowerCase().includes(term) ||
+        (item.kodeCabang || '').toLowerCase().includes(term) ||
+        (item.namaOutlet || '').toLowerCase().includes(term) ||
+        (item.alamat || '').toLowerCase().includes(term) ||
+        (item.kodePos || '').toLowerCase().includes(term) ||
+        (item.kelurahan || '').toLowerCase().includes(term) ||
+        (item.kecamatan || '').toLowerCase().includes(term) ||
+        (item.dati2 || '').toLowerCase().includes(term) ||
+        (item.provinsi || '').toLowerCase().includes(term) ||
+        (item.telp || '').toLowerCase().includes(term)
       );
     });
   }, [settings, searchTerm, selectedProvinsi]);
 
-  // Unique provinsi list for filter
+  // Unique provinsi list for filter and real metric calculation
   const provinsiList = useMemo(() => {
     const list = Array.from(
-      new Set(settings.map((s) => s.provinsi).filter(Boolean))
+      new Set(
+        settings
+          .map((s) => (s.provinsi?.trim() || normalizeWilayahItem(s).provinsi?.trim()))
+          .filter((p): p is string => Boolean(p && p !== '-' && p !== '0'))
+      )
     ).sort();
     return list;
   }, [settings]);
+
+  // Real-time completeness validation
+  const completenessStats = useMemo(() => {
+    let completeCount = 0;
+    const missingRows: string[] = [];
+
+    settings.forEach((s, idx) => {
+      const missing: string[] = [];
+      if (!s.sandiCabang?.trim() || s.sandiCabang === '-') missing.push('Sandi');
+      if (!s.branchCode?.trim() || s.branchCode === '-') missing.push('Branch Code');
+      if (!s.namaOutlet?.trim() || s.namaOutlet === '-') missing.push('Nama Outlet');
+      if (!s.alamat?.trim() || s.alamat === '-') missing.push('Alamat');
+      if (!s.kodePos?.trim() || s.kodePos === '-') missing.push('Kode Pos');
+      if (!s.dati2?.trim() || s.dati2 === '-') missing.push('Dati II');
+      if (!s.provinsi?.trim() || s.provinsi === '-') missing.push('Provinsi');
+
+      if (missing.length === 0) {
+        completeCount++;
+      } else {
+        missingRows.push(`Wilayah ${s.wilayah || idx + 1}: ${missing.join(', ')}`);
+      }
+    });
+
+    const isAllComplete = settings.length > 0 && completeCount === settings.length;
+    const percentage = settings.length > 0 ? Math.round((completeCount / settings.length) * 100) : 0;
+
+    return {
+      isAllComplete,
+      completeCount,
+      totalCount: settings.length,
+      incompleteCount: settings.length - completeCount,
+      percentage,
+      missingRows,
+    };
+  }, [settings]);
+
+  // Pagination calculation
+  const totalPages = pageSize === 'ALL' ? 1 : Math.max(1, Math.ceil(filteredSettings.length / pageSize));
+  
+  // Auto-clamp currentPage if filtered rows change
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(1);
+    }
+  }, [totalPages, currentPage]);
+
+  const paginatedSettings = useMemo(() => {
+    if (pageSize === 'ALL') return filteredSettings;
+    const start = (currentPage - 1) * pageSize;
+    return filteredSettings.slice(start, start + pageSize);
+  }, [filteredSettings, currentPage, pageSize]);
 
   // Handle saving all current data to database
   const handleSaveToDatabase = async (currentSettings = settings) => {
@@ -168,7 +228,6 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
       onSettingsSaved?.(normalized);
 
       if (success) {
-        setIsCloudConnected(true);
         setSuccessMsg(`Berhasil menyimpan ${normalized.length} data wilayah ke Database Cloud!`);
       } else {
         setSuccessMsg(`Data wilayah tersimpan secara lokal di browser (${normalized.length} data).`);
@@ -369,28 +428,9 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
             <Map size={22} />
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <h3 style={{ fontSize: '1.08rem', fontWeight: 700, color: '#212529', margin: 0 }}>
-                Master Setting Wilayah & Kanwil
-              </h3>
-              <span
-                style={{
-                  fontSize: '0.7rem',
-                  fontWeight: 600,
-                  padding: '0.15rem 0.5rem',
-                  borderRadius: '12px',
-                  background: isCloudConnected ? 'rgba(10, 179, 156, 0.12)' : 'rgba(240, 101, 72, 0.12)',
-                  color: isCloudConnected ? '#0ab39c' : '#f06548',
-                  border: isCloudConnected ? '1px solid rgba(10, 179, 156, 0.3)' : '1px solid rgba(240, 101, 72, 0.3)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.3rem',
-                }}
-              >
-                <Database size={10} />
-                <span>{isCloudConnected ? 'Cloud DB Terhubung' : 'Lokal / Offline'}</span>
-              </span>
-            </div>
+            <h3 style={{ fontSize: '1.08rem', fontWeight: 700, color: '#212529', margin: 0 }}>
+              Master Setting Wilayah & Kanwil
+            </h3>
             <p style={{ fontSize: '0.78rem', color: '#878a99', margin: '0.2rem 0 0' }}>
               Kelola daftar lengkap 17 Kantor Wilayah, alamat, kode pos, dati II, dan pemetaan kode branch untuk sistem pencocokan data.
             </p>
@@ -465,7 +505,7 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
             }}
           >
             {isSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-            <span>{isSaving ? 'Menyimpan...' : 'Simpan & Push DB'}</span>
+            <span>{isSaving ? 'Menyimpan...' : 'Simpan Data'}</span>
           </button>
         </div>
       </div>
@@ -561,23 +601,32 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
               width: '40px',
               height: '40px',
               borderRadius: '8px',
-              background: 'rgba(247, 184, 75, 0.12)',
-              color: '#f7b84b',
+              background: completenessStats.isAllComplete ? 'rgba(10, 179, 156, 0.12)' : 'rgba(240, 101, 72, 0.12)',
+              color: completenessStats.isAllComplete ? '#0ab39c' : '#f06548',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <Sparkles size={20} />
+            {completenessStats.isAllComplete ? <Sparkles size={20} /> : <AlertCircle size={20} />}
           </div>
           <div>
             <div style={{ fontSize: '0.72rem', color: '#878a99', fontWeight: 600, textTransform: 'uppercase' }}>
               Status Data
             </div>
-            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#0ab39c', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <CheckCircle2 size={14} />
-              <span>Lengkap & Siap Pakai</span>
-            </div>
+            {completenessStats.isAllComplete ? (
+              <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#0ab39c', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <CheckCircle2 size={14} />
+                <span>Lengkap (100%)</span>
+              </div>
+            ) : (
+              <div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f06548', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <AlertCircle size={14} />
+                  <span>{completenessStats.incompleteCount} Data Belum Lengkap ({completenessStats.percentage}%)</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -686,7 +735,10 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
             {/* Filter Provinsi */}
             <select
               value={selectedProvinsi}
-              onChange={(e) => setSelectedProvinsi(e.target.value)}
+              onChange={(e) => {
+                setSelectedProvinsi(e.target.value);
+                setCurrentPage(1);
+              }}
               style={{
                 padding: '0.45rem 0.65rem',
                 fontSize: '0.8rem',
@@ -707,9 +759,52 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
             </select>
           </div>
 
-          <div style={{ fontSize: '0.8rem', color: '#878a99' }}>
-            Menampilkan <strong style={{ color: '#212529' }}>{filteredSettings.length}</strong> dari{' '}
-            <strong style={{ color: '#212529' }}>{settings.length}</strong> data wilayah
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.78rem', color: '#878a99' }}>
+              <span>Tampilkan:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  const val = e.target.value === 'ALL' ? 'ALL' : Number(e.target.value);
+                  setPageSize(val);
+                  setCurrentPage(1);
+                }}
+                style={{
+                  padding: '0.3rem 0.5rem',
+                  fontSize: '0.78rem',
+                  borderRadius: '4px',
+                  border: '1px solid #ced4da',
+                  outline: 'none',
+                  background: '#ffffff',
+                  color: '#495057',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value={10}>10 Baris</option>
+                <option value={25}>25 Baris</option>
+                <option value={50}>50 Baris</option>
+                <option value={100}>100 Baris</option>
+                <option value="ALL">Lihat Semua ({filteredSettings.length})</option>
+              </select>
+            </div>
+
+            <div style={{ fontSize: '0.8rem', color: '#878a99' }}>
+              Menampilkan{' '}
+              <strong style={{ color: '#212529' }}>
+                {filteredSettings.length === 0
+                  ? 0
+                  : pageSize === 'ALL'
+                  ? 1
+                  : (currentPage - 1) * (pageSize as number) + 1}
+              </strong>{' '}
+              -{' '}
+              <strong style={{ color: '#212529' }}>
+                {pageSize === 'ALL'
+                  ? filteredSettings.length
+                  : Math.min(currentPage * (pageSize as number), filteredSettings.length)}
+              </strong>{' '}
+              dari <strong style={{ color: '#212529' }}>{filteredSettings.length}</strong> data wilayah
+            </div>
           </div>
         </div>
 
@@ -753,8 +848,13 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredSettings.map((item, idx) => {
+                paginatedSettings.map((item, idx) => {
                   const originalIndex = settings.indexOf(item);
+                  const displayRowNumber =
+                    pageSize === 'ALL'
+                      ? idx + 1
+                      : (currentPage - 1) * (pageSize as number) + idx + 1;
+
                   return (
                     <tr
                       key={idx}
@@ -765,7 +865,7 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
                     >
                       {/* No */}
                       <td style={{ textAlign: 'center', color: '#878a99', fontWeight: 500 }}>
-                        {idx + 1}
+                        {displayRowNumber}
                       </td>
 
                       {/* Wilayah */}
@@ -943,6 +1043,96 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Navigation Footer */}
+        {pageSize !== 'ALL' && totalPages > 1 && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '0.75rem',
+              marginTop: '1rem',
+              paddingTop: '0.75rem',
+              borderTop: '1px solid #e9ebec',
+            }}
+          >
+            <div style={{ fontSize: '0.78rem', color: '#878a99' }}>
+              Halaman <strong style={{ color: '#212529' }}>{currentPage}</strong> dari{' '}
+              <strong style={{ color: '#212529' }}>{totalPages}</strong>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                title="Halaman Pertama"
+                style={{ padding: '0.25rem 0.5rem', fontSize: '0.74rem' }}
+              >
+                <ChevronsLeft size={13} />
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                title="Halaman Sebelumnya"
+                style={{ padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}
+              >
+                <ChevronLeft size={13} />
+              </button>
+
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+                <button
+                  key={pageNum}
+                  type="button"
+                  onClick={() => setCurrentPage(pageNum)}
+                  style={{
+                    minWidth: '28px',
+                    height: '28px',
+                    padding: '0 0.4rem',
+                    fontSize: '0.74rem',
+                    fontWeight: currentPage === pageNum ? 700 : 500,
+                    borderRadius: '4px',
+                    border: currentPage === pageNum ? '1px solid #405189' : '1px solid #ced4da',
+                    background: currentPage === pageNum ? '#405189' : '#ffffff',
+                    color: currentPage === pageNum ? '#ffffff' : '#495057',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {pageNum}
+                </button>
+              ))}
+
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                title="Halaman Berikutnya"
+                style={{ padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}
+              >
+                <ChevronRight size={13} />
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+                title="Halaman Terakhir"
+                style={{ padding: '0.25rem 0.5rem', fontSize: '0.74rem' }}
+              >
+                <ChevronsRight size={13} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Logic Information Box */}

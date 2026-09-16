@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Database, Cpu, ShieldCheck, Trash2, Zap } from 'lucide-react';
+import { LayoutDashboard, Database, Cpu, ShieldCheck, Trash2 } from 'lucide-react';
 
 interface NavbarProps {
   activeTab: 'dashboard' | 'master' | 'working';
@@ -18,11 +18,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   masterCount,
   targetCount,
   onResetAll,
-  onOpenNeonModal,
-  onOpenSupabaseModal,
-  isNeonConnected,
 }) => {
-  const handleOpenModal = onOpenNeonModal || onOpenSupabaseModal;
   return (
     <header className="top-navbar">
       <div className="brand-section">
@@ -73,37 +69,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       </nav>
 
       <div className="nav-actions">
-        {/* Neon Postgres DB Button */}
-        {handleOpenModal && (
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            onClick={handleOpenModal}
-            title={
-              isNeonConnected
-                ? 'Neon Postgres (Vercel) Terhubung & Aktif'
-                : 'Status Database Neon Postgres (Vercel)'
-            }
-            style={{
-              borderColor: isNeonConnected
-                ? 'rgba(10, 179, 156, 0.4)'
-                : 'var(--border-subtle)',
-              color: isNeonConnected ? '#0ab39c' : '#495057',
-              backgroundColor: isNeonConnected ? 'rgba(10, 179, 156, 0.08)' : '#ffffff',
-              fontSize: '0.78rem',
-            }}
-            id="btn-cloud-db-config"
-          >
-            {isNeonConnected ? (
-              <Zap size={14} color="#0ab39c" />
-            ) : (
-              <Database size={14} color="#405189" />
-            )}
-            <span>
-              {isNeonConnected ? 'Neon DB Aktif' : 'Database Neon'}
-            </span>
-          </button>
-        )}
+
 
         {/* Reset Data Button (Always available) */}
         {onResetAll && (
