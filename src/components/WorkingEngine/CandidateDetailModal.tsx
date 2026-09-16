@@ -10,11 +10,83 @@ import {
   AlertTriangle,
   Info,
   ExternalLink,
+  Phone,
 } from 'lucide-react';
 import type { TargetRow, MasterRow, WilayahSetting } from '../../types';
 import type { CandidateOption } from '../../utils/recommender';
 import { calculateRealDistance, buildGoogleMapsDirectionsUrl } from '../../utils/geoDistance';
 import { extractWilayahFromBranchCode } from '../../utils/normalizer';
+
+// Helper ekstraksi nomor telepon / No HP KC/KCP
+const extractPhone = (row: any): string => {
+  if (!row) return '';
+  const candidates = [
+    row.Telp,
+    row['No Telp'],
+    row['No HP'],
+    row['NO TELP'],
+    row['NO HP'],
+    row['Telepon'],
+    row['TELEPON'],
+    row['Nomor Telepon'],
+    row['No. Telepon'],
+    row['No. Telp'],
+    row['No. HP'],
+    row['Kontak'],
+    row['No HP Pemimpin'],
+    row['NO HP PEMIMPIN'],
+    row['No Telp KC'],
+    row['No Telp KCP'],
+    row['No HP KC/KCP'],
+    row['Phone'],
+    row['Telephone'],
+  ];
+  for (const c of candidates) {
+    if (c !== undefined && c !== null && String(c).trim() !== '' && String(c).trim() !== '-') {
+      return String(c).trim();
+    }
+  }
+  return '';
+};
+
+const standardMasterKeys = new Set([
+  'Wilayah',
+  'Sandi Cabang',
+  'Sandi',
+  'Cabang',
+  'Branch Code',
+  'Kode Cabang',
+  'Nama Outlet',
+  'Status Outlet',
+  'ALAMAT',
+  'KODE POS',
+  'Kelurahan',
+  'Kecamatan',
+  'Dati II',
+  'Kode Dati II',
+  'Provinsi',
+  'Telp',
+  'No Telp',
+  'No HP',
+  'NO TELP',
+  'NO HP',
+  'Telepon',
+  'TELEPON',
+  'Nomor Telepon',
+  'No. Telepon',
+  'No. Telp',
+  'No. HP',
+  'Kontak',
+  'No HP Pemimpin',
+  'NO HP PEMIMPIN',
+  'No Telp KC',
+  'No Telp KCP',
+  'No HP KC/KCP',
+  'Phone',
+  'Telephone',
+  'SUMBER DATA',
+  'No',
+]);
 
 interface CandidateDetailModalProps {
   isOpen: boolean;
@@ -40,6 +112,14 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
   const m = cand.master;
   const isTop1 = cand.rank === 1;
   const themeColor = isTop1 ? '#0ab39c' : cand.rank === 2 ? '#d97706' : '#3577f1';
+
+  const masterPhone = extractPhone(m);
+
+  const extraMasterFields = Object.entries(m).filter(([k, v]) => {
+    if (standardMasterKeys.has(k) || k.startsWith('_')) return false;
+    if (v === undefined || v === null || String(v).trim() === '' || String(v).trim() === '-') return false;
+    return typeof v === 'string' || typeof v === 'number';
+  });
 
   const candWilayahInfo = extractWilayahFromBranchCode(
     m['Branch Code'] || m['Kode Cabang'] || r['Branch Code'] || r['Kode Cabang'] || '',
@@ -553,6 +633,69 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                     </div>
                   </div>
 
+                  {/* Status Outlet */}
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Status Outlet</div>
+                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ flex: 1 }}>
+                      {r['Status Outlet'] ? (
+                        <span
+                          style={{
+                            padding: '0.12rem 0.5rem',
+                            borderRadius: '4px',
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            background: '#ffedd5',
+                            color: '#c2410c',
+                            border: '1px solid #fed7aa',
+                          }}
+                        >
+                          {r['Status Outlet']}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#94a3b8' }}>-</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Sandi Cabang */}
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Sandi Cabang</div>
+                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>
+                      {r['Sandi Cabang'] || r.Sandi || '-'}
+                    </div>
+                  </div>
+
+                  {/* Kode Cabang */}
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Kode Cabang</div>
+                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>
+                      {r['Kode Cabang'] || '-'}
+                    </div>
+                  </div>
+
+                  {/* No HP / Telp */}
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>No HP / Telp</div>
+                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>
+                      {extractPhone(r) ? (
+                        <span style={{ color: '#c2410c', fontWeight: 600 }}>{extractPhone(r)}</span>
+                      ) : (
+                        <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>-</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Wilayah */}
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Wilayah</div>
+                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{r.Wilayah || '-'}</div>
+                  </div>
+
                   {/* Kode Pos */}
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
                     <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Kode Pos</div>
@@ -580,6 +723,15 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                     <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
                     <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{r['Dati II'] || '-'}</div>
                   </div>
+
+                  {/* Kode Dati II jika ada */}
+                  {r['Kode Dati II'] && (
+                    <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
+                      <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Kode Dati II</div>
+                      <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
+                      <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{r['Kode Dati II']}</div>
+                    </div>
+                  )}
 
                   {/* Provinsi */}
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
@@ -649,6 +801,92 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                     </div>
                   </div>
 
+                  {/* Status Outlet */}
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Status Outlet</div>
+                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ flex: 1 }}>
+                      {m['Status Outlet'] ? (
+                        <span
+                          style={{
+                            padding: '0.12rem 0.5rem',
+                            borderRadius: '4px',
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            background: '#dcfce7',
+                            color: '#15803d',
+                            border: '1px solid #bbf7d0',
+                          }}
+                        >
+                          {m['Status Outlet']}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#94a3b8' }}>-</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Sandi Cabang */}
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Sandi Cabang</div>
+                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>
+                      {m['Sandi Cabang'] || m.Sandi || '-'}
+                    </div>
+                  </div>
+
+                  {/* Kode Cabang */}
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Kode Cabang</div>
+                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>
+                      {m['Kode Cabang'] || '-'}
+                    </div>
+                  </div>
+
+                  {/* No HP / Telp KC/KCP */}
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                      <Phone size={12} color="#15803d" />
+                      <span>No HP / Telp</span>
+                    </div>
+                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      {masterPhone ? (
+                        <a
+                          href={`tel:${masterPhone.replace(/[^0-9+]/g, '')}`}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.3rem',
+                            padding: '0.12rem 0.55rem',
+                            borderRadius: '4px',
+                            background: 'rgba(10, 179, 156, 0.12)',
+                            color: '#0ab39c',
+                            fontWeight: 700,
+                            textDecoration: 'none',
+                            fontSize: '0.75rem',
+                          }}
+                          title="Klik untuk menghubungi outlet KC/KCP ini"
+                        >
+                          <Phone size={11} />
+                          <span>{masterPhone}</span>
+                        </a>
+                      ) : (
+                        <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Tidak terisi di master</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Wilayah */}
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Wilayah</div>
+                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>
+                      {m.Wilayah || candWilayahInfo.wilayahName || '-'}
+                    </div>
+                  </div>
+
                   {/* Kode Pos */}
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
                     <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Kode Pos</div>
@@ -677,12 +915,45 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                     <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{m['Dati II'] || '-'}</div>
                   </div>
 
+                  {/* Kode Dati II jika ada */}
+                  {m['Kode Dati II'] && (
+                    <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
+                      <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Kode Dati II</div>
+                      <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
+                      <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{m['Kode Dati II']}</div>
+                    </div>
+                  )}
+
                   {/* Provinsi */}
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
                     <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Provinsi</div>
                     <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
                     <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{m.Provinsi || '-'}</div>
                   </div>
+
+                  {/* Dynamic extra fields if uploaded master contains custom columns */}
+                  {extraMasterFields.map(([fieldKey, fieldVal]) => (
+                    <div
+                      key={fieldKey}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '0.38rem 0.75rem',
+                        borderBottom: '1px solid #f1f5f9',
+                        fontSize: '0.75rem',
+                        minHeight: '30px',
+                        background: '#f8fafc',
+                      }}
+                    >
+                      <div style={{ width: '105px', minWidth: '105px', color: '#475569', fontWeight: 600 }} title={fieldKey}>
+                        {fieldKey}
+                      </div>
+                      <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
+                      <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>
+                        {String(fieldVal)}
+                      </div>
+                    </div>
+                  ))}
 
                   {/* Alamat Master */}
                   <div style={{ padding: '0.55rem 0.75rem', background: '#fafafa', minHeight: '68px', display: 'flex', flexDirection: 'column' }}>
