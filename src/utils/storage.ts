@@ -3,25 +3,33 @@ const DB_NAME = 'ToolsDataMatcherDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'app_data';
 
-function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+let cachedDBPromise: Promise<IDBDatabase> | null = null;
 
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME);
-      }
-    };
+function getDB(): Promise<IDBDatabase> {
+  if (!cachedDBPromise) {
+    cachedDBPromise = new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME);
+        }
+      };
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => {
+        cachedDBPromise = null;
+        reject(request.error);
+      };
+    });
+  }
+  return cachedDBPromise;
 }
 
 export async function setItem<T>(key: string, value: T): Promise<void> {
   try {
-    const db = await openDB();
+    const db = await getDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
@@ -36,7 +44,7 @@ export async function setItem<T>(key: string, value: T): Promise<void> {
 
 export async function getItem<T>(key: string): Promise<T | null> {
   try {
-    const db = await openDB();
+    const db = await getDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const store = tx.objectStore(STORE_NAME);
@@ -52,7 +60,7 @@ export async function getItem<T>(key: string): Promise<T | null> {
 
 export async function clearAllStorage(): Promise<void> {
   try {
-    const db = await openDB();
+    const db = await getDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);

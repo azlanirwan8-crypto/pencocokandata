@@ -64,6 +64,10 @@ function tokenIntersectionRatio(a: string, b: string, minLen = 3): number {
  */
 const MIN_THRESHOLD = 50;
 
+// High-performance in-memory cache for O(1) instant role resolution
+const roleResolveCache = new Map<string, ResolvedRoleMapping | null>();
+let lastRoleListRef: RoleMappingRecord[] | null = null;
+
 export function resolveRoleMappingForBranch(
   branchName: string,
   dati2?: string,
@@ -74,6 +78,11 @@ export function resolveRoleMappingForBranch(
 ): ResolvedRoleMapping | null {
   if (!roleList || roleList.length === 0) return null;
 
+  if (lastRoleListRef !== roleList) {
+    roleResolveCache.clear();
+    lastRoleListRef = roleList;
+  }
+
   const cleanBranch = normalizeBranchName(branchName);
   const cleanCity = cleanDati(dati2 || '')
     .replace(/^(KOTA|KABUPATEN|KAB)\s+/i, '')
@@ -82,6 +91,11 @@ export function resolveRoleMappingForBranch(
   const cleanKel = cleanText(kelurahan || '').toUpperCase();
   const cleanKec = cleanText(kecamatan || '').toUpperCase();
   const cleanAlm = cleanText(alamat || '').toUpperCase();
+
+  const cacheKey = `${cleanBranch}|${cleanCity}|${cleanKel}|${cleanKec}|${cleanAlm.slice(0, 30)}`;
+  if (roleResolveCache.has(cacheKey)) {
+    return roleResolveCache.get(cacheKey) || null;
+  }
 
   let bestRecord: RoleMappingRecord | null = null;
   let bestScore = -1;
@@ -184,7 +198,7 @@ export function resolveRoleMappingForBranch(
     const isKc = getUnitCategory(bestRecord.organisasiTujuan) === 'KC';
     const wondr = getWondrRecommendation(bestRecord);
 
-    return {
+    const res: ResolvedRoleMapping = {
       organisasiRole: bestRecord.organisasiTujuan,
       tipeUnitRole: isKc ? 'Cabang Utama (KC)' : 'Outlet (KCP)',
       alurWondr: wondr.tier,
@@ -196,7 +210,10 @@ export function resolveRoleMappingForBranch(
       matchScore: bestScore,
       matched: true,
     };
+    roleResolveCache.set(cacheKey, res);
+    return res;
   }
 
+  roleResolveCache.set(cacheKey, null);
   return null;
 }

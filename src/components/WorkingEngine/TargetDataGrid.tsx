@@ -107,6 +107,18 @@ export interface RoleMatchWithDistance {
  * Dianalisis langsung dari data master yang diunggah user:
  * - Menemukan data cabang di masterRows
  * - Memastikan STRICT 1 pulau (tidak menyeberang pulau)
+ */
+// High-performance cache for Role Matches to guarantee 60 FPS smooth rendering (0ms per row)
+const roleMatchCache = new Map<string, RoleMatchWithDistance[]>();
+let lastRoleListCacheRef: RoleMappingRecord[] | null = null;
+let lastMasterRowsCacheRef: MasterRow[] | null = null;
+let cachedBranchMap: Map<string, MasterRow> | null = null;
+let cachedFullRoleList: RoleMappingRecord[] | null = null;
+const resolvedMasterCache = new Map<string, MasterRow | null>();
+
+/**
+ * Helper Cerdas Rekomendasi Mapping Role untuk Tab 2:
+ * - Mengutamakan cabang dengan 3 role lengkap (Maker, Checker, Signer)
  * - Menghitung jarak realistis dari kandidat aktif
  * - Mengurutkan dari jarak terdekat ke terjauh
  */
@@ -119,41 +131,69 @@ export function findTopRoleMatchesByLocation(
 ): RoleMatchWithDistance[] {
   if (!roleMappingList || roleMappingList.length === 0) return [];
 
-  // Filter hanya cabang yang memiliki 3 role lengkap (Maker=1, Checker=1, Signer=1)
-  const fullRoleList = roleMappingList.filter(
-    (r) => r.qrsCabsal === 1 && r.qrsCabapv1 === 1 && r.qrsCabapv2 === 1
-  );
-  if (fullRoleList.length === 0) return [];
-
-  const candProv = activeCandidateMaster?.Provinsi || targetRowFallback?.Provinsi || '';
-  const candidateIsland = getIslandFromProvinsi(candProv);
-
-  // Fast index untuk matching organisasiTujuan ke masterRows yang diunggah
-  const branchMap = new Map<string, MasterRow>();
-  for (const m of masterRows) {
-    const info = cleanText(m['Informasi Cabang']).toUpperCase();
-    const outlet = cleanText(m['Nama Outlet']).toUpperCase();
-    const cabang = cleanText(m.Cabang).toUpperCase();
-    const sandi = cleanText(m['Sandi Cabang']).toUpperCase();
-    if (info && !branchMap.has(info)) branchMap.set(info, m);
-    if (outlet && !branchMap.has(outlet)) branchMap.set(outlet, m);
-    if (cabang && !branchMap.has(cabang)) branchMap.set(cabang, m);
-    if (sandi && !branchMap.has(sandi)) branchMap.set(sandi, m);
+  // Reset caches if dataset references changed
+  if (lastRoleListCacheRef !== roleMappingList) {
+    roleMatchCache.clear();
+    cachedFullRoleList = roleMappingList.filter(
+      (r) => r.qrsCabsal === 1 && r.qrsCabapv1 === 1 && r.qrsCabapv2 === 1
+    );
+    lastRoleListCacheRef = roleMappingList;
   }
 
+  if (lastMasterRowsCacheRef !== masterRows) {
+    roleMatchCache.clear();
+    resolvedMasterCache.clear();
+    cachedBranchMap = new Map<string, MasterRow>();
+    for (const m of masterRows) {
+      const info = cleanText(m['Informasi Cabang']).toUpperCase();
+      const outlet = cleanText(m['Nama Outlet']).toUpperCase();
+      const cabang = cleanText(m.Cabang).toUpperCase();
+      const sandi = cleanText(m['Sandi Cabang']).toUpperCase();
+      if (info && !cachedBranchMap.has(info)) cachedBranchMap.set(info, m);
+      if (outlet && !cachedBranchMap.has(outlet)) cachedBranchMap.set(outlet, m);
+      if (cabang && !cachedBranchMap.has(cabang)) cachedBranchMap.set(cabang, m);
+      if (sandi && !cachedBranchMap.has(sandi)) cachedBranchMap.set(sandi, m);
+    }
+    lastMasterRowsCacheRef = masterRows;
+  }
+
+  const fullRoleList = cachedFullRoleList || [];
+  if (fullRoleList.length === 0) return [];
+
+  const candIdentifier = activeCandidateMaster?.['Sandi Cabang'] || activeCandidateMaster?.Cabang || activeCandidateMaster?.['Nama Outlet'] || String(targetRowFallback?.No || '');
+  const candProv = activeCandidateMaster?.Provinsi || targetRowFallback?.Provinsi || '';
+  const candDati = activeCandidateMaster?.['Dati II'] || activeCandidateMaster?.['Kota/Dati II'] || targetRowFallback?.['Dati II'] || '';
+  const cacheKey = `${candIdentifier}|${candProv}|${candDati}|${count}`;
+
+  if (roleMatchCache.has(cacheKey)) {
+    return roleMatchCache.get(cacheKey)!;
+  }
+
+  const candidateIsland = getIslandFromProvinsi(candProv);
+  const branchMap = cachedBranchMap || new Map<string, MasterRow>();
+
   function resolveMaster(orgName: string): MasterRow | null {
+    if (resolvedMasterCache.has(orgName)) {
+      return resolvedMasterCache.get(orgName)!;
+    }
+
     const cleanOrg = cleanText(orgName)
       .toUpperCase()
       .replace(/\b(BRANCH OFFICE|SUB BRANCH|MAIN BRANCH|KC|KCP|KK|KANTOR CABANG)\b/g, '')
       .trim();
 
-    if (branchMap.has(cleanOrg)) return branchMap.get(cleanOrg)!;
+    if (branchMap.has(cleanOrg)) {
+      const found = branchMap.get(cleanOrg)!;
+      resolvedMasterCache.set(orgName, found);
+      return found;
+    }
 
     const tokens = cleanOrg.split(/\s+/).filter((t) => t.length >= 3);
     let best: MasterRow | null = null;
     let bestScore = -1;
 
-    for (const m of masterRows) {
+    for (let i = 0; i < masterRows.length; i++) {
+      const m = masterRows[i];
       const info = cleanText(m['Informasi Cabang']).toUpperCase();
       const outlet = cleanText(m['Nama Outlet']).toUpperCase();
       const kota = cleanText(m['Kota/Dati II'] || m['Dati II'] || m.Kota).toUpperCase();
@@ -176,8 +216,10 @@ export function findTopRoleMatchesByLocation(
         bestScore = score;
         best = m;
       }
+      if (bestScore >= 95) break; // Early exit on high confidence
     }
 
+    resolvedMasterCache.set(orgName, best);
     return best;
   }
 
@@ -192,7 +234,7 @@ export function findTopRoleMatchesByLocation(
     'KODE POS': activeCandidateMaster?.['KODE POS'] || targetRowFallback?.['KODE POS'] || '',
     Kelurahan: activeCandidateMaster?.Kelurahan || targetRowFallback?.Kelurahan || '',
     Kecamatan: activeCandidateMaster?.Kecamatan || targetRowFallback?.Kecamatan || '',
-    'Dati II': activeCandidateMaster?.['Dati II'] || activeCandidateMaster?.['Kota/Dati II'] || targetRowFallback?.['Dati II'] || '',
+    'Dati II': candDati,
     'Kode Dati II': activeCandidateMaster?.['Kode Dati II'] || '',
     Provinsi: candProv,
   };
@@ -240,7 +282,9 @@ export function findTopRoleMatchesByLocation(
     return a.distanceKm - b.distanceKm;
   });
 
-  return scored.slice(0, count);
+  const result = scored.slice(0, count);
+  roleMatchCache.set(cacheKey, result);
+  return result;
 }
 
 export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
@@ -364,20 +408,21 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
 
 
   // Trigger recommendation calculation in BACKGROUND as soon as data is ready!
-  // Sesuai request: Tidak mengganggu UI, berjalan di latar belakang, dan tidak wipe saat pindah tab
+  // Trigger recommendation calculation in BACKGROUND as soon as raw dataset or master changes!
+  // Sesuai request: 100% Ringan, tidak lag/freeze saat klik setujui, berjalan di latar belakang, dan tidak wipe saat pindah tab
   useEffect(() => {
-    if (targetRecommendationRows.length === 0 || masterRows.length === 0) {
+    if (rows.length === 0 || masterRows.length === 0) {
       setRecommendations([]);
       lastAnalyzedFingerprintRef.current = '';
       setIsComputingRecs(false);
       return;
     }
 
-    // Dataset fingerprint
-    const currentFingerprint = `${targetRecommendationRows.length}-${targetRecommendationRows[0]?.No || ''}-${targetRecommendationRows[targetRecommendationRows.length - 1]?.No || ''}-${masterRows.length}`;
+    // Dataset fingerprint based on source uploaded rows & masterRows
+    const baseFingerprint = `${rows.length}-${rows[0]?.No || ''}-${rows[rows.length - 1]?.No || ''}-${masterRows.length}`;
 
-    // Jika data sama persis, pertahankan rekomendasi di memori (0ms instant display)
-    if (recommendations.length > 0 && lastAnalyzedFingerprintRef.current === currentFingerprint) {
+    // Jika dataset sumber sama dan rekomendasi sudah ada, JANGAN hitung ulang saat user klik Setujui (0ms instan & smooth)
+    if (lastAnalyzedFingerprintRef.current === baseFingerprint && recommendations.length > 0) {
       return;
     }
 
@@ -385,29 +430,35 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
       cancelProgressiveRef.current();
     }
 
+    const rowsToCompute = rows.filter((r) => !isRowMatched(r));
+    if (rowsToCompute.length === 0) {
+      setIsComputingRecs(false);
+      return;
+    }
+
     setIsComputingRecs(true);
-    lastAnalyzedFingerprintRef.current = currentFingerprint;
+    lastAnalyzedFingerprintRef.current = baseFingerprint;
 
     const cancel = generateRecommendationsProgressive(
-      targetRecommendationRows,
+      rowsToCompute,
       masterRows,
       masterProximityIndex,
       (recs, isDone) => {
         setRecommendations(recs);
-        if (isDone || recs.length >= targetRecommendationRows.length) {
+        if (isDone || recs.length >= rowsToCompute.length) {
           setIsComputingRecs(false);
         }
       },
-      100,
-      500
+      50,
+      200
     );
 
     cancelProgressiveRef.current = cancel;
 
     return () => {
-      // Tetap berjalan di background saat user pindah tab
+      // Tetap berjalan di background
     };
-  }, [targetRecommendationRows, masterRows, masterProximityIndex]);
+  }, [rows.length, masterRows, masterProximityIndex]);
 
   // Bersihkan worker hanya saat unmount
   useEffect(() => {
