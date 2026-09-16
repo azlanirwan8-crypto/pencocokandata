@@ -32,6 +32,7 @@ import {
   saveTargetToNeon,
   clearTargetFromNeon,
   loadWilayahFromNeon,
+  saveWilayahToNeon,
 } from './utils/neonSync';
 import { NeonDatabaseModal } from './components/NeonDatabaseModal';
 import { SnapshotModal, type WorkspaceSnapshot } from './components/SnapshotModal';
@@ -131,6 +132,7 @@ export const App: React.FC = () => {
         if (savedWilayah && Array.isArray(savedWilayah) && savedWilayah.length > 0) {
           const normalized = savedWilayah.map((s, idx) => normalizeWilayahItem(s, idx));
           setWilayahSettings(normalized);
+          setItem('wilayah_settings', normalized);
         } else {
           setWilayahSettings(DEFAULT_WILAYAH_DATA);
           setItem('wilayah_settings', DEFAULT_WILAYAH_DATA);
@@ -173,6 +175,8 @@ export const App: React.FC = () => {
             const normalized = neonWilayah.value.map((s, idx) => normalizeWilayahItem(s, idx));
             setWilayahSettings(normalized);
             setItem('wilayah_settings', normalized);
+          } else if (neonCheck.status === 'fulfilled' && neonCheck.value.connected) {
+            await saveWilayahToNeon(DEFAULT_WILAYAH_DATA);
           }
         } catch (cloudErr) {
           console.warn('Background Neon sync skipped:', cloudErr);

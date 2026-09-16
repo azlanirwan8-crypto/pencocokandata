@@ -297,25 +297,47 @@ export const DEFAULT_WILAYAH_DATA: WilayahSetting[] = [
  */
 export function normalizeWilayahItem(item: Partial<WilayahSetting>, index = 0): WilayahSetting {
   const wilayahStr = String(item.wilayah || item.kodeWilayah || (index + 1)).trim();
-  const digit2 = wilayahStr.replace(/\D/g, '').padStart(2, '0') || '01';
-  const sandi = item.sandiCabang ? String(item.sandiCabang).trim() : `6${digit2}`;
-  const branch = item.branchCode ? String(item.branchCode).trim() : `${sandi}${sandi}`;
-  const nama = item.namaOutlet || item.keterangan || `WILAYAH ${digit2}`;
+  const rawNum = wilayahStr.replace(/\D/g, '');
+  const digit2 = rawNum ? rawNum.padStart(2, '0') : String(index + 1).padStart(2, '0');
+
+  // Match default record if available
+  const defaultRec = DEFAULT_WILAYAH_DATA.find((d) => {
+    return (
+      d.wilayah === wilayahStr ||
+      d.kodeWilayah === digit2 ||
+      (rawNum && String(parseInt(d.wilayah, 10)) === String(parseInt(rawNum, 10))) ||
+      (d.sandiCabang && item.sandiCabang && String(d.sandiCabang) === String(item.sandiCabang)) ||
+      (d.branchCode && item.branchCode && String(d.branchCode) === String(item.branchCode))
+    );
+  });
+
+  const sandi = (item.sandiCabang && String(item.sandiCabang).trim()) || defaultRec?.sandiCabang || `6${digit2}`;
+  const branch = (item.branchCode && String(item.branchCode).trim()) || defaultRec?.branchCode || `${sandi}${sandi}`;
+  const kodeCab = (item.kodeCabang && String(item.kodeCabang).trim().toUpperCase()) || defaultRec?.kodeCabang || '';
+  const nama = (item.namaOutlet && String(item.namaOutlet).trim()) || defaultRec?.namaOutlet || item.keterangan || `WILAYAH ${digit2}`;
+  const status = (item.statusOutlet && String(item.statusOutlet).trim().toUpperCase()) || defaultRec?.statusOutlet || 'KANWIL';
+  const alamat = (item.alamat && String(item.alamat).trim()) || defaultRec?.alamat || '';
+  const kodePos = (item.kodePos && String(item.kodePos).trim()) || defaultRec?.kodePos || '';
+  const kelurahan = (item.kelurahan && String(item.kelurahan).trim()) || defaultRec?.kelurahan || '';
+  const kecamatan = (item.kecamatan && String(item.kecamatan).trim()) || defaultRec?.kecamatan || '';
+  const dati2 = (item.dati2 && String(item.dati2).trim()) || defaultRec?.dati2 || '';
+  const provinsi = (item.provinsi && String(item.provinsi).trim()) || defaultRec?.provinsi || '';
+  const telp = (item.telp && String(item.telp).trim()) || defaultRec?.telp || '';
 
   return {
-    wilayah: wilayahStr,
+    wilayah: (item.wilayah && String(item.wilayah).trim()) || defaultRec?.wilayah || rawNum || String(index + 1),
     sandiCabang: sandi,
     branchCode: branch,
-    kodeCabang: item.kodeCabang ? String(item.kodeCabang).trim().toUpperCase() : '',
+    kodeCabang: kodeCab,
     namaOutlet: nama,
-    statusOutlet: item.statusOutlet ? String(item.statusOutlet).trim().toUpperCase() : 'KANWIL',
-    alamat: item.alamat ? String(item.alamat).trim() : '',
-    kodePos: item.kodePos ? String(item.kodePos).trim() : '',
-    kelurahan: item.kelurahan ? String(item.kelurahan).trim() : '',
-    kecamatan: item.kecamatan ? String(item.kecamatan).trim() : '',
-    dati2: item.dati2 ? String(item.dati2).trim() : '',
-    provinsi: item.provinsi ? String(item.provinsi).trim() : '',
-    telp: item.telp ? String(item.telp).trim() : '',
+    statusOutlet: status,
+    alamat,
+    kodePos,
+    kelurahan,
+    kecamatan,
+    dati2,
+    provinsi,
+    telp,
     kodeWilayah: item.kodeWilayah || digit2,
     keterangan: item.keterangan || nama,
   };
