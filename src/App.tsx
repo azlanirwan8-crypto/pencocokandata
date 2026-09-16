@@ -216,7 +216,7 @@ export const App: React.FC = () => {
 
   const persistTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Helper to persist target & match data across IndexedDB, Neon Postgres, and Supabase Cloud
+  // Helper to persist target & match data across IndexedDB and Neon Postgres asynchronously (0ms UI blocking)
   const persistTargetData = (
     payload: {
       rows: TargetRow[];
@@ -226,14 +226,14 @@ export const App: React.FC = () => {
     },
     immediate = false
   ) => {
-    // 1. Local IndexedDB (Instant non-blocking local cache)
-    setItem('target_data', payload);
-
     if (persistTimeoutRef.current) {
       clearTimeout(persistTimeoutRef.current);
     }
 
-    const syncRemote = () => {
+    const doPersist = () => {
+      // 1. Local IndexedDB (Instant asynchronous cache write)
+      setItem('target_data', payload).catch((e) => console.warn('IndexedDB auto-save skipped:', e));
+
       // 2. Neon Postgres (Serverless DB on Vercel)
       saveTargetToNeon(payload).catch((e) => console.warn('Neon target auto-save skipped:', e));
 
@@ -241,10 +241,10 @@ export const App: React.FC = () => {
     };
 
     if (immediate) {
-      syncRemote();
+      setTimeout(doPersist, 0);
     } else {
-      // 350ms trailing debounce: eliminates network I/O lag during rapid batch actions
-      persistTimeoutRef.current = setTimeout(syncRemote, 350);
+      // 400ms trailing debounce: eliminates network & storage I/O lag during rapid batch actions
+      persistTimeoutRef.current = setTimeout(doPersist, 400);
     }
   };
 
@@ -680,82 +680,92 @@ export const App: React.FC = () => {
     }
   };
 
-  // Setujui Semua Rekomendasi: Mengisi atribut master ke baris target yang cocok, diperkaya PTEN & Mapping Role
+  // Setujui Semua Rekomendasi: Mengisi atribut master ke baris target yang cocok, diperkaya PTEN & Mapping Role (High-performance non-blocking)
   const handleApproveAllRecommendations = (recs: RecommendationResult[]) => {
     if (recs.length === 0) return;
     const recMap = new Map<string, MasterRow>();
-    recs.forEach((r) => {
+    for (let i = 0; i < recs.length; i++) {
+      const r = recs[i];
       if (r?.targetRow?.No !== undefined && r.recommendedMaster) {
         recMap.set(String(r.targetRow.No).trim(), r.recommendedMaster);
       }
-    });
+    }
 
-    setTargetRows((prev) => {
-      const updated = prev.map((row) => {
-        const rowNoKey = String(row.No).trim();
-        const matchedMaster = recMap.get(rowNoKey);
-        if (!matchedMaster) return row;
+    React.startTransition(() => {
+      setTargetRows((prev) => {
+        const nowStr = new Date().toISOString();
+        const updated: TargetRow[] = new Array(prev.length);
 
-        const branchCode = matchedMaster['Branch Code'] || matchedMaster['Kode Cabang'] || '';
-        const resolved = extractWilayahFromBranchCode(
-          branchCode,
-          wilayahSettings,
-          matchedMaster.Wilayah || row.Wilayah || '-'
-        );
+        for (let i = 0; i < prev.length; i++) {
+          const row = prev[i];
+          const rowNoKey = String(row.No).trim();
+          const matchedMaster = recMap.get(rowNoKey);
+          if (!matchedMaster) {
+            updated[i] = row;
+            continue;
+          }
 
-        // Validasi PTEN & Role Mapping untuk rekomendasi
-        const ptenRes = validatePtenForTarget(row['KODE POS'], row['Dati II'] || row.Kota || '', ptenIndex);
-        const branchNameToLook = matchedMaster['Nama Outlet'] || matchedMaster.Cabang || matchedMaster['Sandi Cabang'] || '';
-        const roleRes = resolveRoleMappingForBranch(
-          branchNameToLook,
-          row['Dati II'] || row.Kota,
-          row.Kelurahan,
-          row.Kecamatan,
-          row.ALAMAT || matchedMaster.ALAMAT,
-          roleMappingList
-        );
+          const branchCode = matchedMaster['Branch Code'] || matchedMaster['Kode Cabang'] || '';
+          const resolved = extractWilayahFromBranchCode(
+            branchCode,
+            wilayahSettings,
+            matchedMaster.Wilayah || row.Wilayah || '-'
+          );
 
-        return {
-          ...row,
-          _isMatched: true,
-          _matchLevel: 'recommendation' as const,
-          'Sandi Cabang':
-            matchedMaster['Sandi Cabang'] ||
-            [matchedMaster.Sandi, matchedMaster.Cabang].filter(Boolean).join(' - ') ||
-            matchedMaster.Cabang ||
-            '',
-          Sandi: matchedMaster.Sandi || matchedMaster['Sandi Cabang'] || '',
-          Cabang: matchedMaster.Cabang || matchedMaster['Sandi Cabang'] || '',
-          'Branch Code': branchCode,
-          'Kode Cabang': matchedMaster['Kode Cabang'] || '',
-          'Nama Outlet': matchedMaster['Nama Outlet'] || '',
-          'Status Outlet': matchedMaster['Status Outlet'] || 'Aktif',
-          ALAMAT: matchedMaster.ALAMAT || '',
-          Wilayah: resolved.wilayahName !== '-' ? resolved.wilayahName : (row.Wilayah || '-'),
-          'KOTA PTEN': ptenRes.kotaPten,
-          'KODE POS PTEN': ptenRes.kodePosPten,
-          'CEK KODE POS + PTEN': ptenRes.statusPten,
-          organisasiRole: roleRes?.organisasiRole || row.organisasiRole,
-          tipeUnitRole: roleRes?.tipeUnitRole || row.tipeUnitRole,
-          alurWondr: roleRes?.alurWondr || row.alurWondr,
-          flowDescription: roleRes?.flowDescription || row.flowDescription,
-          roleCabsal: roleRes?.qrsCabsal ?? row.roleCabsal,
-          roleCabapv1: roleRes?.qrsCabapv1 ?? row.roleCabapv1,
-          roleCabapv2: roleRes?.qrsCabapv2 ?? row.roleCabapv2,
-          roleGrandTotal: roleRes?.grandTotal ?? row.roleGrandTotal,
-          _matchedAt: new Date().toISOString(),
-          _matchedBy: 'Operator (Approval)',
-        };
+          // Validasi PTEN & Role Mapping untuk rekomendasi
+          const ptenRes = validatePtenForTarget(row['KODE POS'], row['Dati II'] || row.Kota || '', ptenIndex);
+          const branchNameToLook = matchedMaster['Nama Outlet'] || matchedMaster.Cabang || matchedMaster['Sandi Cabang'] || '';
+          const roleRes = resolveRoleMappingForBranch(
+            branchNameToLook,
+            row['Dati II'] || row.Kota,
+            row.Kelurahan,
+            row.Kecamatan,
+            row.ALAMAT || matchedMaster.ALAMAT,
+            roleMappingList
+          );
+
+          updated[i] = {
+            ...row,
+            _isMatched: true,
+            _matchLevel: 'recommendation' as const,
+            'Sandi Cabang':
+              matchedMaster['Sandi Cabang'] ||
+              [matchedMaster.Sandi, matchedMaster.Cabang].filter(Boolean).join(' - ') ||
+              matchedMaster.Cabang ||
+              '',
+            Sandi: matchedMaster.Sandi || matchedMaster['Sandi Cabang'] || '',
+            Cabang: matchedMaster.Cabang || matchedMaster['Sandi Cabang'] || '',
+            'Branch Code': branchCode,
+            'Kode Cabang': matchedMaster['Kode Cabang'] || '',
+            'Nama Outlet': matchedMaster['Nama Outlet'] || '',
+            'Status Outlet': matchedMaster['Status Outlet'] || 'Aktif',
+            ALAMAT: matchedMaster.ALAMAT || '',
+            Wilayah: resolved.wilayahName !== '-' ? resolved.wilayahName : (row.Wilayah || '-'),
+            'KOTA PTEN': ptenRes.kotaPten,
+            'KODE POS PTEN': ptenRes.kodePosPten,
+            'CEK KODE POS + PTEN': ptenRes.statusPten,
+            organisasiRole: roleRes?.organisasiRole || row.organisasiRole,
+            tipeUnitRole: roleRes?.tipeUnitRole || row.tipeUnitRole,
+            alurWondr: roleRes?.alurWondr || row.alurWondr,
+            flowDescription: roleRes?.flowDescription || row.flowDescription,
+            roleCabsal: roleRes?.qrsCabsal ?? row.roleCabsal,
+            roleCabapv1: roleRes?.qrsCabapv1 ?? row.roleCabapv1,
+            roleCabapv2: roleRes?.qrsCabapv2 ?? row.roleCabapv2,
+            roleGrandTotal: roleRes?.grandTotal ?? row.roleGrandTotal,
+            _matchedAt: nowStr,
+            _matchedBy: 'Operator (Approval)',
+          };
+        }
+
+        persistTargetData({
+          rows: updated,
+          fileName: targetFileName,
+          initialCount: initialTargetCount,
+          matchedDone: true,
+        });
+
+        return updated;
       });
-
-      persistTargetData({
-        rows: updated,
-        fileName: targetFileName,
-        initialCount: initialTargetCount,
-        matchedDone: true,
-      });
-
-      return updated;
     });
   };
 
