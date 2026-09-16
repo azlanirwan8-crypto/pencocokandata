@@ -75,57 +75,194 @@ interface TargetDataGridProps {
   roleMappingList?: RoleMappingRecord[];
 }
 
+/** Koordinat pusat kota (lat, lng) dan pulau untuk semua branch office BNI yang ada di mapping */
+const CITY_GEO: Record<string, { lat: number; lng: number; island: string }> = {
+  // ── JAWA ──────────────────────────────────────────────────────────────────
+  JAKARTA: { lat: -6.2088, lng: 106.8456, island: 'Jawa' },
+  'JAKARTA PUSAT': { lat: -6.1862, lng: 106.8307, island: 'Jawa' },
+  'JAKARTA THAMRIN': { lat: -6.2009, lng: 106.8229, island: 'Jawa' },
+  'JAKARTA UTARA': { lat: -6.1382, lng: 106.8668, island: 'Jawa' },
+  'JAKARTA SELATAN': { lat: -6.2615, lng: 106.8106, island: 'Jawa' },
+  'JAKARTA BARAT': { lat: -6.1673, lng: 106.7636, island: 'Jawa' },
+  'JAKARTA TIMUR': { lat: -6.2257, lng: 106.9004, island: 'Jawa' },
+  BOGOR: { lat: -6.5971, lng: 106.8060, island: 'Jawa' },
+  BEKASI: { lat: -6.2383, lng: 106.9756, island: 'Jawa' },
+  DEPOK: { lat: -6.4025, lng: 106.7942, island: 'Jawa' },
+  TANGERANG: { lat: -6.1783, lng: 106.6319, island: 'Jawa' },
+  BANDUNG: { lat: -6.9175, lng: 107.6191, island: 'Jawa' },
+  'BANDUNG ASIA AFRIKA': { lat: -6.9210, lng: 107.6068, island: 'Jawa' },
+  CIREBON: { lat: -6.7063, lng: 108.5571, island: 'Jawa' },
+  TASIKMALAYA: { lat: -7.3274, lng: 108.2207, island: 'Jawa' },
+  BANJAR: { lat: -7.3673, lng: 108.5400, island: 'Jawa' },
+  SUKABUMI: { lat: -6.9177, lng: 106.9280, island: 'Jawa' },
+  KARAWANG: { lat: -6.3219, lng: 107.3387, island: 'Jawa' },
+  SEMARANG: { lat: -7.0051, lng: 110.4381, island: 'Jawa' },
+  'SEMARANG BRIGJEN SUDIARTO': { lat: -6.9748, lng: 110.4487, island: 'Jawa' },
+  SOLO: { lat: -7.5755, lng: 110.8243, island: 'Jawa' },
+  SURAKARTA: { lat: -7.5755, lng: 110.8243, island: 'Jawa' },
+  YOGYAKARTA: { lat: -7.7956, lng: 110.3695, island: 'Jawa' },
+  SURABAYA: { lat: -7.2575, lng: 112.7521, island: 'Jawa' },
+  'SURABAYA BASUKI RAHMAT': { lat: -7.2619, lng: 112.7391, island: 'Jawa' },
+  MALANG: { lat: -7.9666, lng: 112.6326, island: 'Jawa' },
+  SIDOARJO: { lat: -7.4478, lng: 112.7183, island: 'Jawa' },
+  KEDIRI: { lat: -7.8167, lng: 112.0115, island: 'Jawa' },
+  PASURUAN: { lat: -7.6449, lng: 112.9031, island: 'Jawa' },
+  MADIUN: { lat: -7.6298, lng: 111.5243, island: 'Jawa' },
+  JEMBER: { lat: -8.1845, lng: 113.6882, island: 'Jawa' },
+  BANYUWANGI: { lat: -8.2192, lng: 114.3691, island: 'Jawa' },
+  // ── SUMATERA ──────────────────────────────────────────────────────────────
+  MEDAN: { lat: 3.5952, lng: 98.6722, island: 'Sumatera' },
+  'MEDAN BALAI KOTA': { lat: 3.5862, lng: 98.6764, island: 'Sumatera' },
+  PALEMBANG: { lat: -2.9761, lng: 104.7754, island: 'Sumatera' },
+  PADANG: { lat: -0.9493, lng: 100.3543, island: 'Sumatera' },
+  PEKANBARU: { lat: 0.5071, lng: 101.4478, island: 'Sumatera' },
+  BATAM: { lat: 1.1301, lng: 104.0529, island: 'Sumatera' },
+  JAMBI: { lat: -1.6101, lng: 103.6131, island: 'Sumatera' },
+  BANDA_ACEH: { lat: 5.5483, lng: 95.3238, island: 'Sumatera' },
+  ACEH: { lat: 5.5483, lng: 95.3238, island: 'Sumatera' },
+  BANDAR_LAMPUNG: { lat: -5.4295, lng: 105.2610, island: 'Sumatera' },
+  LAMPUNG: { lat: -5.4295, lng: 105.2610, island: 'Sumatera' },
+  BENGKULU: { lat: -3.7928, lng: 102.2608, island: 'Sumatera' },
+  RANTAUPRAPAT: { lat: 2.0948, lng: 99.8308, island: 'Sumatera' },
+  KISARAN: { lat: 2.9826, lng: 99.6100, island: 'Sumatera' },
+  'PEMATANG SIANTAR': { lat: 2.9598, lng: 99.0687, island: 'Sumatera' },
+  'TEBING TINGGI': { lat: 3.3272, lng: 99.1625, island: 'Sumatera' },
+  // ── KALIMANTAN ────────────────────────────────────────────────────────────
+  BALIKPAPAN: { lat: -1.2654, lng: 116.8312, island: 'Kalimantan' },
+  SAMARINDA: { lat: -0.5022, lng: 117.1536, island: 'Kalimantan' },
+  BANJARMASIN: { lat: -3.3186, lng: 114.5944, island: 'Kalimantan' },
+  PONTIANAK: { lat: -0.0263, lng: 109.3425, island: 'Kalimantan' },
+  PALANGKARAYA: { lat: -2.2096, lng: 113.9136, island: 'Kalimantan' },
+  // ── SULAWESI ──────────────────────────────────────────────────────────────
+  MAKASSAR: { lat: -5.1477, lng: 119.4327, island: 'Sulawesi' },
+  MANADO: { lat: 1.4748, lng: 124.8421, island: 'Sulawesi' },
+  PALU: { lat: -0.8917, lng: 119.8707, island: 'Sulawesi' },
+  KENDARI: { lat: -3.9985, lng: 122.5130, island: 'Sulawesi' },
+  GORONTALO: { lat: 0.5387, lng: 123.0595, island: 'Sulawesi' },
+  // ── BALI ──────────────────────────────────────────────────────────────────
+  DENPASAR: { lat: -8.6705, lng: 115.2126, island: 'Bali' },
+  'DENPASAR RENON': { lat: -8.6784, lng: 115.2215, island: 'Bali' },
+  // ── NUSA TENGGARA ─────────────────────────────────────────────────────────
+  MATARAM: { lat: -8.5833, lng: 116.1167, island: 'Lombok' },
+  KUPANG: { lat: -10.1772, lng: 123.6070, island: 'NTT' },
+  ENDE: { lat: -8.8432, lng: 121.6573, island: 'NTT' },
+  // ── MALUKU ────────────────────────────────────────────────────────────────
+  AMBON: { lat: -3.6954, lng: 128.1814, island: 'Maluku' },
+  TERNATE: { lat: 0.7821, lng: 127.3787, island: 'Maluku Utara' },
+  // ── PAPUA ─────────────────────────────────────────────────────────────────
+  JAYAPURA: { lat: -2.5337, lng: 140.7181, island: 'Papua' },
+  MANOKWARI: { lat: -0.8670, lng: 134.0806, island: 'Papua Barat' },
+  SORONG: { lat: -0.8767, lng: 131.2520, island: 'Papua Barat' },
+};
+
+/** Haversine distance (km) antara dua titik koordinat */
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/** Ekstrak nama kota dari nama organisasi (e.g. "JAKARTA PUSAT BRANCH OFFICE" → "JAKARTA PUSAT") */
+function extractCityFromOrgName(orgName: string): string {
+  return orgName
+    .toUpperCase()
+    .replace(/\s*BRANCH OFFICE.*$/i, '')
+    .replace(/\s*-.*$/i, '')
+    .trim();
+}
+
+/** Lookup koordinat kota — coba exact match dulu, lalu first-token match */
+function lookupCityGeo(cityName: string): { lat: number; lng: number; island: string } | null {
+  if (!cityName) return null;
+  const key = cityName.toUpperCase().trim();
+  if (CITY_GEO[key]) return CITY_GEO[key];
+  // First token (e.g. "JAKARTA" from "JAKARTA PUSAT")
+  const firstToken = key.split(/\s+/)[0];
+  if (firstToken && CITY_GEO[firstToken]) return CITY_GEO[firstToken];
+  // Partial match scan
+  for (const [k, v] of Object.entries(CITY_GEO)) {
+    if (key.startsWith(k) || k.startsWith(key)) return v;
+  }
+  return null;
+}
+
+export interface RoleMatchWithDistance {
+  rec: RoleMappingRecord;
+  distanceKm: number | null;
+  sameIsland: boolean;
+  branchCity: string;
+}
+
 /**
  * Find top 3 role mapping branches with ALL 3 roles complete (M=1, C=1, S=1)
- * sorted by proximity to the active candidate's city/dati2
+ * • Filter: same island as active candidate only
+ * • Sort: closest first (haversine distance in km)
  */
 function findTopRoleMatchesByLocation(
   activeCandidateDati2: string,
   activeProvinsi: string,
   roleMappingList: RoleMappingRecord[],
   count = 3
-): RoleMappingRecord[] {
+): RoleMatchWithDistance[] {
   if (!roleMappingList || roleMappingList.length === 0) return [];
 
   // Filter: only full 3-role branches (Maker=1, Checker=1, Signer=1)
   const fullRoleList = roleMappingList.filter(
     (r) => r.qrsCabsal === 1 && r.qrsCabapv1 === 1 && r.qrsCabapv2 === 1
   );
-
   if (fullRoleList.length === 0) return [];
 
-  const normCity = String(activeCandidateDati2 || '')
+  // Resolve candidate's geo
+  const candidateCity = String(activeCandidateDati2 || '')
     .toUpperCase()
     .replace(/^(KOTA|KABUPATEN|KAB)\s+/i, '')
     .trim();
-  const normProv = String(activeProvinsi || '').toUpperCase().trim();
+  const candidateGeo = lookupCityGeo(candidateCity) ||
+    lookupCityGeo(String(activeProvinsi || '').replace(/^PROVINSI\s*/i, '').trim());
 
-  // Score each record
-  const scored = fullRoleList.map((rec) => {
-    const orgUpper = rec.organisasiTujuan.toUpperCase();
-    let score = 0;
+  const scored: RoleMatchWithDistance[] = fullRoleList.map((rec) => {
+    const branchCity = extractCityFromOrgName(rec.organisasiTujuan);
+    const branchGeo = lookupCityGeo(branchCity);
 
-    // Exact city name in org name => high score
-    if (normCity && orgUpper.includes(normCity)) score += 100;
-    // Partial city tokens
-    if (normCity) {
-      const tokens = normCity.split(/\s+/).filter((t) => t.length >= 4);
-      tokens.forEach((t) => { if (orgUpper.includes(t)) score += 30; });
+    let distanceKm: number | null = null;
+    let sameIsland = true; // default: tampilkan jika tidak bisa tentukan pulau
+
+    if (candidateGeo && branchGeo) {
+      distanceKm = Math.round(haversineKm(candidateGeo.lat, candidateGeo.lng, branchGeo.lat, branchGeo.lng));
+      sameIsland = candidateGeo.island === branchGeo.island;
     }
-    // Province match in org name
-    if (normProv) {
-      const provTokens = normProv.split(/\s+/).filter((t) => t.length >= 4);
-      provTokens.forEach((t) => { if (orgUpper.includes(t)) score += 10; });
-    }
-    // Prefer KC (Kantor Cabang Utama) over KCP
-    if (getUnitCategory(rec.organisasiTujuan) === 'KC') score += 5;
 
-    return { rec, score };
+    return { rec, distanceKm, sameIsland, branchCity };
   });
 
-  scored.sort((a, b) => b.score - a.score);
+  // Prioritaskan: same island saja, sort by distance asc
+  const sameIslandList = scored.filter((s) => s.sameIsland);
+  const sortedSameIsland = sameIslandList.sort((a, b) => {
+    if (a.distanceKm === null && b.distanceKm === null) return 0;
+    if (a.distanceKm === null) return 1;
+    if (b.distanceKm === null) return -1;
+    return a.distanceKm - b.distanceKm;
+  });
 
-  return scored.slice(0, count).map((s) => s.rec);
+  if (sortedSameIsland.length >= count) {
+    return sortedSameIsland.slice(0, count);
+  }
+
+  // Jika kurang dari count, tambah dari pulau lain (fallback)
+  const otherIsland = scored
+    .filter((s) => !s.sameIsland)
+    .sort((a, b) => {
+      if (a.distanceKm === null && b.distanceKm === null) return 0;
+      if (a.distanceKm === null) return 1;
+      if (b.distanceKm === null) return -1;
+      return a.distanceKm - b.distanceKm;
+    });
+
+  return [...sortedSameIsland, ...otherIsland].slice(0, count);
 }
 
 export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
@@ -255,6 +392,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     candidate: CandidateOption;
   } | null>(null);
   const [activeCandidateByRow, setActiveCandidateByRow] = useState<Record<string | number, number>>({});
+  // Tracks selected role-mapping branch index (0-based) per row No
+  const [selectedRoleByRow, setSelectedRoleByRow] = useState<Record<string | number, number>>({});
 
   // Fingerprint cache & background cancel ref to prevent redundant calculation
   const lastAnalyzedFingerprintRef = useRef<string>('');
@@ -2001,7 +2140,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                         })()}
                       </td>
 
-                      {/* Kolom Rekomendasi Mapping Role - ikuti kandidat aktif */}
+                      {/* Kolom Rekomendasi Mapping Role - ikuti kandidat aktif, filter same-island, sort by km */}
                       {roleMappingList.length > 0 && (() => {
                         const activeRank = activeCandidateByRow[r.No] || 1;
                         const activeCand = candidates.find((c) => c.rank === activeRank) || candidates[0];
@@ -2009,6 +2148,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                         const activeDati2 = activeMaster?.['Dati II'] || activeMaster?.Kota || r['Dati II'] || '';
                         const activeProvinsi = activeMaster?.Provinsi || r.Provinsi || '';
                         const topRoles = findTopRoleMatchesByLocation(activeDati2, activeProvinsi, roleMappingList, 3);
+                        const selectedIdx = selectedRoleByRow[r.No] ?? -1;
 
                         return (
                           <td
@@ -2024,35 +2164,54 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                             }}
                           >
                             {topRoles.length === 0 ? (
-                              <span style={{ fontSize: '0.7rem', color: '#adb5bd' }}>Belum ada data role lengkap</span>
+                              <span style={{ fontSize: '0.7rem', color: '#adb5bd' }}>Belum ada data role lengkap di pulau ini</span>
                             ) : (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                                <div style={{ fontSize: '0.65rem', fontWeight: 600, color: '#6b7280', marginBottom: '0.05rem' }}>
-                                  Berdasarkan lokasi Pilihan {activeRank} ({activeDati2 || '-'})
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.32rem' }}>
+                                {/* Header info lokasi */}
+                                <div style={{ fontSize: '0.63rem', fontWeight: 600, color: '#6b7280', marginBottom: '0.02rem' }}>
+                                  Pilihan {activeRank} — {activeDati2 || '-'} · Terdekat (1 Pulau)
                                 </div>
-                                {topRoles.map((role, rIdx) => {
-                                  const rankColors = [
-                                    { bg: 'rgba(16, 185, 129, 0.1)', border: 'rgba(16, 185, 129, 0.35)', text: '#065f46', badge: '#059669' },
-                                    { bg: 'rgba(14, 165, 233, 0.08)', border: 'rgba(14, 165, 233, 0.3)', text: '#0c4a6e', badge: '#0284c7' },
-                                    { bg: 'rgba(99, 102, 241, 0.08)', border: 'rgba(99, 102, 241, 0.28)', text: '#312e81', badge: '#4f46e5' },
-                                  ];
-                                  const c = rankColors[rIdx] || rankColors[0];
+                                {topRoles.map((item, rIdx) => {
+                                  const { rec: role, distanceKm, sameIsland } = item;
+                                  const isSelected = selectedIdx === rIdx;
                                   const isKc = getUnitCategory(role.organisasiTujuan) === 'KC';
+
+                                  // Color theme per rank
+                                  const rankTheme = [
+                                    { bg: 'rgba(16,185,129,0.09)', border: '#6ee7b7', text: '#065f46', badge: '#059669', selBg: 'rgba(16,185,129,0.22)', selBorder: '#059669' },
+                                    { bg: 'rgba(14,165,233,0.07)', border: '#7dd3fc', text: '#0c4a6e', badge: '#0284c7', selBg: 'rgba(14,165,233,0.2)', selBorder: '#0284c7' },
+                                    { bg: 'rgba(99,102,241,0.07)', border: '#c4b5fd', text: '#312e81', badge: '#4f46e5', selBg: 'rgba(99,102,241,0.18)', selBorder: '#4f46e5' },
+                                  ];
+                                  const t = rankTheme[rIdx] || rankTheme[0];
+
                                   return (
                                     <div
                                       key={`rm-${r.No}-${rIdx}`}
-                                      style={{
-                                        background: c.bg,
-                                        border: `1px solid ${c.border}`,
-                                        borderRadius: '5px',
-                                        padding: '0.3rem 0.45rem',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        gap: '0.12rem',
+                                      onClick={() =>
+                                        setSelectedRoleByRow((prev) => ({
+                                          ...prev,
+                                          [r.No]: isSelected ? -1 : rIdx,
+                                        }))
+                                      }
+                                      role="button"
+                                      tabIndex={0}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter' || e.key === ' ')
+                                          setSelectedRoleByRow((prev) => ({ ...prev, [r.No]: isSelected ? -1 : rIdx }));
                                       }}
-                                      title={`${role.organisasiTujuan} — Maker: ${role.qrsCabsal}, Checker: ${role.qrsCabapv1}, Signer: ${role.qrsCabapv2}, Total: ${role.grandTotal} User`}
+                                      style={{
+                                        background: isSelected ? t.selBg : t.bg,
+                                        border: `1.5px solid ${isSelected ? t.selBorder : t.border}`,
+                                        borderRadius: '6px',
+                                        padding: '0.3rem 0.42rem',
+                                        cursor: 'pointer',
+                                        outline: 'none',
+                                        transition: 'all 0.15s ease',
+                                        boxShadow: isSelected ? `0 0 0 2px ${t.selBorder}33` : 'none',
+                                      }}
+                                      title={`Klik untuk ${isSelected ? 'batalkan pilihan' : 'pilih'} cabang ini`}
                                     >
-                                      {/* Rank number + org name */}
+                                      {/* Baris atas: nomor rank + nama + centang */}
                                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.3rem' }}>
                                         <span
                                           style={{
@@ -2060,7 +2219,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                             width: '16px',
                                             height: '16px',
                                             borderRadius: '50%',
-                                            background: c.badge,
+                                            background: isSelected ? t.selBorder : t.badge,
                                             color: '#fff',
                                             fontSize: '0.6rem',
                                             fontWeight: 700,
@@ -2069,44 +2228,83 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                             justifyContent: 'center',
                                           }}
                                         >
-                                          {rIdx + 1}
+                                          {isSelected ? '✓' : rIdx + 1}
                                         </span>
                                         <span
                                           style={{
+                                            flex: 1,
                                             fontSize: '0.7rem',
                                             fontWeight: 700,
-                                            color: c.text,
+                                            color: t.text,
                                             lineHeight: 1.25,
                                             wordBreak: 'break-word',
                                           }}
                                         >
                                           {role.organisasiTujuan}
                                         </span>
+                                        {isSelected && (
+                                          <span style={{ flexShrink: 0, fontSize: '0.6rem', fontWeight: 700, color: t.selBorder }}>
+                                            Dipilih
+                                          </span>
+                                        )}
                                       </div>
-                                      {/* Role badges row */}
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', flexWrap: 'wrap', paddingLeft: '1.25rem' }}>
+
+                                      {/* Baris bawah: KC/KCP badge + jarak km */}
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', paddingLeft: '1.3rem', marginTop: '0.15rem', flexWrap: 'wrap' }}>
                                         <span
                                           style={{
                                             fontSize: '0.6rem',
                                             fontWeight: 700,
-                                            padding: '0.04rem 0.3rem',
+                                            padding: '0.04rem 0.28rem',
                                             borderRadius: '3px',
-                                            background: isKc ? 'rgba(64, 81, 137, 0.12)' : 'rgba(41, 156, 219, 0.12)',
+                                            background: isKc ? 'rgba(64,81,137,0.11)' : 'rgba(41,156,219,0.11)',
                                             color: isKc ? '#405189' : '#0284c7',
                                           }}
                                         >
                                           {isKc ? 'Cabang Utama (KC)' : 'Outlet (KCP)'}
                                         </span>
-                                        <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#059669', background: 'rgba(5,150,105,0.1)', padding: '0.04rem 0.28rem', borderRadius: '3px' }}>
-                                          M✓ C✓ S✓
-                                        </span>
-                                        <span style={{ fontSize: '0.6rem', color: '#6b7280', fontWeight: 600 }}>
-                                          {role.grandTotal} User
-                                        </span>
+                                        {distanceKm !== null ? (
+                                          <span
+                                            style={{
+                                              fontSize: '0.6rem',
+                                              fontWeight: 700,
+                                              color: !sameIsland ? '#dc2626' : distanceKm < 50 ? '#059669' : distanceKm < 200 ? '#d97706' : '#6b7280',
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              gap: '0.15rem',
+                                            }}
+                                            title={!sameIsland ? 'Peringatan: cabang ini berada di pulau berbeda' : `Estimasi jarak lurus: ${distanceKm} km`}
+                                          >
+                                            <MapPin size={9} />
+                                            {distanceKm.toLocaleString('id-ID')} km
+                                            {!sameIsland && ' ⚠️ beda pulau'}
+                                          </span>
+                                        ) : (
+                                          <span style={{ fontSize: '0.6rem', color: '#adb5bd' }}>jarak tidak diketahui</span>
+                                        )}
                                       </div>
                                     </div>
                                   );
                                 })}
+                                {/* Info selected */}
+                                {selectedIdx >= 0 && topRoles[selectedIdx] && (
+                                  <div
+                                    style={{
+                                      fontSize: '0.62rem',
+                                      color: '#059669',
+                                      fontWeight: 600,
+                                      background: 'rgba(16,185,129,0.07)',
+                                      borderRadius: '4px',
+                                      padding: '0.2rem 0.4rem',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '0.25rem',
+                                    }}
+                                  >
+                                    <CheckCircle2 size={11} />
+                                    Dipilih: {topRoles[selectedIdx].rec.organisasiTujuan}
+                                  </div>
+                                )}
                               </div>
                             )}
                           </td>
