@@ -100,10 +100,10 @@ export const App: React.FC = () => {
     return buildMasterIndex(masterRows);
   }, [masterRows]);
 
-  // Build In-Memory PTEN Fast Lookup Map O(1)
+  // Build In-Memory PTEN Fast Lookup Map O(1) with Multi-Source Fallback
   const ptenIndex = useMemo(() => {
-    return buildPtenIndex(ptenList);
-  }, [ptenList]);
+    return buildPtenIndex(ptenList, masterRows);
+  }, [ptenList, masterRows]);
 
   // Master Health Analysis
   const masterHealth = useMemo(() => {
@@ -151,9 +151,13 @@ export const App: React.FC = () => {
           setItem('wilayah_settings', DEFAULT_WILAYAH_DATA);
         }
 
-        if (savedPten && Array.isArray(savedPten) && savedPten.length > 0) {
+        if (savedPten && Array.isArray(savedPten) && savedPten.length > 500) {
           setPtenList(savedPten);
           setPtenCount(savedPten.length);
+        } else {
+          setPtenList(DEFAULT_PTEN_DATA);
+          setPtenCount(DEFAULT_PTEN_DATA.length);
+          setItem('pten_master_data', DEFAULT_PTEN_DATA);
         }
 
         if (savedRoleMapping && Array.isArray(savedRoleMapping) && savedRoleMapping.length > 0) {

@@ -78,11 +78,13 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
     const loadSaved = async () => {
       try {
         const saved = await getItem<PTENRecord[]>('pten_master_data');
-        if (saved && Array.isArray(saved) && saved.length > 0 && isMounted) {
+        if (saved && Array.isArray(saved) && saved.length > 500 && isMounted) {
           setPtenList(saved);
           onPtenCountChange?.(saved.length);
         } else if (isMounted) {
+          setPtenList(DEFAULT_PTEN_DATA);
           onPtenCountChange?.(DEFAULT_PTEN_DATA.length);
+          setItem('pten_master_data', DEFAULT_PTEN_DATA);
         }
       } catch (err) {
         console.warn('Error loading PTEN data:', err);
