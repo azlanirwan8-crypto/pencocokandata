@@ -94,5 +94,25 @@ function geocodeDevMiddleware(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), geocodeDevMiddleware()],
+  build: {
+    target: 'esnext',
+    cssCodeSplit: true,
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom')) return 'vendor-react';
+            if (id.includes('xlsx')) return 'vendor-excel';
+            if (id.includes('jspdf') || id.includes('html2canvas')) return 'vendor-pdf';
+            if (id.includes('leaflet')) return 'vendor-map';
+            if (id.includes('lucide-react')) return 'vendor-icons';
+            if (id.includes('idb-keyval') || id.includes('@neondatabase') || id.includes('@supabase')) return 'vendor-db';
+            return 'vendor-libs';
+          }
+        },
+      },
+    },
+  },
 })
 

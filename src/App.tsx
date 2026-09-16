@@ -771,29 +771,142 @@ export const App: React.FC = () => {
 
         <main className="page-content">
           {/* MENU 1: DASHBOARD (EXECUTIVE OPERATIONAL ANALYST DASHBOARD) */}
-          <div style={{ display: activeTab === 'dashboard' ? 'contents' : 'none' }}>
-            {/* Toolbar Filter Wilayah Dashboard - Mengontrol seluruh metrik, grafik, dan anomali */}
-            {wilayahList.length > 0 && (
+          {activeTab === 'dashboard' && (
+            <div>
+              {/* Toolbar Filter Wilayah Dashboard - Mengontrol seluruh metrik, grafik, dan anomali */}
+              {wilayahList.length > 0 && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '0.75rem',
+                    marginBottom: '1rem',
+                    background: '#ffffff',
+                    border: '1px solid #e9ebec',
+                    borderRadius: '6px',
+                    padding: '0.65rem 1rem',
+                    boxShadow: '0 1px 2px rgba(56, 65, 74, 0.05)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <div
+                      style={{
+                        width: '30px',
+                        height: '30px',
+                        borderRadius: '6px',
+                        background: 'rgba(64, 81, 137, 0.1)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#405189',
+                      }}
+                    >
+                      <Filter size={15} />
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#212529' }}>
+                        Filter Lingkup Wilayah
+                      </span>
+                      <span style={{ fontSize: '0.74rem', color: '#878a99', marginLeft: '0.5rem' }}>
+                        {dashboardWilayahFilter === 'ALL'
+                          ? `Menampilkan seluruh ${targetRows.length.toLocaleString('id-ID')} data (${wilayahList.length} Wilayah)`
+                          : `Menampilkan khusus ${formatWilayahName(dashboardWilayahFilter)} (${dashboardFilteredRows.length.toLocaleString('id-ID')} data)`}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <label htmlFor="dashboard-wilayah-filter" style={{ fontSize: '0.76rem', fontWeight: 600, color: '#495057' }}>
+                      Pilih Wilayah:
+                    </label>
+                    <div className="unified-select-box" style={{ width: '220px' }}>
+                      <Filter size={13} style={{ color: '#405189', flexShrink: 0 }} />
+                      <select
+                        id="dashboard-wilayah-filter"
+                        value={dashboardWilayahFilter}
+                        onChange={(e) => setDashboardWilayahFilter(e.target.value)}
+                      >
+                        <option value="ALL">Semua Wilayah ({targetRows.length.toLocaleString('id-ID')} Data)</option>
+                        {wilayahList.map((w) => {
+                          const countW = targetRows.filter(r => String(r.Wilayah || '').trim() === String(w).trim()).length;
+                          return (
+                            <option key={w} value={w}>
+                              {formatWilayahName(w)} ({countW.toLocaleString('id-ID')} Data)
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <MetricCards
+                stats={dashboardStats}
+                masterCount={masterRows.length}
+                multiCabangCount={masterHealth.multiOutletCount}
+              />
+
+              {/* URUTAN KE-2: Peta Tracking Penyebaran Cabang BNI di Indonesia (GIS & Google Maps Direct Link) */}
+              <IndonesiaBranchMap
+                masterRows={masterRows}
+                targetRows={targetRows}
+                selectedWilayah={dashboardWilayahFilter}
+                onNavigateToMaster={() => setActiveTab('master')}
+                onNavigateToEngine={(searchFilter) => {
+                  setActiveTab('working');
+                  if (searchFilter) setSearchTerm(searchFilter);
+                }}
+              />
+
+              {/* Visual Analisis: Dekomposisi Donut Chart & Kinerja Wilayah */}
+              <RegionalAnalyticsCharts
+                stats={regionalStats}
+                matchingStats={dashboardStats}
+                totalDataCount={dashboardFilteredRows.length}
+                selectedWilayah={dashboardWilayahFilter}
+              />
+
+              {/* Visualisasi Data Master Duplikat / Multi-Cabang per Kode Pos */}
+              <MasterDuplicateChart
+                masterHealth={masterHealth}
+                masterRows={masterRows}
+                selectedWilayah={dashboardWilayahFilter}
+                onNavigateToMaster={() => setActiveTab('master')}
+              />
+
+              {/* Rekapitulasi Data Match per Wilayah & Download Laporan Excel/PDF */}
+              <DashboardMatchTable
+                allTargetRows={targetRows}
+                regionalStats={regionalStats}
+                selectedWilayah={dashboardWilayahFilter}
+              />
+            </div>
+          )}
+
+          {/* MENU 2: DATA MASTER (MANAJEMEN REFERENSI CABANG) */}
+          {activeTab === 'master' && (
+            <div>
+              {/* Top Action Card: Upload Button & Template & Reset */}
               <div
+                className="glass-card"
                 style={{
+                  padding: '0.65rem 1.15rem',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   flexWrap: 'wrap',
                   gap: '0.75rem',
-                  marginBottom: '1rem',
-                  background: '#ffffff',
-                  border: '1px solid #e9ebec',
-                  borderRadius: '6px',
-                  padding: '0.65rem 1rem',
-                  boxShadow: '0 1px 2px rgba(56, 65, 74, 0.05)',
+                  marginBottom: '0',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <div
                     style={{
-                      width: '30px',
-                      height: '30px',
+                      width: '38px',
+                      height: '38px',
                       borderRadius: '6px',
                       background: 'rgba(64, 81, 137, 0.1)',
                       display: 'flex',
@@ -802,488 +915,365 @@ export const App: React.FC = () => {
                       color: '#405189',
                     }}
                   >
-                    <Filter size={15} />
+                    <Database size={18} />
                   </div>
                   <div>
-                    <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#212529' }}>
-                      Filter Lingkup Wilayah
-                    </span>
-                    <span style={{ fontSize: '0.74rem', color: '#878a99', marginLeft: '0.5rem' }}>
-                      {dashboardWilayahFilter === 'ALL'
-                        ? `Menampilkan seluruh ${targetRows.length.toLocaleString('id-ID')} data (${wilayahList.length} Wilayah)`
-                        : `Menampilkan khusus ${formatWilayahName(dashboardWilayahFilter)} (${dashboardFilteredRows.length.toLocaleString('id-ID')} data)`}
-                    </span>
+                    <h3 style={{ fontSize: '0.96rem', fontWeight: 600, color: '#212529', margin: 0 }}>
+                      Master Data Cabang & Outlet
+                    </h3>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <label htmlFor="dashboard-wilayah-filter" style={{ fontSize: '0.76rem', fontWeight: 600, color: '#495057' }}>
-                    Pilih Wilayah:
-                  </label>
-                  <div className="unified-select-box" style={{ width: '220px' }}>
-                    <Filter size={13} style={{ color: '#405189', flexShrink: 0 }} />
-                    <select
-                      id="dashboard-wilayah-filter"
-                      value={dashboardWilayahFilter}
-                      onChange={(e) => setDashboardWilayahFilter(e.target.value)}
-                    >
-                      <option value="ALL">Semua Wilayah ({targetRows.length.toLocaleString('id-ID')} Data)</option>
-                      {wilayahList.map((w) => {
-                        const countW = targetRows.filter(r => String(r.Wilayah || '').trim() === String(w).trim()).length;
-                        return (
-                          <option key={w} value={w}>
-                            {formatWilayahName(w)} ({countW.toLocaleString('id-ID')} Data)
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <MetricCards
-              stats={dashboardStats}
-              masterCount={masterRows.length}
-              multiCabangCount={masterHealth.multiOutletCount}
-            />
-
-            {/* URUTAN KE-2: Peta Tracking Penyebaran Cabang BNI di Indonesia (GIS & Google Maps Direct Link) */}
-            <IndonesiaBranchMap
-              masterRows={masterRows}
-              targetRows={targetRows}
-              selectedWilayah={dashboardWilayahFilter}
-              onNavigateToMaster={() => setActiveTab('master')}
-              onNavigateToEngine={(searchFilter) => {
-                setActiveTab('working');
-                if (searchFilter) setSearchTerm(searchFilter);
-              }}
-            />
-
-            {/* Visual Analisis: Dekomposisi Donut Chart & Kinerja Wilayah */}
-            <RegionalAnalyticsCharts
-              stats={regionalStats}
-              matchingStats={dashboardStats}
-              totalDataCount={dashboardFilteredRows.length}
-              selectedWilayah={dashboardWilayahFilter}
-            />
-
-            {/* Visualisasi Data Master Duplikat / Multi-Cabang per Kode Pos */}
-            <MasterDuplicateChart
-              masterHealth={masterHealth}
-              masterRows={masterRows}
-              selectedWilayah={dashboardWilayahFilter}
-              onNavigateToMaster={() => setActiveTab('master')}
-            />
-
-            {/* Rekapitulasi Data Match per Wilayah & Download Laporan Excel/PDF */}
-            <DashboardMatchTable
-              allTargetRows={targetRows}
-              regionalStats={regionalStats}
-              selectedWilayah={dashboardWilayahFilter}
-            />
-          </div>
-
-          {/* MENU 2: DATA MASTER (MANAJEMEN REFERENSI CABANG) */}
-          <div style={{ display: activeTab === 'master' ? 'contents' : 'none' }}>
-            {/* Top Action Card: Upload Button & Template & Reset */}
-            <div
-              className="glass-card"
-              style={{
-                padding: '0.65rem 1.15rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '0.75rem',
-                marginBottom: '0',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <div
-                  style={{
-                    width: '38px',
-                    height: '38px',
-                    borderRadius: '6px',
-                    background: 'rgba(64, 81, 137, 0.1)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#405189',
-                  }}
-                >
-                  <Database size={18} />
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '0.96rem', fontWeight: 600, color: '#212529', margin: 0 }}>
-                    Master Data Cabang & Outlet
-                  </h3>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  onClick={() => setIsMasterUploadModalOpen(true)}
-                  id="btn-open-upload-master"
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.42rem 0.95rem' }}
-                >
-                  <UploadCloud size={14} />
-                  <span>Upload Data Master</span>
-                </button>
-
-
-
-                {masterRows.length > 0 && (
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm"
-                    onClick={handleResetMaster}
-                    title="Kosongkan data master cabang"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.35rem',
-                      color: '#f06548',
-                      borderColor: 'rgba(240, 101, 72, 0.3)',
-                      padding: '0.42rem 0.85rem',
-                    }}
-                  >
-                    <RotateCcw size={13} />
-                    <span>Reset Master</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {masterRows.length === 0 ? (
-              <div
-                className="glass-card"
-                style={{
-                  padding: '3.5rem 1.5rem',
-                  textAlign: 'center',
-                  background: '#ffffff',
-                  borderRadius: '6px',
-                  border: '1px solid #e9ebec',
-                }}
-              >
-                <div
-                  style={{
-                    width: '52px',
-                    height: '52px',
-                    borderRadius: '50%',
-                    background: 'rgba(64, 81, 137, 0.08)',
-                    color: '#405189',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    margin: '0 auto 0.85rem',
-                  }}
-                >
-                  <Database size={24} />
-                </div>
-                <h3 style={{ fontSize: '0.98rem', fontWeight: 600, color: '#212529', margin: '0 0 0.35rem' }}>
-                  Belum Ada Data Master Cabang
-                </h3>
-                <p style={{ fontSize: '0.8rem', color: '#878a99', maxWidth: '420px', margin: '0 auto 1.25rem' }}>
-                  Silakan unggah berkas Excel master cabang & outlet sebagai basis referensi pencocokan. Berkas baru akan menambahkan cabang secara otomatis.
-                </p>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                   <button
                     type="button"
                     className="btn btn-primary btn-sm"
                     onClick={() => setIsMasterUploadModalOpen(true)}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', padding: '0.45rem 1.1rem' }}
+                    id="btn-open-upload-master"
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.42rem 0.95rem' }}
                   >
                     <UploadCloud size={14} />
-                    <span>Upload Data Master</span>
+                    <span>Upload Master Excel</span>
                   </button>
 
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={() => {
+                      if (window.confirm('Kosongkan data Master dari sesi ini?')) {
+                        handleResetMaster();
+                      }
+                    }}
+                    style={{ color: '#f06548', borderColor: 'rgba(240, 101, 72, 0.3)' }}
+                    title="Kosongkan seluruh data Master"
+                  >
+                    <RotateCcw size={13} />
+                    <span>Reset Master</span>
+                  </button>
                 </div>
               </div>
-            ) : (
-              <div className="glass-card" style={{ padding: '0.85rem 1.15rem' }}>
-                {/* Header Title inside Card Removed */}
 
-
-                {/* 2 SUB-TABS (VELZON UNDERLINE STYLE DI DALAM CARD) */}
+              {masterRows.length === 0 ? (
                 <div
+                  className="glass-card"
                   style={{
+                    padding: '3.5rem 2rem',
+                    textAlign: 'center',
+                    borderRadius: '8px',
+                    border: '1px dashed #ced4da',
+                    background: '#ffffff',
                     display: 'flex',
-                    gap: '0.5rem',
-                    borderBottom: '1px solid #e9ebec',
-                    marginBottom: '1rem',
-                    flexWrap: 'wrap',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '1rem',
                   }}
                 >
-                  {/* Tab 1: Indikator Kesehatan Master */}
-                  <button
-                    type="button"
-                    onClick={() => setMasterSubTab('health')}
+                  <div
                     style={{
+                      width: '56px',
+                      height: '56px',
+                      borderRadius: '50%',
+                      background: 'rgba(64, 81, 137, 0.08)',
+                      color: '#405189',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '0.45rem',
-                      padding: '0.65rem 1.1rem',
-                      fontSize: '0.82rem',
-                      fontWeight: masterSubTab === 'health' ? 600 : 500,
-                      color: masterSubTab === 'health' ? (masterHealth.multiOutletCount > 0 ? '#d97706' : '#0ab39c') : '#878a99',
-                      background: 'transparent',
-                      border: 'none',
-                      borderBottom: masterSubTab === 'health' ? `2px solid ${masterHealth.multiOutletCount > 0 ? '#f7b84b' : '#0ab39c'}` : '2px solid transparent',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                      marginBottom: '-1px',
+                      justifyContent: 'center',
                     }}
-                    id="tab-btn-master-health"
                   >
-                    <ShieldAlert size={14} color={masterSubTab === 'health' ? (masterHealth.multiOutletCount > 0 ? '#d97706' : '#0ab39c') : '#878a99'} />
-                    <span>Indikator Kesehatan Master</span>
-                    <span
-                      style={{
-                        padding: '0.12rem 0.5rem',
-                        borderRadius: '9999px',
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        background: masterHealth.multiOutletCount > 0 ? 'rgba(247, 184, 75, 0.15)' : 'rgba(10, 179, 156, 0.12)',
-                        color: masterHealth.multiOutletCount > 0 ? '#d97706' : '#0ab39c',
-                        border: masterHealth.multiOutletCount > 0 ? '1px solid rgba(247, 184, 75, 0.3)' : '1px solid rgba(10, 179, 156, 0.25)',
-                      }}
-                    >
-                      {masterHealth.multiOutletCount > 0 ? `${masterHealth.multiOutletCount} Multi-Cabang` : '100% Optimal'}
-                    </span>
-                  </button>
-
-                  {/* Tab 2: Data Grid Master Cabang */}
+                    <Database size={28} />
+                  </div>
+                  <div>
+                    <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#212529', margin: '0 0 0.4rem' }}>
+                      Belum Ada Data Master Terunggah
+                    </h4>
+                    <p style={{ fontSize: '0.82rem', color: '#878a99', maxWidth: '420px', margin: 0, lineHeight: 1.5 }}>
+                      Silakan unggah berkas Excel master cabang resmi untuk mengaktifkan pemetaan dan verifikasi otomatis.
+                    </p>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setMasterSubTab('grid')}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.45rem',
-                      padding: '0.65rem 1.1rem',
-                      fontSize: '0.82rem',
-                      fontWeight: masterSubTab === 'grid' ? 600 : 500,
-                      color: masterSubTab === 'grid' ? '#3577f1' : '#878a99',
-                      background: 'transparent',
-                      border: 'none',
-                      borderBottom: masterSubTab === 'grid' ? '2px solid #3577f1' : '2px solid transparent',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                      marginBottom: '-1px',
-                    }}
-                    id="tab-btn-master-grid"
+                    className="btn btn-primary"
+                    onClick={() => setIsMasterUploadModalOpen(true)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 1.25rem' }}
                   >
-                    <Database size={14} color={masterSubTab === 'grid' ? '#3577f1' : '#878a99'} />
-                    <span>Data Grid Master Cabang</span>
-                    <span
-                      style={{
-                        padding: '0.12rem 0.5rem',
-                        borderRadius: '9999px',
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        background: 'rgba(53, 119, 241, 0.1)',
-                        color: '#3577f1',
-                        border: '1px solid rgba(53, 119, 241, 0.25)',
-                      }}
-                    >
-                      {masterRows.length.toLocaleString('id-ID')} Baris
-                    </span>
+                    <UploadCloud size={16} />
+                    <span>Pilih Berkas Master Excel</span>
                   </button>
                 </div>
+              ) : (
+                <div className="glass-card" style={{ padding: '0.85rem 1.15rem' }}>
+                  {/* Clean Tab Segment Navigation */}
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      background: '#f3f6f9',
+                      padding: '3px',
+                      borderRadius: '6px',
+                      border: '1px solid #e9ebec',
+                      marginBottom: '0.85rem',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setMasterSubTab('health')}
+                      style={{
+                        padding: '0.4rem 0.95rem',
+                        fontSize: '0.8rem',
+                        fontWeight: masterSubTab === 'health' ? 700 : 500,
+                        color: masterSubTab === 'health' ? '#405189' : '#878a99',
+                        background: masterSubTab === 'health' ? '#ffffff' : 'transparent',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        boxShadow: masterSubTab === 'health' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                        transition: 'all 0.15s',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                      }}
+                    >
+                      <ShieldAlert size={14} style={{ color: masterSubTab === 'health' ? '#405189' : '#878a99' }} />
+                      <span>Audit & Multi-Outlet</span>
+                      {masterHealth.multiOutletCount > 0 && (
+                        <span
+                          style={{
+                            background: '#f06548',
+                            color: '#ffffff',
+                            padding: '0.05rem 0.35rem',
+                            borderRadius: '10px',
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                          }}
+                        >
+                          {masterHealth.multiOutletCount}
+                        </span>
+                      )}
+                    </button>
 
-                {/* Sub-Tab Content inside Single Card */}
-                {masterSubTab === 'health' ? (
-                  <MasterHealthCard health={masterHealth} />
-                ) : (
-                  <MasterDataGrid masterRows={masterRows} />
-                )}
-              </div>
-            )}
-          </div>
+                    <button
+                      type="button"
+                      onClick={() => setMasterSubTab('grid')}
+                      style={{
+                        padding: '0.4rem 0.95rem',
+                        fontSize: '0.8rem',
+                        fontWeight: masterSubTab === 'grid' ? 700 : 500,
+                        color: masterSubTab === 'grid' ? '#405189' : '#878a99',
+                        background: masterSubTab === 'grid' ? '#ffffff' : 'transparent',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        boxShadow: masterSubTab === 'grid' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                        transition: 'all 0.15s',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                      }}
+                    >
+                      <Database size={14} style={{ color: masterSubTab === 'grid' ? '#405189' : '#878a99' }} />
+                      <span>Daftar Data Master</span>
+                      <span
+                        style={{
+                          background: masterSubTab === 'grid' ? '#eef0f7' : '#e9ebec',
+                          color: masterSubTab === 'grid' ? '#405189' : '#878a99',
+                          padding: '0.05rem 0.35rem',
+                          borderRadius: '10px',
+                          fontSize: '0.68rem',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {masterRows.length.toLocaleString('id-ID')} Baris
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* Sub-Tab Content inside Single Card */}
+                  {masterSubTab === 'health' ? (
+                    <MasterHealthCard health={masterHealth} />
+                  ) : (
+                    <MasterDataGrid masterRows={masterRows} />
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* MENU 3: DATA YANG AKAN DICOCOKAN (WORKING & EXECUTION ENGINE) */}
-          <div style={{ display: activeTab === 'working' ? 'contents' : 'none' }}>
-            {/* Top Action Card: Upload Button & Template & Reset */}
-            <div
-              className="glass-card"
-              style={{
-                padding: '0.55rem 1.1rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '0.65rem',
-                marginBottom: '0',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                <div
-                  style={{
-                    width: '30px',
-                    height: '30px',
-                    borderRadius: '5px',
-                    background: 'rgba(53, 119, 241, 0.1)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#3577f1',
-                  }}
-                >
-                  <Layers size={15} />
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '0.92rem', fontWeight: 600, color: '#212529', margin: 0 }}>
-                    Data Analisa Pencocokan
-                  </h3>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  onClick={() => setIsTargetUploadModalOpen(true)}
-                  id="btn-open-upload-target"
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.3rem 0.75rem' }}
-                >
-                  <UploadCloud size={13} />
-                  <span>Upload Data Cek</span>
-                </button>
-
-                {/* Reset Hasil Match: Hanya muncul jika proses pencocokan sudah selesai */}
-                {matchedDone && targetRows.length > 0 && (
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm"
-                    onClick={handleResetMatchingResults}
-                    title="Kembalikan status data target ke kondisi awal upload untuk mencocokkan ulang tanpa menghapus berkas"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.3rem',
-                      color: '#405189',
-                      borderColor: 'rgba(64, 81, 137, 0.3)',
-                      padding: '0.3rem 0.7rem',
-                    }}
-                  >
-                    <RotateCcw size={12} />
-                    <span>Reset Hasil Match</span>
-                  </button>
-                )}
-
-                {targetRows.length > 0 && (
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm"
-                    onClick={handleResetTarget}
-                    title="Kosongkan seluruh data target operasional"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.3rem',
-                      color: '#f06548',
-                      borderColor: 'rgba(240, 101, 72, 0.3)',
-                      padding: '0.3rem 0.7rem',
-                    }}
-                  >
-                    <RotateCcw size={12} />
-                    <span>Kosongkan Data Cek</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {targetRows.length === 0 ? (
+          {activeTab === 'working' && (
+            <div>
+              {/* Top Action Card: Upload Button & Template & Reset */}
               <div
                 className="glass-card"
                 style={{
-                  padding: '3.5rem 1.5rem',
-                  textAlign: 'center',
-                  background: '#ffffff',
-                  borderRadius: '6px',
-                  border: '1px solid #e9ebec',
+                  padding: '0.55rem 1.1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '0.65rem',
+                  marginBottom: '0',
                 }}
               >
-                <div
-                  style={{
-                    width: '52px',
-                    height: '52px',
-                    borderRadius: '50%',
-                    background: 'rgba(53, 119, 241, 0.08)',
-                    color: '#3577f1',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    margin: '0 auto 0.85rem',
-                  }}
-                >
-                  <Layers size={24} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                  <div
+                    style={{
+                      width: '30px',
+                      height: '30px',
+                      borderRadius: '5px',
+                      background: 'rgba(53, 119, 241, 0.1)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#3577f1',
+                    }}
+                  >
+                    <Layers size={15} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '0.92rem', fontWeight: 600, color: '#212529', margin: 0 }}>
+                      Data Analisa Pencocokan
+                    </h3>
+                  </div>
                 </div>
-                <h3 style={{ fontSize: '0.98rem', fontWeight: 600, color: '#212529', margin: '0 0 0.35rem' }}>
-                  Belum Ada Data Target Operasional
-                </h3>
-                <p style={{ fontSize: '0.8rem', color: '#878a99', maxWidth: '420px', margin: '0 auto 1.25rem' }}>
-                  Silakan unggah berkas Excel target untuk memulai pencocokan kode pos dan nama cabang. File baru akan otomatis menambahkan baris data (append).
-                </p>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem' }}>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
                   <button
                     type="button"
                     className="btn btn-primary btn-sm"
                     onClick={() => setIsTargetUploadModalOpen(true)}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', padding: '0.45rem 1.1rem' }}
+                    id="btn-open-upload-target"
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.3rem 0.75rem' }}
                   >
-                    <UploadCloud size={14} />
-                    <span>Upload Data Cek</span>
+                    <UploadCloud size={13} />
+                    <span>Upload Data Excel</span>
                   </button>
 
+                  {/* Reset Hasil Match: Hanya muncul jika proses pencocokan sudah selesai */}
+                  {matchedDone && targetRows.length > 0 && (
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      onClick={handleResetMatchingResults}
+                      title="Kembalikan status data target ke kondisi awal upload untuk mencocokkan ulang tanpa menghapus berkas"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.3rem',
+                        color: '#405189',
+                        borderColor: 'rgba(64, 81, 137, 0.3)',
+                        padding: '0.3rem 0.7rem',
+                      }}
+                    >
+                      <RotateCcw size={12} />
+                      <span>Reset Hasil Match</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={() => {
+                      if (window.confirm('Kosongkan seluruh data Target Cek dari sesi ini?')) {
+                        handleResetTarget();
+                      }
+                    }}
+                    style={{ color: '#f06548', borderColor: 'rgba(240, 101, 72, 0.3)', padding: '0.3rem 0.75rem' }}
+                    title="Kosongkan seluruh data target"
+                  >
+                    <RotateCcw size={13} />
+                    <span>Reset Data</span>
+                  </button>
                 </div>
               </div>
-            ) : (
-              <>
-                {isProcessing && (
+
+              {targetRows.length === 0 ? (
+                <div
+                  className="glass-card"
+                  style={{
+                    padding: '3.5rem 2rem',
+                    textAlign: 'center',
+                    borderRadius: '8px',
+                    border: '1px dashed #ced4da',
+                    background: '#ffffff',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '1rem',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '56px',
+                      height: '56px',
+                      borderRadius: '50%',
+                      background: 'rgba(53, 119, 241, 0.08)',
+                      color: '#3577f1',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Layers size={28} />
+                  </div>
+                  <div>
+                    <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#212529', margin: '0 0 0.4rem' }}>
+                      Belum Ada Data yang Diunggah untuk Dicocokan
+                    </h4>
+                    <p style={{ fontSize: '0.82rem', color: '#878a99', maxWidth: '420px', margin: 0, lineHeight: 1.5 }}>
+                      Silakan unggah berkas Excel data target (transaksi/merchant/EDC) untuk memulai proses pencocokan otomatis.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => setIsTargetUploadModalOpen(true)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 1.25rem' }}
+                  >
+                    <UploadCloud size={16} />
+                    <span>Pilih Berkas Target Excel</span>
+                  </button>
+                </div>
+              ) : (
+                <>
                   <ProgressBar
                     isProcessing={isProcessing}
                     progress={progress}
                     processedCount={processedCount}
-                    totalCount={targetRows.length}
+                    totalCount={initialTargetCount}
                     durationMs={durationMs}
                   />
-                )}
 
-                <TargetDataGrid
-                  rows={targetRows}
-                  totalInputRows={initialTargetCount}
-                  masterRows={masterRows}
-                  wilayahList={wilayahList}
-                  selectedWilayah={selectedWilayah}
-                  onWilayahChange={setSelectedWilayah}
-                  searchTerm={searchTerm}
-                  onSearchChange={setSearchTerm}
-                  onExecuteMatching={handleExecuteMatching}
-                  onApproveAllRecommendations={handleApproveAllRecommendations}
-                  onApproveRecommendation={handleApproveSingleRecommendation}
-                  isProcessing={isProcessing}
-                  canExecute={targetRows.length > 0 && masterRows.length > 0}
-                  matchedDone={matchedDone}
-                  onRevertRecommendation={handleRevertRecommendation}
-                  wilayahSettings={wilayahSettings}
-                />
+                  <TargetDataGrid
+                    rows={targetRows}
+                    totalInputRows={initialTargetCount}
+                    masterRows={masterRows}
+                    wilayahList={wilayahList}
+                    selectedWilayah={selectedWilayah}
+                    onWilayahChange={setSelectedWilayah}
+                    searchTerm={searchTerm}
+                    onSearchChange={setSearchTerm}
+                    onExecuteMatching={handleExecuteMatching}
+                    onApproveAllRecommendations={handleApproveAllRecommendations}
+                    onApproveRecommendation={handleApproveSingleRecommendation}
+                    isProcessing={isProcessing}
+                    canExecute={targetRows.length > 0 && masterRows.length > 0}
+                    matchedDone={matchedDone}
+                    onRevertRecommendation={handleRevertRecommendation}
+                    wilayahSettings={wilayahSettings}
+                  />
 
-                <ExportAction
-                  allTargetRows={targetRows}
-                  filteredRows={filteredTargetRows}
-                  selectedWilayah={selectedWilayah}
-                  totalInputRows={initialTargetCount}
-                />
-              </>
-            )}
-          </div>
+                  <ExportAction
+                    allTargetRows={targetRows}
+                    filteredRows={filteredTargetRows}
+                    selectedWilayah={selectedWilayah}
+                    totalInputRows={initialTargetCount}
+                  />
+                </>
+              )}
+            </div>
+          )}
 
           {/* MENU MASTER: SETTING WILAYAH */}
-          <div style={{ display: activeTab === 'wilayah' ? 'contents' : 'none' }}>
+          {activeTab === 'wilayah' && (
             <WilayahManager
               initialSettings={wilayahSettings}
               onSettingsSaved={(newSettings) => {
@@ -1291,12 +1281,12 @@ export const App: React.FC = () => {
                 setItem('wilayah_settings', newSettings);
               }}
             />
-          </div>
+          )}
 
           {/* MENU MASTER: DATA PTEN */}
-          <div style={{ display: activeTab === 'pten' ? 'contents' : 'none' }}>
+          {activeTab === 'pten' && (
             <PTENManager targetRows={targetRows} masterRows={masterRows} />
-          </div>
+          )}
         </main>
       </div>
 
