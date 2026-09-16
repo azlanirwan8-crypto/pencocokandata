@@ -20,8 +20,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import type { RoleMappingRecord } from '../../components/RoleMapping/RoleMappingManager';
-import { getUnitCategory } from '../../components/RoleMapping/RoleMappingManager';
-import { auditRoleMasterConsistency } from '../../utils/roleMatcher';
+import { getUnitCategory, DEFAULT_ROLE_MAPPING_DATA } from '../../components/RoleMapping/RoleMappingManager';
+import { auditRoleMasterConsistency, resolveRoleMappingForBranch } from '../../utils/roleMatcher';
 import type { TargetRow, MasterRow, WilayahSetting } from '../../types';
 import {
   generateRecommendationsProgressive,
@@ -2936,87 +2936,118 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                       {/* Kolom Tipe Unit & Status Kesesuaian Mapping Role */}
                       {!hiddenCols.has('RoleMapping') && (
                         <td style={{ padding: '0.4rem 0.55rem', verticalAlign: 'middle', textAlign: 'center' }}>
-                          {r.organisasiRole || r.tipeUnitRole ? (
-                            (() => {
-                              const audit = auditRoleMasterConsistency(r);
-                              return (
+                          {(() => {
+                            const activeRoleList = (roleMappingList && roleMappingList.length > 0) ? roleMappingList : DEFAULT_ROLE_MAPPING_DATA;
+                            let effectiveRoleOrg = r.organisasiRole || '';
+                            let effectiveRoleType = r.tipeUnitRole || '';
+                            let effectiveAlur = r.alurWondr || '';
+
+                            if (!effectiveRoleOrg && activeRoleList.length > 0) {
+                              const resolved = resolveRoleMappingForBranch(
+                                r.Cabang || r['Sandi Cabang'] || r['Nama Outlet'] || r.Sandi || '',
+                                r['Dati II'] || r.Kota,
+                                r.Kelurahan,
+                                r.Kecamatan,
+                                r.ALAMAT,
+                                activeRoleList,
+                                r['Nama Outlet'] || '',
+                                r.Provinsi,
+                                r.Wilayah
+                              );
+                              if (resolved) {
+                                effectiveRoleOrg = resolved.organisasiRole;
+                                effectiveRoleType = resolved.tipeUnitRole;
+                                effectiveAlur = resolved.alurWondr;
+                              }
+                            }
+
+                            if (!effectiveRoleOrg && !effectiveRoleType) {
+                              return <span style={{ color: '#adb5bd', fontSize: '0.72rem' }}>-</span>;
+                            }
+
+                            const tempRow = {
+                              ...r,
+                              organisasiRole: effectiveRoleOrg,
+                              tipeUnitRole: effectiveRoleType,
+                              alurWondr: effectiveAlur,
+                            };
+                            const audit = auditRoleMasterConsistency(tempRow);
+
+                            return (
+                              <div
+                                style={{
+                                  display: 'inline-flex',
+                                  flexDirection: 'column',
+                                  gap: '0.22rem',
+                                  alignItems: 'center',
+                                  background: audit.cardBg,
+                                  padding: '0.35rem 0.55rem',
+                                  borderRadius: '6px',
+                                  border: `1px solid ${audit.cardBorder}`,
+                                  minWidth: '185px',
+                                  maxWidth: '240px',
+                                }}
+                                title={audit.tooltip}
+                              >
+                                {/* Nama Unit di Mapping Role Database */}
                                 <div
                                   style={{
-                                    display: 'inline-flex',
-                                    flexDirection: 'column',
-                                    gap: '0.22rem',
-                                    alignItems: 'center',
-                                    background: audit.cardBg,
-                                    padding: '0.35rem 0.55rem',
-                                    borderRadius: '6px',
-                                    border: `1px solid ${audit.cardBorder}`,
-                                    minWidth: '185px',
-                                    maxWidth: '240px',
+                                    fontSize: '0.72rem',
+                                    fontWeight: 700,
+                                    color: audit.isNameMatched ? '#1e293b' : '#b91c1c',
+                                    textAlign: 'center',
+                                    maxWidth: '220px',
+                                    whiteSpace: 'normal',
+                                    lineHeight: 1.25,
                                   }}
-                                  title={audit.tooltip}
                                 >
-                                  {/* Nama Unit di Mapping Role Database */}
-                                  <div
+                                  {effectiveRoleOrg || '-'}
+                                </div>
+
+                                {/* Baris Badge: Tipe Unit + Indikator Kesesuaian Master */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                                  {/* Tipe Unit Badge */}
+                                  <span
                                     style={{
-                                      fontSize: '0.72rem',
+                                      fontSize: '0.65rem',
                                       fontWeight: 700,
-                                      color: audit.isNameMatched ? '#1e293b' : '#b91c1c',
-                                      textAlign: 'center',
-                                      maxWidth: '220px',
-                                      whiteSpace: 'normal',
-                                      lineHeight: 1.25,
+                                      padding: '0.08rem 0.38rem',
+                                      borderRadius: '3px',
+                                      background:
+                                        effectiveRoleType?.includes('KC') || effectiveRoleType?.includes('Utama')
+                                          ? 'rgba(64, 81, 137, 0.12)'
+                                          : 'rgba(41, 156, 219, 0.12)',
+                                      color:
+                                        effectiveRoleType?.includes('KC') || effectiveRoleType?.includes('Utama')
+                                          ? '#405189'
+                                          : '#299cdb',
                                     }}
                                   >
-                                    {r.organisasiRole || '-'}
-                                  </div>
+                                    {effectiveRoleType || (effectiveRoleOrg ? 'Terpetakan' : '-')}
+                                  </span>
 
-                                  {/* Baris Badge: Tipe Unit + Indikator Kesesuaian Master */}
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-                                    {/* Tipe Unit Badge */}
+                                  {/* Indikator Keselarasan Master jika ada Master */}
+                                  {audit.hasMaster && (
                                     <span
                                       style={{
-                                        fontSize: '0.65rem',
+                                        fontSize: '0.62rem',
                                         fontWeight: 700,
-                                        padding: '0.08rem 0.38rem',
+                                        padding: '0.06rem 0.35rem',
                                         borderRadius: '3px',
-                                        background:
-                                          r.tipeUnitRole?.includes('KC') || r.tipeUnitRole?.includes('Utama')
-                                            ? 'rgba(64, 81, 137, 0.12)'
-                                            : 'rgba(41, 156, 219, 0.12)',
-                                        color:
-                                          r.tipeUnitRole?.includes('KC') || r.tipeUnitRole?.includes('Utama')
-                                            ? '#405189'
-                                            : '#299cdb',
+                                        background: audit.badgeBg,
+                                        color: audit.badgeColor,
+                                        border: `1px solid ${audit.badgeBorder}`,
+                                        whiteSpace: 'nowrap',
                                       }}
+                                      title={audit.tooltip}
                                     >
-                                      {r.tipeUnitRole || (r.organisasiRole ? 'Terpetakan' : '-')}
+                                      {audit.badgeLabel}
                                     </span>
-
-                                    {/* Indikator Keselarasan Master jika ada Master */}
-                                    {audit.hasMaster && (
-                                      <span
-                                        style={{
-                                          fontSize: '0.62rem',
-                                          fontWeight: 700,
-                                          padding: '0.06rem 0.35rem',
-                                          borderRadius: '3px',
-                                          background: audit.badgeBg,
-                                          color: audit.badgeColor,
-                                          border: `1px solid ${audit.badgeBorder}`,
-                                          whiteSpace: 'nowrap',
-                                        }}
-                                        title={audit.tooltip}
-                                      >
-                                        {audit.badgeLabel}
-                                      </span>
-                                    )}
-                                  </div>
+                                  )}
                                 </div>
-                              );
-                            })()
-                          ) : (
-                            <span style={{ color: '#adb5bd', fontSize: '0.72rem' }}>-</span>
-                          )}
+                              </div>
+                            );
+                          })()}
                         </td>
                       )}
                     </tr>

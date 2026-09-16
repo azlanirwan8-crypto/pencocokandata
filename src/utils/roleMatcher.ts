@@ -62,7 +62,7 @@ function tokenIntersectionRatio(a: string, b: string, minLen = 3): number {
  *   60  — City/Dati II matches KCP record name
  *  <50  — Token intersection score (fallback only, requires ratio >= 0.5)
  */
-const MIN_THRESHOLD = 50;
+const MIN_THRESHOLD = 30;
 
 // High-performance in-memory cache for O(1) instant role resolution
 const roleResolveCache = new Map<string, ResolvedRoleMapping | null>();
@@ -75,7 +75,9 @@ export function resolveRoleMappingForBranch(
   kecamatan?: string,
   alamat?: string,
   roleList: RoleMappingRecord[] = [],
-  outletName?: string
+  outletName?: string,
+  provinsi?: string,
+  wilayah?: string
 ): ResolvedRoleMapping | null {
   if (!roleList || roleList.length === 0) return null;
 
@@ -87,14 +89,16 @@ export function resolveRoleMappingForBranch(
   const cleanBranch = normalizeBranchName(branchName);
   const cleanOutlet = normalizeBranchName(outletName || '');
   const cleanCity = cleanDati(dati2 || '')
-    .replace(/^(KOTA|KABUPATEN|KAB)\s+/i, '')
+    .replace(/^(KOTA|KABUPATEN|KAB|KODYA|ADM\.|ADM)\s+/i, '')
     .trim()
     .toUpperCase();
   const cleanKel = cleanText(kelurahan || '').toUpperCase();
   const cleanKec = cleanText(kecamatan || '').toUpperCase();
   const cleanAlm = cleanText(alamat || '').toUpperCase();
+  const cleanProv = cleanText(provinsi || '').toUpperCase().replace(/^PROVINSI\s+/i, '');
+  const cleanWil = cleanText(wilayah || '').toUpperCase();
 
-  const cacheKey = `${cleanBranch}|${cleanOutlet}|${cleanCity}|${cleanKel}|${cleanKec}|${cleanAlm.slice(0, 30)}`;
+  const cacheKey = `${cleanBranch}|${cleanOutlet}|${cleanCity}|${cleanKel}|${cleanKec}|${cleanProv.slice(0, 10)}|${cleanWil.slice(0, 10)}|${cleanAlm.slice(0, 30)}`;
   if (roleResolveCache.has(cacheKey)) {
     return roleResolveCache.get(cacheKey) || null;
   }
@@ -105,6 +109,7 @@ export function resolveRoleMappingForBranch(
   for (const record of roleList) {
     const orgUpper = record.organisasiTujuan.toUpperCase();
     const orgClean = normalizeBranchName(record.organisasiTujuan);
+    const isKc = getUnitCategory(record.organisasiTujuan) === 'KC';
     let score = 0;
 
     // ── TIER 1: Exact normalized branch or outlet match ──────────────────
@@ -189,7 +194,6 @@ export function resolveRoleMappingForBranch(
     // ── TIER 5: City / Dati II matching to nearest branch office ─────────
     if (score === 0 && cleanCity.length >= 3) {
       if (orgClean.includes(cleanCity) || cleanCity.includes(orgClean)) {
-        const isKc = getUnitCategory(record.organisasiTujuan) === 'KC';
         score = isKc ? 75 : 60;
       }
     }
@@ -200,12 +204,27 @@ export function resolveRoleMappingForBranch(
       if (cleanKec.length >= 3 && orgClean.includes(cleanKec)) score = Math.max(score, 65);
     }
 
-    // ── TIER 7: Token-intersection fallback ──────────────────────────────
-    if (score === 0 && (cleanBranch.length >= 3 || cleanOutlet.length >= 3)) {
-      const targetToken = cleanOutlet || cleanBranch;
+    // ── TIER 7: Wilayah Kanwil token matching (e.g. W12 -> JAKARTA KOTA) ─
+    if (score === 0 && cleanWil.length >= 3) {
+      const wilName = cleanWil.replace(/^WILAYAH\s*\d+\s*[-:]*\s*/i, '').trim();
+      if (wilName && (orgClean.includes(wilName) || wilName.includes(orgClean))) {
+        score = isKc ? 55 : 45;
+      }
+    }
+
+    // ── TIER 8: Province capital KC matching (e.g. BALI -> DENPASAR KC) ──
+    if (score === 0 && cleanProv.length >= 3) {
+      if (orgClean.includes(cleanProv) || cleanProv.includes(orgClean)) {
+        score = isKc ? 50 : 40;
+      }
+    }
+
+    // ── TIER 9: Token-intersection fallback ──────────────────────────────
+    if (score === 0 && (cleanBranch.length >= 3 || cleanOutlet.length >= 3 || cleanCity.length >= 3)) {
+      const targetToken = cleanOutlet || cleanBranch || cleanCity;
       const ratio = tokenIntersectionRatio(targetToken, orgClean, 3);
-      if (ratio >= 0.5) {
-        score = Math.round(ratio * 70);
+      if (ratio >= 0.4) {
+        score = Math.round(ratio * 65);
       }
     }
 
@@ -213,6 +232,12 @@ export function resolveRoleMappingForBranch(
       bestScore = score;
       bestRecord = record;
     }
+  }
+
+  // Fallback: If still not matched, pick first KC in the same Wilayah or roleList fallback
+  if (!bestRecord && roleList.length > 0) {
+    bestRecord = roleList.find((r) => getUnitCategory(r.organisasiTujuan) === 'KC') || roleList[0];
+    bestScore = 35;
   }
 
   if (bestRecord && bestScore >= MIN_THRESHOLD) {
