@@ -10,6 +10,8 @@ import {
   Building2,
   Filter,
   CheckCircle,
+  CheckCircle2,
+  MapPin,
   Eye,
   Globe,
   Share2,
@@ -21,6 +23,8 @@ import {
   Info,
 } from 'lucide-react';
 import type { MasterRow, TargetRow } from '../../types';
+import { formatWilayahName } from '../../utils/normalizer';
+import { DEFAULT_PTEN_DATA } from '../PTENData/defaultPtenData';
 import {
   clusterMasterRowsForMap,
   INDONESIA_REGIONS,
@@ -186,6 +190,14 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
 
   const [activeRegion, setActiveRegion] = useState<keyof typeof INDONESIA_REGIONS>('ALL');
+  const [mapSelectedWilayah, setMapSelectedWilayah] = useState<string>(selectedWilayah || 'ALL');
+
+  useEffect(() => {
+    if (selectedWilayah) {
+      setMapSelectedWilayah(selectedWilayah);
+    }
+  }, [selectedWilayah]);
+
   const [displayScope, setDisplayScope] = useState<DisplayScope>('ALL');
   const [tileProvider, setTileProvider] = useState<TileProvider>('google');
 
@@ -340,10 +352,57 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     };
   }, [cachePreloaded, masterRows, targetRows, googleApiKey]);
 
-  // 1. Group & Cluster master rows into pins using dynamic resolved coordinates
+  // List of exact Wilayah for map filtering
+  const mapWilayahList = useMemo(() => {
+    const set = new Set<string>();
+    masterRows.forEach((m) => {
+      if (m.Wilayah && String(m.Wilayah).trim()) {
+        const norm = formatWilayahName(m.Wilayah);
+        if (norm && norm !== 'Tanpa Wilayah') set.add(norm);
+      }
+    });
+    targetRows.forEach((r) => {
+      if (r.Wilayah && String(r.Wilayah).trim()) {
+        const norm = formatWilayahName(r.Wilayah);
+        if (norm && norm !== 'Tanpa Wilayah') set.add(norm);
+      }
+    });
+    return Array.from(set).sort((a, b) => {
+      const numA = parseInt(a.replace(/\D/g, ''), 10) || 0;
+      const numB = parseInt(b.replace(/\D/g, ''), 10) || 0;
+      return numA - numB;
+    });
+  }, [masterRows, targetRows]);
+
+  const mapWilayahPinCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const m of masterRows) {
+      if (m.Wilayah) {
+        const norm = formatWilayahName(m.Wilayah);
+        map.set(norm, (map.get(norm) || 0) + 1);
+      }
+    }
+    return map;
+  }, [masterRows]);
+
+  // Set kode pos PTEN untuk pencocokan instan O(1) di popup detail
+  const ptenKpSet = useMemo(() => {
+    const set = new Set<string>();
+    for (let i = 0; i < DEFAULT_PTEN_DATA.length; i++) {
+      const kp = String(DEFAULT_PTEN_DATA[i].kodePosPten || '').replace(/\D/g, '').trim();
+      if (kp && kp.length === 5) set.add(kp);
+    }
+    for (const m of masterRows) {
+      const kp = String(m['KODE POS PTEN'] || m['KODE POS'] || '').replace(/\D/g, '').trim();
+      if (kp && kp.length === 5) set.add(kp);
+    }
+    return set;
+  }, [masterRows]);
+
+  // 1. Group & Cluster master rows into pins using dynamic resolved coordinates & map selected Wilayah
   const allPins = useMemo(() => {
-    return clusterMasterRowsForMap(masterRows, selectedWilayah, targetRows, resolvedCoords);
-  }, [masterRows, selectedWilayah, targetRows, resolvedCoords]);
+    return clusterMasterRowsForMap(masterRows, mapSelectedWilayah, targetRows, resolvedCoords);
+  }, [masterRows, mapSelectedWilayah, targetRows, resolvedCoords]);
 
   const multiOutletKodePos = useMemo(() => {
     const counts = new Map<string, number>();
@@ -1444,6 +1503,44 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
         <div style={{ width: '1px', height: '20px', background: '#dee2e6', flexShrink: 0 }} />
 
+        {/* Dropdown Filter Wilayah pada Peta */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+          <MapPin size={13} color="#405189" />
+          <select
+            value={mapSelectedWilayah}
+            onChange={(e) => {
+              setMapSelectedWilayah(e.target.value);
+              setSelectedPin(null);
+            }}
+            id="map-filter-select-wilayah"
+            style={{
+              fontSize: '0.73rem',
+              fontWeight: 600,
+              padding: '0.25rem 0.5rem',
+              borderRadius: '5px',
+              border: '1px solid #ced4da',
+              background: '#ffffff',
+              color: '#212529',
+              cursor: 'pointer',
+              outline: 'none',
+              minWidth: '160px',
+            }}
+            title="Filter cabang pada peta berdasarkan Wilayah"
+          >
+            <option value="ALL">Semua Wilayah ({masterRows.length} Cabang)</option>
+            {mapWilayahList.map((w) => {
+              const count = mapWilayahPinCounts.get(w) || 0;
+              return (
+                <option key={w} value={w}>
+                  {formatWilayahName(w)} ({count} Cabang)
+                </option>
+              );
+            })}
+          </select>
+        </div>
+
+        <div style={{ width: '1px', height: '20px', background: '#dee2e6', flexShrink: 0 }} />
+
         {/* 3. Display Filter — Custom Dropdown with Colored Bullets */}
         <div style={{ position: 'relative' }}>
           {/* Trigger Button */}
@@ -1792,33 +1889,6 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
             </div>
           )}
         </div>
-
-        {/* 7. Geocoding API Status Button */}
-        <button
-          type="button"
-          onClick={() => {
-            setApiKeyInput(googleApiKey);
-            setShowApiKeyModal(true);
-          }}
-          title="Geocoding: LocationIQ aktif (fallback). Klik untuk tambah Google API Key (opsional)"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            fontSize: '0.73rem',
-            fontWeight: 600,
-            padding: '0.25rem 0.55rem',
-            borderRadius: '5px',
-            border: '1px solid #10b981',
-            background: 'rgba(16,185,129,0.1)',
-            color: '#059669',
-            cursor: 'pointer',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          <Key size={12} />
-          <span>{googleApiKey ? 'Google + LocationIQ ✓' : 'LocationIQ Aktif ✓'}</span>
-        </button>
       </div>
 
       {showAnomalyPanel && (
@@ -2783,87 +2853,151 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
             </div>
 
             {/* Modal Table Body */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem 1.25rem', maxHeight: '420px' }}>
-              <table className="modern-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem 1.25rem', maxHeight: '460px' }}>
+              <table className="modern-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.73rem' }}>
                 <thead>
                   <tr>
-                    <th style={{ width: '45px', textAlign: 'center', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>No</th>
-                    <th style={{ minWidth: '160px', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Nama Outlet Target</th>
+                    <th style={{ width: '40px', textAlign: 'center', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>No</th>
+                    <th style={{ minWidth: '140px', textAlign: 'center', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Status Match</th>
+                    <th style={{ minWidth: '95px', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Wilayah</th>
+                    <th style={{ minWidth: '120px', color: '#405189', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Sandi Cabang</th>
+                    <th style={{ minWidth: '150px', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Nama Outlet Target</th>
                     <th style={{ minWidth: '220px', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Alamat Lengkap Target</th>
-                    <th style={{ minWidth: '110px', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Kecamatan</th>
-                    <th style={{ minWidth: '85px', textAlign: 'center', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Kode Pos</th>
-                    <th style={{ minWidth: '100px', textAlign: 'center', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Metode Match</th>
-                    <th style={{ minWidth: '110px', textAlign: 'center', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Google Maps</th>
+                    <th style={{ minWidth: '80px', textAlign: 'center', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Kode Pos</th>
+                    <th style={{ minWidth: '100px', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Kelurahan</th>
+                    <th style={{ minWidth: '100px', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Kecamatan</th>
+                    <th style={{ minWidth: '100px', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Dati II</th>
+                    <th style={{ minWidth: '100px', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Provinsi</th>
+                    <th style={{ minWidth: '110px', textAlign: 'center', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>PTEN</th>
+                    <th style={{ minWidth: '100px', textAlign: 'center', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>Google Maps</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredModalRows.length === 0 ? (
                     <tr>
-                      <td colSpan={7} style={{ textAlign: 'center', padding: '2rem 1rem', color: '#878a99' }}>
+                      <td colSpan={13} style={{ textAlign: 'center', padding: '2rem 1rem', color: '#878a99' }}>
                         Tidak ada record yang sesuai dengan pencarian "{modalSearchTerm}".
                       </td>
                     </tr>
                   ) : (
-                    filteredModalRows.map((row, idx) => (
-                      <tr key={idx}>
-                        <td style={{ textAlign: 'center', color: '#878a99', fontWeight: 600 }}>{row.No || idx + 1}</td>
-                        <td style={{ fontWeight: 600, color: '#212529' }}>{row['Nama Outlet']}</td>
-                        <td style={{ color: '#495057' }}>{row.ALAMAT || '-'}</td>
-                        <td style={{ color: '#6c757d' }}>{row.Kecamatan || row['Dati II'] || '-'}</td>
-                        <td style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#405189' }}>
-                          {row['KODE POS'] || '-'}
-                        </td>
-                        <td style={{ textAlign: 'center' }}>
-                          <span
-                            style={{
-                              fontSize: '0.68rem',
-                              fontWeight: 700,
-                              background: row._matchLevel === 'level1'
-                                ? 'rgba(10, 179, 156, 0.12)'
-                                : row._matchLevel === 'level2'
-                                ? 'rgba(53, 119, 241, 0.12)'
-                                : 'rgba(247, 184, 75, 0.15)',
-                              color: row._matchLevel === 'level1'
-                                ? '#0ab39c'
-                                : row._matchLevel === 'level2'
-                                ? '#3577f1'
-                                : '#d97706',
-                              padding: '0.1rem 0.4rem',
-                              borderRadius: '3px',
-                            }}
-                          >
-                            {row._matchLevel === 'level1' ? 'Level 1 (Sandi)' : row._matchLevel === 'level2' ? 'Level 2 (Nama/Alamat)' : 'Rekomendasi'}
-                          </span>
-                        </td>
-                        <td style={{ textAlign: 'center' }}>
-                          <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                              `${row['Nama Outlet'] || ''} ${row.ALAMAT || ''} ${row.Kecamatan || ''} ${row['Dati II'] || ''} ${row['KODE POS'] || ''}`
-                            )}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn btn-sm btn-ghost-primary"
-                            style={{
-                              padding: '0.15rem 0.45rem',
-                              fontSize: '0.67rem',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '0.25rem',
-                              borderRadius: '4px',
-                              color: '#2563eb',
-                              background: 'rgba(37, 99, 235, 0.08)',
-                              border: '1px solid rgba(37, 99, 235, 0.2)',
-                              textDecoration: 'none',
-                              fontWeight: 600,
-                            }}
-                            title="Buka dan verifikasi alamat record ini langsung di Google Maps"
-                          >
-                            <ExternalLink size={11} />
-                            <span>Cek Google</span>
-                          </a>
-                        </td>
-                      </tr>
-                    ))
+                    filteredModalRows.map((row, idx) => {
+                      const targetKp = String(row['KODE POS'] || '').replace(/\D/g, '').trim();
+                      const rawStatus = String(row['CEK KODE POS + PTEN'] || '').toUpperCase().trim();
+                      const isPtenMatch =
+                        rawStatus === 'COCOK' ||
+                        rawStatus === 'SAME' ||
+                        rawStatus === 'MATCH' ||
+                        (targetKp.length === 5 && ptenKpSet.has(targetKp));
+
+                      return (
+                        <tr key={idx}>
+                          <td style={{ textAlign: 'center', color: '#878a99', fontWeight: 600 }}>{row.No || idx + 1}</td>
+                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            <span
+                              style={{
+                                fontSize: '0.68rem',
+                                fontWeight: 700,
+                                background: row._matchLevel === 'level1'
+                                  ? 'rgba(10, 179, 156, 0.12)'
+                                  : row._matchLevel === 'level2'
+                                  ? 'rgba(53, 119, 241, 0.12)'
+                                  : 'rgba(247, 184, 75, 0.15)',
+                                color: row._matchLevel === 'level1'
+                                  ? '#0ab39c'
+                                  : row._matchLevel === 'level2'
+                                  ? '#3577f1'
+                                  : '#d97706',
+                                padding: '0.12rem 0.45rem',
+                                borderRadius: '4px',
+                                display: 'inline-block',
+                              }}
+                            >
+                              {row._matchLevel === 'level1' ? '✓ Level 1 (Sandi)' : row._matchLevel === 'level2' ? '✓ Level 2 (Nama/Alamat)' : '✓ Rekomendasi Terpilih'}
+                            </span>
+                          </td>
+                          <td style={{ fontWeight: 500, color: '#495057', whiteSpace: 'nowrap' }}>
+                            {formatWilayahName(row.Wilayah || currentBranch?.Wilayah || '-')}
+                          </td>
+                          <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#405189', whiteSpace: 'nowrap' }}>
+                            {row['Sandi Cabang'] || row.Sandi || currentBranch?.['Sandi Cabang'] || currentBranch?.Sandi || '-'}
+                          </td>
+                          <td style={{ fontWeight: 600, color: '#212529', minWidth: '150px' }}>
+                            {row['Nama Outlet'] || '-'}
+                          </td>
+                          <td style={{ color: '#495057', minWidth: '200px', lineHeight: 1.35 }}>
+                            {row.ALAMAT || '-'}
+                          </td>
+                          <td style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#405189' }}>
+                            {row['KODE POS'] || '-'}
+                          </td>
+                          <td style={{ color: '#495057' }}>{row.Kelurahan || '-'}</td>
+                          <td style={{ color: '#495057' }}>{row.Kecamatan || '-'}</td>
+                          <td style={{ color: '#495057' }}>{row['Dati II'] || '-'}</td>
+                          <td style={{ color: '#495057' }}>{row.Provinsi || '-'}</td>
+                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            {isPtenMatch ? (
+                              <span
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.2rem',
+                                  fontSize: '0.66rem',
+                                  fontWeight: 700,
+                                  color: '#059669',
+                                  background: 'rgba(10, 179, 156, 0.12)',
+                                  border: '1px solid rgba(10, 179, 156, 0.3)',
+                                  borderRadius: '4px',
+                                  padding: '0.1rem 0.4rem',
+                                }}
+                              >
+                                <CheckCircle2 size={10} color="#059669" /> Match PTEN
+                              </span>
+                            ) : (
+                              <span
+                                style={{
+                                  fontSize: '0.66rem',
+                                  fontWeight: 600,
+                                  color: '#6b7280',
+                                  background: '#f3f4f6',
+                                  border: '1px solid #e5e7eb',
+                                  borderRadius: '4px',
+                                  padding: '0.1rem 0.4rem',
+                                }}
+                              >
+                                Tidak Ada Data PTEN
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                                `${row['Nama Outlet'] || ''} ${row.ALAMAT || ''} ${row.Kecamatan || ''} ${row['Dati II'] || ''} ${row['KODE POS'] || ''}`
+                              )}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn btn-sm btn-ghost-primary"
+                              style={{
+                                padding: '0.15rem 0.45rem',
+                                fontSize: '0.67rem',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.25rem',
+                                borderRadius: '4px',
+                                color: '#2563eb',
+                                background: 'rgba(37, 99, 235, 0.08)',
+                                border: '1px solid rgba(37, 99, 235, 0.2)',
+                                textDecoration: 'none',
+                                fontWeight: 600,
+                              }}
+                              title="Buka dan verifikasi alamat record ini langsung di Google Maps"
+                            >
+                              <ExternalLink size={11} />
+                              <span>Google Maps</span>
+                            </a>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
