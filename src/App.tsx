@@ -1121,12 +1121,18 @@ export const App: React.FC = () => {
 
           {/* MENU MASTER: DATA PTEN */}
           {activeTab === 'pten' && (
-            <PTENManager targetRows={targetRows} masterRows={masterRows} />
+            <PTENManager
+              targetRows={targetRows}
+              masterRows={masterRows}
+              onPtenCountChange={(count) => setPtenCount(count)}
+            />
           )}
 
           {/* MENU MASTER: MAPPING ROLE */}
           {activeTab === 'mapping_role' && (
-            <RoleMappingManager />
+            <RoleMappingManager
+              onRoleMappingCountChange={(count) => setRoleMappingCount(count)}
+            />
           )}
         </main>
       </div>

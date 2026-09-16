@@ -23,9 +23,12 @@ import * as XLSX from 'xlsx';
 import type { TargetRow, MasterRow } from '../../types';
 import { getItem, setItem } from '../../utils/storage';
 
+import { DEFAULT_PTEN_DATA } from './defaultPtenData';
+
 interface PTENManagerProps {
   targetRows?: TargetRow[];
   masterRows?: MasterRow[];
+  onPtenCountChange?: (count: number) => void;
 }
 
 export interface PTENRecord {
@@ -38,9 +41,10 @@ export interface PTENRecord {
 
 export const PTENManager: React.FC<PTENManagerProps> = ({
   targetRows = [],
+  onPtenCountChange,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'master' | 'audit'>('master');
-  const [ptenList, setPtenList] = useState<PTENRecord[]>([]);
+  const [ptenList, setPtenList] = useState<PTENRecord[]>(DEFAULT_PTEN_DATA);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedKota, setSelectedKota] = useState<string>('ALL');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -74,8 +78,11 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
     const loadSaved = async () => {
       try {
         const saved = await getItem<PTENRecord[]>('pten_master_data');
-        if (saved && Array.isArray(saved) && isMounted) {
+        if (saved && Array.isArray(saved) && saved.length > 0 && isMounted) {
           setPtenList(saved);
+          onPtenCountChange?.(saved.length);
+        } else if (isMounted) {
+          onPtenCountChange?.(DEFAULT_PTEN_DATA.length);
         }
       } catch (err) {
         console.warn('Error loading PTEN data:', err);
@@ -92,6 +99,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
     setErrorMsg(null);
     try {
       await setItem('pten_master_data', listToSave);
+      onPtenCountChange?.(listToSave.length);
       setSuccessMsg(`Berhasil menyimpan ${listToSave.length.toLocaleString('id-ID')} data PTEN!`);
       setTimeout(() => setSuccessMsg(null), 4000);
     } catch (err: any) {
@@ -132,17 +140,27 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
     };
   }, [targetRows]);
 
-  // Unique Kota list
+  // Unique Kota list (High-Speed O(N) Set)
   const kotaList = useMemo(() => {
-    return Array.from(new Set(ptenList.map((p) => p.kotaPten?.trim()).filter(Boolean))).sort();
+    const set = new Set<string>();
+    for (let i = 0; i < ptenList.length; i++) {
+      const k = ptenList[i]?.kotaPten?.trim();
+      if (k) set.add(k);
+    }
+    return Array.from(set).sort();
   }, [ptenList]);
 
-  // Filtered PTEN Master
+  // Filtered PTEN Master (Optimized O(N) single-pass with pre-lowercased query)
   const filteredPten = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const hasSearch = q.length > 0;
+    const hasKotaFilter = selectedKota !== 'ALL';
+
+    if (!hasSearch && !hasKotaFilter) return ptenList;
+
     return ptenList.filter((p) => {
-      if (selectedKota !== 'ALL' && p.kotaPten !== selectedKota) return false;
-      if (!searchTerm.trim()) return true;
-      const q = searchTerm.toLowerCase();
+      if (hasKotaFilter && p.kotaPten !== selectedKota) return false;
+      if (!hasSearch) return true;
       return (
         p.kodePosPten?.toLowerCase().includes(q) ||
         p.kotaPten?.toLowerCase().includes(q) ||
@@ -389,6 +407,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
     setPtenList([]);
     setShowResetConfirm(false);
     await setItem('pten_master_data', []);
+    onPtenCountChange?.(0);
     setSuccessMsg('Seluruh data master PTEN berhasil dikosongkan!');
     setTimeout(() => setSuccessMsg(null), 3000);
   };

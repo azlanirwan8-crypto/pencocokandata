@@ -163,7 +163,13 @@ export function getWondrRecommendation(record: RoleMappingRecord) {
   };
 }
 
-export const RoleMappingManager: React.FC = () => {
+interface RoleMappingManagerProps {
+  onRoleMappingCountChange?: (count: number) => void;
+}
+
+export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
+  onRoleMappingCountChange,
+}) => {
   const [activeSubTab, setActiveSubTab] = useState<'list' | 'wondr'>('list');
   const [roleList, setRoleList] = useState<RoleMappingRecord[]>(DEFAULT_ROLE_MAPPING_DATA);
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -199,6 +205,9 @@ export const RoleMappingManager: React.FC = () => {
         const saved = await getItem<RoleMappingRecord[]>('role_mapping_data');
         if (saved && Array.isArray(saved) && isMounted) {
           setRoleList(saved);
+          onRoleMappingCountChange?.(saved.length);
+        } else if (isMounted) {
+          onRoleMappingCountChange?.(DEFAULT_ROLE_MAPPING_DATA.length);
         }
       } catch (err) {
         console.warn('Error loading Role Mapping data:', err);
@@ -215,6 +224,7 @@ export const RoleMappingManager: React.FC = () => {
     setErrorMsg(null);
     try {
       await setItem('role_mapping_data', listToSave);
+      onRoleMappingCountChange?.(listToSave.length);
       setSuccessMsg(`Berhasil menyimpan ${listToSave.length.toLocaleString('id-ID')} data mapping role!`);
       setTimeout(() => setSuccessMsg(null), 4000);
     } catch (err: any) {
@@ -523,6 +533,7 @@ export const RoleMappingManager: React.FC = () => {
     setRoleList([]);
     setShowResetConfirm(false);
     await setItem('role_mapping_data', []);
+    onRoleMappingCountChange?.(0);
     setSuccessMsg('Seluruh data mapping role berhasil dikosongkan!');
     setTimeout(() => setSuccessMsg(null), 3000);
   };
