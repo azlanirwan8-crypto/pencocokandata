@@ -174,6 +174,7 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
   const [roleList, setRoleList] = useState<RoleMappingRecord[]>(DEFAULT_ROLE_MAPPING_DATA);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [filterUnit, setFilterUnit] = useState<'ALL' | 'FULL' | 'KCP' | 'KC'>('ALL');
+  const [showBanner, setShowBanner] = useState<boolean>(true);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -683,45 +684,81 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
       </div>
 
       {/* Main Informative Executive Banner */}
-      <div
-        style={{
-          background: 'linear-gradient(135deg, #f0f4ff 0%, #e6f7ff 100%)',
-          borderRadius: '8px',
-          border: '1px solid #d0e2ff',
-          padding: '1.1rem 1.35rem',
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: '0.85rem',
-          boxShadow: '0 1px 2px rgba(64, 81, 137, 0.04)',
-        }}
-      >
+      {showBanner && (
         <div
           style={{
-            width: '32px',
-            height: '32px',
-            borderRadius: '50%',
-            background: '#405189',
-            color: '#ffffff',
+            background: 'linear-gradient(135deg, #f0f4ff 0%, #e6f7ff 100%)',
+            borderRadius: '8px',
+            border: '1px solid #d0e2ff',
+            padding: '1.1rem 1.35rem',
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-            marginTop: '0.1rem',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: '0.85rem',
+            boxShadow: '0 1px 2px rgba(64, 81, 137, 0.04)',
+            position: 'relative',
           }}
         >
-          <Info size={18} />
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem', flex: 1 }}>
+            <div
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                background: '#405189',
+                color: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                marginTop: '0.1rem',
+              }}
+            >
+              <Info size={18} />
+            </div>
+            <div>
+              <h4 style={{ fontSize: '0.92rem', fontWeight: 700, color: '#2d3748', margin: '0 0 0.35rem' }}>
+                List Cabang & Outlet BNI se-Indonesia untuk Mapping Wondr Merchant
+              </h4>
+              <p style={{ fontSize: '0.82rem', color: '#4a5568', margin: 0, lineHeight: 1.55 }}>
+                Berikut list <strong>Cabang dan Outlet BNI se-Indonesia</strong> dan pemetaan perannya.{' '}
+                Dari total <strong>{stats.totalOrganisasi.toLocaleString('id-ID')} Unit Kerja</strong>, yang{' '}
+                <strong>lengkap 3 role-nya</strong> ada <strong>{stats.totalFullRoles.toLocaleString('id-ID')} Cabang Utama (KC)</strong>.{' '}
+                Data ini dapat langsung dijadikan acuan alur persetujuan untuk aplikasi <strong>Wondr Merchant</strong>.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowBanner(false)}
+            title="Tutup informasi ini"
+            aria-label="Tutup"
+            style={{
+              background: 'rgba(64, 81, 137, 0.08)',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '0.35rem',
+              cursor: 'pointer',
+              color: '#405189',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              transition: 'background 0.15s, color 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(240, 101, 72, 0.15)';
+              e.currentTarget.style.color = '#f06548';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(64, 81, 137, 0.08)';
+              e.currentTarget.style.color = '#405189';
+            }}
+          >
+            <X size={16} />
+          </button>
         </div>
-        <div>
-          <h4 style={{ fontSize: '0.92rem', fontWeight: 700, color: '#2d3748', margin: '0 0 0.35rem' }}>
-            List Cabang & Outlet BNI se-Indonesia untuk Mapping Wondr Merchant
-          </h4>
-          <p style={{ fontSize: '0.82rem', color: '#4a5568', margin: 0, lineHeight: 1.55 }}>
-            Berikut list <strong>Cabang dan Outlet BNI se-Indonesia</strong> dan pemetaan perannya. 
-            Dari total <strong>{stats.totalOrganisasi.toLocaleString('id-ID')} Unit Kerja</strong>, yang <strong>lengkap 3 role-nya</strong> ada <strong>{stats.totalFullRoles.toLocaleString('id-ID')} Cabang Utama (KC)</strong>. 
-            Data ini dapat langsung dijadikan acuan alur persetujuan untuk aplikasi <strong>Wondr Merchant</strong>.
-          </p>
-        </div>
-      </div>
+      )}
 
       {/* Alert Notifications */}
       {successMsg && (

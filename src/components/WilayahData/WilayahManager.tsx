@@ -79,6 +79,7 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
 
   const [deleteTargetIndex, setDeleteTargetIndex] = useState<number | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
+  const [showInfoBanner, setShowInfoBanner] = useState<boolean>(true);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1229,45 +1230,79 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
         )}
       </div>
 
-      {/* Logic Information Box */}
-      <div
-        style={{
-          background: 'rgba(64, 81, 137, 0.04)',
-          border: '1px solid rgba(64, 81, 137, 0.15)',
-          borderRadius: '8px',
-          padding: '1rem 1.25rem',
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: '0.85rem',
-        }}
-      >
+      {/* Summary / Educational Card on Automation Logic */}
+      {showInfoBanner && (
         <div
           style={{
-            width: '32px',
-            height: '32px',
-            borderRadius: '50%',
-            background: 'rgba(64, 81, 137, 0.1)',
+            background: 'rgba(64, 81, 137, 0.04)',
+            border: '1px solid rgba(64, 81, 137, 0.15)',
+            borderRadius: '8px',
+            padding: '1rem 1.25rem',
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#405189',
-            flexShrink: 0,
-            marginTop: '0.1rem',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: '0.85rem',
           }}
         >
-          <Info size={18} />
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem', flex: 1 }}>
+            <div
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                background: 'rgba(64, 81, 137, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#405189',
+                flexShrink: 0,
+                marginTop: '0.1rem',
+              }}
+            >
+              <Info size={18} />
+            </div>
+            <div style={{ flex: 1, fontSize: '0.8rem', color: '#495057', lineHeight: '1.5' }}>
+              <strong style={{ color: '#212529', display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem' }}>
+                Logika & Otomasi Pengayaan Wilayah Berdasarkan Branch Code:
+              </strong>
+              <p style={{ margin: '0 0 0.5rem' }}>
+                Saat data Excel diunggah (Data Target / Data Master), sistem secara otomatis mengekstrak 2 digit (digit ke-2 dan ke-3) dari kolom{' '}
+                <strong style={{ color: '#212529' }}>Branch Code</strong> atau <strong style={{ color: '#212529' }}>Sandi Cabang</strong>.{' '}
+                Contoh: <code style={{ color: '#405189', fontWeight: 700 }}>60115601</code> atau <code style={{ color: '#405189', fontWeight: 700 }}>601601</code> menghasilkan kode <code style={{ color: '#0ab39c', fontWeight: 700 }}>01</code>, yang otomatis memetakan baris ke <strong style={{ color: '#212529' }}>WILAYAH 01 - MEDAN</strong>.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowInfoBanner(false)}
+            title="Tutup informasi ini"
+            aria-label="Tutup"
+            style={{
+              background: 'rgba(64, 81, 137, 0.08)',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '0.35rem',
+              cursor: 'pointer',
+              color: '#405189',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              transition: 'background 0.15s, color 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(240, 101, 72, 0.15)';
+              e.currentTarget.style.color = '#f06548';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(64, 81, 137, 0.08)';
+              e.currentTarget.style.color = '#405189';
+            }}
+          >
+            <X size={16} />
+          </button>
         </div>
-        <div style={{ flex: 1, fontSize: '0.8rem', color: '#495057', lineHeight: '1.5' }}>
-          <strong style={{ color: '#212529', display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem' }}>
-            Logika & Otomasi Pengayaan Wilayah Berdasarkan Branch Code:
-          </strong>
-          <p style={{ margin: '0 0 0.5rem' }}>
-            Saat data Excel diunggah (Data Target / Data Master), sistem secara otomatis mengekstrak 2 digit (digit ke-2 dan ke-3) dari kolom{' '}
-            <strong style={{ color: '#212529' }}>Branch Code</strong> atau <strong style={{ color: '#212529' }}>Sandi Cabang</strong>.
-            Contoh: <code style={{ color: '#405189', fontWeight: 700 }}>60115601</code> atau <code style={{ color: '#405189', fontWeight: 700 }}>601601</code> menghasilkan kode <code style={{ color: '#0ab39c', fontWeight: 700 }}>01</code>, yang otomatis memetakan baris ke <strong style={{ color: '#212529' }}>WILAYAH 01 - MEDAN</strong>.
-          </p>
-        </div>
-      </div>
+      )}
 
       {/* MODAL: Tambah / Edit Wilayah */}
       {(modalMode === 'create' || modalMode === 'edit') && (
