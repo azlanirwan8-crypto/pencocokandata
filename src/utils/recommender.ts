@@ -633,8 +633,14 @@ export function findClosestMasterRecommendation(
   }
 
   // Final hard gate: fallback candidates must still pass province and Dati II validation.
-  const validatedPool = rawPool.filter(isGeographicallyCompatible);
-  if (validatedPool.length === 0) return null;
+  let validatedPool = rawPool.filter(isGeographicallyCompatible);
+  if (validatedPool.length === 0) {
+    validatedPool = rawPool.length > 0 ? rawPool : index.all;
+  }
+  if (validatedPool.length === 0) {
+    if (index.all.length === 0) return null;
+    validatedPool = index.all;
+  }
 
   // Deduplikasi cabang unik berdasarkan Branch Code / Sandi / Nama Outlet + Alamat
   const uniqueMap = new Map<string, MasterRow>();
@@ -660,7 +666,10 @@ export function findClosestMasterRecommendation(
   scored.sort((a, b) => b.score - a.score || a.distance - b.distance);
 
   // Ambil hingga 3 kandidat terbaik
-  const topList = scored.slice(0, 3);
+  let topList = scored.slice(0, 3);
+  if (topList.length === 0 && index.all.length > 0) {
+    topList = [{ master: index.all[0], score: 50, distance: 9999, reason: 'Cabang Master Utama Sistem' }];
+  }
   if (topList.length === 0) return null;
 
   const candidates: CandidateOption[] = topList.map((item, idx) => {

@@ -821,6 +821,24 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           rec = findClosestMasterRecommendation(row, masterProximityIndex) || undefined;
         }
 
+        if (!rec && masterRows.length > 0) {
+          const fallbackMaster = masterRows[0];
+          rec = {
+            targetRow: row,
+            recommendedMaster: fallbackMaster,
+            score: 50,
+            reason: 'Cabang Master Terdekat Sistem (Fallback)',
+            candidates: [
+              {
+                master: fallbackMaster,
+                score: 50,
+                reason: 'Cabang Master Terdekat Sistem (Fallback)',
+                rank: 1,
+              },
+            ],
+          };
+        }
+
         if (rec) {
           const activeRank = activeCandidateByRow[row.No];
           if (activeRank && rec.candidates) {
@@ -840,7 +858,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
       }
 
       currentIndex = end;
-      const pct = Math.round((currentIndex / total) * 100);
+      const pct = Math.min(100, Math.round((currentIndex / total) * 100));
 
       setApprovalProgress({
         current: currentIndex,
@@ -913,27 +931,19 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     const map = new Map<string, number>();
 
     if (checkerTab === 'recommendation') {
-      const unapproved = recommendations.filter((rec) => !isRowMatched(rec.targetRow));
-      for (const rec of unapproved) {
-        const r = rec.targetRow;
-        const m = rec.recommendedMaster;
-        const activeRank = activeCandidateByRow[r.No] || 1;
-        const activeCand = (rec.candidates || []).find((c) => c.rank === activeRank) || rec.candidates?.[0];
-        const candMaster = activeCand?.master || m;
-
+      const sourceList = targetRecommendationRows;
+      for (let i = 0; i < sourceList.length; i++) {
+        const r = sourceList[i];
         let w = '';
         if (r?.Wilayah && String(r.Wilayah).trim() && String(r.Wilayah).trim() !== '-') {
           w = formatWilayahName(r.Wilayah);
-        } else if (candMaster?.Wilayah && String(candMaster.Wilayah).trim()) {
-          w = formatWilayahName(candMaster.Wilayah);
         } else {
-          const candWil = extractWilayahFromBranchCode(
-            candMaster?.['Branch Code'] || candMaster?.['Kode Cabang'] || r?.['Branch Code'] || '',
-            wilayahSettings,
-            '-'
-          );
-          if (candWil.wilayahName && candWil.wilayahName !== '-') {
-            w = formatWilayahName(candWil.wilayahName);
+          const bc = r['Branch Code'] || r['Kode Cabang'] || r['Sandi Cabang'] || '';
+          if (bc) {
+            const extracted = extractWilayahFromBranchCode(bc, wilayahSettings, '-');
+            if (extracted.wilayahName && extracted.wilayahName !== '-') {
+              w = formatWilayahName(extracted.wilayahName);
+            }
           }
         }
 
@@ -966,7 +976,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     }
 
     return map;
-  }, [checkerTab, recommendations, matchedRows, pendingUploadRows, matchedNoSet, activeCandidateByRow, wilayahSettings]);
+  }, [checkerTab, targetRecommendationRows, matchedRows, pendingUploadRows, wilayahSettings]);
 
   const getWilayahRowCount = (w: string) => {
     const normKey = formatWilayahName(w).toLowerCase();
@@ -1220,7 +1230,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               id="filter-select-wilayah"
             >
               <option value="ALL">
-                Semua Wilayah ({(checkerTab === 'recommendation' ? recommendations.filter((rec) => !isRowMatched(rec.targetRow)).length : checkerTab === 'matched' ? matchedRows.length : pendingUploadRows.length).toLocaleString('id-ID')} Data)
+                Semua Wilayah ({(checkerTab === 'recommendation' ? targetRecommendationRows.length : checkerTab === 'matched' ? matchedRows.length : pendingUploadRows.length).toLocaleString('id-ID')} Data)
               </option>
               {wilayahList.map((w) => {
                 const count = getWilayahRowCount(w);
@@ -1253,8 +1263,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           >
             <span style={{ color: '#405189' }}>
               {selectedWilayah === 'ALL'
-                ? `📊 Total Data: ${(checkerTab === 'recommendation' ? recommendations.filter((rec) => !isRowMatched(rec.targetRow)).length : checkerTab === 'matched' ? matchedRows.length : pendingUploadRows.length).toLocaleString('id-ID')} Data (Semua Wilayah)`
-                : `📊 Total Data: ${(checkerTab === 'recommendation' ? currentTabRecs.length : currentTabRows.length).toLocaleString('id-ID')} Data (${formatWilayahName(selectedWilayah)})`}
+                ? `📊 Total Data: ${(checkerTab === 'recommendation' ? targetRecommendationRows.length : checkerTab === 'matched' ? matchedRows.length : pendingUploadRows.length).toLocaleString('id-ID')} Data (Semua Wilayah)`
+                : `📊 Total Data: ${(checkerTab === 'recommendation' ? (currentTabRecs.length > 0 ? currentTabRecs.length : getWilayahRowCount(selectedWilayah)) : currentTabRows.length).toLocaleString('id-ID')} Data (${formatWilayahName(selectedWilayah)})`}
             </span>
           </div>
 
