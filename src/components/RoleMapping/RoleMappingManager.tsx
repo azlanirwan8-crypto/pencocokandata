@@ -1286,14 +1286,13 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
                         <div>Grand Total</div>
                         <div style={{ fontSize: '0.68rem', fontWeight: 500, color: '#878a99' }}>Jumlah Pegawai</div>
                       </th>
-                      <th style={{ width: '180px', textAlign: 'center' }}>Alur Wondr</th>
                       <th style={{ width: '95px', textAlign: 'center' }}>AKSI</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredList.length === 0 ? (
                       <tr>
-                        <td colSpan={9} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
+                        <td colSpan={8} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
                           Tidak ada data mapping role yang cocok dengan filter pencarian.
                         </td>
                       </tr>
@@ -1306,7 +1305,6 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
                             : (page - 1) * (pageSize as number) + idx + 1;
                         
                         const isKc = getUnitCategory(item.organisasiTujuan) === 'KC';
-                        const wondr = getWondrRecommendation(item);
 
                         return (
                           <tr key={idx} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
@@ -1411,23 +1409,6 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
                                 title={`${item.grandTotal} Pegawai Fisik`}
                               >
                                 {item.grandTotal}
-                              </span>
-                            </td>
-
-                            {/* Alur Wondr */}
-                            <td style={{ textAlign: 'center' }}>
-                              <span
-                                style={{
-                                  display: 'inline-block',
-                                  padding: '0.15rem 0.5rem',
-                                  borderRadius: '4px',
-                                  fontSize: '0.68rem',
-                                  fontWeight: 700,
-                                  background: wondr.badgeBg,
-                                  color: wondr.badgeColor,
-                                }}
-                              >
-                                {wondr.tier}
                               </span>
                             </td>
 
