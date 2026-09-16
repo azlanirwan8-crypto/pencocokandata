@@ -13,8 +13,9 @@ import {
   RefreshCw,
   Building2,
   UserCheck,
-  UserPlus,
   ShieldCheck,
+  ShieldAlert,
+  GitBranch,
   X,
   ChevronLeft,
   ChevronRight,
@@ -27,10 +28,10 @@ import { getItem, setItem } from '../../utils/storage';
 export interface RoleMappingRecord {
   id?: string;
   organisasiTujuan: string;
-  qrsCabsal: number;    // QRS_CABSAL -> Sales Cabang
-  qrsCabapv1: number;   // QRS_CABAPV1 -> Verifikator Cabang
-  qrsCabapv2: number;   // QRS_CABAPV2 -> Penyetuju Cabang
-  grandTotal: number;
+  qrsCabsal: number;    // QRS_CABSAL -> Sales Cabang (1: Aktif, 0: Tidak Aktif)
+  qrsCabapv1: number;   // QRS_CABAPV1 -> Verifikator Cabang (1: Aktif, 0: Tidak Aktif)
+  qrsCabapv2: number;   // QRS_CABAPV2 -> Penyetuju Cabang (1: Aktif, 0: Tidak Aktif)
+  grandTotal: number;   // Grand Total -> Jumlah User/Pegawai Fisik Unik (Distinct User Count)
   keterangan?: string;
 }
 
@@ -40,7 +41,7 @@ export const DEFAULT_ROLE_MAPPING_DATA: RoleMappingRecord[] = [
     qrsCabsal: 1,
     qrsCabapv1: 1,
     qrsCabapv2: 1,
-    grandTotal: 3,
+    grandTotal: 1,
   },
   {
     organisasiTujuan: 'AMBON BRANCH OFFICE - BURU SELATAN SUB BRANCH',
@@ -65,52 +66,134 @@ export const DEFAULT_ROLE_MAPPING_DATA: RoleMappingRecord[] = [
   },
   {
     organisasiTujuan: 'BALIKPAPAN BRANCH OFFICE',
-    qrsCabsal: 2,
+    qrsCabsal: 1,
     qrsCabapv1: 1,
     qrsCabapv2: 1,
-    grandTotal: 4,
+    grandTotal: 2,
   },
   {
     organisasiTujuan: 'BANDUNG ASIA AFRIKA BRANCH OFFICE',
-    qrsCabsal: 2,
-    qrsCabapv1: 2,
-    qrsCabapv2: 2,
-    grandTotal: 6,
+    qrsCabsal: 1,
+    qrsCabapv1: 1,
+    qrsCabapv2: 1,
+    grandTotal: 3,
+  },
+  {
+    organisasiTujuan: 'BANJAR BRANCH OFFICE',
+    qrsCabsal: 1,
+    qrsCabapv1: 1,
+    qrsCabapv2: 1,
+    grandTotal: 3,
   },
   {
     organisasiTujuan: 'DENPASAR RENON BRANCH OFFICE',
-    qrsCabsal: 2,
+    qrsCabsal: 1,
     qrsCabapv1: 1,
     qrsCabapv2: 1,
-    grandTotal: 4,
+    grandTotal: 2,
+  },
+  {
+    organisasiTujuan: 'DENPASAR RENON BRANCH OFFICE - GIANYAR SUB BRANCH',
+    qrsCabsal: 1,
+    qrsCabapv1: 0,
+    qrsCabapv2: 1,
+    grandTotal: 2,
   },
   {
     organisasiTujuan: 'JAKARTA THAMRIN BRANCH OFFICE',
-    qrsCabsal: 3,
-    qrsCabapv1: 2,
-    qrsCabapv2: 2,
-    grandTotal: 7,
+    qrsCabsal: 1,
+    qrsCabapv1: 1,
+    qrsCabapv2: 1,
+    grandTotal: 3,
   },
   {
     organisasiTujuan: 'MEDAN BALAI KOTA BRANCH OFFICE',
-    qrsCabsal: 2,
-    qrsCabapv1: 2,
+    qrsCabsal: 1,
+    qrsCabapv1: 1,
     qrsCabapv2: 1,
-    grandTotal: 5,
+    grandTotal: 2,
   },
   {
     organisasiTujuan: 'SURABAYA BASUKI RAHMAT BRANCH OFFICE',
-    qrsCabsal: 3,
-    qrsCabapv1: 2,
-    qrsCabapv2: 2,
-    grandTotal: 7,
+    qrsCabsal: 1,
+    qrsCabapv1: 1,
+    qrsCabapv2: 1,
+    grandTotal: 3,
   },
 ];
 
+// Helper: Deteksi tipe unit kerja (Cabang Induk vs Sub Branch / KCP)
+export function getUnitCategory(orgName: string): 'KC' | 'KCP' {
+  const upper = String(orgName || '').toUpperCase();
+  if (upper.includes(' - ') || upper.includes('SUB BRANCH') || upper.includes('KCP')) {
+    return 'KCP';
+  }
+  return 'KC';
+}
+
+// Helper: Evaluasi Status Segregation of Duties (SoD)
+export function getSodAnalysis(record: RoleMappingRecord) {
+  const gt = Number(record.grandTotal) || 0;
+  const isKc = getUnitCategory(record.organisasiTujuan) === 'KC';
+
+  if (gt >= 3) {
+    return {
+      level: 'IDEAL',
+      badgeClass: 'badge-match',
+      label: 'SoD Ideal (≥ 3 User)',
+      color: '#0ab39c',
+      bgColor: 'rgba(10, 179, 156, 0.1)',
+      summary: 'Four-Eyes Principle Terpenuhi',
+      desc: '3 Role dipegang oleh 3 pegawai fisik berbeda secara independen (Maker, Checker, Approver).',
+    };
+  }
+  if (gt === 2) {
+    return {
+      level: 'DUAL',
+      badgeClass: 'badge-level2',
+      label: 'Dual Role (2 User)',
+      color: '#299cdb',
+      bgColor: 'rgba(41, 156, 219, 0.1)',
+      summary: isKc ? 'Ada 1 User Merangkap 2 Role' : 'Maker & Approver Terpisah',
+      desc: isKc
+        ? 'Terdapat 2 orang pegawai di Cabang Induk (1 staf independen, 1 pejabat merangkap Checker + Approver).'
+        : 'Di Sub Branch / KCP, peran Sales (Maker) dan Approver dipegang 2 pegawai berbeda.',
+    };
+  }
+  return {
+    level: 'SINGLE',
+    badgeClass: 'badge-mismatch',
+    label: 'Perangkapan Hak Akses (1 User)',
+    color: '#f06548',
+    bgColor: 'rgba(240, 101, 72, 0.1)',
+    summary: 'Perangkapan Hak Akses (Dual/Triple Role)',
+    desc: 'Seluruh role aktif dipegang oleh 1 orang pegawai yang sama (Single User ID / PIC Inisiasi Cabang).',
+  };
+}
+
+// Helper: Rekomendasi Alur Wondr Merchant
+export function getWondrRecommendation(record: RoleMappingRecord) {
+  const isKc = getUnitCategory(record.organisasiTujuan) === 'KC';
+  if (isKc) {
+    return {
+      tier: 'Cabang Induk: 3-Tier Standard Workflow',
+      flow: 'Sales Cabang (CABSAL) ➔ Verifikator (CABAPV1) ➔ Penyetuju (CABAPV2)',
+      desc: 'Langsung dipetakan ke alur onboarding standar 3-tingkat.',
+    };
+  }
+  return {
+    tier: 'Outlet/KCP: 2-Tier Sub Branch Workflow (Tanpa CABAPV1)',
+    flow: 'Opsi A (Bypass): Sales ➔ Approver (CABAPV2) | Opsi B: Review ke Cabang Induk',
+    desc: 'Karena tidak ada role CABAPV1, approval tahap 1 di-bypass atau diarahkan ke KC Pembina.',
+  };
+}
+
 export const RoleMappingManager: React.FC = () => {
+  const [activeSubTab, setActiveSubTab] = useState<'list' | 'audit'>('list');
   const [roleList, setRoleList] = useState<RoleMappingRecord[]>(DEFAULT_ROLE_MAPPING_DATA);
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [filterRole, setFilterRole] = useState<string>('ALL');
+  const [filterUnit, setFilterUnit] = useState<string>('ALL');
+  const [filterSod, setFilterSod] = useState<string>('ALL');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -129,12 +212,12 @@ export const RoleMappingManager: React.FC = () => {
     qrsCabsal: 1,
     qrsCabapv1: 1,
     qrsCabapv2: 1,
-    grandTotal: 3,
+    grandTotal: 1,
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load persisted Role Mapping data on mount from IndexedDB
+  // Load persisted data on mount from IndexedDB
   useEffect(() => {
     let isMounted = true;
     const loadSaved = async () => {
@@ -171,13 +254,25 @@ export const RoleMappingManager: React.FC = () => {
     let totalCabsal = 0;
     let totalCabapv1 = 0;
     let totalCabapv2 = 0;
-    let totalGrand = 0;
+    let totalKc = 0;
+    let totalKcp = 0;
+    let totalSodIdeal = 0;
+    let totalSingleUser = 0;
 
     roleList.forEach((r) => {
-      totalCabsal += Number(r.qrsCabsal) || 0;
-      totalCabapv1 += Number(r.qrsCabapv1) || 0;
-      totalCabapv2 += Number(r.qrsCabapv2) || 0;
-      totalGrand += Number(r.grandTotal) || 0;
+      if (r.qrsCabsal === 1) totalCabsal++;
+      if (r.qrsCabapv1 === 1) totalCabapv1++;
+      if (r.qrsCabapv2 === 1) totalCabapv2++;
+
+      if (getUnitCategory(r.organisasiTujuan) === 'KC') {
+        totalKc++;
+      } else {
+        totalKcp++;
+      }
+
+      const gt = Number(r.grandTotal) || 0;
+      if (gt >= 3) totalSodIdeal++;
+      if (gt === 1) totalSingleUser++;
     });
 
     return {
@@ -185,27 +280,33 @@ export const RoleMappingManager: React.FC = () => {
       totalCabsal,
       totalCabapv1,
       totalCabapv2,
-      totalGrand,
+      totalKc,
+      totalKcp,
+      totalSodIdeal,
+      totalSingleUser,
     };
   }, [roleList]);
 
   // Filtered Role List
   const filteredList = useMemo(() => {
     return roleList.filter((r) => {
-      if (filterRole === 'HAS_APV1' && (!r.qrsCabapv1 || r.qrsCabapv1 === 0)) return false;
-      if (filterRole === 'HAS_APV2' && (!r.qrsCabapv2 || r.qrsCabapv2 === 0)) return false;
-      if (filterRole === 'HAS_SALES' && (!r.qrsCabsal || r.qrsCabsal === 0)) return false;
+      const unitType = getUnitCategory(r.organisasiTujuan);
+      if (filterUnit === 'KC' && unitType !== 'KC') return false;
+      if (filterUnit === 'KCP' && unitType !== 'KCP') return false;
+
+      const gt = Number(r.grandTotal) || 0;
+      if (filterSod === 'IDEAL' && gt < 3) return false;
+      if (filterSod === 'DUAL' && gt !== 2) return false;
+      if (filterSod === 'SINGLE' && gt !== 1) return false;
 
       if (!searchTerm.trim()) return true;
       const q = searchTerm.toLowerCase();
       return (
         r.organisasiTujuan?.toLowerCase().includes(q) ||
-        String(r.qrsCabsal).includes(q) ||
-        String(r.qrsCabapv1).includes(q) ||
-        String(r.qrsCabapv2).includes(q)
+        String(r.grandTotal).includes(q)
       );
     });
-  }, [roleList, filterRole, searchTerm]);
+  }, [roleList, filterUnit, filterSod, searchTerm]);
 
   // Pagination Calculations
   const totalPages = pageSize === 'ALL' ? 1 : Math.max(1, Math.ceil(filteredList.length / pageSize));
@@ -268,18 +369,25 @@ export const RoleMappingManager: React.FC = () => {
             ''
           ).trim();
 
-          const cabsal = parseInt(String(row['QRS_CABSAL'] || row['Sales Cabang'] || row['CABSAL'] || 0), 10) || 0;
-          const cabapv1 = parseInt(String(row['QRS_CABAPV1'] || row['Verifikator Cabang'] || row['CABAPV1'] || 0), 10) || 0;
-          const cabapv2 = parseInt(String(row['QRS_CABAPV2'] || row['Penyetuju Cabang'] || row['CABAPV2'] || 0), 10) || 0;
-          const rawTotal = parseInt(String(row['Grand Total'] || row['GRAND TOTAL'] || row['Total'] || 0), 10);
-          const calculatedTotal = cabsal + cabapv1 + cabapv2;
+          const rawCabsal = String(row['QRS_CABSAL'] || row['Sales Cabang'] || row['CABSAL'] || '').trim();
+          const rawCabapv1 = String(row['QRS_CABAPV1'] || row['Verifikator Cabang'] || row['CABAPV1'] || '').trim();
+          const rawCabapv2 = String(row['QRS_CABAPV2'] || row['Penyetuju Cabang'] || row['CABAPV2'] || '').trim();
+          
+          // Parsing Checkbox status: 1 if non-empty / >0, 0 otherwise
+          const cabsal = rawCabsal === '1' || rawCabsal.toLowerCase() === 'true' || rawCabsal.toLowerCase() === 'ya' || Number(rawCabsal) > 0 ? 1 : 0;
+          const cabapv1 = rawCabapv1 === '1' || rawCabapv1.toLowerCase() === 'true' || rawCabapv1.toLowerCase() === 'ya' || Number(rawCabapv1) > 0 ? 1 : 0;
+          const cabapv2 = rawCabapv2 === '1' || rawCabapv2.toLowerCase() === 'true' || rawCabapv2.toLowerCase() === 'ya' || Number(rawCabapv2) > 0 ? 1 : 0;
+          
+          // Distinct User Grand Total (Preserve the exact value from Excel)
+          const parsedGrandTotal = parseInt(String(row['Grand Total'] || row['GRAND TOTAL'] || row['Total'] || row['Total User'] || '1'), 10);
+          const grandTotal = isNaN(parsedGrandTotal) || parsedGrandTotal <= 0 ? 1 : parsedGrandTotal;
 
           return {
             organisasiTujuan: org,
             qrsCabsal: cabsal,
             qrsCabapv1: cabapv1,
             qrsCabapv2: cabapv2,
-            grandTotal: rawTotal > 0 ? rawTotal : calculatedTotal,
+            grandTotal: grandTotal,
           };
         }).filter((item) => Boolean(item.organisasiTujuan));
 
@@ -308,7 +416,7 @@ export const RoleMappingManager: React.FC = () => {
         'QRS_CABSAL': 1,
         'QRS_CABAPV1': 1,
         'QRS_CABAPV2': 1,
-        'Grand Total': 3,
+        'Grand Total': 1,
       },
       {
         'ORGANISASI TUJUAN': 'AMBON BRANCH OFFICE - BURU SELATAN SUB BRANCH',
@@ -325,11 +433,18 @@ export const RoleMappingManager: React.FC = () => {
         'Grand Total': 2,
       },
       {
-        'ORGANISASI TUJUAN': 'AMBON BRANCH OFFICE - MALUKU TENGGARA SUB BRANCH',
+        'ORGANISASI TUJUAN': 'BALIKPAPAN BRANCH OFFICE',
         'QRS_CABSAL': 1,
-        'QRS_CABAPV1': '',
+        'QRS_CABAPV1': 1,
         'QRS_CABAPV2': 1,
         'Grand Total': 2,
+      },
+      {
+        'ORGANISASI TUJUAN': 'BANJAR BRANCH OFFICE',
+        'QRS_CABSAL': 1,
+        'QRS_CABAPV1': 1,
+        'QRS_CABAPV2': 1,
+        'Grand Total': 3,
       },
     ];
 
@@ -345,9 +460,9 @@ export const RoleMappingManager: React.FC = () => {
     const ws = XLSX.utils.json_to_sheet(
       exportData.map((r) => ({
         'ORGANISASI TUJUAN': r.organisasiTujuan,
-        'QRS_CABSAL': r.qrsCabsal || '',
-        'QRS_CABAPV1': r.qrsCabapv1 || '',
-        'QRS_CABAPV2': r.qrsCabapv2 || '',
+        'QRS_CABSAL': r.qrsCabsal === 1 ? 1 : '',
+        'QRS_CABAPV1': r.qrsCabapv1 === 1 ? 1 : '',
+        'QRS_CABAPV2': r.qrsCabapv2 === 1 ? 1 : '',
         'Grand Total': r.grandTotal,
       }))
     );
@@ -363,7 +478,7 @@ export const RoleMappingManager: React.FC = () => {
       qrsCabsal: 1,
       qrsCabapv1: 1,
       qrsCabapv2: 1,
-      grandTotal: 3,
+      grandTotal: 1,
     });
     setEditingIndex(null);
     setModalMode('create');
@@ -393,18 +508,13 @@ export const RoleMappingManager: React.FC = () => {
       return;
     }
 
-    const cabsal = Number(formData.qrsCabsal) || 0;
-    const cabapv1 = Number(formData.qrsCabapv1) || 0;
-    const cabapv2 = Number(formData.qrsCabapv2) || 0;
-    const grandTotal = cabsal + cabapv1 + cabapv2;
-
     const normalizedItem: RoleMappingRecord = {
       ...formData,
       organisasiTujuan: formData.organisasiTujuan.trim().toUpperCase(),
-      qrsCabsal: cabsal,
-      qrsCabapv1: cabapv1,
-      qrsCabapv2: cabapv2,
-      grandTotal: grandTotal,
+      qrsCabsal: formData.qrsCabsal ? 1 : 0,
+      qrsCabapv1: formData.qrsCabapv1 ? 1 : 0,
+      qrsCabapv2: formData.qrsCabapv2 ? 1 : 0,
+      grandTotal: Math.max(1, Number(formData.grandTotal) || 1),
     };
 
     let updatedList: RoleMappingRecord[];
@@ -472,10 +582,10 @@ export const RoleMappingManager: React.FC = () => {
           </div>
           <div>
             <h3 style={{ fontSize: '1.08rem', fontWeight: 700, color: '#212529', margin: 0 }}>
-              Master Mapping Role Organisasi
+              Master Mapping Role & Distinct User Cabang
             </h3>
             <p style={{ fontSize: '0.82rem', color: '#878a99', margin: '0.2rem 0 0' }}>
-              Kelola alokasi role per Organisasi Tujuan (Sales Cabang, Verifikator Cabang, Penyetuju Cabang).
+              Kelola alokasi role per Organisasi Tujuan (Sales Cabang, Verifikator, Penyetuju) & Audit Segregation of Duties.
             </p>
           </div>
         </div>
@@ -638,7 +748,7 @@ export const RoleMappingManager: React.FC = () => {
           gap: '1rem',
         }}
       >
-        {/* Card 1: Total Organisasi */}
+        {/* Card 1: Total Unit Kerja */}
         <div
           style={{
             background: '#ffffff',
@@ -653,10 +763,13 @@ export const RoleMappingManager: React.FC = () => {
         >
           <div>
             <div style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Total Organisasi Tujuan
+              Total Unit Kerja
             </div>
             <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#212529', marginTop: '0.25rem' }}>
               {stats.totalOrganisasi.toLocaleString('id-ID')}
+            </div>
+            <div style={{ fontSize: '0.72rem', color: '#878a99', marginTop: '0.2rem' }}>
+              {stats.totalKc} Cabang Induk · {stats.totalKcp} Sub Branch
             </div>
           </div>
           <div
@@ -675,7 +788,7 @@ export const RoleMappingManager: React.FC = () => {
           </div>
         </div>
 
-        {/* Card 2: Total Sales Cabang (QRS_CABSAL) */}
+        {/* Card 2: Segregation of Duties (SoD) Ideal */}
         <div
           style={{
             background: '#ffffff',
@@ -690,10 +803,13 @@ export const RoleMappingManager: React.FC = () => {
         >
           <div>
             <div style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Sales Cabang (CABSAL)
+              SoD Penuh (≥ 3 User)
             </div>
             <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#0ab39c', marginTop: '0.25rem' }}>
-              {stats.totalCabsal.toLocaleString('id-ID')}
+              {stats.totalSodIdeal.toLocaleString('id-ID')}
+            </div>
+            <div style={{ fontSize: '0.72rem', color: '#0ab39c', fontWeight: 600, marginTop: '0.2rem' }}>
+              Four-Eyes Terpenuhi
             </div>
           </div>
           <div
@@ -708,11 +824,11 @@ export const RoleMappingManager: React.FC = () => {
               color: '#0ab39c',
             }}
           >
-            <UserPlus size={22} />
+            <ShieldCheck size={22} />
           </div>
         </div>
 
-        {/* Card 3: Total Verifikator Cabang (QRS_CABAPV1) */}
+        {/* Card 3: Perangkapan Hak Akses (1 User) */}
         <div
           style={{
             background: '#ffffff',
@@ -727,10 +843,13 @@ export const RoleMappingManager: React.FC = () => {
         >
           <div>
             <div style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Verifikator (CABAPV1)
+              Perangkapan Akses (1 User)
             </div>
-            <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#299cdb', marginTop: '0.25rem' }}>
-              {stats.totalCabapv1.toLocaleString('id-ID')}
+            <div style={{ fontSize: '1.45rem', fontWeight: 700, color: stats.totalSingleUser > 0 ? '#f06548' : '#299cdb', marginTop: '0.25rem' }}>
+              {stats.totalSingleUser.toLocaleString('id-ID')}
+            </div>
+            <div style={{ fontSize: '0.72rem', color: stats.totalSingleUser > 0 ? '#f06548' : '#878a99', marginTop: '0.2rem' }}>
+              Perlu Review PIC
             </div>
           </div>
           <div
@@ -738,18 +857,18 @@ export const RoleMappingManager: React.FC = () => {
               width: '44px',
               height: '44px',
               borderRadius: '8px',
-              background: 'rgba(41, 156, 219, 0.1)',
+              background: stats.totalSingleUser > 0 ? 'rgba(240, 101, 72, 0.1)' : 'rgba(41, 156, 219, 0.1)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#299cdb',
+              color: stats.totalSingleUser > 0 ? '#f06548' : '#299cdb',
             }}
           >
-            <UserCheck size={22} />
+            <ShieldAlert size={22} />
           </div>
         </div>
 
-        {/* Card 4: Total Penyetuju Cabang (QRS_CABAPV2) */}
+        {/* Card 4: Alokasi Role Aktif */}
         <div
           style={{
             background: '#ffffff',
@@ -764,10 +883,13 @@ export const RoleMappingManager: React.FC = () => {
         >
           <div>
             <div style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Penyetuju (CABAPV2)
+              Role Checker (APV1)
             </div>
             <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#d68b0c', marginTop: '0.25rem' }}>
-              {stats.totalCabapv2.toLocaleString('id-ID')}
+              {stats.totalCabapv1.toLocaleString('id-ID')}
+            </div>
+            <div style={{ fontSize: '0.72rem', color: '#878a99', marginTop: '0.2rem' }}>
+              Khusus Cabang Induk (KC)
             </div>
           </div>
           <div
@@ -782,12 +904,12 @@ export const RoleMappingManager: React.FC = () => {
               color: '#d68b0c',
             }}
           >
-            <ShieldCheck size={22} />
+            <UserCheck size={22} />
           </div>
         </div>
       </div>
 
-      {/* Main Table Card */}
+      {/* Main Content Area */}
       {roleList.length === 0 ? (
         <div
           style={{
@@ -855,364 +977,659 @@ export const RoleMappingManager: React.FC = () => {
             padding: '1.15rem 1.35rem',
           }}
         >
-          {/* Filter Toolbar without top counter */}
+          {/* Sub-Tabs Navigation */}
           <div
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '0.75rem',
+              display: 'inline-flex',
+              background: '#f3f6f9',
+              padding: '3px',
+              borderRadius: '6px',
+              border: '1px solid #e9ebec',
               marginBottom: '1rem',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: '260px' }}>
-              <div style={{ position: 'relative', flex: 1 }}>
-                <Search
-                  size={15}
-                  style={{ position: 'absolute', left: '0.65rem', top: '50%', transform: 'translateY(-50%)', color: '#878a99' }}
-                />
-                <input
-                  type="text"
-                  placeholder="Cari Organisasi Tujuan..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.45rem 0.75rem 0.45rem 2.1rem',
-                    fontSize: '0.8rem',
-                    borderRadius: '5px',
-                    border: '1px solid #ced4da',
-                    background: '#ffffff',
-                  }}
-                />
-              </div>
-
-              {/* Role Type Filter */}
-              <select
-                value={filterRole}
-                onChange={(e) => setFilterRole(e.target.value)}
-                style={{
-                  padding: '0.45rem 0.75rem',
-                  fontSize: '0.8rem',
-                  borderRadius: '5px',
-                  border: '1px solid #ced4da',
-                  background: '#ffffff',
-                  color: '#495057',
-                  cursor: 'pointer',
-                }}
-              >
-                <option value="ALL">Semua Role</option>
-                <option value="HAS_SALES">Memiliki Sales Cabang (CABSAL)</option>
-                <option value="HAS_APV1">Memiliki Verifikator (CABAPV1)</option>
-                <option value="HAS_APV2">Memiliki Penyetuju (CABAPV2)</option>
-              </select>
-            </div>
-
-            {/* Page Size Selector */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <label style={{ fontSize: '0.78rem', color: '#878a99' }}>Tampilkan:</label>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  const val = e.target.value === 'ALL' ? 'ALL' : Number(e.target.value);
-                  setPageSize(val);
-                  setPage(1);
-                }}
-                style={{
-                  padding: '0.35rem 0.65rem',
-                  fontSize: '0.78rem',
-                  borderRadius: '4px',
-                  border: '1px solid #ced4da',
-                  background: '#ffffff',
-                  color: '#495057',
-                  cursor: 'pointer',
-                }}
-              >
-                <option value={10}>10 Baris</option>
-                <option value={25}>25 Baris</option>
-                <option value={50}>50 Baris</option>
-                <option value={100}>100 Baris</option>
-                <option value="ALL">Lihat Semua ({filteredList.length})</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Table Role Mapping */}
-          <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', overflowX: 'auto', maxHeight: '580px' }}>
-            <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
-              <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
-                <tr>
-                  <th style={{ width: '45px', textAlign: 'center' }}>No</th>
-                  <th>ORGANISASI TUJUAN</th>
-                  <th style={{ width: '150px', textAlign: 'center' }}>
-                    <div>QRS_CABSAL</div>
-                    <div style={{ fontSize: '0.68rem', fontWeight: 500, color: '#878a99' }}>Sales Cabang</div>
-                  </th>
-                  <th style={{ width: '150px', textAlign: 'center' }}>
-                    <div>QRS_CABAPV1</div>
-                    <div style={{ fontSize: '0.68rem', fontWeight: 500, color: '#878a99' }}>Verifikator Cabang</div>
-                  </th>
-                  <th style={{ width: '150px', textAlign: 'center' }}>
-                    <div>QRS_CABAPV2</div>
-                    <div style={{ fontSize: '0.68rem', fontWeight: 500, color: '#878a99' }}>Penyetuju Cabang</div>
-                  </th>
-                  <th style={{ width: '120px', textAlign: 'center' }}>
-                    <div>Grand Total</div>
-                    <div style={{ fontSize: '0.68rem', fontWeight: 500, color: '#878a99' }}>Total Role</div>
-                  </th>
-                  <th style={{ width: '95px', textAlign: 'center' }}>AKSI</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredList.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
-                      Tidak ada data mapping role yang cocok dengan filter pencarian.
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedRows.map((item, idx) => {
-                    const originalIdx = roleList.indexOf(item);
-                    const displayRowNo =
-                      pageSize === 'ALL'
-                        ? idx + 1
-                        : (page - 1) * (pageSize as number) + idx + 1;
-
-                    return (
-                      <tr key={idx} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
-                        <td style={{ textAlign: 'center', color: '#878a99' }}>{displayRowNo}</td>
-                        <td style={{ fontWeight: 600, color: '#212529' }}>{item.organisasiTujuan}</td>
-                        <td style={{ textAlign: 'center' }}>
-                          <span
-                            style={{
-                              display: 'inline-block',
-                              padding: '0.15rem 0.6rem',
-                              borderRadius: '4px',
-                              fontWeight: 700,
-                              fontSize: '0.78rem',
-                              background: item.qrsCabsal > 0 ? 'rgba(10, 179, 156, 0.1)' : '#f3f6f9',
-                              color: item.qrsCabsal > 0 ? '#0ab39c' : '#adb5bd',
-                            }}
-                          >
-                            {item.qrsCabsal > 0 ? item.qrsCabsal : '-'}
-                          </span>
-                        </td>
-                        <td style={{ textAlign: 'center' }}>
-                          <span
-                            style={{
-                              display: 'inline-block',
-                              padding: '0.15rem 0.6rem',
-                              borderRadius: '4px',
-                              fontWeight: 700,
-                              fontSize: '0.78rem',
-                              background: item.qrsCabapv1 > 0 ? 'rgba(41, 156, 219, 0.1)' : '#f3f6f9',
-                              color: item.qrsCabapv1 > 0 ? '#299cdb' : '#adb5bd',
-                            }}
-                          >
-                            {item.qrsCabapv1 > 0 ? item.qrsCabapv1 : '-'}
-                          </span>
-                        </td>
-                        <td style={{ textAlign: 'center' }}>
-                          <span
-                            style={{
-                              display: 'inline-block',
-                              padding: '0.15rem 0.6rem',
-                              borderRadius: '4px',
-                              fontWeight: 700,
-                              fontSize: '0.78rem',
-                              background: item.qrsCabapv2 > 0 ? 'rgba(247, 184, 75, 0.15)' : '#f3f6f9',
-                              color: item.qrsCabapv2 > 0 ? '#d68b0c' : '#adb5bd',
-                            }}
-                          >
-                            {item.qrsCabapv2 > 0 ? item.qrsCabapv2 : '-'}
-                          </span>
-                        </td>
-                        <td style={{ textAlign: 'center' }}>
-                          <span className="code-cell" style={{ fontWeight: 800, color: '#405189', background: '#eef0f7', padding: '0.2rem 0.65rem' }}>
-                            {item.grandTotal}
-                          </span>
-                        </td>
-                        <td style={{ textAlign: 'center' }}>
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenDetailModal(originalIdx)}
-                              title="Lihat Detail Mapping"
-                              style={{
-                                background: 'rgba(41, 156, 219, 0.1)',
-                                border: '1px solid rgba(41, 156, 219, 0.25)',
-                                color: '#299cdb',
-                                borderRadius: '4px',
-                                padding: '0.22rem 0.35rem',
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                              }}
-                            >
-                              <Eye size={12} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenEdit(originalIdx)}
-                              title="Edit Mapping Role"
-                              style={{
-                                background: 'rgba(64, 81, 137, 0.1)',
-                                border: '1px solid rgba(64, 81, 137, 0.25)',
-                                color: '#405189',
-                                borderRadius: '4px',
-                                padding: '0.22rem 0.35rem',
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                              }}
-                            >
-                              <Edit size={12} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeleteTargetIndex(originalIdx)}
-                              title="Hapus Mapping Role"
-                              style={{
-                                background: 'rgba(240, 101, 72, 0.1)',
-                                border: '1px solid rgba(240, 101, 72, 0.25)',
-                                color: '#f06548',
-                                borderRadius: '4px',
-                                padding: '0.22rem 0.35rem',
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                              }}
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination Footer with Compact Sliding Range */}
-          {pageSize !== 'ALL' && totalPages > 1 && (
-            <div
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('list')}
               style={{
+                padding: '0.4rem 0.95rem',
+                fontSize: '0.8rem',
+                fontWeight: activeSubTab === 'list' ? 700 : 500,
+                color: activeSubTab === 'list' ? '#405189' : '#878a99',
+                background: activeSubTab === 'list' ? '#ffffff' : 'transparent',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                boxShadow: activeSubTab === 'list' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                transition: 'all 0.15s',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '0.75rem',
-                marginTop: '1rem',
-                paddingTop: '0.75rem',
-                borderTop: '1px solid #e9ebec',
+                gap: '0.4rem',
               }}
             >
-              <div style={{ fontSize: '0.78rem', color: '#878a99' }}>
-                Halaman <strong style={{ color: '#212529' }}>{page}</strong> dari{' '}
-                <strong style={{ color: '#212529' }}>{totalPages}</strong>
+              <Users size={14} style={{ color: activeSubTab === 'list' ? '#405189' : '#878a99' }} />
+              <span>Daftar Mapping Role</span>
+              <span
+                style={{
+                  background: activeSubTab === 'list' ? '#eef0f7' : '#e9ebec',
+                  color: activeSubTab === 'list' ? '#405189' : '#878a99',
+                  padding: '0.05rem 0.35rem',
+                  borderRadius: '10px',
+                  fontSize: '0.68rem',
+                  fontWeight: 600,
+                }}
+              >
+                {roleList.length.toLocaleString('id-ID')}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('audit')}
+              style={{
+                padding: '0.4rem 0.95rem',
+                fontSize: '0.8rem',
+                fontWeight: activeSubTab === 'audit' ? 700 : 500,
+                color: activeSubTab === 'audit' ? '#405189' : '#878a99',
+                background: activeSubTab === 'audit' ? '#ffffff' : 'transparent',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                boxShadow: activeSubTab === 'audit' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                transition: 'all 0.15s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+              }}
+            >
+              <ShieldAlert size={14} style={{ color: activeSubTab === 'audit' ? '#405189' : '#878a99' }} />
+              <span>Analisa Segregation of Duties & Wondr Workflow</span>
+            </button>
+          </div>
+
+          {activeSubTab === 'list' ? (
+            <>
+              {/* Filter Toolbar without top counter */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '0.75rem',
+                  marginBottom: '1rem',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: '260px' }}>
+                  <div style={{ position: 'relative', flex: 1 }}>
+                    <Search
+                      size={15}
+                      style={{ position: 'absolute', left: '0.65rem', top: '50%', transform: 'translateY(-50%)', color: '#878a99' }}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Cari Organisasi Tujuan..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '0.45rem 0.75rem 0.45rem 2.1rem',
+                        fontSize: '0.8rem',
+                        borderRadius: '5px',
+                        border: '1px solid #ced4da',
+                        background: '#ffffff',
+                      }}
+                    />
+                  </div>
+
+                  {/* Unit Filter */}
+                  <select
+                    value={filterUnit}
+                    onChange={(e) => setFilterUnit(e.target.value)}
+                    style={{
+                      padding: '0.45rem 0.75rem',
+                      fontSize: '0.8rem',
+                      borderRadius: '5px',
+                      border: '1px solid #ced4da',
+                      background: '#ffffff',
+                      color: '#495057',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value="ALL">Semua Tipe Unit</option>
+                    <option value="KC">Cabang Induk (KC)</option>
+                    <option value="KCP">Sub Branch / KCP</option>
+                  </select>
+
+                  {/* SoD Filter */}
+                  <select
+                    value={filterSod}
+                    onChange={(e) => setFilterSod(e.target.value)}
+                    style={{
+                      padding: '0.45rem 0.75rem',
+                      fontSize: '0.8rem',
+                      borderRadius: '5px',
+                      border: '1px solid #ced4da',
+                      background: '#ffffff',
+                      color: '#495057',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value="ALL">Semua Status SoD</option>
+                    <option value="IDEAL">SoD Ideal (≥ 3 User)</option>
+                    <option value="DUAL">Dual Role (2 User)</option>
+                    <option value="SINGLE">Perangkapan Akses (1 User)</option>
+                  </select>
+                </div>
+
+                {/* Page Size Selector */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.78rem', color: '#878a99' }}>Tampilkan:</label>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      const val = e.target.value === 'ALL' ? 'ALL' : Number(e.target.value);
+                      setPageSize(val);
+                      setPage(1);
+                    }}
+                    style={{
+                      padding: '0.35rem 0.65rem',
+                      fontSize: '0.78rem',
+                      borderRadius: '4px',
+                      border: '1px solid #ced4da',
+                      background: '#ffffff',
+                      color: '#495057',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value={10}>10 Baris</option>
+                    <option value={25}>25 Baris</option>
+                    <option value={50}>50 Baris</option>
+                    <option value={100}>100 Baris</option>
+                    <option value="ALL">Lihat Semua ({filteredList.length})</option>
+                  </select>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  onClick={() => setPage(1)}
-                  disabled={page === 1}
-                  title="Halaman Pertama"
-                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.74rem' }}
-                >
-                  <ChevronsLeft size={13} />
-                </button>
+              {/* Table Role Mapping */}
+              <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', overflowX: 'auto', maxHeight: '580px' }}>
+                <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
+                  <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
+                    <tr>
+                      <th style={{ width: '45px', textAlign: 'center' }}>No</th>
+                      <th>ORGANISASI TUJUAN</th>
+                      <th style={{ width: '110px', textAlign: 'center' }}>Tipe Unit</th>
+                      <th style={{ width: '140px', textAlign: 'center' }}>
+                        <div>QRS_CABSAL</div>
+                        <div style={{ fontSize: '0.68rem', fontWeight: 500, color: '#878a99' }}>Sales Cabang</div>
+                      </th>
+                      <th style={{ width: '140px', textAlign: 'center' }}>
+                        <div>QRS_CABAPV1</div>
+                        <div style={{ fontSize: '0.68rem', fontWeight: 500, color: '#878a99' }}>Verifikator</div>
+                      </th>
+                      <th style={{ width: '140px', textAlign: 'center' }}>
+                        <div>QRS_CABAPV2</div>
+                        <div style={{ fontSize: '0.68rem', fontWeight: 500, color: '#878a99' }}>Penyetuju</div>
+                      </th>
+                      <th style={{ width: '130px', textAlign: 'center' }}>
+                        <div>Grand Total</div>
+                        <div style={{ fontSize: '0.68rem', fontWeight: 500, color: '#878a99' }}>Distinct User</div>
+                      </th>
+                      <th style={{ width: '140px', textAlign: 'center' }}>Status SoD</th>
+                      <th style={{ width: '95px', textAlign: 'center' }}>AKSI</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredList.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
+                          Tidak ada data mapping role yang cocok dengan filter pencarian.
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedRows.map((item, idx) => {
+                        const originalIdx = roleList.indexOf(item);
+                        const displayRowNo =
+                          pageSize === 'ALL'
+                            ? idx + 1
+                            : (page - 1) * (pageSize as number) + idx + 1;
+                        
+                        const isKc = getUnitCategory(item.organisasiTujuan) === 'KC';
+                        const sod = getSodAnalysis(item);
 
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  title="Halaman Sebelumnya"
-                  style={{ padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}
-                >
-                  <ChevronLeft size={13} />
-                </button>
+                        return (
+                          <tr key={idx} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
+                            <td style={{ textAlign: 'center', color: '#878a99' }}>{displayRowNo}</td>
+                            <td style={{ fontWeight: 600, color: '#212529' }}>{item.organisasiTujuan}</td>
+                            <td style={{ textAlign: 'center' }}>
+                              <span
+                                style={{
+                                  fontSize: '0.68rem',
+                                  fontWeight: 700,
+                                  padding: '0.15rem 0.45rem',
+                                  borderRadius: '4px',
+                                  background: isKc ? 'rgba(64, 81, 137, 0.1)' : 'rgba(41, 156, 219, 0.1)',
+                                  color: isKc ? '#405189' : '#299cdb',
+                                }}
+                              >
+                                {isKc ? 'Cabang Induk' : 'Sub Branch'}
+                              </span>
+                            </td>
 
-                {getPaginationRange(page, totalPages).map((p, idx) => {
-                  if (typeof p === 'string') {
-                    return (
-                      <span
-                        key={p + idx}
-                        style={{
-                          minWidth: '22px',
-                          height: '28px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '0.74rem',
-                          color: '#878a99',
-                          userSelect: 'none',
-                        }}
-                      >
-                        ...
-                      </span>
-                    );
-                  }
-                  return (
+                            {/* QRS_CABSAL */}
+                            <td style={{ textAlign: 'center' }}>
+                              {item.qrsCabsal === 1 ? (
+                                <span
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.25rem',
+                                    padding: '0.15rem 0.55rem',
+                                    borderRadius: '4px',
+                                    fontWeight: 700,
+                                    fontSize: '0.74rem',
+                                    background: 'rgba(10, 179, 156, 0.12)',
+                                    color: '#0ab39c',
+                                  }}
+                                >
+                                  ✓ 1
+                                </span>
+                              ) : (
+                                <span style={{ color: '#adb5bd', fontWeight: 500 }}>-</span>
+                              )}
+                            </td>
+
+                            {/* QRS_CABAPV1 */}
+                            <td style={{ textAlign: 'center' }}>
+                              {item.qrsCabapv1 === 1 ? (
+                                <span
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.25rem',
+                                    padding: '0.15rem 0.55rem',
+                                    borderRadius: '4px',
+                                    fontWeight: 700,
+                                    fontSize: '0.74rem',
+                                    background: 'rgba(41, 156, 219, 0.12)',
+                                    color: '#299cdb',
+                                  }}
+                                >
+                                  ✓ 1
+                                </span>
+                              ) : (
+                                <span style={{ color: '#adb5bd', fontWeight: 500 }}>-</span>
+                              )}
+                            </td>
+
+                            {/* QRS_CABAPV2 */}
+                            <td style={{ textAlign: 'center' }}>
+                              {item.qrsCabapv2 === 1 ? (
+                                <span
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.25rem',
+                                    padding: '0.15rem 0.55rem',
+                                    borderRadius: '4px',
+                                    fontWeight: 700,
+                                    fontSize: '0.74rem',
+                                    background: 'rgba(247, 184, 75, 0.18)',
+                                    color: '#d68b0c',
+                                  }}
+                                >
+                                  ✓ 1
+                                </span>
+                              ) : (
+                                <span style={{ color: '#adb5bd', fontWeight: 500 }}>-</span>
+                              )}
+                            </td>
+
+                            {/* Grand Total Distinct User */}
+                            <td style={{ textAlign: 'center' }}>
+                              <span
+                                className="code-cell"
+                                style={{
+                                  fontWeight: 800,
+                                  fontSize: '0.84rem',
+                                  color: sod.color,
+                                  background: sod.bgColor,
+                                  padding: '0.2rem 0.65rem',
+                                  borderRadius: '4px',
+                                }}
+                                title={`${item.grandTotal} Distinct User Fisik`}
+                              >
+                                {item.grandTotal} User
+                              </span>
+                            </td>
+
+                            {/* Status SoD */}
+                            <td style={{ textAlign: 'center' }}>
+                              <span
+                                style={{
+                                  display: 'inline-block',
+                                  padding: '0.15rem 0.5rem',
+                                  borderRadius: '4px',
+                                  fontSize: '0.68rem',
+                                  fontWeight: 700,
+                                  background: sod.bgColor,
+                                  color: sod.color,
+                                }}
+                              >
+                                {sod.label}
+                              </span>
+                            </td>
+
+                            {/* Actions */}
+                            <td style={{ textAlign: 'center' }}>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenDetailModal(originalIdx)}
+                                  title="Lihat Detail Mapping & Alur Workflow"
+                                  style={{
+                                    background: 'rgba(41, 156, 219, 0.1)',
+                                    border: '1px solid rgba(41, 156, 219, 0.25)',
+                                    color: '#299cdb',
+                                    borderRadius: '4px',
+                                    padding: '0.22rem 0.35rem',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                  }}
+                                >
+                                  <Eye size={12} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEdit(originalIdx)}
+                                  title="Edit Mapping Role"
+                                  style={{
+                                    background: 'rgba(64, 81, 137, 0.1)',
+                                    border: '1px solid rgba(64, 81, 137, 0.25)',
+                                    color: '#405189',
+                                    borderRadius: '4px',
+                                    padding: '0.22rem 0.35rem',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                  }}
+                                >
+                                  <Edit size={12} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteTargetIndex(originalIdx)}
+                                  title="Hapus Mapping Role"
+                                  style={{
+                                    background: 'rgba(240, 101, 72, 0.1)',
+                                    border: '1px solid rgba(240, 101, 72, 0.25)',
+                                    color: '#f06548',
+                                    borderRadius: '4px',
+                                    padding: '0.22rem 0.35rem',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                  }}
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination Footer with Compact Sliding Range */}
+              {pageSize !== 'ALL' && totalPages > 1 && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '0.75rem',
+                    marginTop: '1rem',
+                    paddingTop: '0.75rem',
+                    borderTop: '1px solid #e9ebec',
+                  }}
+                >
+                  <div style={{ fontSize: '0.78rem', color: '#878a99' }}>
+                    Halaman <strong style={{ color: '#212529' }}>{page}</strong> dari{' '}
+                    <strong style={{ color: '#212529' }}>{totalPages}</strong>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                     <button
-                      key={p}
                       type="button"
-                      onClick={() => setPage(p)}
-                      style={{
-                        minWidth: '28px',
-                        height: '28px',
-                        padding: '0 0.4rem',
-                        fontSize: '0.74rem',
-                        fontWeight: page === p ? 700 : 500,
-                        borderRadius: '4px',
-                        border: page === p ? '1px solid #405189' : '1px solid #ced4da',
-                        background: page === p ? '#405189' : '#ffffff',
-                        color: page === p ? '#ffffff' : '#495057',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s',
-                      }}
+                      className="btn btn-outline btn-sm"
+                      onClick={() => setPage(1)}
+                      disabled={page === 1}
+                      title="Halaman Pertama"
+                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.74rem' }}
                     >
-                      {p}
+                      <ChevronsLeft size={13} />
                     </button>
-                  );
-                })}
 
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  title="Halaman Berikutnya"
-                  style={{ padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}
-                >
-                  <ChevronRight size={13} />
-                </button>
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page === 1}
+                      title="Halaman Sebelumnya"
+                      style={{ padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}
+                    >
+                      <ChevronLeft size={13} />
+                    </button>
 
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  onClick={() => setPage(totalPages)}
-                  disabled={page === totalPages}
-                  title="Halaman Terakhir"
-                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.74rem' }}
-                >
-                  <ChevronsRight size={13} />
-                </button>
+                    {getPaginationRange(page, totalPages).map((p, idx) => {
+                      if (typeof p === 'string') {
+                        return (
+                          <span
+                            key={p + idx}
+                            style={{
+                              minWidth: '22px',
+                              height: '28px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '0.74rem',
+                              color: '#878a99',
+                              userSelect: 'none',
+                            }}
+                          >
+                            ...
+                          </span>
+                        );
+                      }
+                      return (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setPage(p)}
+                          style={{
+                            minWidth: '28px',
+                            height: '28px',
+                            padding: '0 0.4rem',
+                            fontSize: '0.74rem',
+                            fontWeight: page === p ? 700 : 500,
+                            borderRadius: '4px',
+                            border: page === p ? '1px solid #405189' : '1px solid #ced4da',
+                            background: page === p ? '#405189' : '#ffffff',
+                            color: page === p ? '#ffffff' : '#495057',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s',
+                          }}
+                        >
+                          {p}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={page === totalPages}
+                      title="Halaman Berikutnya"
+                      style={{ padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}
+                    >
+                      <ChevronRight size={13} />
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      onClick={() => setPage(totalPages)}
+                      disabled={page === totalPages}
+                      title="Halaman Terakhir"
+                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.74rem' }}
+                    >
+                      <ChevronsRight size={13} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            /* Audit & Workflow View */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              {/* Insight Explanation Card */}
+              <div
+                style={{
+                  background: 'linear-gradient(135deg, rgba(64, 81, 137, 0.05) 0%, rgba(41, 156, 219, 0.05) 100%)',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(64, 81, 137, 0.15)',
+                  padding: '1.25rem',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                  <ShieldCheck size={18} color="#405189" />
+                  <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#405189' }}>
+                    Panduan Bisnis: Logika Grand Total (Distinct User Count) & Wondr Workflow
+                  </h4>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '0.85rem', fontSize: '0.78rem' }}>
+                  <div style={{ background: '#ffffff', padding: '0.85rem', borderRadius: '6px', border: '1px solid #e9ebec' }}>
+                    <div style={{ fontWeight: 700, color: '#212529', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <Building2 size={15} color="#405189" />
+                      <span>1. Cabang Induk (KC)</span>
+                    </div>
+                    <p style={{ margin: 0, color: '#6c757d', lineHeight: 1.5 }}>
+                      Pola nama <code>[NAMA KOTA] BRANCH OFFICE</code> (tanpa strip). Memiliki 3 role lengkap (Sales/Maker, Verifikator/APV1, Penyetuju/APV2) untuk alur persetujuan bertingkat standard 3-tier.
+                    </p>
+                  </div>
+
+                  <div style={{ background: '#ffffff', padding: '0.85rem', borderRadius: '6px', border: '1px solid #e9ebec' }}>
+                    <div style={{ fontWeight: 700, color: '#212529', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <GitBranch size={15} color="#299cdb" />
+                      <span>2. Outlet / Sub Branch (KCP)</span>
+                    </div>
+                    <p style={{ margin: 0, color: '#6c757d', lineHeight: 1.5 }}>
+                      Pola nama <code>[KC INDUK] - [OUTLET] SUB BRANCH</code>. Tidak memiliki role Verifikator (<code>QRS_CABAPV1</code>). Jalur persetujuan langsung loncat (Bypass) ke Approver atau diarahkan ke KC Pembina.
+                    </p>
+                  </div>
+
+                  <div style={{ background: '#ffffff', padding: '0.85rem', borderRadius: '6px', border: '1px solid #e9ebec' }}>
+                    <div style={{ fontWeight: 700, color: '#212529', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <Users size={15} color="#0ab39c" />
+                      <span>3. Makna Kolom Grand Total</span>
+                    </div>
+                    <p style={{ margin: 0, color: '#6c757d', lineHeight: 1.5 }}>
+                      Bukan penjumlahan matematika horizontal, melainkan <strong>Jumlah Pegawai / User ID Fisik Unik</strong>. Grand Total = 1 berarti perangkapan hak akses (1 orang memegang semua role), sedangkan Grand Total ≥ 3 berarti Segregation of Duties ideal.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* SoD Breakdown Table */}
+              <div>
+                <h4 style={{ fontSize: '0.92rem', fontWeight: 700, color: '#212529', margin: '0 0 0.65rem' }}>
+                  Matriks Rekomendasi Alur Wondr Merchant per Unit Kerja
+                </h4>
+                <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', overflowX: 'auto', maxHeight: '480px' }}>
+                  <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
+                    <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
+                      <tr>
+                        <th style={{ width: '45px', textAlign: 'center' }}>No</th>
+                        <th>Organisasi Tujuan</th>
+                        <th style={{ width: '110px', textAlign: 'center' }}>Struktur Unit</th>
+                        <th style={{ width: '120px', textAlign: 'center' }}>Distinct User</th>
+                        <th>Status Segregation of Duties (SoD)</th>
+                        <th>Rekomendasi Alur Wondr Workflow</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {roleList.map((item, idx) => {
+                        const isKc = getUnitCategory(item.organisasiTujuan) === 'KC';
+                        const sod = getSodAnalysis(item);
+                        const wondr = getWondrRecommendation(item);
+
+                        return (
+                          <tr key={idx} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
+                            <td style={{ textAlign: 'center', color: '#878a99' }}>{idx + 1}</td>
+                            <td style={{ fontWeight: 600, color: '#212529' }}>{item.organisasiTujuan}</td>
+                            <td style={{ textAlign: 'center' }}>
+                              <span
+                                style={{
+                                  fontSize: '0.68rem',
+                                  fontWeight: 700,
+                                  padding: '0.15rem 0.45rem',
+                                  borderRadius: '4px',
+                                  background: isKc ? 'rgba(64, 81, 137, 0.1)' : 'rgba(41, 156, 219, 0.1)',
+                                  color: isKc ? '#405189' : '#299cdb',
+                                }}
+                              >
+                                {isKc ? 'Cabang Induk (KC)' : 'Sub Branch (KCP)'}
+                              </span>
+                            </td>
+                            <td style={{ textAlign: 'center' }}>
+                              <strong style={{ color: sod.color }}>{item.grandTotal} Orang</strong>
+                            </td>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <span
+                                  style={{
+                                    display: 'inline-block',
+                                    padding: '0.15rem 0.45rem',
+                                    borderRadius: '4px',
+                                    fontSize: '0.68rem',
+                                    fontWeight: 700,
+                                    background: sod.bgColor,
+                                    color: sod.color,
+                                  }}
+                                >
+                                  {sod.label}
+                                </span>
+                                <span style={{ fontSize: '0.74rem', color: '#6c757d' }}>{sod.summary}</span>
+                              </div>
+                            </td>
+                            <td>
+                              <div style={{ fontSize: '0.76rem', color: '#495057', fontWeight: 600 }}>
+                                {wondr.flow}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
         </div>
       )}
 
-      {/* Create / Edit / Detail Modal */}
+      {/* Create / Edit / Detail Modal with Checkboxes and Distinct User Input */}
       {modalMode && (
         <div
           style={{
@@ -1231,7 +1648,7 @@ export const RoleMappingManager: React.FC = () => {
               background: '#ffffff',
               borderRadius: '8px',
               width: '100%',
-              maxWidth: '540px',
+              maxWidth: '560px',
               boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
               border: '1px solid #e9ebec',
               overflow: 'hidden',
@@ -1250,9 +1667,9 @@ export const RoleMappingManager: React.FC = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <Users size={18} color="#405189" />
                 <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: '#212529' }}>
-                  {modalMode === 'create' && 'Tambah Mapping Role Baru'}
-                  {modalMode === 'edit' && 'Edit Mapping Role'}
-                  {modalMode === 'detail' && 'Detail Mapping Role'}
+                  {modalMode === 'create' && 'Tambah Mapping Role Organisasi'}
+                  {modalMode === 'edit' && 'Edit Mapping Role Organisasi'}
+                  {modalMode === 'detail' && 'Detail Mapping Role & Distinct User'}
                 </h4>
               </div>
               <button
@@ -1264,7 +1681,7 @@ export const RoleMappingManager: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSubmitForm} style={{ padding: '1.35rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <form onSubmit={handleSubmitForm} style={{ padding: '1.35rem', display: 'flex', flexDirection: 'column', gap: '1.15rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#495057', marginBottom: '0.35rem' }}>
                   ORGANISASI TUJUAN <span style={{ color: '#f06548' }}>*</span>
@@ -1278,114 +1695,174 @@ export const RoleMappingManager: React.FC = () => {
                   onChange={(e) => setFormData({ ...formData, organisasiTujuan: e.target.value })}
                   style={{
                     width: '100%',
-                    padding: '0.45rem 0.65rem',
+                    padding: '0.48rem 0.65rem',
                     fontSize: '0.82rem',
                     borderRadius: '5px',
                     border: '1px solid #ced4da',
                     background: modalMode === 'detail' ? '#f8f9fa' : '#ffffff',
                   }}
                 />
+                <span style={{ fontSize: '0.7rem', color: '#878a99', marginTop: '0.2rem', display: 'block' }}>
+                  Pola: Cabang Induk <code>[KOTA] BRANCH OFFICE</code> atau Sub Branch <code>[KC] - [OUTLET] SUB BRANCH</code>
+                </span>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#0ab39c', marginBottom: '0.35rem' }}>
-                    QRS_CABSAL
-                    <span style={{ display: 'block', fontSize: '0.65rem', fontWeight: 400, color: '#878a99' }}>Sales Cabang</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    disabled={modalMode === 'detail'}
-                    value={formData.qrsCabsal}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value, 10) || 0;
-                      const next = { ...formData, qrsCabsal: val };
-                      next.grandTotal = next.qrsCabsal + next.qrsCabapv1 + next.qrsCabapv2;
-                      setFormData(next);
-                    }}
+              {/* 3 Role Checkboxes (Checked = 1, Unchecked = 0) */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#212529', marginBottom: '0.5rem' }}>
+                  Kelengkapan Role Aktif (Ceklist jika aktif):
+                </label>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: '0.65rem',
+                  }}
+                >
+                  {/* Checkbox 1: QRS_CABSAL */}
+                  <label
                     style={{
-                      width: '100%',
-                      padding: '0.45rem 0.65rem',
-                      fontSize: '0.82rem',
-                      borderRadius: '5px',
-                      border: '1px solid #ced4da',
-                      background: modalMode === 'detail' ? '#f8f9fa' : '#ffffff',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '0.5rem',
+                      padding: '0.65rem',
+                      borderRadius: '6px',
+                      border: formData.qrsCabsal === 1 ? '1px solid #0ab39c' : '1px solid #ced4da',
+                      background: formData.qrsCabsal === 1 ? 'rgba(10, 179, 156, 0.06)' : '#fafbfe',
+                      cursor: modalMode === 'detail' ? 'default' : 'pointer',
+                      transition: 'all 0.15s',
                     }}
-                  />
-                </div>
+                  >
+                    <input
+                      type="checkbox"
+                      disabled={modalMode === 'detail'}
+                      checked={formData.qrsCabsal === 1}
+                      onChange={(e) => setFormData({ ...formData, qrsCabsal: e.target.checked ? 1 : 0 })}
+                      style={{ marginTop: '0.15rem', cursor: 'pointer', accentColor: '#0ab39c' }}
+                    />
+                    <div>
+                      <strong style={{ fontSize: '0.76rem', color: '#0ab39c', display: 'block' }}>QRS_CABSAL</strong>
+                      <span style={{ fontSize: '0.68rem', color: '#878a99' }}>Sales Cabang</span>
+                      <span style={{ display: 'block', fontSize: '0.66rem', fontWeight: 700, color: '#495057', marginTop: '0.15rem' }}>
+                        Nilai: ({formData.qrsCabsal === 1 ? '1' : '0'})
+                      </span>
+                    </div>
+                  </label>
 
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#299cdb', marginBottom: '0.35rem' }}>
-                    QRS_CABAPV1
-                    <span style={{ display: 'block', fontSize: '0.65rem', fontWeight: 400, color: '#878a99' }}>Verifikator</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    disabled={modalMode === 'detail'}
-                    value={formData.qrsCabapv1}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value, 10) || 0;
-                      const next = { ...formData, qrsCabapv1: val };
-                      next.grandTotal = next.qrsCabsal + next.qrsCabapv1 + next.qrsCabapv2;
-                      setFormData(next);
-                    }}
+                  {/* Checkbox 2: QRS_CABAPV1 */}
+                  <label
                     style={{
-                      width: '100%',
-                      padding: '0.45rem 0.65rem',
-                      fontSize: '0.82rem',
-                      borderRadius: '5px',
-                      border: '1px solid #ced4da',
-                      background: modalMode === 'detail' ? '#f8f9fa' : '#ffffff',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '0.5rem',
+                      padding: '0.65rem',
+                      borderRadius: '6px',
+                      border: formData.qrsCabapv1 === 1 ? '1px solid #299cdb' : '1px solid #ced4da',
+                      background: formData.qrsCabapv1 === 1 ? 'rgba(41, 156, 219, 0.06)' : '#fafbfe',
+                      cursor: modalMode === 'detail' ? 'default' : 'pointer',
+                      transition: 'all 0.15s',
                     }}
-                  />
-                </div>
+                  >
+                    <input
+                      type="checkbox"
+                      disabled={modalMode === 'detail'}
+                      checked={formData.qrsCabapv1 === 1}
+                      onChange={(e) => setFormData({ ...formData, qrsCabapv1: e.target.checked ? 1 : 0 })}
+                      style={{ marginTop: '0.15rem', cursor: 'pointer', accentColor: '#299cdb' }}
+                    />
+                    <div>
+                      <strong style={{ fontSize: '0.76rem', color: '#299cdb', display: 'block' }}>QRS_CABAPV1</strong>
+                      <span style={{ fontSize: '0.68rem', color: '#878a99' }}>Verifikator</span>
+                      <span style={{ display: 'block', fontSize: '0.66rem', fontWeight: 700, color: '#495057', marginTop: '0.15rem' }}>
+                        Nilai: ({formData.qrsCabapv1 === 1 ? '1' : '0'})
+                      </span>
+                    </div>
+                  </label>
 
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#d68b0c', marginBottom: '0.35rem' }}>
-                    QRS_CABAPV2
-                    <span style={{ display: 'block', fontSize: '0.65rem', fontWeight: 400, color: '#878a99' }}>Penyetuju</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    disabled={modalMode === 'detail'}
-                    value={formData.qrsCabapv2}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value, 10) || 0;
-                      const next = { ...formData, qrsCabapv2: val };
-                      next.grandTotal = next.qrsCabsal + next.qrsCabapv1 + next.qrsCabapv2;
-                      setFormData(next);
-                    }}
+                  {/* Checkbox 3: QRS_CABAPV2 */}
+                  <label
                     style={{
-                      width: '100%',
-                      padding: '0.45rem 0.65rem',
-                      fontSize: '0.82rem',
-                      borderRadius: '5px',
-                      border: '1px solid #ced4da',
-                      background: modalMode === 'detail' ? '#f8f9fa' : '#ffffff',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '0.5rem',
+                      padding: '0.65rem',
+                      borderRadius: '6px',
+                      border: formData.qrsCabapv2 === 1 ? '1px solid #d68b0c' : '1px solid #ced4da',
+                      background: formData.qrsCabapv2 === 1 ? 'rgba(247, 184, 75, 0.1)' : '#fafbfe',
+                      cursor: modalMode === 'detail' ? 'default' : 'pointer',
+                      transition: 'all 0.15s',
                     }}
-                  />
+                  >
+                    <input
+                      type="checkbox"
+                      disabled={modalMode === 'detail'}
+                      checked={formData.qrsCabapv2 === 1}
+                      onChange={(e) => setFormData({ ...formData, qrsCabapv2: e.target.checked ? 1 : 0 })}
+                      style={{ marginTop: '0.15rem', cursor: 'pointer', accentColor: '#d68b0c' }}
+                    />
+                    <div>
+                      <strong style={{ fontSize: '0.76rem', color: '#d68b0c', display: 'block' }}>QRS_CABAPV2</strong>
+                      <span style={{ fontSize: '0.68rem', color: '#878a99' }}>Penyetuju</span>
+                      <span style={{ display: 'block', fontSize: '0.66rem', fontWeight: 700, color: '#495057', marginTop: '0.15rem' }}>
+                        Nilai: ({formData.qrsCabapv2 === 1 ? '1' : '0'})
+                      </span>
+                    </div>
+                  </label>
                 </div>
               </div>
 
-              {/* Grand Total Summary Box */}
+              {/* Grand Total Distinct User Input */}
               <div
                 style={{
-                  background: '#f3f6f9',
-                  padding: '0.75rem 1rem',
+                  background: '#f8f9fa',
                   borderRadius: '6px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
                   border: '1px solid #e9ebec',
+                  padding: '1rem',
                 }}
               >
-                <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#495057' }}>Grand Total Alokasi:</span>
-                <span style={{ fontSize: '1.15rem', fontWeight: 800, color: '#405189' }}>
-                  {(Number(formData.qrsCabsal) || 0) + (Number(formData.qrsCabapv1) || 0) + (Number(formData.qrsCabapv2) || 0)} Role
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '0.4rem' }}>
+                  <label style={{ fontSize: '0.76rem', fontWeight: 700, color: '#212529' }}>
+                    Grand Total: Jumlah Pegawai / User Fisik Unik (Distinct User Count) <span style={{ color: '#f06548' }}>*</span>
+                  </label>
+                  <span
+                    style={{
+                      fontSize: '0.68rem',
+                      fontWeight: 700,
+                      padding: '0.12rem 0.45rem',
+                      borderRadius: '4px',
+                      background: getSodAnalysis(formData).bgColor,
+                      color: getSodAnalysis(formData).color,
+                    }}
+                  >
+                    {getSodAnalysis(formData).label}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    disabled={modalMode === 'detail'}
+                    value={formData.grandTotal}
+                    onChange={(e) => setFormData({ ...formData, grandTotal: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                    style={{
+                      width: '120px',
+                      padding: '0.45rem 0.65rem',
+                      fontSize: '0.88rem',
+                      fontWeight: 700,
+                      borderRadius: '5px',
+                      border: '1px solid #ced4da',
+                      background: modalMode === 'detail' ? '#f8f9fa' : '#ffffff',
+                      color: '#405189',
+                    }}
+                  />
+                  <span style={{ fontSize: '0.74rem', color: '#6c757d', lineHeight: 1.4 }}>
+                    {formData.grandTotal === 1 && '1 User: Perangkapan hak akses (Triple/Dual Role dipegang 1 pegawai).'}
+                    {formData.grandTotal === 2 && '2 User: Ada 2 pegawai aktif (1 staf independen, 1 pejabat).'}
+                    {formData.grandTotal >= 3 && '≥ 3 User: Pemisahan tugas ideal (Four-Eyes Principle berjalan penuh).'}
+                  </span>
+                </div>
               </div>
 
               <div
