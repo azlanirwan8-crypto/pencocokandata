@@ -20,6 +20,12 @@ import type { MasterRow, TargetRow, MatchingStats, WilayahStat, WilayahSetting }
 import type { RecommendationResult } from './utils/recommender';
 import { buildMasterIndex, analyzeMasterHealth, executeChunkMatching } from './utils/matcher';
 import { formatWilayahName, extractWilayahFromBranchCode } from './utils/normalizer';
+import type { RoleMappingRecord } from './components/RoleMapping/RoleMappingManager';
+import { DEFAULT_ROLE_MAPPING_DATA } from './components/RoleMapping/RoleMappingManager';
+import type { PTENRecord } from './components/PTENData/PTENManager';
+import { DEFAULT_PTEN_DATA } from './components/PTENData/defaultPtenData';
+import { buildPtenIndex, validatePtenForTarget } from './utils/ptenMatcher';
+import { resolveRoleMappingForBranch } from './utils/roleMatcher';
 
 import { getItem, setItem } from './utils/storage';
 import {
@@ -72,8 +78,10 @@ export const App: React.FC = () => {
   const [initialTargetCount, setInitialTargetCount] = useState<number>(0);
   const [targetFileName, setTargetFileName] = useState<string>('');
   const [wilayahSettings, setWilayahSettings] = useState<WilayahSetting[]>(DEFAULT_WILAYAH_DATA);
-  const [ptenCount, setPtenCount] = useState<number>(0);
-  const [roleMappingCount, setRoleMappingCount] = useState<number>(12);
+  const [ptenList, setPtenList] = useState<PTENRecord[]>(DEFAULT_PTEN_DATA);
+  const [roleMappingList, setRoleMappingList] = useState<RoleMappingRecord[]>(DEFAULT_ROLE_MAPPING_DATA);
+  const [ptenCount, setPtenCount] = useState<number>(DEFAULT_PTEN_DATA.length);
+  const [roleMappingCount, setRoleMappingCount] = useState<number>(DEFAULT_ROLE_MAPPING_DATA.length);
 
   // Matching Execution State
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -87,11 +95,15 @@ export const App: React.FC = () => {
   const [dashboardWilayahFilter, setDashboardWilayahFilter] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
 
-
   // Build In-Memory Hash Map O(1)
   const masterIndex = useMemo(() => {
     return buildMasterIndex(masterRows);
   }, [masterRows]);
+
+  // Build In-Memory PTEN Fast Lookup Map O(1)
+  const ptenIndex = useMemo(() => {
+    return buildPtenIndex(ptenList);
+  }, [ptenList]);
 
   // Master Health Analysis
   const masterHealth = useMemo(() => {
@@ -115,8 +127,8 @@ export const App: React.FC = () => {
             matchedDone: boolean;
           }>('target_data').catch(() => null),
           getItem<WilayahSetting[]>('wilayah_settings').catch(() => null),
-          getItem<any[]>('pten_records').catch(() => null),
-          getItem<any[]>('role_mapping_data').catch(() => null),
+          getItem<PTENRecord[]>('pten_master_data').catch(() => null),
+          getItem<RoleMappingRecord[]>('role_mapping_data').catch(() => null),
         ]);
 
         if (savedMaster && savedMaster.rows && savedMaster.rows.length > 0) {
@@ -139,11 +151,13 @@ export const App: React.FC = () => {
           setItem('wilayah_settings', DEFAULT_WILAYAH_DATA);
         }
 
-        if (savedPten && Array.isArray(savedPten)) {
+        if (savedPten && Array.isArray(savedPten) && savedPten.length > 0) {
+          setPtenList(savedPten);
           setPtenCount(savedPten.length);
         }
 
-        if (savedRoleMapping && Array.isArray(savedRoleMapping)) {
+        if (savedRoleMapping && Array.isArray(savedRoleMapping) && savedRoleMapping.length > 0) {
+          setRoleMappingList(savedRoleMapping);
           setRoleMappingCount(savedRoleMapping.length);
         }
       } catch (err) {
@@ -410,7 +424,9 @@ export const App: React.FC = () => {
           setDurationMs(Math.round(performance.now() - startTime));
         },
         1200, // Chunk size
-        wilayahSettings
+        wilayahSettings,
+        roleMappingList,
+        ptenIndex
       );
 
       const endTime = performance.now();
@@ -507,7 +523,7 @@ export const App: React.FC = () => {
     }
   };
 
-  // Target Actions (Uploads new rows with strict Excel order preservation)
+  // Target Actions (Uploads new rows with strict Excel order preservation & immediate PTEN/Role validation)
   const handleTargetLoaded = (
     newRows: TargetRow[],
     fileName: string,
@@ -517,19 +533,67 @@ export const App: React.FC = () => {
       let finalRows: TargetRow[];
       if (mode === 'append' && prev.length > 0) {
         const startNo = prev.length;
-        const indexedNewRows = newRows.map((r, idx) => ({
-          ...r,
-          No: r.No !== undefined && String(r.No).trim() !== '' ? r.No : startNo + idx + 1,
-          _excelRowIndex: startNo + idx + 1,
-        }));
+        const indexedNewRows = newRows.map((r, idx) => {
+          // 1. Validasi PTEN Instan
+          const ptenRes = validatePtenForTarget(r['KODE POS'], r['Dati II'] || r.Kota || '', ptenIndex);
+          // 2. Validasi Role Mapping jika ada nama cabang
+          const branchCandidate = r['Nama Outlet'] || r.Cabang || r['Sandi Cabang'] || r.Sandi || '';
+          const roleRes = resolveRoleMappingForBranch(
+            branchCandidate,
+            r['Dati II'] || r.Kota,
+            r.Kelurahan,
+            r.Kecamatan,
+            roleMappingList
+          );
+
+          return {
+            ...r,
+            No: r.No !== undefined && String(r.No).trim() !== '' ? r.No : startNo + idx + 1,
+            _excelRowIndex: startNo + idx + 1,
+            'KOTA PTEN': r['KOTA PTEN'] || ptenRes.kotaPten,
+            'KODE POS PTEN': r['KODE POS PTEN'] || ptenRes.kodePosPten,
+            'CEK KODE POS + PTEN': r['CEK KODE POS + PTEN'] || ptenRes.statusPten,
+            organisasiRole: roleRes?.organisasiRole || r.organisasiRole,
+            tipeUnitRole: roleRes?.tipeUnitRole || r.tipeUnitRole,
+            alurWondr: roleRes?.alurWondr || r.alurWondr,
+            flowDescription: roleRes?.flowDescription || r.flowDescription,
+            roleCabsal: roleRes?.qrsCabsal ?? r.roleCabsal,
+            roleCabapv1: roleRes?.qrsCabapv1 ?? r.roleCabapv1,
+            roleCabapv2: roleRes?.qrsCabapv2 ?? r.roleCabapv2,
+            roleGrandTotal: roleRes?.grandTotal ?? r.roleGrandTotal,
+          };
+        });
         finalRows = [...prev, ...indexedNewRows];
       } else {
         // Mode Replace (default): Urutan 100% murni persis sesuai file Excel yang diunggah
-        finalRows = newRows.map((r, idx) => ({
-          ...r,
-          No: r.No !== undefined && String(r.No).trim() !== '' ? r.No : idx + 1,
-          _excelRowIndex: idx + 1,
-        }));
+        finalRows = newRows.map((r, idx) => {
+          const ptenRes = validatePtenForTarget(r['KODE POS'], r['Dati II'] || r.Kota || '', ptenIndex);
+          const branchCandidate = r['Nama Outlet'] || r.Cabang || r['Sandi Cabang'] || r.Sandi || '';
+          const roleRes = resolveRoleMappingForBranch(
+            branchCandidate,
+            r['Dati II'] || r.Kota,
+            r.Kelurahan,
+            r.Kecamatan,
+            roleMappingList
+          );
+
+          return {
+            ...r,
+            No: r.No !== undefined && String(r.No).trim() !== '' ? r.No : idx + 1,
+            _excelRowIndex: idx + 1,
+            'KOTA PTEN': r['KOTA PTEN'] || ptenRes.kotaPten,
+            'KODE POS PTEN': r['KODE POS PTEN'] || ptenRes.kodePosPten,
+            'CEK KODE POS + PTEN': r['CEK KODE POS + PTEN'] || ptenRes.statusPten,
+            organisasiRole: roleRes?.organisasiRole || r.organisasiRole,
+            tipeUnitRole: roleRes?.tipeUnitRole || r.tipeUnitRole,
+            alurWondr: roleRes?.alurWondr || r.alurWondr,
+            flowDescription: roleRes?.flowDescription || r.flowDescription,
+            roleCabsal: roleRes?.qrsCabsal ?? r.roleCabsal,
+            roleCabapv1: roleRes?.qrsCabapv1 ?? r.roleCabapv1,
+            roleCabapv2: roleRes?.qrsCabapv2 ?? r.roleCabapv2,
+            roleGrandTotal: roleRes?.grandTotal ?? r.roleGrandTotal,
+          };
+        });
       }
 
       const finalFileName =
@@ -603,7 +667,7 @@ export const App: React.FC = () => {
     }
   };
 
-  // Setujui Semua Rekomendasi: Mengisi atribut master ke baris target yang cocok, pindah ke matched, tab 1 & 2 kosong
+  // Setujui Semua Rekomendasi: Mengisi atribut master ke baris target yang cocok, diperkaya PTEN & Mapping Role
   const handleApproveAllRecommendations = (recs: RecommendationResult[]) => {
     if (recs.length === 0) return;
     const recMap = new Map<string, MasterRow>();
@@ -626,6 +690,17 @@ export const App: React.FC = () => {
           matchedMaster.Wilayah || row.Wilayah || '-'
         );
 
+        // Validasi PTEN & Role Mapping untuk rekomendasi
+        const ptenRes = validatePtenForTarget(row['KODE POS'], row['Dati II'] || row.Kota || '', ptenIndex);
+        const branchNameToLook = matchedMaster['Nama Outlet'] || matchedMaster.Cabang || matchedMaster['Sandi Cabang'] || '';
+        const roleRes = resolveRoleMappingForBranch(
+          branchNameToLook,
+          row['Dati II'] || row.Kota,
+          row.Kelurahan,
+          row.Kecamatan,
+          roleMappingList
+        );
+
         return {
           ...row,
           _isMatched: true,
@@ -643,6 +718,17 @@ export const App: React.FC = () => {
           'Status Outlet': matchedMaster['Status Outlet'] || 'Aktif',
           ALAMAT: matchedMaster.ALAMAT || '',
           Wilayah: resolved.wilayahName !== '-' ? resolved.wilayahName : (row.Wilayah || '-'),
+          'KOTA PTEN': ptenRes.kotaPten,
+          'KODE POS PTEN': ptenRes.kodePosPten,
+          'CEK KODE POS + PTEN': ptenRes.statusPten,
+          organisasiRole: roleRes?.organisasiRole || row.organisasiRole,
+          tipeUnitRole: roleRes?.tipeUnitRole || row.tipeUnitRole,
+          alurWondr: roleRes?.alurWondr || row.alurWondr,
+          flowDescription: roleRes?.flowDescription || row.flowDescription,
+          roleCabsal: roleRes?.qrsCabsal ?? row.roleCabsal,
+          roleCabapv1: roleRes?.qrsCabapv1 ?? row.roleCabapv1,
+          roleCabapv2: roleRes?.qrsCabapv2 ?? row.roleCabapv2,
+          roleGrandTotal: roleRes?.grandTotal ?? row.roleGrandTotal,
           _matchedAt: new Date().toISOString(),
           _matchedBy: 'Operator (Approval)',
         };
@@ -673,6 +759,17 @@ export const App: React.FC = () => {
           matchedMaster.Wilayah || row.Wilayah || '-'
         );
 
+        // Validasi PTEN & Role Mapping
+        const ptenRes = validatePtenForTarget(row['KODE POS'], row['Dati II'] || row.Kota || '', ptenIndex);
+        const branchNameToLook = matchedMaster['Nama Outlet'] || matchedMaster.Cabang || matchedMaster['Sandi Cabang'] || '';
+        const roleRes = resolveRoleMappingForBranch(
+          branchNameToLook,
+          row['Dati II'] || row.Kota,
+          row.Kelurahan,
+          row.Kecamatan,
+          roleMappingList
+        );
+
         return {
           ...row,
           _isMatched: true,
@@ -690,6 +787,17 @@ export const App: React.FC = () => {
           'Status Outlet': matchedMaster['Status Outlet'] || 'Aktif',
           ALAMAT: matchedMaster.ALAMAT || '',
           Wilayah: resolved.wilayahName !== '-' ? resolved.wilayahName : (row.Wilayah || '-'),
+          'KOTA PTEN': ptenRes.kotaPten,
+          'KODE POS PTEN': ptenRes.kodePosPten,
+          'CEK KODE POS + PTEN': ptenRes.statusPten,
+          organisasiRole: roleRes?.organisasiRole || row.organisasiRole,
+          tipeUnitRole: roleRes?.tipeUnitRole || row.tipeUnitRole,
+          alurWondr: roleRes?.alurWondr || row.alurWondr,
+          flowDescription: roleRes?.flowDescription || row.flowDescription,
+          roleCabsal: roleRes?.qrsCabsal ?? row.roleCabsal,
+          roleCabapv1: roleRes?.qrsCabapv1 ?? row.roleCabapv1,
+          roleCabapv2: roleRes?.qrsCabapv2 ?? row.roleCabapv2,
+          roleGrandTotal: roleRes?.grandTotal ?? row.roleGrandTotal,
           _matchedAt: new Date().toISOString(),
           _matchedBy: 'Operator (Approval)',
         };

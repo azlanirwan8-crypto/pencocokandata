@@ -58,6 +58,22 @@ export interface TargetRow {
   Provinsi: string;
   'SUMBER DATA'?: string;
 
+  // PTEN Master Validation Fields
+  'KOTA PTEN'?: string;
+  'KODE POS PTEN'?: string;
+  'CEK KODE POS + PTEN'?: 'SAME' | 'DIFFERENT' | 'NOT_FOUND' | string;
+  'CEK DUPLIKAT KODE POS'?: string;
+
+  // Role Mapping & Wondr Workflow Validation Fields
+  organisasiRole?: string;
+  tipeUnitRole?: 'Cabang Utama (KC)' | 'Outlet (KCP)' | string;
+  alurWondr?: string;
+  flowDescription?: string;
+  roleCabsal?: number;
+  roleCabapv1?: number;
+  roleCabapv2?: number;
+  roleGrandTotal?: number;
+
   // Visual/Processing flags
   _isMatched?: boolean;
   _matchLevel?: 'level1' | 'level2' | 'none' | 'recommendation';

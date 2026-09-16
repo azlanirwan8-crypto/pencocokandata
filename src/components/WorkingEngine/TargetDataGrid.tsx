@@ -48,6 +48,8 @@ export const TOGGLEABLE_COLUMNS: ColumnOption[] = [
   { key: 'Dati II', label: 'Dati II Target' },
   { key: 'Kode Dati II', label: 'Kode Dati II Target' },
   { key: 'Provinsi', label: 'Provinsi Target' },
+  { key: 'PTEN', label: 'Validasi PTEN' },
+  { key: 'RoleMapping', label: 'Tipe Unit & Alur Wondr' },
 ];
 
 interface TargetDataGridProps {
@@ -2124,6 +2126,18 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                 {!hiddenCols.has('Dati II') && <th>Dati II</th>}
                 {!hiddenCols.has('Kode Dati II') && <th>Kode Dati II</th>}
                 {!hiddenCols.has('Provinsi') && <th>Provinsi</th>}
+                {!hiddenCols.has('PTEN') && (
+                  <th style={{ color: '#0ab39c', textAlign: 'center', minWidth: '135px' }}>
+                    <div>Validasi PTEN</div>
+                    <div style={{ fontSize: '0.66rem', fontWeight: 500, color: '#878a99' }}>Kode Pos & Kota</div>
+                  </th>
+                )}
+                {!hiddenCols.has('RoleMapping') && (
+                  <th style={{ color: '#405189', textAlign: 'center', minWidth: '180px' }}>
+                    <div>Mapping Role BNI</div>
+                    <div style={{ fontSize: '0.66rem', fontWeight: 500, color: '#878a99' }}>Tipe Unit & Alur Wondr</div>
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -2338,6 +2352,108 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                       {!hiddenCols.has('Dati II') && <td>{r['Dati II'] || '-'}</td>}
                       {!hiddenCols.has('Kode Dati II') && <td className="code-cell">{r['Kode Dati II'] || '-'}</td>}
                       {!hiddenCols.has('Provinsi') && <td>{r.Provinsi || '-'}</td>}
+
+                      {/* Kolom Validasi PTEN */}
+                      {!hiddenCols.has('PTEN') && (
+                        <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                          {(() => {
+                            const ptenStatus = String(r['CEK KODE POS + PTEN'] || '').toUpperCase();
+                            if (ptenStatus === 'SAME' || ptenStatus === 'COCOK') {
+                              return (
+                                <span
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.25rem',
+                                    padding: '0.15rem 0.45rem',
+                                    borderRadius: '4px',
+                                    background: 'rgba(10, 179, 156, 0.12)',
+                                    color: '#0ab39c',
+                                    fontSize: '0.68rem',
+                                    fontWeight: 700,
+                                  }}
+                                  title={`PTEN: ${r['KOTA PTEN'] || '-'} (Kode Pos: ${r['KODE POS PTEN'] || r['KODE POS']})`}
+                                >
+                                  ✓ Cocok PTEN
+                                </span>
+                              );
+                            }
+                            if (ptenStatus === 'DIFFERENT' || ptenStatus === 'TIDAK COCOK') {
+                              return (
+                                <span
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.25rem',
+                                    padding: '0.15rem 0.45rem',
+                                    borderRadius: '4px',
+                                    background: 'rgba(247, 184, 75, 0.15)',
+                                    color: '#d97706',
+                                    fontSize: '0.68rem',
+                                    fontWeight: 700,
+                                  }}
+                                  title={`Beda Kota: Excel (${r['Dati II'] || '-'}) vs PTEN (${r['KOTA PTEN'] || '-'})`}
+                                >
+                                  ⚠️ Beda Kota ({r['KOTA PTEN'] || 'PTEN'})
+                                </span>
+                              );
+                            }
+                            return (
+                              <span
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  padding: '0.15rem 0.4rem',
+                                  borderRadius: '4px',
+                                  background: '#f3f6f9',
+                                  color: '#878a99',
+                                  fontSize: '0.68rem',
+                                  fontWeight: 500,
+                                }}
+                                title="Kode pos belum terdaftar di Master PTEN"
+                              >
+                                Belum di PTEN
+                              </span>
+                            );
+                          })()}
+                        </td>
+                      )}
+
+                      {/* Kolom Tipe Unit & Alur Wondr Mapping Role */}
+                      {!hiddenCols.has('RoleMapping') && (
+                        <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                          {r.organisasiRole || r.tipeUnitRole || r.alurWondr ? (
+                            <div style={{ display: 'inline-flex', flexDirection: 'column', gap: '0.15rem', alignItems: 'center' }}>
+                              <span
+                                style={{
+                                  fontSize: '0.68rem',
+                                  fontWeight: 700,
+                                  padding: '0.12rem 0.45rem',
+                                  borderRadius: '4px',
+                                  background:
+                                    r.tipeUnitRole?.includes('KC') || r.tipeUnitRole?.includes('Utama')
+                                      ? 'rgba(64, 81, 137, 0.12)'
+                                      : 'rgba(41, 156, 219, 0.12)',
+                                  color:
+                                    r.tipeUnitRole?.includes('KC') || r.tipeUnitRole?.includes('Utama')
+                                      ? '#405189'
+                                      : '#299cdb',
+                                }}
+                                title={r.organisasiRole ? `Unit: ${r.organisasiRole}` : undefined}
+                              >
+                                {r.tipeUnitRole || (r.organisasiRole ? 'Terpetakan' : '-')}
+                              </span>
+                              {r.alurWondr && (
+                                <span style={{ fontSize: '0.64rem', color: '#6c757d', fontWeight: 600 }}>
+                                  {r.alurWondr} {r.roleGrandTotal ? `(${r.roleGrandTotal} User)` : ''}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span style={{ color: '#adb5bd', fontSize: '0.72rem' }}>-</span>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })

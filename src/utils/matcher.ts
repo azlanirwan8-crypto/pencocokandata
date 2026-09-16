@@ -1,4 +1,6 @@
 import type { MasterRow, TargetRow, MasterHealth, WilayahSetting } from '../types';
+import type { RoleMappingRecord } from '../components/RoleMapping/RoleMappingManager';
+import type { PTENRecord } from '../components/PTENData/PTENManager';
 import {
   normalizeKodePos,
   textSimilarityScore,
@@ -6,6 +8,8 @@ import {
   cleanText,
   findSharedStreetOrLandmark,
 } from './normalizer.ts';
+import { resolveRoleMappingForBranch } from './roleMatcher';
+import { validatePtenForTarget } from './ptenMatcher';
 
 /**
  * Build fast O(1) In-Memory Hash Map index keyed by 5-digit KODE POS
@@ -59,11 +63,6 @@ export function analyzeMasterHealth(masterRows: MasterRow[], index: Map<string, 
 
 /**
  * Level 2 Tie-Breaker Algorithm for multi-candidate postal codes:
- * 1. Cocokkan teks Kecamatan Data Asli vs Master
- * 2. Jika masih > 1, cocokkan Kelurahan
- * 3. Jika masih > 1, gunakan kesamaan teks Dati II
- * 4. Analisis koridor nama jalan / landmark / mall pada Alamat
- * 5. Pilih baris master dengan skor kecocokan tertinggi
  */
 export function resolveLevel2TieBreaker(target: TargetRow, candidates: MasterRow[]): MasterRow {
   let bestCandidate = candidates[0];
@@ -77,7 +76,6 @@ export function resolveLevel2TieBreaker(target: TargetRow, candidates: MasterRow
     const streetMatch = findSharedStreetOrLandmark(target.ALAMAT || '', cand.ALAMAT || '');
     const streetBonus = streetMatch.isMatch ? 0.35 : 0;
 
-    // Weighted composite score prioritizes Kecamatan (0.4), Kelurahan (0.25), Dati II (0.15), Alamat & Koridor Jalan (0.2 + bonus jalan)
     const compositeScore = scoreKec * 0.4 + scoreKel * 0.25 + scoreDati * 0.15 + scoreAddr * 0.2 + streetBonus;
 
     if (compositeScore > bestScore) {
@@ -90,128 +88,158 @@ export function resolveLevel2TieBreaker(target: TargetRow, candidates: MasterRow
 }
 
 /**
- * Match a single target row against Master index and validate PTEN
+ * Match a single target row against Master index, PTEN index, and Role Mapping
  */
 export function matchSingleRow(
   target: TargetRow,
   masterIndex: Map<string, MasterRow[]>,
-  wilayahSettings?: WilayahSetting[]
+  wilayahSettings?: WilayahSetting[],
+  roleMappingList?: RoleMappingRecord[],
+  ptenIndex?: Map<string, PTENRecord>
 ): TargetRow {
-  // Jika baris ini sudah berstatus MATCH (misal dari file sebelumnya atau sudah disetujui dari rekomendasi), pertahankan data bersihnya!
-  if (target._isMatched && (target.Sandi || target['Sandi Cabang'] || target.Cabang)) {
-    return target;
-  }
-
   const result: TargetRow = { ...target };
 
   // 1. Standarisasi String Kode Pos
   const targetKp = normalizeKodePos(result['KODE POS']);
 
-  // 3. Hierarki Pencocokan Cabang dengan Geographic Integrity Check
-  const rawCandidates = targetKp ? masterIndex.get(targetKp) : undefined;
-  let candidates = rawCandidates;
+  // 2. Jika baris belum cocok, cari kandidat di Master Index
+  if (!result._isMatched || !result.Sandi) {
+    const rawCandidates = targetKp ? masterIndex.get(targetKp) : undefined;
+    let candidates = rawCandidates;
 
-  if (rawCandidates && rawCandidates.length > 0) {
-    const targetProv = String(result.Provinsi || '').trim().toUpperCase();
-    const targetDati = String(result['Dati II'] || '').trim().toUpperCase();
+    if (rawCandidates && rawCandidates.length > 0) {
+      const targetProv = String(result.Provinsi || '').trim().toUpperCase();
+      const targetDati = String(result['Dati II'] || '').trim().toUpperCase();
 
-    if (targetProv || targetDati) {
-      const geoMatched = rawCandidates.filter((cand) => {
-        const candProv = String(cand.Provinsi || '').trim().toUpperCase();
-        const candDati = String(cand['Dati II'] || '').trim().toUpperCase();
-        if (targetProv && candProv) {
-          // If provinces are explicitly specified and completely different (e.g. JAWA TIMUR vs SUMATERA BARAT)
-          const pTarget = targetProv.replace(/PROVINSI\s*/i, '').trim();
-          const pCand = candProv.replace(/PROVINSI\s*/i, '').trim();
-          if (pTarget && pCand && !pTarget.includes(pCand) && !pCand.includes(pTarget)) {
-            return false;
+      if (targetProv || targetDati) {
+        const geoMatched = rawCandidates.filter((cand) => {
+          const candProv = String(cand.Provinsi || '').trim().toUpperCase();
+          const candDati = String(cand['Dati II'] || '').trim().toUpperCase();
+          if (targetProv && candProv) {
+            const pTarget = targetProv.replace(/PROVINSI\s*/i, '').trim();
+            const pCand = candProv.replace(/PROVINSI\s*/i, '').trim();
+            if (pTarget && pCand && !pTarget.includes(pCand) && !pCand.includes(pTarget)) {
+              return false;
+            }
           }
-        }
-        if (targetDati && candDati) {
-          const dTarget = targetDati.replace(/^KOTA\s+ADM\.?\s*|^KABUPATEN\s*|^KAB\.\s*/i, '').trim();
-          const dCand = candDati.replace(/^KOTA\s+ADM\.?\s*|^KABUPATEN\s*|^KAB\.\s*/i, '').trim();
-          if (dTarget && dCand && !dTarget.includes(dCand) && !dCand.includes(dTarget) && targetProv && candProv) {
-            // High confidence mismatch
-            return false;
+          if (targetDati && candDati) {
+            const dTarget = targetDati.replace(/^KOTA\s+ADM\.?\s*|^KABUPATEN\s*|^KAB\.\s*/i, '').trim();
+            const dCand = candDati.replace(/^KOTA\s+ADM\.?\s*|^KABUPATEN\s*|^KAB\.\s*/i, '').trim();
+            if (dTarget && dCand && !dTarget.includes(dCand) && !dCand.includes(dTarget) && targetProv && candProv) {
+              return false;
+            }
           }
-        }
-        return true;
-      });
+          return true;
+        });
 
-      if (geoMatched.length > 0) {
-        candidates = geoMatched;
-      } else {
-        // Discrepancy: Candidate has same postal code but different province. Do not auto-match cross-island.
-        candidates = undefined;
+        if (geoMatched.length > 0) {
+          candidates = geoMatched;
+        } else {
+          candidates = undefined;
+        }
       }
     }
+
+    if (candidates && candidates.length > 0) {
+      let matchedMaster: MasterRow;
+
+      if (candidates.length === 1) {
+        matchedMaster = candidates[0];
+        result._matchLevel = 'level1';
+      } else {
+        matchedMaster = resolveLevel2TieBreaker(result, candidates);
+        result._matchLevel = 'level2';
+      }
+
+      // Auto-populate 7 atribut master
+      if (matchedMaster['Sandi Cabang']) {
+        result['Sandi Cabang'] = matchedMaster['Sandi Cabang'];
+      }
+      result.Sandi = matchedMaster.Sandi || matchedMaster['Sandi Cabang'] || '';
+      result.Cabang = matchedMaster.Cabang || matchedMaster['Sandi Cabang'] || '';
+      result['Branch Code'] = matchedMaster['Branch Code'] || '';
+      result['Kode Cabang'] = matchedMaster['Kode Cabang'] || '';
+      result['Nama Outlet'] = matchedMaster['Nama Outlet'] || '';
+      result['Status Outlet'] = matchedMaster['Status Outlet'] || '';
+      result.ALAMAT = matchedMaster.ALAMAT || '';
+
+      // Pengayaan Otomatis Wilayah
+      const resolvedWilayah = extractWilayahFromBranchCode(
+        matchedMaster['Branch Code'] || matchedMaster['Kode Cabang'] || result['Branch Code'] || result['Kode Cabang'] || '',
+        wilayahSettings,
+        matchedMaster.Wilayah || result.Wilayah || '-'
+      );
+      if (resolvedWilayah.wilayahName && resolvedWilayah.wilayahName !== '-') {
+        result.Wilayah = resolvedWilayah.wilayahName;
+      }
+
+      result._isMatched = true;
+      result._matchedAt = target._matchedAt || new Date().toISOString();
+      result._matchedBy = target._matchedBy || 'System (Auto)';
+    } else {
+      result['Sandi Cabang'] = '';
+      result.Sandi = '';
+      result.Cabang = '';
+      result['Branch Code'] = '';
+      result['Kode Cabang'] = '';
+      result['Nama Outlet'] = '';
+      result['Status Outlet'] = '';
+      result.ALAMAT = '';
+
+      result._isMatched = false;
+      result._matchLevel = 'none';
+    }
   }
 
-  if (candidates && candidates.length > 0) {
-    let matchedMaster: MasterRow;
-
-    if (candidates.length === 1) {
-      // Single Candidate (1-to-1)
-      matchedMaster = candidates[0];
-      result._matchLevel = 'level1';
-    } else {
-      // Multiple Candidates (1-to-Many): Level 2 Tie-Breaker
-      matchedMaster = resolveLevel2TieBreaker(result, candidates);
-      result._matchLevel = 'level2';
-    }
-
-    // Auto-populate 7 atribut master (mendukung Sandi Cabang 1 kolom maupun terpisah)
-    if (matchedMaster['Sandi Cabang']) {
-      result['Sandi Cabang'] = matchedMaster['Sandi Cabang'];
-    }
-    result.Sandi = matchedMaster.Sandi || matchedMaster['Sandi Cabang'] || '';
-    result.Cabang = matchedMaster.Cabang || matchedMaster['Sandi Cabang'] || '';
-    result['Branch Code'] = matchedMaster['Branch Code'] || '';
-    result['Kode Cabang'] = matchedMaster['Kode Cabang'] || '';
-    result['Nama Outlet'] = matchedMaster['Nama Outlet'] || '';
-    result['Status Outlet'] = matchedMaster['Status Outlet'] || '';
-    result.ALAMAT = matchedMaster.ALAMAT || '';
-
-    // Pengayaan Otomatis Wilayah berdasarkan 2 digit kode branch (Setting Wilayah)
-    const resolvedWilayah = extractWilayahFromBranchCode(
-      matchedMaster['Branch Code'] || matchedMaster['Kode Cabang'] || result['Branch Code'] || result['Kode Cabang'] || '',
-      wilayahSettings,
-      matchedMaster.Wilayah || result.Wilayah || '-'
+  // 3. Validasi & Pengayaan PTEN Otomatis
+  if (ptenIndex && ptenIndex.size > 0) {
+    const ptenValidation = validatePtenForTarget(
+      result['KODE POS'],
+      result['Dati II'] || result.Kota || '',
+      ptenIndex
     );
-    if (resolvedWilayah.wilayahName && resolvedWilayah.wilayahName !== '-') {
-      result.Wilayah = resolvedWilayah.wilayahName;
-    }
-
-    result._isMatched = true;
-    result._matchedAt = target._matchedAt || new Date().toISOString();
-    result._matchedBy = target._matchedBy || 'System (Auto)';
+    result['KOTA PTEN'] = ptenValidation.kotaPten;
+    result['KODE POS PTEN'] = ptenValidation.kodePosPten;
+    result['CEK KODE POS + PTEN'] = ptenValidation.statusPten;
   } else {
-    // No Candidate (0 Match): Kolom 3 s.d. 9 dibiarkan kosong (blank). Data asli tetap utuh.
-    result['Sandi Cabang'] = '';
-    result.Sandi = '';
-    result.Cabang = '';
-    result['Branch Code'] = '';
-    result['Kode Cabang'] = '';
-    result['Nama Outlet'] = '';
-    result['Status Outlet'] = '';
-    // ALAMAT dibiarkan atau di-reset kosong sesuai kamus data BRD jika unmatched
-    result.ALAMAT = '';
-
-    result._isMatched = false;
-    result._matchLevel = 'none';
+    // Fallback PTEN check jika kolom KODE POS PTEN sudah ada di row
+    const targetKpClean = normalizeKodePos(result['KODE POS']);
+    const ptenKpClean = normalizeKodePos(result['KODE POS PTEN']);
+    if (targetKpClean && ptenKpClean) {
+      result['CEK KODE POS + PTEN'] = targetKpClean === ptenKpClean ? 'SAME' : 'DIFFERENT';
+    } else if (!result['CEK KODE POS + PTEN']) {
+      result['CEK KODE POS + PTEN'] = 'NOT_FOUND';
+    }
   }
 
-  // 4. Evaluasi Otomatis Integritas PTEN (KODE POS vs KODE POS PTEN)
-  const targetKpClean = normalizeKodePos(result['KODE POS']);
-  const ptenKpClean = normalizeKodePos(result['KODE POS PTEN']);
-  if (targetKpClean && ptenKpClean) {
-    if (targetKpClean === ptenKpClean) {
-      result['CEK KODE POS + PTEN'] = 'COCOK';
-    } else {
-      result['CEK KODE POS + PTEN'] = 'TIDAK COCOK';
+  // 4. Validasi & Pengayaan Database Mapping Role (Smart Multi-Tier Lookup)
+  // Menghubungkan Kelurahan/Kecamatan/Cabang (contoh: Pagutan -> KC MATARAM -> MATARAM BRANCH OFFICE)
+  if (roleMappingList && roleMappingList.length > 0) {
+    const branchCandidateName =
+      result['Nama Outlet'] ||
+      result.Cabang ||
+      result['Sandi Cabang'] ||
+      result.Sandi ||
+      '';
+
+    const roleResolution = resolveRoleMappingForBranch(
+      branchCandidateName,
+      result['Dati II'] || result.Kota,
+      result.Kelurahan,
+      result.Kecamatan,
+      roleMappingList
+    );
+
+    if (roleResolution) {
+      result.organisasiRole = roleResolution.organisasiRole;
+      result.tipeUnitRole = roleResolution.tipeUnitRole;
+      result.alurWondr = roleResolution.alurWondr;
+      result.flowDescription = roleResolution.flowDescription;
+      result.roleCabsal = roleResolution.qrsCabsal;
+      result.roleCabapv1 = roleResolution.qrsCabapv1;
+      result.roleCabapv2 = roleResolution.qrsCabapv2;
+      result.roleGrandTotal = roleResolution.grandTotal;
     }
-  } else if (!result['CEK KODE POS + PTEN']) {
-    result['CEK KODE POS + PTEN'] = '-';
   }
 
   // 5. Evaluasi Status Keberadaan di BNI (SUDAH ADA DI BNI vs BELUM ADA DI BNI)
@@ -229,14 +257,15 @@ export function matchSingleRow(
 
 /**
  * Non-blocking Chunk Streaming Matching Engine (Anti-Stopper)
- * Breaks workload into chunks (e.g. 1000 - 2500 rows) using setTimeout to prevent UI freeze
  */
 export function executeChunkMatching(
   targetRows: TargetRow[],
   masterIndex: Map<string, MasterRow[]>,
   onProgress: (progress: number, processed: number, total: number) => void,
   chunkSize = 1000,
-  wilayahSettings?: WilayahSetting[]
+  wilayahSettings?: WilayahSetting[],
+  roleMappingList?: RoleMappingRecord[],
+  ptenIndex?: Map<string, PTENRecord>
 ): Promise<TargetRow[]> {
   return new Promise((resolve) => {
     const total = targetRows.length;
@@ -253,7 +282,13 @@ export function executeChunkMatching(
       const end = Math.min(currentIndex + chunkSize, total);
 
       for (let i = currentIndex; i < end; i++) {
-        matchedResults[i] = matchSingleRow(targetRows[i], masterIndex, wilayahSettings);
+        matchedResults[i] = matchSingleRow(
+          targetRows[i],
+          masterIndex,
+          wilayahSettings,
+          roleMappingList,
+          ptenIndex
+        );
       }
 
       currentIndex = end;
@@ -261,11 +296,8 @@ export function executeChunkMatching(
       onProgress(progressPercent, currentIndex, total);
 
       if (currentIndex < total) {
-        // Yield control to main thread so browser renders progress bar and stays responsive
         setTimeout(processNextChunk, 0);
       } else {
-        // ROW INTEGRITY ASSERTION:
-        // "Sistem menjalankan validasi ketat otomatis: assert total_downloaded_rows == total_uploaded_rows"
         if (matchedResults.length !== total) {
           throw new Error(`CRITICAL ROW INTEGRITY FAILURE: Output ${matchedResults.length} != Input ${total}`);
         }
@@ -273,7 +305,7 @@ export function executeChunkMatching(
       }
     }
 
-    // Begin first chunk asynchronously
     setTimeout(processNextChunk, 0);
   });
 }
+
