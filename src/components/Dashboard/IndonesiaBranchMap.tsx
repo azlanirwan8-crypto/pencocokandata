@@ -543,6 +543,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
 
   const anomalyRows: AnomalyItem[] = useMemo(() => {
+    if (!showAnomalyPanel) return [];
     const masterByIdentity = new Map<string, MasterRow>();
     masterRows.forEach((master) => {
       [master['Branch Code'], master['Kode Cabang'], master['Sandi Cabang'], master.Sandi, master.Cabang, master['Nama Outlet']]
@@ -645,7 +646,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         },
       ];
     });
-  }, [targetRows, masterRows, resolvedCoords]);
+  }, [targetRows, masterRows, resolvedCoords, showAnomalyPanel]);
 
   const filteredAnomalyRows = useMemo(() => {
     if (anomalyTypeFilter === 'ALL') return anomalyRows;

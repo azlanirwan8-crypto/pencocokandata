@@ -98,24 +98,6 @@ export const App: React.FC = () => {
     return analyzeMasterHealth(masterRows, masterIndex);
   }, [masterRows, masterIndex]);
 
-  // Function to refresh PTEN and Role Mapping counts
-  const refreshMasterCounts = async () => {
-    try {
-      const [savedPten, savedRoleMapping] = await Promise.all([
-        getItem<any[]>('pten_records').catch(() => null),
-        getItem<any[]>('role_mapping_data').catch(() => null),
-      ]);
-      if (savedPten && Array.isArray(savedPten)) {
-        setPtenCount(savedPten.length);
-      }
-      if (savedRoleMapping && Array.isArray(savedRoleMapping)) {
-        setRoleMappingCount(savedRoleMapping.length);
-      }
-    } catch (e) {
-      console.warn('Count refresh warning:', e);
-    }
-  };
-
   // Restore persisted data (Instant Cache-First + Parallel Cloud Revalidation)
   useEffect(() => {
     const restoreSavedData = async () => {
@@ -274,6 +256,18 @@ export const App: React.FC = () => {
       .filter((w) => w && w !== 'Tanpa Wilayah')
       .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
   }, [targetRows, masterRows, wilayahSettings]);
+
+  // Pre-aggregated count of target rows per wilayah (O(N) single pass instead of O(N*M))
+  const targetWilayahCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (let i = 0; i < targetRows.length; i++) {
+      const w = String(targetRows[i].Wilayah || '').trim();
+      if (w) {
+        map.set(w, (map.get(w) || 0) + 1);
+      }
+    }
+    return map;
+  }, [targetRows]);
 
   // Filtered Target Rows (Optimized with early return for millions of records)
   const filteredTargetRows = useMemo(() => {
@@ -782,10 +776,7 @@ export const App: React.FC = () => {
       {/* 1. Velzon Left Sidebar (Dashboard, Data Analisa, Data Master) */}
       <Sidebar
         activeTab={activeTab}
-        setActiveTab={(tab) => {
-          setActiveTab(tab);
-          refreshMasterCounts();
-        }}
+        setActiveTab={setActiveTab}
         isCollapsed={isSidebarCollapsed}
         masterCount={masterRows.length}
         targetCount={targetRows.length}
@@ -866,7 +857,7 @@ export const App: React.FC = () => {
                       >
                         <option value="ALL">Semua Wilayah ({targetRows.length.toLocaleString('id-ID')} Data)</option>
                         {wilayahList.map((w) => {
-                          const countW = targetRows.filter(r => String(r.Wilayah || '').trim() === String(w).trim()).length;
+                          const countW = targetWilayahCounts.get(String(w).trim()) || 0;
                           return (
                             <option key={w} value={w}>
                               {formatWilayahName(w)} ({countW.toLocaleString('id-ID')} Data)

@@ -900,27 +900,15 @@ export function generateRecommendationsProgressive(
     }
   };
 
-  // STEP 1: Process initial fast batch synchronously (< 15ms)
-  const firstBatchCount = Math.min(initialBatchSize, unmatchedRows.length);
-  for (let i = 0; i < firstBatchCount; i++) {
-    const res = processRow(unmatchedRows[i]);
-    if (res) allResults.push(res);
-  }
-
-  const isCompleteImmediately = firstBatchCount >= unmatchedRows.length;
-  onBatch([...allResults], isCompleteImmediately, firstBatchCount);
-
-  if (isCompleteImmediately) {
-    return () => {};
-  }
-
-  // STEP 2: Process remaining items in chunks asynchronously
-  let currentIndex = firstBatchCount;
+  // STEP 1: Process initial fast batch in next microtask/macrotask (0ms blocking on mount)
+  let currentIndex = 0;
+  let timerId: ReturnType<typeof setTimeout> | null = null;
 
   const processNextChunk = () => {
     if (isCancelled) return;
 
-    const chunkEnd = Math.min(currentIndex + chunkSize, unmatchedRows.length);
+    const currentBatchSize = currentIndex === 0 ? Math.min(initialBatchSize, unmatchedRows.length) : chunkSize;
+    const chunkEnd = Math.min(currentIndex + currentBatchSize, unmatchedRows.length);
     for (let i = currentIndex; i < chunkEnd; i++) {
       const res = processRow(unmatchedRows[i]);
       if (res) allResults.push(res);
@@ -931,14 +919,14 @@ export function generateRecommendationsProgressive(
     onBatch([...allResults], isDone, currentIndex);
 
     if (!isDone && !isCancelled) {
-      setTimeout(processNextChunk, 0);
+      timerId = setTimeout(processNextChunk, 0);
     }
   };
 
-  const timerId = setTimeout(processNextChunk, 0);
+  timerId = setTimeout(processNextChunk, 0);
 
   return () => {
     isCancelled = true;
-    clearTimeout(timerId);
+    if (timerId) clearTimeout(timerId);
   };
 }
