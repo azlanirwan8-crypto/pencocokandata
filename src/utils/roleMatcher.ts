@@ -74,7 +74,8 @@ export function resolveRoleMappingForBranch(
   kelurahan?: string,
   kecamatan?: string,
   alamat?: string,
-  roleList: RoleMappingRecord[] = []
+  roleList: RoleMappingRecord[] = [],
+  outletName?: string
 ): ResolvedRoleMapping | null {
   if (!roleList || roleList.length === 0) return null;
 
@@ -84,6 +85,7 @@ export function resolveRoleMappingForBranch(
   }
 
   const cleanBranch = normalizeBranchName(branchName);
+  const cleanOutlet = normalizeBranchName(outletName || '');
   const cleanCity = cleanDati(dati2 || '')
     .replace(/^(KOTA|KABUPATEN|KAB)\s+/i, '')
     .trim()
@@ -92,7 +94,7 @@ export function resolveRoleMappingForBranch(
   const cleanKec = cleanText(kecamatan || '').toUpperCase();
   const cleanAlm = cleanText(alamat || '').toUpperCase();
 
-  const cacheKey = `${cleanBranch}|${cleanCity}|${cleanKel}|${cleanKec}|${cleanAlm.slice(0, 30)}`;
+  const cacheKey = `${cleanBranch}|${cleanOutlet}|${cleanCity}|${cleanKel}|${cleanKec}|${cleanAlm.slice(0, 30)}`;
   if (roleResolveCache.has(cacheKey)) {
     return roleResolveCache.get(cacheKey) || null;
   }
@@ -105,21 +107,12 @@ export function resolveRoleMappingForBranch(
     const orgClean = normalizeBranchName(record.organisasiTujuan);
     let score = 0;
 
-    // ── TIER 1: Exact normalized branch name ─────────────────────────────
-    if (cleanBranch && orgClean === cleanBranch) {
+    // ── TIER 1: Exact normalized branch or outlet match ──────────────────
+    if ((cleanBranch && orgClean === cleanBranch) || (cleanOutlet && orgClean === cleanOutlet)) {
       score = 100;
     }
 
-    // ── TIER 2: Substring containment ─────────────────────────────────────
-    if (score === 0 && cleanBranch) {
-      const branchInOrg = orgClean.includes(cleanBranch);
-      const orgInBranch = cleanBranch.includes(orgClean) && orgClean.length >= 4;
-      if (branchInOrg || orgInBranch) {
-        score = 85;
-      }
-    }
-
-    // ── TIER 3: Sub-branch part matching ─────────────────────────────────
+    // ── TIER 2: Sub-branch part matching (e.g. BANJARMASIN BRANCH OFFICE - PASAR BARU SUB BRANCH) ──
     if (orgUpper.includes(' - ')) {
       const dashIdx = orgUpper.indexOf(' - ');
       const parentPart = orgUpper.substring(0, dashIdx);
@@ -127,8 +120,23 @@ export function resolveRoleMappingForBranch(
       const subPartClean = normalizeBranchName(subPart);
       const parentClean = normalizeBranchName(parentPart);
 
+      // Both Parent and Outlet match perfectly (e.g. Cabang BANJARMASIN + Outlet PASAR BARU)
+      if (
+        (cleanBranch && parentClean.includes(cleanBranch) && cleanOutlet && subPartClean.includes(cleanOutlet)) ||
+        (cleanOutlet && parentClean.includes(cleanOutlet) && cleanBranch && subPartClean.includes(cleanBranch))
+      ) {
+        score = 100;
+      }
+
+      // Sub-branch name vs outlet name
+      if (score < 99 && cleanOutlet && subPartClean.length >= 3) {
+        if (subPartClean === cleanOutlet || subPartClean.includes(cleanOutlet) || cleanOutlet.includes(subPartClean)) {
+          score = Math.max(score, 99);
+        }
+      }
+
       // Sub-branch name vs branch name
-      if (cleanBranch && subPartClean.length >= 3) {
+      if (score < 98 && cleanBranch && subPartClean.length >= 3) {
         if (subPartClean === cleanBranch || subPartClean.includes(cleanBranch) || cleanBranch.includes(subPartClean)) {
           score = Math.max(score, 98);
         }
@@ -157,6 +165,20 @@ export function resolveRoleMappingForBranch(
       }
     }
 
+    // ── TIER 3: Substring containment ─────────────────────────────────────
+    if (score === 0) {
+      if (cleanOutlet) {
+        const outletInOrg = orgClean.includes(cleanOutlet);
+        const orgInOutlet = cleanOutlet.includes(orgClean) && orgClean.length >= 4;
+        if (outletInOrg || orgInOutlet) score = 88;
+      }
+      if (score === 0 && cleanBranch) {
+        const branchInOrg = orgClean.includes(cleanBranch);
+        const orgInBranch = cleanBranch.includes(orgClean) && orgClean.length >= 4;
+        if (branchInOrg || orgInBranch) score = 85;
+      }
+    }
+
     // ── TIER 4: Address scanning ─────────────────────────────────────────
     if (score < 80 && cleanAlm && orgClean.length >= 4) {
       if (cleanAlm.includes(orgClean)) {
@@ -168,7 +190,6 @@ export function resolveRoleMappingForBranch(
     if (score === 0 && cleanCity.length >= 3) {
       if (orgClean.includes(cleanCity) || cleanCity.includes(orgClean)) {
         const isKc = getUnitCategory(record.organisasiTujuan) === 'KC';
-        // KC (main branch) scores higher: more reliable parent
         score = isKc ? 75 : 60;
       }
     }
@@ -180,10 +201,10 @@ export function resolveRoleMappingForBranch(
     }
 
     // ── TIER 7: Token-intersection fallback ──────────────────────────────
-    if (score === 0 && cleanBranch.length >= 3) {
-      const ratio = tokenIntersectionRatio(cleanBranch, orgClean, 3);
+    if (score === 0 && (cleanBranch.length >= 3 || cleanOutlet.length >= 3)) {
+      const targetToken = cleanOutlet || cleanBranch;
+      const ratio = tokenIntersectionRatio(targetToken, orgClean, 3);
       if (ratio >= 0.5) {
-        // Max score from this tier is 49 (below threshold if only here)
         score = Math.round(ratio * 70);
       }
     }
@@ -216,4 +237,237 @@ export function resolveRoleMappingForBranch(
 
   roleResolveCache.set(cacheKey, null);
   return null;
+}
+
+export interface RoleMasterAuditResult {
+  hasRole: boolean;
+  hasMaster: boolean;
+  isNameMatched: boolean;
+  isTypeMatched: boolean;
+  isFullyConsistent: boolean;
+  nameStatus: 'exact' | 'similar' | 'different' | 'none';
+  typeStatus: 'match' | 'mismatch' | 'none';
+  masterType: 'KC' | 'KCP' | 'UNKNOWN';
+  roleType: 'KC' | 'KCP' | 'UNKNOWN';
+  badgeLabel: string;
+  badgeColor: string;
+  badgeBg: string;
+  badgeBorder: string;
+  cardBg: string;
+  cardBorder: string;
+  tooltip: string;
+}
+
+/**
+ * Membandingkan keselarasan Nama Outlet (Master), Status Outlet (Master), dan Cabang (Master)
+ * dengan Data Mapping Role BNI (organisasiRole & tipeUnitRole).
+ * Memberikan evaluasi ketat, warna status, dan tooltip peringatan jika terdapat ketidakcocokan.
+ */
+export function auditRoleMasterConsistency(row: {
+  'Nama Outlet'?: string;
+  'Status Outlet'?: string;
+  Cabang?: string;
+  'Sandi Cabang'?: string;
+  organisasiRole?: string;
+  tipeUnitRole?: string;
+}): RoleMasterAuditResult {
+  const masterOutletRaw = String(row['Nama Outlet'] || '').trim();
+  const masterCabangRaw = String(row.Cabang || row['Sandi Cabang'] || '').trim();
+  const masterStatusRaw = String(row['Status Outlet'] || '').trim().toUpperCase();
+  const roleOrgRaw = String(row.organisasiRole || '').trim();
+  const roleTipeRaw = String(row.tipeUnitRole || '').trim();
+
+  const hasMaster = Boolean(masterOutletRaw || masterCabangRaw);
+  const hasRole = Boolean(roleOrgRaw);
+
+  if (!hasMaster && !hasRole) {
+    return {
+      hasRole: false,
+      hasMaster: false,
+      isNameMatched: true,
+      isTypeMatched: true,
+      isFullyConsistent: true,
+      nameStatus: 'none',
+      typeStatus: 'none',
+      masterType: 'UNKNOWN',
+      roleType: 'UNKNOWN',
+      badgeLabel: '-',
+      badgeColor: '#878a99',
+      badgeBg: '#f3f4f6',
+      badgeBorder: '#e5e7eb',
+      cardBg: '#ffffff',
+      cardBorder: '#e9ebec',
+      tooltip: 'Tidak ada data master dan role',
+    };
+  }
+
+  if (!hasMaster || !hasRole) {
+    return {
+      hasRole,
+      hasMaster,
+      isNameMatched: false,
+      isTypeMatched: false,
+      isFullyConsistent: false,
+      nameStatus: 'none',
+      typeStatus: 'none',
+      masterType: 'UNKNOWN',
+      roleType: 'UNKNOWN',
+      badgeLabel: hasRole ? 'Belum Ada Master' : 'Belum Terpetakan',
+      badgeColor: '#6b7280',
+      badgeBg: '#f3f4f6',
+      badgeBorder: '#e5e7eb',
+      cardBg: '#fcfdfe',
+      cardBorder: '#e9ecef',
+      tooltip: hasRole ? 'Mapping role terisi namun data master kosong' : 'Data master ada namun belum terpetakan ke mapping role',
+    };
+  }
+
+  // 1. Ekstraksi Tipe Unit Master
+  let masterType: 'KC' | 'KCP' | 'UNKNOWN' = 'UNKNOWN';
+  if (
+    masterStatusRaw === 'KC' ||
+    masterStatusRaw.includes('CABANG UTAMA') ||
+    masterStatusRaw.includes('BRANCH OFFICE') ||
+    masterStatusRaw.includes('KANWIL')
+  ) {
+    masterType = 'KC';
+  } else if (
+    masterStatusRaw === 'KCP' ||
+    masterStatusRaw === 'KK' ||
+    masterStatusRaw.includes('KANTOR KAS') ||
+    masterStatusRaw.includes('PEMBANTU') ||
+    masterStatusRaw.includes('SUB BRANCH') ||
+    masterStatusRaw.includes('OUTLET') ||
+    masterStatusRaw.includes('KLN')
+  ) {
+    masterType = 'KCP';
+  } else {
+    // Coba tebak dari teks nama outlet & cabang
+    const combinedMasterText = `${masterOutletRaw} ${masterCabangRaw}`.toUpperCase();
+    if (/\b(KCP|KK|KAS|KLN|PEMBANTU)\b/.test(combinedMasterText)) {
+      masterType = 'KCP';
+    } else if (/\b(KC|UTAMA|BRANCH OFFICE)\b/.test(combinedMasterText)) {
+      masterType = 'KC';
+    }
+  }
+
+  // 2. Ekstraksi Tipe Unit Role
+  let roleType: 'KC' | 'KCP' | 'UNKNOWN' = 'UNKNOWN';
+  if (roleTipeRaw.includes('KC') || roleTipeRaw.includes('Utama') || getUnitCategory(roleOrgRaw) === 'KC') {
+    roleType = 'KC';
+  } else if (roleTipeRaw.includes('KCP') || roleTipeRaw.includes('Outlet') || getUnitCategory(roleOrgRaw) === 'KCP') {
+    roleType = 'KCP';
+  }
+
+  // 3. Evaluasi Keselarasan Nama Unit
+  const cleanOutlet = normalizeBranchName(masterOutletRaw);
+  const cleanCabang = normalizeBranchName(masterCabangRaw);
+  const cleanRoleOrg = normalizeBranchName(roleOrgRaw);
+
+  let nameStatus: 'exact' | 'similar' | 'different' | 'none' = 'different';
+
+  let roleParentClean = '';
+  let roleSubClean = '';
+  if (roleOrgRaw.toUpperCase().includes(' - ')) {
+    const parts = roleOrgRaw.toUpperCase().split(' - ');
+    roleParentClean = normalizeBranchName(parts[0] || '');
+    roleSubClean = normalizeBranchName(parts[1] || '');
+  }
+
+  // Cek apakah ada kecocokan nama
+  const isExactOrgMatch =
+    (cleanOutlet && cleanRoleOrg === cleanOutlet) ||
+    (cleanCabang && cleanRoleOrg === cleanCabang);
+
+  const isSubMatch =
+    (cleanOutlet && roleSubClean && (roleSubClean.includes(cleanOutlet) || cleanOutlet.includes(roleSubClean))) ||
+    (cleanCabang && roleParentClean && (roleParentClean.includes(cleanCabang) || cleanCabang.includes(roleParentClean)));
+
+  const isSubstringMatch =
+    (cleanOutlet && cleanOutlet.length >= 3 && cleanRoleOrg.includes(cleanOutlet)) ||
+    (cleanCabang && cleanCabang.length >= 3 && cleanRoleOrg.includes(cleanCabang));
+
+  if (isExactOrgMatch || (cleanOutlet && cleanCabang && roleParentClean.includes(cleanCabang) && roleSubClean.includes(cleanOutlet))) {
+    nameStatus = 'exact';
+  } else if (isSubMatch || isSubstringMatch) {
+    nameStatus = 'similar';
+  } else {
+    nameStatus = 'different';
+  }
+
+  const isNameMatched = nameStatus === 'exact' || nameStatus === 'similar';
+
+  // 4. Evaluasi Keselarasan Tipe Unit
+  let typeStatus: 'match' | 'mismatch' | 'none' = 'none';
+  if (masterType !== 'UNKNOWN' && roleType !== 'UNKNOWN') {
+    typeStatus = masterType === roleType ? 'match' : 'mismatch';
+  } else {
+    typeStatus = 'match'; // Netral jika master status tidak spesifik KC/KCP
+  }
+
+  const isTypeMatched = typeStatus !== 'mismatch';
+  const isFullyConsistent = isNameMatched && isTypeMatched;
+
+  // 5. Tentukan Gaya Warna, Pesan, dan Tooltip
+  if (isFullyConsistent) {
+    return {
+      hasRole: true,
+      hasMaster: true,
+      isNameMatched: true,
+      isTypeMatched: true,
+      isFullyConsistent: true,
+      nameStatus,
+      typeStatus,
+      masterType,
+      roleType,
+      badgeLabel: '✓ Sesuai Master',
+      badgeColor: '#059669',
+      badgeBg: 'rgba(16, 185, 129, 0.1)',
+      badgeBorder: 'rgba(16, 185, 129, 0.3)',
+      cardBg: '#fcfdfe',
+      cardBorder: '#e2e8f0',
+      tooltip: `✓ Unit & Status sesuai Master (Cabang: ${masterCabangRaw || '-'}, Outlet: ${masterOutletRaw || '-'}, Status: ${masterStatusRaw || '-'})`,
+    };
+  }
+
+  if (nameStatus === 'different') {
+    return {
+      hasRole: true,
+      hasMaster: true,
+      isNameMatched: false,
+      isTypeMatched,
+      isFullyConsistent: false,
+      nameStatus,
+      typeStatus,
+      masterType,
+      roleType,
+      badgeLabel: '⚠️ Unit Beda dgn Master',
+      badgeColor: '#dc2626',
+      badgeBg: 'rgba(239, 68, 68, 0.1)',
+      badgeBorder: 'rgba(239, 68, 68, 0.3)',
+      cardBg: 'rgba(239, 68, 68, 0.03)',
+      cardBorder: '#fca5a5',
+      tooltip: `⚠️ Nama Unit Mapping Role (${roleOrgRaw}) berbeda dengan Master Outlet (${[masterCabangRaw, masterOutletRaw].filter(Boolean).join(' / ')})`,
+    };
+  }
+
+  // Kasus Beda Tipe (Nama serupa tapi Master KC vs Role KCP atau sebaliknya)
+  return {
+    hasRole: true,
+    hasMaster: true,
+    isNameMatched: true,
+    isTypeMatched: false,
+    isFullyConsistent: false,
+    nameStatus,
+    typeStatus,
+    masterType,
+    roleType,
+    badgeLabel: `⚠️ Beda Tipe (${masterType} vs ${roleType})`,
+    badgeColor: '#d97706',
+    badgeBg: 'rgba(245, 158, 11, 0.12)',
+    badgeBorder: 'rgba(245, 158, 11, 0.35)',
+    cardBg: 'rgba(245, 158, 11, 0.03)',
+    cardBorder: '#fcd34d',
+    tooltip: `⚠️ Tipe unit berbeda: Master berstatus ${masterType} (${masterStatusRaw || '-'}), sedangkan Role berstatus ${roleType} (${roleTipeRaw || '-'})`,
+  };
 }

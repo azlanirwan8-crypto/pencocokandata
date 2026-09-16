@@ -548,14 +548,16 @@ export const App: React.FC = () => {
           // 1. Validasi PTEN Instan
           const ptenRes = validatePtenForTarget(r['KODE POS'], r['Dati II'] || r.Kota || '', ptenIndex);
           // 2. Validasi Role Mapping jika ada nama cabang
-          const branchCandidate = r['Nama Outlet'] || r.Cabang || r['Sandi Cabang'] || r.Sandi || '';
+          const branchCandidate = r.Cabang || r['Sandi Cabang'] || r['Nama Outlet'] || r.Sandi || '';
+          const outletCandidate = r['Nama Outlet'] || '';
           const roleRes = resolveRoleMappingForBranch(
             branchCandidate,
             r['Dati II'] || r.Kota,
             r.Kelurahan,
             r.Kecamatan,
             r.ALAMAT,
-            roleMappingList
+            roleMappingList,
+            outletCandidate
           );
 
           return {
@@ -580,14 +582,16 @@ export const App: React.FC = () => {
         // Mode Replace (default): Urutan 100% murni persis sesuai file Excel yang diunggah
         finalRows = newRows.map((r, idx) => {
           const ptenRes = validatePtenForTarget(r['KODE POS'], r['Dati II'] || r.Kota || '', ptenIndex);
-          const branchCandidate = r['Nama Outlet'] || r.Cabang || r['Sandi Cabang'] || r.Sandi || '';
+          const branchCandidate = r.Cabang || r['Sandi Cabang'] || r['Nama Outlet'] || r.Sandi || '';
+          const outletCandidate = r['Nama Outlet'] || '';
           const roleRes = resolveRoleMappingForBranch(
             branchCandidate,
             r['Dati II'] || r.Kota,
             r.Kelurahan,
             r.Kecamatan,
             r.ALAMAT,
-            roleMappingList
+            roleMappingList,
+            outletCandidate
           );
 
           return {
@@ -714,14 +718,16 @@ export const App: React.FC = () => {
 
           // Validasi PTEN & Role Mapping untuk rekomendasi
           const ptenRes = validatePtenForTarget(row['KODE POS'], row['Dati II'] || row.Kota || '', ptenIndex);
-          const branchNameToLook = matchedMaster['Nama Outlet'] || matchedMaster.Cabang || matchedMaster['Sandi Cabang'] || '';
+          const branchNameToLook = matchedMaster.Cabang || matchedMaster['Sandi Cabang'] || matchedMaster['Nama Outlet'] || '';
+          const outletNameToLook = matchedMaster['Nama Outlet'] || '';
           const roleRes = resolveRoleMappingForBranch(
             branchNameToLook,
             row['Dati II'] || row.Kota,
             row.Kelurahan,
             row.Kecamatan,
             row.ALAMAT || matchedMaster.ALAMAT,
-            roleMappingList
+            roleMappingList,
+            outletNameToLook
           );
 
           updated[i] = {
@@ -785,14 +791,16 @@ export const App: React.FC = () => {
 
         // Validasi PTEN & Role Mapping
         const ptenRes = validatePtenForTarget(row['KODE POS'], row['Dati II'] || row.Kota || '', ptenIndex);
-        const branchNameToLook = matchedMaster['Nama Outlet'] || matchedMaster.Cabang || matchedMaster['Sandi Cabang'] || '';
+        const branchNameToLook = matchedMaster.Cabang || matchedMaster['Sandi Cabang'] || matchedMaster['Nama Outlet'] || '';
+        const outletNameToLook = matchedMaster['Nama Outlet'] || '';
         const roleRes = resolveRoleMappingForBranch(
           branchNameToLook,
           row['Dati II'] || row.Kota,
           row.Kelurahan,
           row.Kecamatan,
           row.ALAMAT || matchedMaster.ALAMAT,
-          roleMappingList
+          roleMappingList,
+          outletNameToLook
         );
 
         return {

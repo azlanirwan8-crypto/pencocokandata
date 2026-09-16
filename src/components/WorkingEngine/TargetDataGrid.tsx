@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import type { RoleMappingRecord } from '../../components/RoleMapping/RoleMappingManager';
 import { getUnitCategory } from '../../components/RoleMapping/RoleMappingManager';
+import { auditRoleMasterConsistency } from '../../utils/roleMatcher';
 import type { TargetRow, MasterRow, WilayahSetting } from '../../types';
 import {
   generateRecommendationsProgressive,
@@ -2796,15 +2797,67 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                         </td>
                       )}
                       {!hiddenCols.has('Nama Outlet') && (
-                        <td style={{ color: '#405189', fontWeight: 500 }}>{r['Nama Outlet'] || <span style={{ color: '#878a99' }}>-</span>}</td>
+                        <td style={{ color: '#405189', fontWeight: 500 }}>
+                          {(() => {
+                            const val = r['Nama Outlet'];
+                            if (!val) return <span style={{ color: '#878a99' }}>-</span>;
+                            const audit = auditRoleMasterConsistency(r);
+                            if (audit.hasRole && !audit.isNameMatched) {
+                              return (
+                                <div style={{ display: 'inline-flex', flexDirection: 'column', gap: '0.15rem' }}>
+                                  <span style={{ color: '#b91c1c', fontWeight: 600 }} title={audit.tooltip}>
+                                    {val}
+                                  </span>
+                                  <span
+                                    style={{
+                                      fontSize: '0.62rem',
+                                      color: '#dc2626',
+                                      background: '#fee2e2',
+                                      padding: '0.04rem 0.28rem',
+                                      borderRadius: '3px',
+                                      border: '1px solid #fca5a5',
+                                      whiteSpace: 'nowrap',
+                                      fontWeight: 600,
+                                    }}
+                                    title={`Beda dengan Role: ${r.organisasiRole || '-'}`}
+                                  >
+                                    ⚠️ Beda dr Role
+                                  </span>
+                                </div>
+                              );
+                            }
+                            return <span>{val}</span>;
+                          })()}
+                        </td>
                       )}
                       {!hiddenCols.has('Status Outlet') && (
                         <td>
-                          {r['Status Outlet'] ? (
-                            <span className="badge badge-match">{r['Status Outlet']}</span>
-                          ) : (
-                            <span style={{ color: '#878a99' }}>-</span>
-                          )}
+                          {(() => {
+                            const val = r['Status Outlet'];
+                            if (!val) return <span style={{ color: '#878a99' }}>-</span>;
+                            const audit = auditRoleMasterConsistency(r);
+                            if (audit.hasRole && !audit.isTypeMatched) {
+                              return (
+                                <div style={{ display: 'inline-flex', flexDirection: 'column', gap: '0.15rem', alignItems: 'center' }}>
+                                  <span className="badge" style={{ background: '#fef3c7', color: '#b45309', border: '1px solid #fcd34d', fontWeight: 700 }}>
+                                    {val}
+                                  </span>
+                                  <span
+                                    style={{
+                                      fontSize: '0.6rem',
+                                      color: '#d97706',
+                                      fontWeight: 700,
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                    title={audit.tooltip}
+                                  >
+                                    ⚠️ Role: {audit.roleType}
+                                  </span>
+                                </div>
+                              );
+                            }
+                            return <span className="badge badge-match">{val}</span>;
+                          })()}
                         </td>
                       )}
                       {!hiddenCols.has('ALAMAT') && (
@@ -2852,7 +2905,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                               >
                                 <CheckCircle2 size={11} color="#059669" /> Match PTEN
                               </span>
-                            ) : (
+                              ) : (
                               <span
                                 style={{
                                   display: 'inline-flex',
@@ -2876,61 +2929,87 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                         </td>
                       )}
 
-                      {/* Kolom Tipe Unit & Alur Wondr Mapping Role */}
+                      {/* Kolom Tipe Unit & Status Kesesuaian Mapping Role */}
                       {!hiddenCols.has('RoleMapping') && (
                         <td style={{ padding: '0.4rem 0.55rem', verticalAlign: 'middle', textAlign: 'center' }}>
                           {r.organisasiRole || r.tipeUnitRole ? (
-                            <div
-                              style={{
-                                display: 'inline-flex',
-                                flexDirection: 'column',
-                                gap: '0.2rem',
-                                alignItems: 'center',
-                                background: '#fcfdfe',
-                                padding: '0.35rem 0.55rem',
-                                borderRadius: '6px',
-                                border: '1px solid #e9ecef',
-                                minWidth: '180px',
-                              }}
-                              title={`Unit: ${r.organisasiRole || '-'}\nTipe: ${r.tipeUnitRole || '-'}`}
-                            >
-                              {/* Nama Unit di Mapping Role Database */}
-                              <div
-                                style={{
-                                  fontSize: '0.72rem',
-                                  fontWeight: 700,
-                                  color: '#1e293b',
-                                  textAlign: 'center',
-                                  maxWidth: '220px',
-                                  whiteSpace: 'normal',
-                                  lineHeight: 1.25,
-                                }}
-                              >
-                                {r.organisasiRole || '-'}
-                              </div>
-
-                              {/* Tipe Unit Badge */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', justifyContent: 'center' }}>
-                                <span
+                            (() => {
+                              const audit = auditRoleMasterConsistency(r);
+                              return (
+                                <div
                                   style={{
-                                    fontSize: '0.65rem',
-                                    fontWeight: 700,
-                                    padding: '0.08rem 0.38rem',
-                                    borderRadius: '3px',
-                                    background:
-                                      r.tipeUnitRole?.includes('KC') || r.tipeUnitRole?.includes('Utama')
-                                        ? 'rgba(64, 81, 137, 0.12)'
-                                        : 'rgba(41, 156, 219, 0.12)',
-                                    color:
-                                      r.tipeUnitRole?.includes('KC') || r.tipeUnitRole?.includes('Utama')
-                                        ? '#405189'
-                                        : '#299cdb',
+                                    display: 'inline-flex',
+                                    flexDirection: 'column',
+                                    gap: '0.22rem',
+                                    alignItems: 'center',
+                                    background: audit.cardBg,
+                                    padding: '0.35rem 0.55rem',
+                                    borderRadius: '6px',
+                                    border: `1px solid ${audit.cardBorder}`,
+                                    minWidth: '185px',
+                                    maxWidth: '240px',
                                   }}
+                                  title={audit.tooltip}
                                 >
-                                  {r.tipeUnitRole || (r.organisasiRole ? 'Terpetakan' : '-')}
-                                </span>
-                              </div>
-                            </div>
+                                  {/* Nama Unit di Mapping Role Database */}
+                                  <div
+                                    style={{
+                                      fontSize: '0.72rem',
+                                      fontWeight: 700,
+                                      color: audit.isNameMatched ? '#1e293b' : '#b91c1c',
+                                      textAlign: 'center',
+                                      maxWidth: '220px',
+                                      whiteSpace: 'normal',
+                                      lineHeight: 1.25,
+                                    }}
+                                  >
+                                    {r.organisasiRole || '-'}
+                                  </div>
+
+                                  {/* Baris Badge: Tipe Unit + Indikator Kesesuaian Master */}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                                    {/* Tipe Unit Badge */}
+                                    <span
+                                      style={{
+                                        fontSize: '0.65rem',
+                                        fontWeight: 700,
+                                        padding: '0.08rem 0.38rem',
+                                        borderRadius: '3px',
+                                        background:
+                                          r.tipeUnitRole?.includes('KC') || r.tipeUnitRole?.includes('Utama')
+                                            ? 'rgba(64, 81, 137, 0.12)'
+                                            : 'rgba(41, 156, 219, 0.12)',
+                                        color:
+                                          r.tipeUnitRole?.includes('KC') || r.tipeUnitRole?.includes('Utama')
+                                            ? '#405189'
+                                            : '#299cdb',
+                                      }}
+                                    >
+                                      {r.tipeUnitRole || (r.organisasiRole ? 'Terpetakan' : '-')}
+                                    </span>
+
+                                    {/* Indikator Keselarasan Master jika ada Master */}
+                                    {audit.hasMaster && (
+                                      <span
+                                        style={{
+                                          fontSize: '0.62rem',
+                                          fontWeight: 700,
+                                          padding: '0.06rem 0.35rem',
+                                          borderRadius: '3px',
+                                          background: audit.badgeBg,
+                                          color: audit.badgeColor,
+                                          border: `1px solid ${audit.badgeBorder}`,
+                                          whiteSpace: 'nowrap',
+                                        }}
+                                        title={audit.tooltip}
+                                      >
+                                        {audit.badgeLabel}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })()
                           ) : (
                             <span style={{ color: '#adb5bd', fontSize: '0.72rem' }}>-</span>
                           )}

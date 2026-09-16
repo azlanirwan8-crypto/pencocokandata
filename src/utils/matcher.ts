@@ -216,11 +216,12 @@ export function matchSingleRow(
   // Menghubungkan Kelurahan/Kecamatan/Cabang (contoh: Pagutan -> KC MATARAM -> MATARAM BRANCH OFFICE)
   if (roleMappingList && roleMappingList.length > 0) {
     const branchCandidateName =
-      result['Nama Outlet'] ||
       result.Cabang ||
       result['Sandi Cabang'] ||
+      result['Nama Outlet'] ||
       result.Sandi ||
       '';
+    const outletCandidateName = result['Nama Outlet'] || '';
 
     const roleResolution = resolveRoleMappingForBranch(
       branchCandidateName,
@@ -228,7 +229,8 @@ export function matchSingleRow(
       result.Kelurahan,
       result.Kecamatan,
       result.ALAMAT,
-      roleMappingList
+      roleMappingList,
+      outletCandidateName
     );
 
     if (roleResolution) {
