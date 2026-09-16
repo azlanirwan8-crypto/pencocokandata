@@ -780,15 +780,27 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
               Silakan unggah berkas Excel master PTEN resmi Anda (KODEPOS, KOTA/KABUPATEN, KOTA/KABUPATEN MAX 15 DIGIT) untuk mengaktifkan referensi validasi merchant.
             </p>
           </div>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => fileInputRef.current?.click()}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 1.25rem' }}
-          >
-            <Upload size={16} />
-            <span>Pilih Berkas Excel PTEN</span>
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => fileInputRef.current?.click()}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 1.25rem' }}
+            >
+              <Upload size={16} />
+              <span>Pilih Berkas Excel PTEN</span>
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={handleDownloadTemplate}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 1.25rem' }}
+            >
+              <Download size={16} />
+              <span>Download Template Excel</span>
+            </button>
+          </div>
         </div>
       ) : (
         <div

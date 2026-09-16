@@ -394,6 +394,65 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
     reader.readAsBinaryString(file);
   };
 
+  // Download Template Excel Wilayah
+  const handleDownloadTemplate = () => {
+    const templateData = [
+      {
+        'Wilayah': 'W1',
+        'Sandi Cabang': '001',
+        'Branch Code': '001',
+        'Kode Cabang': '001',
+        'Nama Outlet': 'KANWIL 01 - MEDAN',
+        'Status Outlet': 'KANWIL',
+        'ALAMAT': 'Jl. Balai Kota No. 2, Kesawan, Kec. Medan Barat',
+        'KODE POS': '20111',
+        'Kelurahan': 'Kesawan',
+        'Kecamatan': 'Medan Barat',
+        'Dati II': 'KOTA MEDAN',
+        'Kode Dati II': '1271',
+        'Provinsi': 'Sumatera Utara',
+        'Telp': '061-4512345',
+      },
+      {
+        'Wilayah': 'W2',
+        'Sandi Cabang': '002',
+        'Branch Code': '002',
+        'Kode Cabang': '002',
+        'Nama Outlet': 'KANWIL 02 - PADANG',
+        'Status Outlet': 'KANWIL',
+        'ALAMAT': 'Jl. Bagindo Aziz Chan No. 1, Sawahan, Kec. Padang Timur',
+        'KODE POS': '25121',
+        'Kelurahan': 'Sawahan',
+        'Kecamatan': 'Padang Timur',
+        'Dati II': 'KOTA PADANG',
+        'Kode Dati II': '1371',
+        'Provinsi': 'Sumatera Barat',
+        'Telp': '0751-31234',
+      },
+      {
+        'Wilayah': 'W12',
+        'Sandi Cabang': '012',
+        'Branch Code': '012',
+        'Kode Cabang': '012',
+        'Nama Outlet': 'KANWIL 12 - JAKARTA KOTA',
+        'Status Outlet': 'KANWIL',
+        'ALAMAT': 'Jl. Lada No. 1, Pinangsia, Kec. Taman Sari',
+        'KODE POS': '11110',
+        'Kelurahan': 'Pinangsia',
+        'Kecamatan': 'Taman Sari',
+        'Dati II': 'JAKARTA BARAT',
+        'Kode Dati II': '3173',
+        'Provinsi': 'DKI Jakarta',
+        'Telp': '021-6901234',
+      },
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(templateData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Template_Wilayah');
+    XLSX.writeFile(wb, 'Template_Upload_Wilayah.xlsx');
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '2rem' }}>
       {/* Top Header Card */}
@@ -467,6 +526,17 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
           >
             <Download size={13} />
             <span>Ekspor Excel</span>
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={handleDownloadTemplate}
+            title="Download Template format Excel untuk Wilayah"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+          >
+            <Download size={13} />
+            <span>Template Excel</span>
           </button>
 
           <button

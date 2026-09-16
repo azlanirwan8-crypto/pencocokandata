@@ -692,15 +692,27 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
               Silakan impor berkas Excel data cabang atau tambah data baru untuk memulai pencocokan data otomatis.
             </p>
           </div>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => fileInputRef.current?.click()}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 1.25rem' }}
-          >
-            <Upload size={16} />
-            <span>Pilih Berkas Master Excel</span>
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => fileInputRef.current?.click()}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 1.25rem' }}
+            >
+              <Upload size={16} />
+              <span>Pilih Berkas Master Excel</span>
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => downloadMasterTemplate(false)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 1.25rem' }}
+            >
+              <FileSpreadsheet size={16} />
+              <span>Download Template Excel</span>
+            </button>
+          </div>
         </div>
       ) : (
         /* Table View */
