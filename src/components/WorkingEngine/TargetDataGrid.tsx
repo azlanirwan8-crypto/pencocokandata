@@ -2123,7 +2123,6 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                         const activeCand = candidates.find((c) => c.rank === activeRank) || candidates[0];
                         const activeMaster = activeCand?.master;
                         const activeDati2 = activeMaster?.['Dati II'] || activeMaster?.Kota || r['Dati II'] || '';
-                        const activeProvinsi = activeMaster?.Provinsi || r.Provinsi || '';
                         const topRoles = findTopRoleMatchesByLocation(activeMaster, r, roleMappingList, masterRows, 3);
                         const selectedIdx = selectedRoleByRow[r.No] ?? -1;
 
