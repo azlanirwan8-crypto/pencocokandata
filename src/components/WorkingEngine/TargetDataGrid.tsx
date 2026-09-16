@@ -358,17 +358,6 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   const [renderedLimit, setRenderedLimit] = useState<number>(60);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
-  // Helper membandingkan kesesuaian wilayah (raw atau normalized "Wilayah 1" vs "1")
-  const isWilayahMatch = (val: unknown, selected: string): boolean => {
-    if (!selected || selected === 'ALL') return true;
-    if (!val) return false;
-    const s = String(val).trim();
-    if (!s) return false;
-    if (s.toLowerCase() === selected.toLowerCase()) return true;
-    const normA = formatWilayahName(s).toLowerCase();
-    const normB = formatWilayahName(selected).toLowerCase();
-    return normA === normB;
-  };
 
   // Trigger recommendation calculation in BACKGROUND as soon as data is ready!
   // Sesuai request: Tidak mengganggu UI, berjalan di latar belakang, dan tidak wipe saat pindah tab
@@ -454,7 +443,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     setRenderedLimit(60);
   }, [checkerTab, selectedWilayah, searchTerm, pageSize]);
 
-  // Determine current dataset based on active tab with search & wilayah filter
+  // Determine current dataset based on active tab with search & wilayah filter (Ultra-Fast O(N) single-pass)
   const currentTabRows = useMemo(() => {
     let source: TargetRow[] = [];
     if (checkerTab === 'upload') {
@@ -465,9 +454,16 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
       return [];
     }
 
-    // Filter by Wilayah
-    if (selectedWilayah !== 'ALL') {
-      source = source.filter((r) => isWilayahMatch(r.Wilayah, selectedWilayah));
+    // Fast Filter by Wilayah
+    if (selectedWilayah && selectedWilayah !== 'ALL') {
+      const targetNorm = formatWilayahName(selectedWilayah).toLowerCase();
+      const targetRaw = selectedWilayah.trim().toLowerCase();
+      source = source.filter((r) => {
+        if (!r.Wilayah) return false;
+        const s = String(r.Wilayah).trim().toLowerCase();
+        if (s === targetRaw || s === targetNorm) return true;
+        return formatWilayahName(s).toLowerCase() === targetNorm;
+      });
     }
 
     // Filter by Search Term
@@ -498,47 +494,51 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     // HANYA data yang belum disetujui / belum match yang tampil di tab rekomendasi
     let list = recommendations.filter((rec) => !isRowMatched(rec.targetRow));
 
-    // 1. FILTER BERDASARKAN WILAYAH
-    if (selectedWilayah !== 'ALL') {
+    // 1. ULTRA-FAST FILTER BERDASARKAN WILAYAH
+    if (selectedWilayah && selectedWilayah !== 'ALL') {
+      const targetNorm = formatWilayahName(selectedWilayah).toLowerCase();
+      const targetRaw = selectedWilayah.trim().toLowerCase();
+      const matchW = (wVal?: unknown): boolean => {
+        if (!wVal) return false;
+        const s = String(wVal).trim().toLowerCase();
+        if (!s) return false;
+        if (s === targetRaw || s === targetNorm) return true;
+        return formatWilayahName(s).toLowerCase() === targetNorm;
+      };
+
       list = list.filter((rec) => {
         const r = rec.targetRow;
+        // Direct O(1) string check on Target Row Wilayah
+        if (r?.Wilayah && matchW(r.Wilayah)) return true;
+
         const m = rec.recommendedMaster;
         const activeRank = activeCandidateByRow[r.No] || 1;
         const activeCand = (rec.candidates || []).find((c) => c.rank === activeRank) || rec.candidates?.[0];
         const candMaster = activeCand?.master || m;
 
-        // A. Wilayah dari Branch Code via setting wilayah (digit 2 & 3)
+        // Direct check on Recommended Master Wilayah
+        if (candMaster?.Wilayah && matchW(candMaster.Wilayah)) return true;
+
+        // Check via branch code extraction
         const candWil = extractWilayahFromBranchCode(
           candMaster?.['Branch Code'] || candMaster?.['Kode Cabang'] || r?.['Branch Code'] || '',
           wilayahSettings,
           candMaster?.Wilayah || r?.Wilayah || '-'
         );
-        if (candWil.wilayahName && isWilayahMatch(candWil.wilayahName, selectedWilayah)) {
-          return true;
-        }
+        if (candWil.wilayahName && matchW(candWil.wilayahName)) return true;
 
-        // B. Wilayah dari Master Cabang
-        if (candMaster?.Wilayah && isWilayahMatch(candMaster.Wilayah, selectedWilayah)) {
-          return true;
-        }
-
-        // C. Wilayah dari Baris Target Excel
-        if (r?.Wilayah && isWilayahMatch(r.Wilayah, selectedWilayah)) {
-          return true;
-        }
-
-        // D. Wilayah dari opsi kandidat alternatif
+        // Check alternative candidate options
         if (
-          (rec.candidates || []).some((c) => {
+          rec.candidates &&
+          rec.candidates.length > 1 &&
+          rec.candidates.some((c) => {
+            if (c.master?.Wilayah && matchW(c.master.Wilayah)) return true;
             const cWil = extractWilayahFromBranchCode(
               c.master?.['Branch Code'] || c.master?.['Kode Cabang'] || '',
               wilayahSettings,
               c.master?.Wilayah || '-'
             );
-            return (
-              (cWil.wilayahName && isWilayahMatch(cWil.wilayahName, selectedWilayah)) ||
-              (c.master?.Wilayah && isWilayahMatch(c.master.Wilayah, selectedWilayah))
-            );
+            return cWil.wilayahName ? matchW(cWil.wilayahName) : false;
           })
         ) {
           return true;
@@ -554,21 +554,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
       list = list.filter((rec) => {
         const r = rec.targetRow;
         const m = rec.recommendedMaster;
-        const candsMatch = (rec.candidates || []).some((c) => {
-          const cm = c.master;
-          return (
-            String(cm['Branch Code'] || '').toLowerCase().includes(q) ||
-            String(cm['Sandi Cabang'] || cm.Cabang || cm.Sandi || '').toLowerCase().includes(q) ||
-            String(cm['Nama Outlet'] || '').toLowerCase().includes(q) ||
-            String(cm.ALAMAT || '').toLowerCase().includes(q) ||
-            String(cm.Kecamatan || '').toLowerCase().includes(q) ||
-            String(cm['Dati II'] || '').toLowerCase().includes(q) ||
-            String(cm['KODE POS'] || '').toLowerCase().includes(q)
-          );
-        });
-
-        return (
-          candsMatch ||
+        if (
           String(r.No || '').toLowerCase().includes(q) ||
           String(r['Branch Code'] || '').toLowerCase().includes(q) ||
           String(r.Wilayah || '').toLowerCase().includes(q) ||
@@ -577,20 +563,34 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           String(r.Kecamatan || '').toLowerCase().includes(q) ||
           String(r.Kelurahan || '').toLowerCase().includes(q) ||
           String(r['Dati II'] || '').toLowerCase().includes(q) ||
-          String(m['Branch Code'] || '').toLowerCase().includes(q) ||
-          String(m['Sandi Cabang'] || m.Cabang || '').toLowerCase().includes(q) ||
-          String(m['Nama Outlet'] || '').toLowerCase().includes(q) ||
-          String(m.ALAMAT || '').toLowerCase().includes(q)
-        );
+          (m && (
+            String(m['Branch Code'] || '').toLowerCase().includes(q) ||
+            String(m['Sandi Cabang'] || m.Cabang || '').toLowerCase().includes(q) ||
+            String(m['Nama Outlet'] || '').toLowerCase().includes(q) ||
+            String(m.ALAMAT || '').toLowerCase().includes(q)
+          ))
+        ) {
+          return true;
+        }
+
+        return (rec.candidates || []).some((c) => {
+          const cm = c.master;
+          return (
+            cm && (
+              String(cm['Branch Code'] || '').toLowerCase().includes(q) ||
+              String(cm['Sandi Cabang'] || cm.Cabang || cm.Sandi || '').toLowerCase().includes(q) ||
+              String(cm['Nama Outlet'] || '').toLowerCase().includes(q) ||
+              String(cm.ALAMAT || '').toLowerCase().includes(q) ||
+              String(cm.Kecamatan || '').toLowerCase().includes(q) ||
+              String(cm['Dati II'] || '').toLowerCase().includes(q) ||
+              String(cm['KODE POS'] || '').toLowerCase().includes(q)
+            )
+          );
+        });
       });
     }
 
-    // STRICT GUARANTEE: Urutan rekomendasi SELALU 100% mengikuti urutan baris Excel yang diupload!
-    return [...list].sort((a, b) => {
-      const idxA = Number(a.targetRow._excelRowIndex ?? a.targetRow.No) || 0;
-      const idxB = Number(b.targetRow._excelRowIndex ?? b.targetRow.No) || 0;
-      return idxA - idxB;
-    });
+    return list;
   }, [checkerTab, recommendations, selectedWilayah, searchTerm, activeCandidateByRow, wilayahSettings]);
 
   const totalPages = useMemo(() => {
@@ -808,6 +808,29 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     const key = String(w).trim().toLowerCase();
     const sandi = wilayahSandiMap.get(key) || wilayahSandiMap.get(norm.toLowerCase()) || '';
     return sandi ? (sandi + ' : ' + norm) : norm;
+  };
+
+  // Pre-aggregated count of target rows per wilayah for 0ms instant display
+  const targetWilayahCountMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (let i = 0; i < rows.length; i++) {
+      const rawW = String(rows[i].Wilayah || '').trim();
+      if (rawW) {
+        const norm = formatWilayahName(rawW).toLowerCase();
+        const rawKey = rawW.toLowerCase();
+        map.set(norm, (map.get(norm) || 0) + 1);
+        if (rawKey !== norm) {
+          map.set(rawKey, (map.get(rawKey) || 0) + 1);
+        }
+      }
+    }
+    return map;
+  }, [rows]);
+
+  const getWilayahRowCount = (w: string) => {
+    const normKey = formatWilayahName(w).toLowerCase();
+    const rawKey = String(w).trim().toLowerCase();
+    return targetWilayahCountMap.get(normKey) || targetWilayahCountMap.get(rawKey) || 0;
   };
 
   return (
@@ -1045,7 +1068,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           )}
 
           {/* Dropdown Filter Wilayah (Single Unified Clean Box) */}
-          <div className="unified-select-box">
+          <div className="unified-select-box" style={{ maxWidth: '280px' }}>
             <MapPin size={13} color="#405189" style={{ flexShrink: 0 }} />
             <select
               value={selectedWilayah}
@@ -1056,13 +1079,46 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               }}
               id="filter-select-wilayah"
             >
-              <option value="ALL">Semua Wilayah ({wilayahList.length})</option>
-              {wilayahList.map((w) => (
-                <option key={w} value={w}>
-                  {getWilayahDropdownLabel(w)}
-                </option>
-              ))}
+              <option value="ALL">Semua Wilayah ({rows.length.toLocaleString('id-ID')} Data)</option>
+              {wilayahList.map((w) => {
+                const count = getWilayahRowCount(w);
+                return (
+                  <option key={w} value={w}>
+                    {getWilayahDropdownLabel(w)} ({count.toLocaleString('id-ID')} Data)
+                  </option>
+                );
+              })}
             </select>
+          </div>
+
+          {/* Label Informasi Jumlah Data Wilayah Terpilih */}
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              padding: '0.28rem 0.65rem',
+              background: '#f8f9fa',
+              border: '1px solid #e9ebec',
+              borderRadius: '4px',
+              fontSize: '0.74rem',
+              color: '#343a40',
+              fontWeight: 600,
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+            title="Informasi jumlah data target pada wilayah yang dipilih"
+          >
+            <span style={{ color: '#405189' }}>
+              {selectedWilayah === 'ALL'
+                ? `📊 Total: ${rows.length.toLocaleString('id-ID')} Data (${wilayahList.length} Wilayah)`
+                : `📊 ${getWilayahRowCount(selectedWilayah).toLocaleString('id-ID')} Data di ${getWilayahDropdownLabel(selectedWilayah)}`}
+            </span>
+            {selectedWilayah !== 'ALL' && (
+              <span style={{ color: '#878a99', fontWeight: 500, fontSize: '0.7rem' }}>
+                ({checkerTab === 'recommendation' ? `${currentTabRecs.length} Rekomendasi` : checkerTab === 'matched' ? `${currentTabRows.length} Matched` : `${currentTabRows.length} Upload`})
+              </span>
+            )}
           </div>
 
           {/* Action button in Tab 1: PENCOCOKAN */}

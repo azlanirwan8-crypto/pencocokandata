@@ -24,48 +24,39 @@ export const ExportAction: React.FC<ExportActionProps> = ({
   // Extract unique Wilayah list and count per wilayah
   const { wilayahList, wilayahCounts } = useMemo(() => {
     const map = new Map<string, number>();
-    allTargetRows.forEach((r) => {
-      const w = String(r.Wilayah || 'Tanpa Wilayah').trim();
+    for (let i = 0; i < allTargetRows.length; i++) {
+      const w = String(allTargetRows[i].Wilayah || 'Tanpa Wilayah').trim();
       map.set(w, (map.get(w) || 0) + 1);
-    });
+    }
 
     const list = Array.from(map.keys()).sort();
     return { wilayahList: list, wilayahCounts: map };
   }, [allTargetRows]);
 
-  // Compute dataset to export
-  const exportData = useMemo(() => {
-    if (isAllChecked || selectedExportWilayah === 'ALL') {
-      // KETIKA CEKLIST ALL:
-      // Pertahankan 100% urutan asli persis sesuai berkas Excel yang diunggah
-      const sorted = [...allTargetRows].sort((a, b) => {
-        const idxA = Number(a._excelRowIndex ?? a.No) || 0;
-        const idxB = Number(b._excelRowIndex ?? b.No) || 0;
-        return idxA - idxB;
-      });
-      return {
-        rows: sorted,
-        label: 'SEMUA_WILAYAH_URUT_EXCEL',
-        isFiltered: false,
-      };
-    } else {
-      // KETIKA DI-FILTER SESUAI WILAYAH:
-      const filtered = allTargetRows.filter(
-        (r) => String(r.Wilayah || 'Tanpa Wilayah').trim() === selectedExportWilayah
-      );
-      return {
-        rows: filtered,
-        label: selectedExportWilayah,
-        isFiltered: true,
-      };
-    }
-  }, [allTargetRows, isAllChecked, selectedExportWilayah]);
-
   if (allTargetRows.length === 0) return null;
 
   const handleDownload = () => {
     setAlertInfo(null);
-    const { rows, label, isFiltered } = exportData;
+    let rows: TargetRow[] = [];
+    let label = 'SEMUA_WILAYAH_URUT_EXCEL';
+    let isFiltered = false;
+
+    if (isAllChecked || selectedExportWilayah === 'ALL') {
+      // Pertahankan urutan asli persis sesuai berkas Excel
+      rows = [...allTargetRows].sort((a, b) => {
+        const idxA = Number(a._excelRowIndex ?? a.No) || 0;
+        const idxB = Number(b._excelRowIndex ?? b.No) || 0;
+        return idxA - idxB;
+      });
+      label = 'SEMUA_WILAYAH_URUT_EXCEL';
+      isFiltered = false;
+    } else {
+      rows = allTargetRows.filter(
+        (r) => String(r.Wilayah || 'Tanpa Wilayah').trim() === selectedExportWilayah
+      );
+      label = selectedExportWilayah;
+      isFiltered = true;
+    }
 
     const result = exportTargetToExcel(
       rows,
@@ -236,7 +227,7 @@ export const ExportAction: React.FC<ExportActionProps> = ({
             <span>
               {isAllChecked
                 ? `Unduh Excel (${allTargetRows.length.toLocaleString('id-ID')} Baris - Urut Wilayah)`
-                : `Unduh Excel (${exportData.rows.length.toLocaleString('id-ID')} Baris)`}
+                : `Unduh Excel (${(wilayahCounts.get(selectedExportWilayah) || 0).toLocaleString('id-ID')} Baris)`}
             </span>
           </button>
         </div>
