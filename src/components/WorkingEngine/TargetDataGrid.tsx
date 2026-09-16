@@ -18,7 +18,10 @@ import {
   SlidersHorizontal,
   ExternalLink,
   Building2,
+  Shield,
 } from 'lucide-react';
+import type { RoleMappingRecord } from '../../components/RoleMapping/RoleMappingManager';
+import { getUnitCategory } from '../../components/RoleMapping/RoleMappingManager';
 import type { TargetRow, MasterRow, WilayahSetting } from '../../types';
 import {
   generateRecommendationsProgressive,
@@ -69,6 +72,60 @@ interface TargetDataGridProps {
   canExecute: boolean;
   matchedDone?: boolean;
   wilayahSettings?: WilayahSetting[];
+  roleMappingList?: RoleMappingRecord[];
+}
+
+/**
+ * Find top 3 role mapping branches with ALL 3 roles complete (M=1, C=1, S=1)
+ * sorted by proximity to the active candidate's city/dati2
+ */
+function findTopRoleMatchesByLocation(
+  activeCandidateDati2: string,
+  activeProvinsi: string,
+  roleMappingList: RoleMappingRecord[],
+  count = 3
+): RoleMappingRecord[] {
+  if (!roleMappingList || roleMappingList.length === 0) return [];
+
+  // Filter: only full 3-role branches (Maker=1, Checker=1, Signer=1)
+  const fullRoleList = roleMappingList.filter(
+    (r) => r.qrsCabsal === 1 && r.qrsCabapv1 === 1 && r.qrsCabapv2 === 1
+  );
+
+  if (fullRoleList.length === 0) return [];
+
+  const normCity = String(activeCandidateDati2 || '')
+    .toUpperCase()
+    .replace(/^(KOTA|KABUPATEN|KAB)\s+/i, '')
+    .trim();
+  const normProv = String(activeProvinsi || '').toUpperCase().trim();
+
+  // Score each record
+  const scored = fullRoleList.map((rec) => {
+    const orgUpper = rec.organisasiTujuan.toUpperCase();
+    let score = 0;
+
+    // Exact city name in org name => high score
+    if (normCity && orgUpper.includes(normCity)) score += 100;
+    // Partial city tokens
+    if (normCity) {
+      const tokens = normCity.split(/\s+/).filter((t) => t.length >= 4);
+      tokens.forEach((t) => { if (orgUpper.includes(t)) score += 30; });
+    }
+    // Province match in org name
+    if (normProv) {
+      const provTokens = normProv.split(/\s+/).filter((t) => t.length >= 4);
+      provTokens.forEach((t) => { if (orgUpper.includes(t)) score += 10; });
+    }
+    // Prefer KC (Kantor Cabang Utama) over KCP
+    if (getUnitCategory(rec.organisasiTujuan) === 'KC') score += 5;
+
+    return { rec, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+
+  return scored.slice(0, count).map((s) => s.rec);
 }
 
 export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
@@ -88,6 +145,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   canExecute,
   matchedDone = false,
   wilayahSettings = [],
+  roleMappingList = [],
 }) => {
   // 3 Sub-Tabs State: 'upload' | 'recommendation' | 'matched'
   const [checkerTab, setCheckerTab] = useState<'upload' | 'recommendation' | 'matched'>('upload');
@@ -1363,6 +1421,30 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                 >
                   Kandidat Rekomendasi Master (Top 2–3 Pilihan Terdekat)
                 </th>
+                {/* Kolom Rekomendasi Mapping Role - 3 Cabang Role Lengkap Terdekat */}
+                {roleMappingList.length > 0 && (
+                  <th
+                    style={{
+                      minWidth: '280px',
+                      maxWidth: '280px',
+                      width: '280px',
+                      background: '#f0fdf8',
+                      color: '#059669',
+                      borderBottom: '1px solid #e9ebec',
+                      borderLeft: '2px solid rgba(16, 185, 129, 0.35)',
+                      padding: '0.55rem 0.65rem',
+                      verticalAlign: 'middle',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <Shield size={13} color="#059669" />
+                      <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>Rekomendasi Cabang</span>
+                    </div>
+                    <div style={{ fontSize: '0.65rem', fontWeight: 500, color: '#6b7280', marginTop: '0.1rem' }}>
+                      3 Role Lengkap Terdekat (Alur Standar 3 Tahap)
+                    </div>
+                  </th>
+                )}
                 {/* Data Target Asli (Wilayah Target Dihapus sesuai permintaan user) */}
                 <th style={{ color: '#878a99', minWidth: '95px', borderBottom: '1px solid #e9ebec' }}>KODE POS Target</th>
                 <th style={{ color: '#878a99', minWidth: '120px', borderBottom: '1px solid #e9ebec' }}>Kecamatan Target</th>
@@ -1375,7 +1457,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
             <tbody>
               {paginatedRecs.length === 0 ? (
                 <tr>
-                  <td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: '#878a99' }}>
+                  <td colSpan={roleMappingList.length > 0 ? 10 : 9} style={{ textAlign: 'center', padding: '2rem', color: '#878a99' }}>
                     Tidak ada rekomendasi yang sesuai dengan filter pencarian.
                   </td>
                 </tr>
@@ -1918,6 +2000,118 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                           );
                         })()}
                       </td>
+
+                      {/* Kolom Rekomendasi Mapping Role - ikuti kandidat aktif */}
+                      {roleMappingList.length > 0 && (() => {
+                        const activeRank = activeCandidateByRow[r.No] || 1;
+                        const activeCand = candidates.find((c) => c.rank === activeRank) || candidates[0];
+                        const activeMaster = activeCand?.master;
+                        const activeDati2 = activeMaster?.['Dati II'] || activeMaster?.Kota || r['Dati II'] || '';
+                        const activeProvinsi = activeMaster?.Provinsi || r.Provinsi || '';
+                        const topRoles = findTopRoleMatchesByLocation(activeDati2, activeProvinsi, roleMappingList, 3);
+
+                        return (
+                          <td
+                            style={{
+                              padding: '0.5rem 0.6rem',
+                              verticalAlign: 'top',
+                              background: '#fafffe',
+                              borderLeft: '2px solid rgba(16, 185, 129, 0.2)',
+                              minWidth: '280px',
+                              maxWidth: '280px',
+                              width: '280px',
+                              boxSizing: 'border-box',
+                            }}
+                          >
+                            {topRoles.length === 0 ? (
+                              <span style={{ fontSize: '0.7rem', color: '#adb5bd' }}>Belum ada data role lengkap</span>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                <div style={{ fontSize: '0.65rem', fontWeight: 600, color: '#6b7280', marginBottom: '0.05rem' }}>
+                                  Berdasarkan lokasi Pilihan {activeRank} ({activeDati2 || '-'})
+                                </div>
+                                {topRoles.map((role, rIdx) => {
+                                  const rankColors = [
+                                    { bg: 'rgba(16, 185, 129, 0.1)', border: 'rgba(16, 185, 129, 0.35)', text: '#065f46', badge: '#059669' },
+                                    { bg: 'rgba(14, 165, 233, 0.08)', border: 'rgba(14, 165, 233, 0.3)', text: '#0c4a6e', badge: '#0284c7' },
+                                    { bg: 'rgba(99, 102, 241, 0.08)', border: 'rgba(99, 102, 241, 0.28)', text: '#312e81', badge: '#4f46e5' },
+                                  ];
+                                  const c = rankColors[rIdx] || rankColors[0];
+                                  const isKc = getUnitCategory(role.organisasiTujuan) === 'KC';
+                                  return (
+                                    <div
+                                      key={`rm-${r.No}-${rIdx}`}
+                                      style={{
+                                        background: c.bg,
+                                        border: `1px solid ${c.border}`,
+                                        borderRadius: '5px',
+                                        padding: '0.3rem 0.45rem',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '0.12rem',
+                                      }}
+                                      title={`${role.organisasiTujuan} — Maker: ${role.qrsCabsal}, Checker: ${role.qrsCabapv1}, Signer: ${role.qrsCabapv2}, Total: ${role.grandTotal} User`}
+                                    >
+                                      {/* Rank number + org name */}
+                                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.3rem' }}>
+                                        <span
+                                          style={{
+                                            flexShrink: 0,
+                                            width: '16px',
+                                            height: '16px',
+                                            borderRadius: '50%',
+                                            background: c.badge,
+                                            color: '#fff',
+                                            fontSize: '0.6rem',
+                                            fontWeight: 700,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                          }}
+                                        >
+                                          {rIdx + 1}
+                                        </span>
+                                        <span
+                                          style={{
+                                            fontSize: '0.7rem',
+                                            fontWeight: 700,
+                                            color: c.text,
+                                            lineHeight: 1.25,
+                                            wordBreak: 'break-word',
+                                          }}
+                                        >
+                                          {role.organisasiTujuan}
+                                        </span>
+                                      </div>
+                                      {/* Role badges row */}
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', flexWrap: 'wrap', paddingLeft: '1.25rem' }}>
+                                        <span
+                                          style={{
+                                            fontSize: '0.6rem',
+                                            fontWeight: 700,
+                                            padding: '0.04rem 0.3rem',
+                                            borderRadius: '3px',
+                                            background: isKc ? 'rgba(64, 81, 137, 0.12)' : 'rgba(41, 156, 219, 0.12)',
+                                            color: isKc ? '#405189' : '#0284c7',
+                                          }}
+                                        >
+                                          {isKc ? 'Cabang Utama (KC)' : 'Outlet (KCP)'}
+                                        </span>
+                                        <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#059669', background: 'rgba(5,150,105,0.1)', padding: '0.04rem 0.28rem', borderRadius: '3px' }}>
+                                          M✓ C✓ S✓
+                                        </span>
+                                        <span style={{ fontSize: '0.6rem', color: '#6b7280', fontWeight: 600 }}>
+                                          {role.grandTotal} User
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </td>
+                        );
+                      })()}
 
                       {/* Data Target Asli (Wilayah Target Dihapus, Teks Alamat Tampil Utuh) */}
                       <td className="code-cell" style={{ color: '#f06548', fontWeight: 700, paddingTop: '0.55rem' }}>
