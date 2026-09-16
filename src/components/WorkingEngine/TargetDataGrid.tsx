@@ -427,8 +427,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           setIsComputingRecs(false);
         }
       },
-      250,
-      30
+      100,
+      500
     );
 
     cancelProgressiveRef.current = cancel;
@@ -1407,31 +1407,6 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
         ) : (
           <>
             {/* Indikator Non-blocking Latar Belakang (Hanya tampil jika masih ada baris yang belum disetujui) */}
-            {isComputingRecs && targetRecommendationRows.length > 0 && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '0.4rem 0.8rem',
-                  background: 'rgba(53, 119, 241, 0.06)',
-                  border: '1px solid rgba(53, 119, 241, 0.2)',
-                  borderRadius: '5px',
-                  marginBottom: '0.65rem',
-                  fontSize: '0.76rem',
-                  color: '#3577f1',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                  <RotateCcw size={13} className="pulse-dot" />
-                  <span>
-                    <strong>Menganalisis rekomendasi di latar belakang:</strong> {recommendations.length.toLocaleString('id-ID')} / {targetRecommendationRows.length.toLocaleString('id-ID')} data siap ({Math.min(100, Math.round((recommendations.length / Math.max(1, targetRecommendationRows.length)) * 100))}%)
-                  </span>
-                </div>
-                <span style={{ fontSize: '0.72rem', color: '#878a99' }}>Tabel tetap aktif & data terus bertambah</span>
-              </div>
-            )}
-
             {/* Jika seluruh rekomendasi telah disetujui ATAU hasil filter kosong */}
             {targetRecommendationRows.length === 0 || (currentTabRecs.length === 0 && !isComputingRecs) ? (
               targetRecommendationRows.length === 0 ? (
