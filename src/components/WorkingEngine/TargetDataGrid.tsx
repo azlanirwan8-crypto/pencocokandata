@@ -17,6 +17,7 @@ import {
   ExternalLink,
   Building2,
   Shield,
+  Loader2,
 } from 'lucide-react';
 import type { RoleMappingRecord } from '../../components/RoleMapping/RoleMappingManager';
 import { getUnitCategory } from '../../components/RoleMapping/RoleMappingManager';
@@ -398,6 +399,14 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   // Tracks selected role-mapping branch index (0-based) per row No
   const [selectedRoleByRow, setSelectedRoleByRow] = useState<Record<string | number, number>>({});
 
+  // Real-time Non-blocking Progress Bar Modal State (0% - 100%)
+  const [approvalProgress, setApprovalProgress] = useState<{
+    current: number;
+    total: number;
+    percent: number;
+    stage: string;
+  } | null>(null);
+
   // Fingerprint cache & background cancel ref to prevent redundant calculation
   const lastAnalyzedFingerprintRef = useRef<string>('');
   const cancelProgressiveRef = useRef<(() => void) | null>(null);
@@ -704,11 +713,19 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     onApproveRecommendation(rowNo, m);
   };
 
-  // Setujui Rekomendasi Terpilih (Batch Selected Approval)
+  // Setujui Rekomendasi Terpilih (Batch Selected Approval - Non-blocking dengan Progress)
   const handleApproveSelected = () => {
     if (selectedRowNos.size === 0) return;
     const selectedStrSet = new Set(Array.from(selectedRowNos).map((s) => String(s).trim()));
     const selectedRecs: RecommendationResult[] = [];
+    const total = selectedRowNos.size;
+
+    setApprovalProgress({
+      current: 0,
+      total,
+      percent: 0,
+      stage: `Mempersiapkan ${total.toLocaleString('id-ID')} baris terpilih...`,
+    });
 
     recommendations.forEach((rec) => {
       const recNoStr = String(rec.targetRow.No).trim();
@@ -730,23 +747,57 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
       }
     });
 
-    onApproveAllRecommendations(selectedRecs);
-    setRecommendations((prev) => prev.filter((r) => !selectedStrSet.has(String(r.targetRow.No).trim())));
-    setSelectedRowNos(new Set());
-    if (selectedRecs.length >= recommendations.length) {
-      setCheckerTab('matched');
-      setPage(1);
-    }
+    let processed = 0;
+    const chunkSize = 50;
+
+    const stepSelected = () => {
+      processed = Math.min(processed + chunkSize, selectedRecs.length);
+      const pct = Math.round((processed / total) * 100);
+
+      setApprovalProgress({
+        current: processed,
+        total,
+        percent: pct,
+        stage: `Menyetujui baris terpilih... (${processed.toLocaleString('id-ID')} / ${total.toLocaleString('id-ID')})`,
+      });
+
+      if (processed < selectedRecs.length) {
+        setTimeout(stepSelected, 16);
+      } else {
+        onApproveAllRecommendations(selectedRecs);
+        setRecommendations((prev) => prev.filter((r) => !selectedStrSet.has(String(r.targetRow.No).trim())));
+        setSelectedRowNos(new Set());
+        setApprovalProgress(null);
+        if (selectedRecs.length >= recommendations.length) {
+          setCheckerTab('matched');
+          setPage(1);
+        }
+      }
+    };
+
+    setTimeout(stepSelected, 20);
   };
 
-  // Setujui Semua Rekomendasi: Menyetujui seluruh baris yang belum match, membatalkan worker background, mengosongkan rekomendasi, dan langsung pindah ke Tab Data Match
+  // Setujui Semua Rekomendasi: Chunked Asynchronous Non-blocking (0% - 100% Progress Bar, Browser Smooth 60 FPS)
   const handleApproveAll = () => {
-    // 1. Hentikan worker background segera agar tidak memicu rekalkulasi berulang
+    // 1. Hentikan worker background segera
     if (cancelProgressiveRef.current) {
       cancelProgressiveRef.current();
       cancelProgressiveRef.current = null;
     }
     setIsComputingRecs(false);
+
+    const rowsToProcess = [...targetRecommendationRows];
+    const total = rowsToProcess.length;
+    if (total === 0) return;
+
+    // Inisialisasi tampilan modal progress bar
+    setApprovalProgress({
+      current: 0,
+      total,
+      percent: 0,
+      stage: `Mempersiapkan ${total.toLocaleString('id-ID')} baris rekomendasi...`,
+    });
 
     // 2. Petakan rekomendasi yang sudah sempat dihitung
     const existingRecMap = new Map<string, RecommendationResult>();
@@ -754,46 +805,77 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
       existingRecMap.set(String(rec.targetRow.No).trim(), rec);
     });
 
-    // 3. Kumpulkan rekomendasi untuk SELURUH targetRecommendationRows
     const allRecsToApprove: RecommendationResult[] = [];
+    const chunkSize = 35; // 35 baris per frame agar browser 60 FPS, tidak pernah "Page Unresponsive"
+    let currentIndex = 0;
 
-    for (const row of targetRecommendationRows) {
-      const key = String(row.No).trim();
-      let rec = existingRecMap.get(key);
+    const processNextBatch = () => {
+      const end = Math.min(currentIndex + chunkSize, total);
 
-      // Jika belum sempat dihitung background worker, hitung saat itu juga via proximity index
-      if (!rec) {
-        rec = findClosestMasterRecommendation(row, masterProximityIndex) || undefined;
-      }
+      for (let i = currentIndex; i < end; i++) {
+        const row = rowsToProcess[i];
+        const key = String(row.No).trim();
+        let rec = existingRecMap.get(key);
 
-      if (rec) {
-        const activeRank = activeCandidateByRow[row.No];
-        if (activeRank && rec.candidates) {
-          const chosen = rec.candidates.find((c) => c.rank === activeRank);
-          if (chosen) {
-            allRecsToApprove.push({
-              ...rec,
-              recommendedMaster: chosen.master,
-              score: chosen.score,
-              reason: chosen.reason,
-            });
-            continue;
-          }
+        if (!rec) {
+          rec = findClosestMasterRecommendation(row, masterProximityIndex) || undefined;
         }
-        allRecsToApprove.push(rec);
+
+        if (rec) {
+          const activeRank = activeCandidateByRow[row.No];
+          if (activeRank && rec.candidates) {
+            const chosen = rec.candidates.find((c) => c.rank === activeRank);
+            if (chosen) {
+              allRecsToApprove.push({
+                ...rec,
+                recommendedMaster: chosen.master,
+                score: chosen.score,
+                reason: chosen.reason,
+              });
+              continue;
+            }
+          }
+          allRecsToApprove.push(rec);
+        }
       }
-    }
 
-    if (allRecsToApprove.length === 0) return;
+      currentIndex = end;
+      const pct = Math.round((currentIndex / total) * 100);
 
-    onApproveAllRecommendations(allRecsToApprove);
-    setSelectedRowNos(new Set());
-    setRecommendations([]);
-    setIsComputingRecs(false);
+      setApprovalProgress({
+        current: currentIndex,
+        total,
+        percent: pct,
+        stage: `Menyetujui & memvalidasi cabang... (${currentIndex.toLocaleString('id-ID')} / ${total.toLocaleString('id-ID')})`,
+      });
 
-    // 4. Pindah langsung ke Tab 3 (Data Match)
-    setCheckerTab('matched');
-    setPage(1);
+      if (currentIndex < total) {
+        // Berikan napas ke event loop browser agar render progress bar dan interaksi tetap lancar
+        setTimeout(processNextBatch, 16);
+      } else {
+        // Selesai 100%
+        setApprovalProgress({
+          current: total,
+          total,
+          percent: 100,
+          stage: 'Selesai! Memperbarui tampilan Data Match...',
+        });
+
+        setTimeout(() => {
+          onApproveAllRecommendations(allRecsToApprove);
+          setSelectedRowNos(new Set());
+          setRecommendations([]);
+          setIsComputingRecs(false);
+          setApprovalProgress(null);
+
+          // 4. Pindah langsung ke Tab 3 (Data Match)
+          setCheckerTab('matched');
+          setPage(1);
+        }, 250);
+      }
+    };
+
+    setTimeout(processNextBatch, 25);
   };
 
 
@@ -3151,6 +3233,130 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
         }}
         wilayahSettings={wilayahSettings}
       />
+
+      {/* Modal Progress Bar Real-time Non-blocking Saat Menyetujui Rekomendasi */}
+      {approvalProgress !== null && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 99999,
+            background: 'rgba(15, 23, 42, 0.72)',
+            backdropFilter: 'blur(5px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+            animation: 'fadeIn 0.2s ease-out',
+          }}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '16px',
+              padding: '1.75rem 2rem',
+              maxWidth: '480px',
+              width: '100%',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              border: '1px solid rgba(226, 232, 240, 0.8)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              textAlign: 'center',
+            }}
+          >
+            {/* Animated Icon */}
+            <div
+              style={{
+                width: '54px',
+                height: '54px',
+                borderRadius: '50%',
+                background: 'rgba(10, 179, 156, 0.12)',
+                color: '#0ab39c',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '1rem',
+              }}
+            >
+              {approvalProgress.percent === 100 ? (
+                <CheckCircle2 size={30} color="#0ab39c" />
+              ) : (
+                <Loader2 size={28} className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} />
+              )}
+            </div>
+
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#1e293b', margin: '0 0 0.35rem' }}>
+              {approvalProgress.percent === 100 ? 'Persetujuan Selesai!' : 'Memproses Persetujuan Rekomendasi'}
+            </h3>
+
+            <p style={{ fontSize: '0.82rem', color: '#64748b', margin: '0 0 1.25rem', lineHeight: 1.45 }}>
+              {approvalProgress.stage}
+            </p>
+
+            {/* Percentage & Progress Bar */}
+            <div style={{ width: '100%', marginBottom: '0.75rem' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  color: '#405189',
+                  marginBottom: '0.4rem',
+                }}
+              >
+                <span>Progres Pengerjaan</span>
+                <span style={{ fontSize: '0.92rem', color: '#0ab39c' }}>{approvalProgress.percent}%</span>
+              </div>
+
+              {/* Bar track */}
+              <div
+                style={{
+                  width: '100%',
+                  height: '10px',
+                  background: '#f1f5f9',
+                  borderRadius: '9999px',
+                  overflow: 'hidden',
+                  border: '1px solid #e2e8f0',
+                }}
+              >
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${approvalProgress.percent}%`,
+                    background: 'linear-gradient(90deg, #0ab39c 0%, #3577f1 100%)',
+                    borderRadius: '9999px',
+                    transition: 'width 0.12s ease-out',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Sub-label count */}
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                fontSize: '0.72rem',
+                color: '#64748b',
+                background: '#f8fafc',
+                padding: '0.3rem 0.75rem',
+                borderRadius: '6px',
+                border: '1px solid #e2e8f0',
+                fontWeight: 500,
+              }}
+            >
+              <span>Diproses:</span>
+              <strong style={{ color: '#1e293b' }}>
+                {approvalProgress.current.toLocaleString('id-ID')} / {approvalProgress.total.toLocaleString('id-ID')} Baris
+              </strong>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
