@@ -1208,6 +1208,49 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
           ) : (
             /* Audit View: Perbedaan Kode Pos PTEN */
             <div>
+              {/* Flow Explanation Banner */}
+              <div
+                style={{
+                  background: 'linear-gradient(135deg, rgba(64, 81, 137, 0.05) 0%, rgba(41, 156, 219, 0.05) 100%)',
+                  border: '1px solid rgba(64, 81, 137, 0.15)',
+                  borderRadius: '8px',
+                  padding: '1rem 1.25rem',
+                  marginBottom: '1.25rem',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.6rem' }}>
+                  <ShieldCheck size={17} color="#405189" />
+                  <strong style={{ fontSize: '0.86rem', color: '#405189' }}>
+                    Alur Kerja & Cara Pengecekan Audit Kode Pos PTEN
+                  </strong>
+                </div>
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                    gap: '0.75rem',
+                    fontSize: '0.76rem',
+                    color: '#495057',
+                  }}
+                >
+                  <div style={{ background: '#ffffff', padding: '0.65rem 0.85rem', borderRadius: '6px', border: '1px solid #e9ebec' }}>
+                    <div style={{ fontWeight: 700, color: '#405189', marginBottom: '0.2rem' }}>1. Data Target Diunggah</div>
+                    <span>Data target dari berkas Excel memuat kolom <code>KODE POS</code> dan lokasi/nama outlet.</span>
+                  </div>
+
+                  <div style={{ background: '#ffffff', padding: '0.65rem 0.85rem', borderRadius: '6px', border: '1px solid #e9ebec' }}>
+                    <div style={{ fontWeight: 700, color: '#299cdb', marginBottom: '0.2rem' }}>2. Lookup Master PTEN</div>
+                    <span>Sistem mencocokkan kota/alamat target terhadap database resmi PTEN untuk memperoleh <code>KODE POS PTEN</code>.</span>
+                  </div>
+
+                  <div style={{ background: '#ffffff', padding: '0.65rem 0.85rem', borderRadius: '6px', border: '1px solid #e9ebec' }}>
+                    <div style={{ fontWeight: 700, color: '#f06548', marginBottom: '0.2rem' }}>3. Verifikasi & Flagging</div>
+                    <span>Jika <strong>Kode Pos Target ≠ Kode Pos PTEN</strong>, data otomatis diklasifikasikan sebagai <code>TIDAK COCOK</code> untuk dikoreksi.</span>
+                  </div>
+                </div>
+              </div>
+
               <div
                 style={{
                   display: 'flex',

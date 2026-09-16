@@ -7,11 +7,12 @@ import {
   Map,
   ShieldCheck,
   Store,
+  Users,
   ChevronDown,
   ChevronRight
 } from 'lucide-react';
 
-export type ActiveTab = 'dashboard' | 'working' | 'wilayah' | 'pten' | 'master';
+export type ActiveTab = 'dashboard' | 'working' | 'wilayah' | 'pten' | 'master' | 'mapping_role';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -31,7 +32,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   wilayahCount,
 }) => {
   // Is Data Master submenu expanded?
-  const isMasterActive = activeTab === 'master' || activeTab === 'wilayah' || activeTab === 'pten';
+  const isMasterActive = activeTab === 'master' || activeTab === 'wilayah' || activeTab === 'pten' || activeTab === 'mapping_role';
   const [isMasterOpen, setIsMasterOpen] = useState<boolean>(true);
 
   // Auto-expand Data Master when one of its children becomes active
@@ -96,14 +97,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onClick={() => {
                 if (!isMasterOpen) {
                   setIsMasterOpen(true);
-                  // If opening and not already in a master tab, default to 'wilayah' or 'master'
                   if (!isMasterActive) setActiveTab('wilayah');
                 } else {
                   setIsMasterOpen(!isMasterOpen);
                 }
               }}
               id="sidebar-btn-datamaster"
-              title="Data Master (Wilayah, PTEN, Cabang)"
+              title="Data Master (Wilayah, PTEN, Cabang, Mapping Role)"
               style={{ justifyContent: 'space-between' }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
@@ -164,6 +164,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       {masterCount}
                     </span>
                   )}
+                </button>
+
+                {/* 3.d. Mapping Role */}
+                <button
+                  type="button"
+                  className={`sidebar-sub-item ${activeTab === 'mapping_role' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('mapping_role')}
+                  id="sidebar-btn-mapping-role"
+                  title="Master Mapping Role Organisasi"
+                >
+                  <Users size={14} />
+                  <span>Mapping Role</span>
                 </button>
               </div>
             )}

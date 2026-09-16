@@ -13,6 +13,7 @@ import { TargetDataGrid } from './components/WorkingEngine/TargetDataGrid';
 import { ExportAction } from './components/WorkingEngine/ExportAction';
 import { WilayahManager } from './components/WilayahData/WilayahManager';
 import { PTENManager } from './components/PTENData/PTENManager';
+import { RoleMappingManager } from './components/RoleMapping/RoleMappingManager';
 import type { ActiveTab } from './components/Sidebar';
 
 import type { MasterRow, TargetRow, MatchingStats, WilayahStat, WilayahSetting } from './types';
@@ -1086,6 +1087,11 @@ export const App: React.FC = () => {
           {/* MENU MASTER: DATA PTEN */}
           {activeTab === 'pten' && (
             <PTENManager targetRows={targetRows} masterRows={masterRows} />
+          )}
+
+          {/* MENU MASTER: MAPPING ROLE */}
+          {activeTab === 'mapping_role' && (
+            <RoleMappingManager />
           )}
         </main>
       </div>
