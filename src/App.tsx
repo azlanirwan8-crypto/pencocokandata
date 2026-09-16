@@ -248,31 +248,38 @@ export const App: React.FC = () => {
     }
   };
 
-  // Compute Wilayah List from Target Data, Master Data, and Wilayah Settings
+  // Compute Wilayah List from Target Data, Master Data, and Wilayah Settings (Exact 17 Kanwil)
   const wilayahList = useMemo(() => {
     const set = new Set<string>();
     // 1. Dari Wilayah Settings (Setting Wilayah)
     wilayahSettings.forEach((s) => {
-      const label = s.keterangan || s.namaOutlet || (s.wilayah ? `Wilayah ${s.wilayah}` : '');
-      if (label && label.trim()) {
-        set.add(formatWilayahName(label.trim()));
+      const w = s.wilayah || s.kodeWilayah || s.keterangan || s.namaOutlet;
+      if (w && String(w).trim()) {
+        const norm = formatWilayahName(String(w).trim());
+        if (norm && norm !== 'Tanpa Wilayah') set.add(norm);
       }
     });
     // 2. Dari Data Target
     targetRows.forEach((r) => {
       if (r.Wilayah && String(r.Wilayah).trim()) {
-        set.add(formatWilayahName(String(r.Wilayah).trim()));
+        const norm = formatWilayahName(String(r.Wilayah).trim());
+        if (norm && norm !== 'Tanpa Wilayah') set.add(norm);
       }
     });
     // 3. Dari Data Master
     masterRows.forEach((m) => {
       if (m.Wilayah && String(m.Wilayah).trim()) {
-        set.add(formatWilayahName(String(m.Wilayah).trim()));
+        const norm = formatWilayahName(String(m.Wilayah).trim());
+        if (norm && norm !== 'Tanpa Wilayah') set.add(norm);
       }
     });
     return Array.from(set)
       .filter((w) => w && w !== 'Tanpa Wilayah')
-      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+      .sort((a, b) => {
+        const numA = parseInt(a.replace(/\D/g, ''), 10) || 0;
+        const numB = parseInt(b.replace(/\D/g, ''), 10) || 0;
+        return numA - numB;
+      });
   }, [targetRows, masterRows, wilayahSettings]);
 
   // Pre-aggregated count of target rows per wilayah (O(N) single pass instead of O(N*M))

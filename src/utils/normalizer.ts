@@ -494,6 +494,15 @@ export function formatWilayahName(val: unknown): string {
   const str = String(val).trim();
   if (!str || str === '-' || str === '0') return 'Tanpa Wilayah';
 
+  // Extract canonical digit number (e.g. "WILAYAH 01 - MEDAN" -> "Wilayah 1", "01" -> "Wilayah 1", "W01" -> "Wilayah 1")
+  const match = str.match(/\d+/);
+  if (match) {
+    const num = parseInt(match[0], 10);
+    if (!isNaN(num) && num > 0) {
+      return `Wilayah ${num}`;
+    }
+  }
+
   // Jika sudah memiliki awalan "Wilayah" (case-insensitive)
   if (/^wilayah\b/i.test(str)) {
     return str.replace(/^wilayah/i, 'Wilayah');
