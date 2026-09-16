@@ -11,11 +11,9 @@ import {
   Sparkles,
   CheckCircle2,
   Check,
-  HelpCircle,
   Layers,
   Info,
   Eye,
-  SlidersHorizontal,
   ExternalLink,
   Building2,
   Shield,
@@ -269,28 +267,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
 
   // Multi-Selection State for Recommendations Tab
   const [selectedRowNos, setSelectedRowNos] = useState<Set<string | number>>(new Set());
+  const [hiddenCols] = useState<Set<string>>(new Set());
 
-  // Column Visibility Toggle State (with localStorage persistence)
-  const [hiddenCols, setHiddenCols] = useState<Set<string>>(() => {
-    try {
-      const raw = localStorage.getItem('target_grid_hidden_cols');
-      if (raw) return new Set(JSON.parse(raw));
-    } catch {}
-    return new Set();
-  });
-  const [isColDropdownOpen, setIsColDropdownOpen] = useState<boolean>(false);
-
-  const toggleCol = (key: string) => {
-    setHiddenCols((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      try {
-        localStorage.setItem('target_grid_hidden_cols', JSON.stringify(Array.from(next)));
-      } catch {}
-      return next;
-    });
-  };
 
   // Reset multi-select when switching tabs, filtering wilayah, or searching
   useEffect(() => {
@@ -764,6 +742,25 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   };
 
 
+
+  // Set kode pos PTEN untuk pencocokan instan O(1)
+  const ptenKpSet = useMemo(() => {
+    const set = new Set();
+    if (masterRows && masterRows.length > 0) {
+      for (const m of masterRows) {
+        const kp = String(m['KODE POS PTEN'] || m['KODE POS'] || '').replace(/\D/g, '').trim();
+        if (kp && kp.length === 5) set.add(kp);
+      }
+    }
+    if (rows && rows.length > 0) {
+      for (const r of rows) {
+        const kpPten = String(r['KODE POS PTEN'] || '').replace(/\D/g, '').trim();
+        if (kpPten && kpPten.length === 5) set.add(kpPten);
+      }
+    }
+    return set;
+  }, [masterRows, rows]);
+
   // Map Wilayah -> Sandi Cabang untuk format dropdown: "Sandi Cabang : Nama Wilayah"
   const wilayahSandiMap = useMemo(() => {
     const map = new Map();
@@ -1147,162 +1144,6 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
             </button>
           )}
 
-          {/* Tombol Panduan Skor */}
-          {checkerTab === 'recommendation' && (
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => setIsGuideModalOpen(true)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.3rem',
-                fontSize: '0.75rem',
-                padding: '0.28rem 0.65rem',
-                color: '#d97706',
-                borderColor: 'rgba(247, 184, 75, 0.45)',
-                background: '#fffdf5',
-                flexShrink: 0,
-                whiteSpace: 'nowrap',
-              }}
-              id="btn-panduan-skor"
-              title="Buka panduan sederhana cara sistem menghitung skor kedekatan cabang"
-            >
-              <HelpCircle size={13} />
-              <span>Panduan Skor</span>
-            </button>
-          )}
-
-          {/* Dropdown Visibilitas Kolom */}
-          <div style={{ position: 'relative', flexShrink: 0 }}>
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => setIsColDropdownOpen(!isColDropdownOpen)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.3rem',
-                fontSize: '0.75rem',
-                padding: '0.28rem 0.65rem',
-                color: '#495057',
-                borderColor: '#ced4da',
-                background: isColDropdownOpen ? '#f3f6f9' : '#ffffff',
-                fontWeight: 500,
-                whiteSpace: 'nowrap',
-              }}
-              id="btn-toggle-columns"
-              title="Pilih kolom yang ingin ditampilkan atau disembunyikan"
-            >
-              <SlidersHorizontal size={13} />
-              <span>
-                Kolom {hiddenCols.size > 0 ? `(${TOGGLEABLE_COLUMNS.length - hiddenCols.size}/${TOGGLEABLE_COLUMNS.length})` : ''}
-              </span>
-            </button>
-
-            {isColDropdownOpen && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  marginTop: '0.35rem',
-                  background: '#ffffff',
-                  border: '1px solid #e9ebec',
-                  borderRadius: '6px',
-                  boxShadow: '0 5px 15px rgba(0, 0, 0, 0.12)',
-                  zIndex: 50,
-                  minWidth: '210px',
-                  padding: '0.5rem',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    paddingBottom: '0.35rem',
-                    borderBottom: '1px solid #f3f6f9',
-                    marginBottom: '0.35rem',
-                  }}
-                >
-                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#495057' }}>Visibilitas Kolom</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setHiddenCols(new Set());
-                      localStorage.removeItem('target_grid_hidden_cols');
-                    }}
-                    style={{
-                      border: 'none',
-                      background: 'transparent',
-                      fontSize: '0.68rem',
-                      color: '#3577f1',
-                      cursor: 'pointer',
-                      padding: 0,
-                    }}
-                  >
-                    Reset Semua
-                  </button>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', maxHeight: '220px', overflowY: 'auto' }}>
-                  {TOGGLEABLE_COLUMNS.map((col) => (
-                    <label
-                      key={col.key}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.45rem',
-                        fontSize: '0.74rem',
-                        color: '#495057',
-                        cursor: 'pointer',
-                        userSelect: 'none',
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={!hiddenCols.has(col.key)}
-                        onChange={() => toggleCol(col.key)}
-                      />
-                      <span>{col.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Spacer fleksibel untuk meratakan sisi kanan */}
-          <div style={{ flex: 1, minWidth: '4px' }} />
-
-          {/* Tombol Tampilkan Semua Record / Mode Halaman */}
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            onClick={() => {
-              setPageSize((prev) => (prev === 'all' ? 15 : 'all'));
-              setPage(1);
-              setRenderedLimit(60);
-            }}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.3rem',
-              fontSize: '0.75rem',
-              padding: '0.28rem 0.65rem',
-              color: pageSize === 'all' ? '#0ab39c' : '#405189',
-              borderColor: pageSize === 'all' ? '#0ab39c' : '#ced4da',
-              background: pageSize === 'all' ? 'rgba(10, 179, 156, 0.08)' : '#ffffff',
-              fontWeight: 600,
-              flexShrink: 0,
-              whiteSpace: 'nowrap',
-            }}
-            title="Tampilkan seluruh baris data tanpa batasan per halaman"
-          >
-            <Eye size={13} />
-            <span>{pageSize === 'all' ? 'Mode Paginasi (15 Baris)' : 'Tampilkan Semua Record'}</span>
-          </button>
-
           {/* Input Search */}
           <div className="search-input-wrapper" style={{ flexShrink: 0 }}>
             <Search size={13} className="search-icon-pos" />
@@ -1588,8 +1429,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                 <th style={{ color: '#878a99', minWidth: '120px', borderBottom: '1px solid #e9ebec' }}>Kecamatan Target</th>
                 <th style={{ color: '#878a99', minWidth: '120px', borderBottom: '1px solid #e9ebec' }}>Kelurahan Target</th>
                 <th style={{ color: '#878a99', minWidth: '120px', borderBottom: '1px solid #e9ebec' }}>Dati II Target</th>
-                <th style={{ minWidth: '240px', color: '#878a99', borderBottom: '1px solid #e9ebec' }}>ALAMAT Target</th>
-                <th style={{ minWidth: '110px', borderBottom: '1px solid #e9ebec' }}>Provinsi Target</th>
+                <th style={{ minWidth: '110px', color: '#878a99', borderBottom: '1px solid #e9ebec' }}>Provinsi Target</th>
+                <th style={{ minWidth: '130px', color: '#059669', borderBottom: '1px solid #e9ebec' }}>PTEN</th>
               </tr>
             </thead>
             <tbody>
@@ -2317,20 +2158,59 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                       <td style={{ paddingTop: '0.55rem', whiteSpace: 'normal', wordBreak: 'break-word' }}>
                         {r['Dati II'] || '-'}
                       </td>
-                      <td
-                        style={{
-                          paddingTop: '0.55rem',
-                          whiteSpace: 'normal',
-                          wordBreak: 'break-word',
-                          lineHeight: 1.35,
-                          fontSize: '0.75rem',
-                          color: '#212529',
-                        }}
-                      >
-                        {r.ALAMAT || '-'}
-                      </td>
                       <td style={{ paddingTop: '0.55rem', whiteSpace: 'normal', wordBreak: 'break-word' }}>
                         {r.Provinsi || '-'}
+                      </td>
+                      <td style={{ paddingTop: '0.55rem', whiteSpace: 'nowrap' }}>
+                        {(() => {
+                          const targetKp = String(r['KODE POS'] || '').replace(/\D/g, '').trim();
+                          const rawStatus = String(r['CEK KODE POS + PTEN'] || '').toUpperCase().trim();
+                          const isMatch =
+                            rawStatus === 'COCOK' ||
+                            rawStatus === 'SAME' ||
+                            rawStatus === 'MATCH' ||
+                            (targetKp.length === 5 && ptenKpSet.has(targetKp));
+
+                          return isMatch ? (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.25rem',
+                                fontSize: '0.68rem',
+                                fontWeight: 700,
+                                color: '#059669',
+                                background: 'rgba(10, 179, 156, 0.12)',
+                                border: '1px solid rgba(10, 179, 156, 0.3)',
+                                borderRadius: '4px',
+                                padding: '0.15rem 0.45rem',
+                                whiteSpace: 'nowrap',
+                              }}
+                              title="Kode Pos target terdaftar dan cocok di database PTEN"
+                            >
+                              <CheckCircle2 size={11} color="#059669" /> Match PTEN
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.25rem',
+                                fontSize: '0.68rem',
+                                fontWeight: 600,
+                                color: '#6b7280',
+                                background: '#f3f4f6',
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '4px',
+                                padding: '0.15rem 0.45rem',
+                                whiteSpace: 'nowrap',
+                              }}
+                              title="Kode Pos target belum ditemukan di database PTEN"
+                            >
+                              Tidak Ada Data PTEN
+                            </span>
+                          );
+                        })()}
                       </td>
                     </tr>
                   );
