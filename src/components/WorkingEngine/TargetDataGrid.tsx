@@ -428,22 +428,26 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
       return;
     }
 
-    // Dataset fingerprint based on source uploaded rows & masterRows
-    const baseFingerprint = `${rows.length}-${rows[0]?.No || ''}-${rows[rows.length - 1]?.No || ''}-${masterRows.length}`;
+    const rowsToCompute = rows.filter((r) => !isRowMatched(r));
+    const baseFingerprint = `${rows.length}-${rowsToCompute.length}-${rows[0]?.No || ''}-${rows[rows.length - 1]?.No || ''}-${masterRows.length}`;
 
-    // Jika dataset sumber sama dan rekomendasi sudah ada, JANGAN hitung ulang saat user klik Setujui (0ms instan & smooth)
+    if (rowsToCompute.length === 0) {
+      setRecommendations([]);
+      setIsComputingRecs(false);
+      lastAnalyzedFingerprintRef.current = baseFingerprint;
+      if (cancelProgressiveRef.current) {
+        cancelProgressiveRef.current();
+      }
+      return;
+    }
+
+    // Jika dataset sumber sama dan rekomendasi sudah ada, JANGAN hitung ulang (0ms instan & smooth)
     if (lastAnalyzedFingerprintRef.current === baseFingerprint && recommendations.length > 0) {
       return;
     }
 
     if (cancelProgressiveRef.current) {
       cancelProgressiveRef.current();
-    }
-
-    const rowsToCompute = rows.filter((r) => !isRowMatched(r));
-    if (rowsToCompute.length === 0) {
-      setIsComputingRecs(false);
-      return;
     }
 
     setIsComputingRecs(true);
@@ -468,7 +472,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     return () => {
       // Tetap berjalan di background
     };
-  }, [rows.length, masterRows, masterProximityIndex]);
+  }, [rows, masterRows, masterProximityIndex, matchedNoSet]);
 
   // Bersihkan worker hanya saat unmount
   useEffect(() => {

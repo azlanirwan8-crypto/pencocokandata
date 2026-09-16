@@ -163,8 +163,7 @@ export async function loadTargetFromNeon(): Promise<SavedTargetPayload | null> {
 }
 
 /**
- * Sanitize and strip non-essential properties from TargetRows before transmitting to DB
- * Reduces payload size by ~60% to stay safely within Vercel body limits
+ * Sanitize and preserve essential properties from TargetRows before transmitting to DB
  */
 export function sanitizeTargetRowsForStorage(rows: TargetRow[]): TargetRow[] {
   return rows.map((r) => {
@@ -191,38 +190,95 @@ export function sanitizeTargetRowsForStorage(rows: TargetRow[]): TargetRow[] {
     if (r._matchLevel !== undefined) clean._matchLevel = r._matchLevel;
     if (r._matchedAt) clean._matchedAt = r._matchedAt;
     if (r._matchedBy) clean._matchedBy = r._matchedBy;
+    if (r.organisasiRole) clean.organisasiRole = r.organisasiRole;
+    if (r.tipeUnitRole) clean.tipeUnitRole = r.tipeUnitRole;
+    if (r.alurWondr) clean.alurWondr = r.alurWondr;
+    if (r.flowDescription) clean.flowDescription = r.flowDescription;
+    if (r.roleCabsal !== undefined) clean.roleCabsal = r.roleCabsal;
+    if (r.roleCabapv1 !== undefined) clean.roleCabapv1 = r.roleCabapv1;
+    if (r.roleCabapv2 !== undefined) clean.roleCabapv2 = r.roleCabapv2;
+    if (r.roleGrandTotal !== undefined) clean.roleGrandTotal = r.roleGrandTotal;
+    if (r['KOTA PTEN']) clean['KOTA PTEN'] = r['KOTA PTEN'];
+    if (r['KODE POS PTEN']) clean['KODE POS PTEN'] = r['KODE POS PTEN'];
+    if (r['CEK KODE POS + PTEN']) clean['CEK KODE POS + PTEN'] = r['CEK KODE POS + PTEN'];
+    if (r['CEK DUPLIKAT KODE POS']) clean['CEK DUPLIKAT KODE POS'] = r['CEK DUPLIKAT KODE POS'];
     return clean as TargetRow;
   });
 }
 
 /**
  * Save Target & Match Data to Neon DB via /api/target
+ * Automatically chunks large datasets (>1500 rows) to stay safely within Vercel execution limits
  */
 export async function saveTargetToNeon(
   payload: SavedTargetPayload,
   mode: 'replace' | 'append' = 'replace'
 ): Promise<boolean> {
   try {
-    const res = await fetchWithRetry(
-      '/api/target',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+    const sanitizedRows = sanitizeTargetRowsForStorage(payload.rows);
+    const CHUNK_SIZE = 1500;
+
+    if (sanitizedRows.length <= CHUNK_SIZE) {
+      const res = await fetchWithRetry(
+        '/api/target',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...payload,
+            mode,
+            rows: sanitizedRows,
+            updatedAt: new Date().toISOString(),
+          }),
         },
-        body: JSON.stringify({
-          ...payload,
-          mode,
-          rows: sanitizeTargetRowsForStorage(payload.rows),
-          updatedAt: new Date().toISOString(),
-        }),
-      },
-      8000,
-      2
-    );
-    if (!res.ok) return false;
-    const json = await res.json();
-    return Boolean(json.ok);
+        10000,
+        2
+      );
+      if (!res.ok) return false;
+      const json = await res.json();
+      return Boolean(json.ok);
+    }
+
+    // Large datasets: Send initial chunk with 'replace', then append remaining chunks
+    let allSuccess = true;
+    for (let i = 0; i < sanitizedRows.length; i += CHUNK_SIZE) {
+      const chunk = sanitizedRows.slice(i, i + CHUNK_SIZE);
+      const chunkMode = i === 0 ? mode : 'append';
+
+      const res = await fetchWithRetry(
+        '/api/target',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            fileName: payload.fileName,
+            initialCount: payload.initialCount,
+            matchedDone: payload.matchedDone,
+            mode: chunkMode,
+            rows: chunk,
+            updatedAt: new Date().toISOString(),
+          }),
+        },
+        12000,
+        2
+      );
+
+      if (!res.ok) {
+        allSuccess = false;
+        break;
+      }
+      const json = await res.json();
+      if (!json.ok) {
+        allSuccess = false;
+        break;
+      }
+    }
+
+    return allSuccess;
   } catch (err) {
     console.warn('Neon target save error:', err);
     return false;

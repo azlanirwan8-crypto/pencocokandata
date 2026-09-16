@@ -192,10 +192,29 @@ export const App: React.FC = () => {
           }
 
           if (neonTarget.status === 'fulfilled' && neonTarget.value && neonTarget.value.rows.length > 0) {
-            setTargetRows(neonTarget.value.rows);
-            setTargetFileName(neonTarget.value.fileName || '');
-            setInitialTargetCount(neonTarget.value.initialCount || neonTarget.value.rows.length);
-            setMatchedDone(neonTarget.value.matchedDone || false);
+            const neonRows = neonTarget.value.rows;
+            const localTarget = await getItem<{
+              rows: TargetRow[];
+              fileName: string;
+              initialCount: number;
+              matchedDone: boolean;
+            }>('target_data').catch(() => null);
+            const localMatchedCount = (localTarget?.rows || []).filter((r) => r._isMatched).length;
+            const neonMatchedCount = neonRows.filter((r) => r._isMatched).length;
+
+            // PENTING: Hanya timpa state lokal jika data di Neon memiliki jumlah data match LEBIH BANYAK!
+            // Jika data lokal IndexedDB memiliki data match lebih banyak (baru disetujui),
+            // pertahankan data lokal dan langsung dorong (push) pembaruan tersebut ke Neon DB!
+            if (neonMatchedCount > localMatchedCount) {
+              setTargetRows(neonRows);
+              setTargetFileName(neonTarget.value.fileName || '');
+              setInitialTargetCount(neonTarget.value.initialCount || neonRows.length);
+              setMatchedDone(neonTarget.value.matchedDone || false);
+              setItem('target_data', neonTarget.value).catch(() => {});
+            } else if (localTarget && localTarget.rows && localTarget.rows.length > 0) {
+              // Data lokal lebih mutakhir -> sinkronkan data lokal ke Neon Postgres
+              saveTargetToNeon(localTarget).catch(() => {});
+            }
           }
 
           if (neonWilayah.status === 'fulfilled' && neonWilayah.value && neonWilayah.value.length > 0) {
@@ -768,7 +787,7 @@ export const App: React.FC = () => {
           fileName: targetFileName,
           initialCount: initialTargetCount,
           matchedDone: true,
-        });
+        }, true);
 
         return updated;
       });
@@ -841,7 +860,7 @@ export const App: React.FC = () => {
         fileName: targetFileName,
         initialCount: initialTargetCount,
         matchedDone: true,
-      });
+      }, true);
 
       return updated;
     });
