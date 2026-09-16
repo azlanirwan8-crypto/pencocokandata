@@ -543,6 +543,7 @@ export const App: React.FC = () => {
             r['Dati II'] || r.Kota,
             r.Kelurahan,
             r.Kecamatan,
+            r.ALAMAT,
             roleMappingList
           );
 
@@ -574,6 +575,7 @@ export const App: React.FC = () => {
             r['Dati II'] || r.Kota,
             r.Kelurahan,
             r.Kecamatan,
+            r.ALAMAT,
             roleMappingList
           );
 
@@ -698,6 +700,7 @@ export const App: React.FC = () => {
           row['Dati II'] || row.Kota,
           row.Kelurahan,
           row.Kecamatan,
+          row.ALAMAT || matchedMaster.ALAMAT,
           roleMappingList
         );
 
@@ -767,6 +770,7 @@ export const App: React.FC = () => {
           row['Dati II'] || row.Kota,
           row.Kelurahan,
           row.Kecamatan,
+          row.ALAMAT || matchedMaster.ALAMAT,
           roleMappingList
         );
 

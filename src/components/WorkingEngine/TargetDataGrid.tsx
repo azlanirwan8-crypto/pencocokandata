@@ -2127,15 +2127,15 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                 {!hiddenCols.has('Kode Dati II') && <th>Kode Dati II</th>}
                 {!hiddenCols.has('Provinsi') && <th>Provinsi</th>}
                 {!hiddenCols.has('PTEN') && (
-                  <th style={{ color: '#0ab39c', textAlign: 'center', minWidth: '135px' }}>
+                  <th style={{ color: '#0ab39c', textAlign: 'center', minWidth: '165px' }}>
                     <div>Validasi PTEN</div>
-                    <div style={{ fontSize: '0.66rem', fontWeight: 500, color: '#878a99' }}>Kode Pos & Kota</div>
+                    <div style={{ fontSize: '0.66rem', fontWeight: 500, color: '#878a99' }}>Kode Pos & Kota PTEN</div>
                   </th>
                 )}
                 {!hiddenCols.has('RoleMapping') && (
-                  <th style={{ color: '#405189', textAlign: 'center', minWidth: '180px' }}>
+                  <th style={{ color: '#405189', textAlign: 'center', minWidth: '220px' }}>
                     <div>Mapping Role BNI</div>
-                    <div style={{ fontSize: '0.66rem', fontWeight: 500, color: '#878a99' }}>Tipe Unit & Alur Wondr</div>
+                    <div style={{ fontSize: '0.66rem', fontWeight: 500, color: '#878a99' }}>Unit, Role & Alur Wondr</div>
                   </th>
                 )}
               </tr>
@@ -2355,65 +2355,101 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
 
                       {/* Kolom Validasi PTEN */}
                       {!hiddenCols.has('PTEN') && (
-                        <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        <td style={{ textAlign: 'center', padding: '0.4rem 0.55rem', verticalAlign: 'middle' }}>
                           {(() => {
                             const ptenStatus = String(r['CEK KODE POS + PTEN'] || '').toUpperCase();
+                            const fileCity = r['Dati II'] || '-';
+                            const ptenCity = r['KOTA PTEN'] || '-';
+                            const targetKp = r['KODE POS'] || '-';
+
                             if (ptenStatus === 'SAME' || ptenStatus === 'COCOK') {
                               return (
-                                <span
-                                  style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '0.25rem',
-                                    padding: '0.15rem 0.45rem',
-                                    borderRadius: '4px',
-                                    background: 'rgba(10, 179, 156, 0.12)',
-                                    color: '#0ab39c',
-                                    fontSize: '0.68rem',
-                                    fontWeight: 700,
-                                  }}
-                                  title={`PTEN: ${r['KOTA PTEN'] || '-'} (Kode Pos: ${r['KODE POS PTEN'] || r['KODE POS']})`}
-                                >
-                                  ✓ Cocok PTEN
-                                </span>
+                                <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
+                                  <span
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '0.25rem',
+                                      padding: '0.12rem 0.45rem',
+                                      borderRadius: '4px',
+                                      background: 'rgba(10, 179, 156, 0.12)',
+                                      color: '#0ab39c',
+                                      fontSize: '0.68rem',
+                                      fontWeight: 700,
+                                    }}
+                                    title={`Kode Pos ${targetKp} cocok dengan Master PTEN: ${ptenCity}`}
+                                  >
+                                    ✓ Cocok PTEN
+                                  </span>
+                                  <span style={{ fontSize: '0.66rem', color: '#059669', fontWeight: 600 }}>
+                                    {ptenCity}
+                                  </span>
+                                </div>
                               );
                             }
                             if (ptenStatus === 'DIFFERENT' || ptenStatus === 'TIDAK COCOK') {
                               return (
+                                <div
+                                  style={{
+                                    display: 'inline-flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    gap: '0.2rem',
+                                    background: 'rgba(245, 158, 11, 0.08)',
+                                    padding: '0.3rem 0.5rem',
+                                    borderRadius: '5px',
+                                    border: '1px solid rgba(245, 158, 11, 0.25)',
+                                    minWidth: '150px',
+                                  }}
+                                  title={`Perbedaan Wilayah: Di File Excel "${fileCity}", sedangkan Master PTEN untuk Kode Pos ${targetKp} adalah "${ptenCity}"`}
+                                >
+                                  <span
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '0.2rem',
+                                      padding: '0.06rem 0.38rem',
+                                      borderRadius: '3px',
+                                      background: 'rgba(217, 119, 6, 0.15)',
+                                      color: '#b45309',
+                                      fontSize: '0.66rem',
+                                      fontWeight: 700,
+                                    }}
+                                  >
+                                    ⚠️ Beda Kota ({ptenCity})
+                                  </span>
+                                  <div style={{ fontSize: '0.64rem', lineHeight: 1.3, textAlign: 'left', width: '100%' }}>
+                                    <div style={{ color: '#64748b' }}>
+                                      File: <strong style={{ color: '#d97706' }}>{fileCity}</strong>
+                                    </div>
+                                    <div style={{ color: '#64748b' }}>
+                                      PTEN: <strong style={{ color: '#059669' }}>{ptenCity}</strong>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return (
+                              <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '0.15rem' }}>
                                 <span
                                   style={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: '0.25rem',
-                                    padding: '0.15rem 0.45rem',
+                                    padding: '0.12rem 0.4rem',
                                     borderRadius: '4px',
-                                    background: 'rgba(247, 184, 75, 0.15)',
-                                    color: '#d97706',
-                                    fontSize: '0.68rem',
-                                    fontWeight: 700,
+                                    background: '#f3f6f9',
+                                    color: '#878a99',
+                                    fontSize: '0.66rem',
+                                    fontWeight: 500,
                                   }}
-                                  title={`Beda Kota: Excel (${r['Dati II'] || '-'}) vs PTEN (${r['KOTA PTEN'] || '-'})`}
+                                  title="Kode pos belum terdaftar di Master PTEN"
                                 >
-                                  ⚠️ Beda Kota ({r['KOTA PTEN'] || 'PTEN'})
+                                  Belum di PTEN
                                 </span>
-                              );
-                            }
-                            return (
-                              <span
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  padding: '0.15rem 0.4rem',
-                                  borderRadius: '4px',
-                                  background: '#f3f6f9',
-                                  color: '#878a99',
-                                  fontSize: '0.68rem',
-                                  fontWeight: 500,
-                                }}
-                                title="Kode pos belum terdaftar di Master PTEN"
-                              >
-                                Belum di PTEN
-                              </span>
+                                <span style={{ fontSize: '0.62rem', color: '#adb5bd' }}>
+                                  KP: {targetKp}
+                                </span>
+                              </div>
                             );
                           })()}
                         </td>
@@ -2421,33 +2457,121 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
 
                       {/* Kolom Tipe Unit & Alur Wondr Mapping Role */}
                       {!hiddenCols.has('RoleMapping') && (
-                        <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        <td style={{ padding: '0.4rem 0.55rem', verticalAlign: 'middle', textAlign: 'center' }}>
                           {r.organisasiRole || r.tipeUnitRole || r.alurWondr ? (
-                            <div style={{ display: 'inline-flex', flexDirection: 'column', gap: '0.15rem', alignItems: 'center' }}>
-                              <span
+                            <div
+                              style={{
+                                display: 'inline-flex',
+                                flexDirection: 'column',
+                                gap: '0.25rem',
+                                alignItems: 'center',
+                                background: '#fcfdfe',
+                                padding: '0.35rem 0.55rem',
+                                borderRadius: '6px',
+                                border: '1px solid #e9ecef',
+                                minWidth: '200px',
+                              }}
+                              title={`Unit: ${r.organisasiRole || '-'}\nTipe: ${r.tipeUnitRole || '-'}\nAlur: ${r.flowDescription || r.alurWondr || '-'}`}
+                            >
+                              {/* Nama Unit di Mapping Role Database */}
+                              <div
                                 style={{
-                                  fontSize: '0.68rem',
+                                  fontSize: '0.72rem',
                                   fontWeight: 700,
-                                  padding: '0.12rem 0.45rem',
-                                  borderRadius: '4px',
-                                  background:
-                                    r.tipeUnitRole?.includes('KC') || r.tipeUnitRole?.includes('Utama')
-                                      ? 'rgba(64, 81, 137, 0.12)'
-                                      : 'rgba(41, 156, 219, 0.12)',
-                                  color:
-                                    r.tipeUnitRole?.includes('KC') || r.tipeUnitRole?.includes('Utama')
-                                      ? '#405189'
-                                      : '#299cdb',
+                                  color: '#1e293b',
+                                  textAlign: 'center',
+                                  maxWidth: '220px',
+                                  whiteSpace: 'normal',
+                                  lineHeight: 1.25,
                                 }}
-                                title={r.organisasiRole ? `Unit: ${r.organisasiRole}` : undefined}
                               >
-                                {r.tipeUnitRole || (r.organisasiRole ? 'Terpetakan' : '-')}
-                              </span>
-                              {r.alurWondr && (
-                                <span style={{ fontSize: '0.64rem', color: '#6c757d', fontWeight: 600 }}>
-                                  {r.alurWondr} {r.roleGrandTotal ? `(${r.roleGrandTotal} User)` : ''}
+                                {r.organisasiRole || '-'}
+                              </div>
+
+                              {/* Tipe Unit Badge + Alur Wondr */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+                                <span
+                                  style={{
+                                    fontSize: '0.65rem',
+                                    fontWeight: 700,
+                                    padding: '0.08rem 0.38rem',
+                                    borderRadius: '3px',
+                                    background:
+                                      r.tipeUnitRole?.includes('KC') || r.tipeUnitRole?.includes('Utama')
+                                        ? 'rgba(64, 81, 137, 0.12)'
+                                        : 'rgba(41, 156, 219, 0.12)',
+                                    color:
+                                      r.tipeUnitRole?.includes('KC') || r.tipeUnitRole?.includes('Utama')
+                                        ? '#405189'
+                                        : '#299cdb',
+                                  }}
+                                >
+                                  {r.tipeUnitRole || (r.organisasiRole ? 'Terpetakan' : '-')}
                                 </span>
-                              )}
+                                {r.alurWondr && (
+                                  <span
+                                    style={{
+                                      fontSize: '0.65rem',
+                                      fontWeight: 600,
+                                      color: '#475569',
+                                      background: '#f1f5f9',
+                                      padding: '0.08rem 0.35rem',
+                                      borderRadius: '3px',
+                                    }}
+                                  >
+                                    {r.alurWondr}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Status Ketersediaan 3 Role & Total User */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.62rem', fontWeight: 700 }}>
+                                <span
+                                  style={{
+                                    padding: '0.05rem 0.28rem',
+                                    borderRadius: '2px',
+                                    background: (r.roleCabsal ?? 0) > 0 ? 'rgba(10, 179, 156, 0.15)' : '#f1f5f9',
+                                    color: (r.roleCabsal ?? 0) > 0 ? '#059669' : '#94a3b8',
+                                  }}
+                                  title={`Maker (Sales Cabang / QRS_CABSAL): ${r.roleCabsal ?? 0}`}
+                                >
+                                  M: {r.roleCabsal ?? 0}
+                                </span>
+                                <span
+                                  style={{
+                                    padding: '0.05rem 0.28rem',
+                                    borderRadius: '2px',
+                                    background: (r.roleCabapv1 ?? 0) > 0 ? 'rgba(10, 179, 156, 0.15)' : '#f1f5f9',
+                                    color: (r.roleCabapv1 ?? 0) > 0 ? '#059669' : '#94a3b8',
+                                  }}
+                                  title={`Checker (Verifikator Cabang / QRS_CABAPV1): ${r.roleCabapv1 ?? 0}`}
+                                >
+                                  C: {r.roleCabapv1 ?? 0}
+                                </span>
+                                <span
+                                  style={{
+                                    padding: '0.05rem 0.28rem',
+                                    borderRadius: '2px',
+                                    background: (r.roleCabapv2 ?? 0) > 0 ? 'rgba(10, 179, 156, 0.15)' : '#f1f5f9',
+                                    color: (r.roleCabapv2 ?? 0) > 0 ? '#059669' : '#94a3b8',
+                                  }}
+                                  title={`Signer (Penyetuju Cabang / QRS_CABAPV2): ${r.roleCabapv2 ?? 0}`}
+                                >
+                                  S: {r.roleCabapv2 ?? 0}
+                                </span>
+                                <span
+                                  style={{
+                                    padding: '0.05rem 0.32rem',
+                                    borderRadius: '2px',
+                                    background: 'rgba(64, 81, 137, 0.1)',
+                                    color: '#405189',
+                                    fontWeight: 700,
+                                  }}
+                                  title={`Grand Total Pegawai Fisik Unik di Unit ini: ${r.roleGrandTotal ?? 1} User`}
+                                >
+                                  Total: {r.roleGrandTotal ?? 1} User
+                                </span>
+                              </div>
                             </div>
                           ) : (
                             <span style={{ color: '#adb5bd', fontSize: '0.72rem' }}>-</span>

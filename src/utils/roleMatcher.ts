@@ -38,6 +38,7 @@ export function resolveRoleMappingForBranch(
   dati2?: string,
   kelurahan?: string,
   kecamatan?: string,
+  alamat?: string,
   roleList: RoleMappingRecord[] = []
 ): ResolvedRoleMapping | null {
   if (!roleList || roleList.length === 0) return null;
@@ -46,6 +47,7 @@ export function resolveRoleMappingForBranch(
   const cleanCity = cleanDati(dati2 || '');
   const cleanKel = cleanText(kelurahan || '');
   const cleanKec = cleanText(kecamatan || '');
+  const cleanAlm = cleanText(alamat || '');
 
   let bestRecord: RoleMappingRecord | null = null;
   let bestScore = -1;
@@ -63,22 +65,33 @@ export function resolveRoleMappingForBranch(
       score = 85;
     }
 
-    // 2. Sub Branch Match (e.g., "GIANYAR" in "DENPASAR RENON BRANCH OFFICE - GIANYAR SUB BRANCH")
+    // 2. Sub Branch Match (e.g., "PAGUTAN" in "MATARAM BRANCH OFFICE - PAGUTAN SUB BRANCH" or "AEK KANOPAN")
     if (orgUpper.includes(' - ')) {
       const parts = orgUpper.split(' - ');
       const subPartClean = normalizeBranchName(parts[1] || '');
       if (cleanBranch && subPartClean && (subPartClean.includes(cleanBranch) || cleanBranch.includes(subPartClean))) {
+        score = Math.max(score, 98);
+      }
+      if (cleanKel && subPartClean && (subPartClean.includes(cleanKel.toUpperCase()) || cleanKel.toUpperCase().includes(subPartClean))) {
         score = Math.max(score, 95);
       }
-      if (cleanKel && subPartClean && subPartClean.includes(cleanKel.toUpperCase())) {
-        score = Math.max(score, 90);
+      if (cleanKec && subPartClean && (subPartClean.includes(cleanKec.toUpperCase()) || cleanKec.toUpperCase().includes(subPartClean))) {
+        score = Math.max(score, 92);
       }
-      if (cleanKec && subPartClean && subPartClean.includes(cleanKec.toUpperCase())) {
+      if (cleanAlm && subPartClean && cleanAlm.toUpperCase().includes(subPartClean)) {
         score = Math.max(score, 90);
       }
     }
 
-    // 3. Fallback: City / Dati II matching to Parent Branch Office
+    // 3. Address Scanning for Branch / Sub Branch Keywords
+    if (score < 80 && cleanAlm) {
+      const almUpper = cleanAlm.toUpperCase();
+      if (orgClean && almUpper.includes(orgClean)) {
+        score = Math.max(score, 80);
+      }
+    }
+
+    // 4. Fallback: City / Dati II matching to Parent Branch Office
     if (score === 0 && cleanCity) {
       const cityClean = cleanCity.replace(/^(KOTA|KABUPATEN|KAB)\s+/i, '').trim().toUpperCase();
       if (cityClean && orgClean.includes(cityClean)) {
@@ -88,7 +101,7 @@ export function resolveRoleMappingForBranch(
       }
     }
 
-    // 4. Word-token intersection
+    // 5. Word-token intersection
     if (score === 0 && cleanBranch) {
       const branchTokens = cleanBranch.split(/\s+/).filter((t) => t.length >= 3);
       const orgTokens = orgClean.split(/\s+/).filter((t) => t.length >= 3);

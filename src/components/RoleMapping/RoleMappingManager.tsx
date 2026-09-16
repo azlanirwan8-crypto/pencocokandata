@@ -190,6 +190,48 @@ export const DEFAULT_ROLE_MAPPING_DATA: RoleMappingRecord[] = [
     qrsCabapv2: 1,
     grandTotal: 2,
   },
+  {
+    organisasiTujuan: 'RANTAUPRAPAT BRANCH OFFICE',
+    qrsCabsal: 1,
+    qrsCabapv1: 1,
+    qrsCabapv2: 1,
+    grandTotal: 1,
+  },
+  {
+    organisasiTujuan: 'RANTAUPRAPAT BRANCH OFFICE - AEK KANOPAN SUB BRANCH',
+    qrsCabsal: 1,
+    qrsCabapv1: 0,
+    qrsCabapv2: 1,
+    grandTotal: 2,
+  },
+  {
+    organisasiTujuan: 'RANTAUPRAPAT BRANCH OFFICE - KOTA PINANG SUB BRANCH',
+    qrsCabsal: 1,
+    qrsCabapv1: 0,
+    qrsCabapv2: 1,
+    grandTotal: 2,
+  },
+  {
+    organisasiTujuan: 'KISARAN BRANCH OFFICE',
+    qrsCabsal: 1,
+    qrsCabapv1: 1,
+    qrsCabapv2: 1,
+    grandTotal: 2,
+  },
+  {
+    organisasiTujuan: 'PEMATANG SIANTAR BRANCH OFFICE',
+    qrsCabsal: 1,
+    qrsCabapv1: 1,
+    qrsCabapv2: 1,
+    grandTotal: 3,
+  },
+  {
+    organisasiTujuan: 'TEBING TINGGI BRANCH OFFICE',
+    qrsCabsal: 1,
+    qrsCabapv1: 1,
+    qrsCabapv2: 1,
+    grandTotal: 2,
+  },
 ];
 
 // Helper: Deteksi tipe unit kerja (Cabang Induk vs Sub Branch / KCP)

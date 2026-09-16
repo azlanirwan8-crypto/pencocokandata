@@ -227,6 +227,7 @@ export function matchSingleRow(
       result['Dati II'] || result.Kota,
       result.Kelurahan,
       result.Kecamatan,
+      result.ALAMAT,
       roleMappingList
     );
 
