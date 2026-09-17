@@ -230,7 +230,9 @@ export function matchSingleRow(
       result.Kecamatan,
       result.ALAMAT,
       roleMappingList,
-      outletCandidateName
+      outletCandidateName,
+      result.Provinsi,
+      result.Wilayah
     );
 
     if (roleResolution) {

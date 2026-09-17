@@ -198,9 +198,19 @@ export function resolveRoleMappingForBranch(
       if (cleanKec && subPartClean.length >= 3) {
         if (flexMatch(subPartClean, cleanKec)) score = Math.max(score, 92);
       }
-      // Address contains sub-branch
-      if (cleanAlm && subPartClean.length >= 4 && (cleanAlm.includes(subPartClean) || cleanAlm.includes(subPartNoSpace))) {
-        score = Math.max(score, 90);
+      // Address contains sub-branch (Hanya jika bukan kata pulau/provinsi umum dan tidak bentrok kota/provinsi)
+      const isGenericGeoWord = /^(SUMATERA|JAWA|KALIMANTAN|SULAWESI|PAPUA|BALI|MALUKU|INDONESIA)$/i.test(subPartClean);
+      if (
+        !isGenericGeoWord &&
+        cleanAlm &&
+        subPartClean.length >= 4 &&
+        (cleanAlm.includes(subPartClean) || cleanAlm.includes(subPartNoSpace))
+      ) {
+        // Validasi: jika kota terisi, pastikan parent/org tidak bentrok kota lain
+        const cityConflict = cleanCityNorm && parentClean && cleanCityNorm !== parentClean && !parentClean.includes(cleanCityNorm) && !cleanCityNorm.includes(parentClean);
+        if (!cityConflict) {
+          score = Math.max(score, 90);
+        }
       }
       // Parent part vs branch name (with no-space fix)
       if (cleanBranch && parentClean.length >= 3) {
@@ -226,9 +236,11 @@ export function resolveRoleMappingForBranch(
       }
     }
 
-    // ── TIER 4: Address scanning ─────────────────────────────────────────
+    // ── TIER 4: Address scanning (bukan kata pulau umum dan tidak bentrok kota) ──
     if (score < 80 && cleanAlm && orgClean.length >= 4) {
-      if (cleanAlm.includes(orgClean) || cleanAlm.includes(orgNoSpace)) {
+      const isGenericOrg = /^(SUMATERA|JAWA|KALIMANTAN|SULAWESI|PAPUA|BALI|MALUKU)$/i.test(orgClean);
+      const cityConflict = cleanCityNorm && orgClean && cleanCityNorm !== orgClean && !orgClean.includes(cleanCityNorm) && !cleanCityNorm.includes(orgClean);
+      if (!isGenericOrg && !cityConflict && (cleanAlm.includes(orgClean) || cleanAlm.includes(orgNoSpace))) {
         score = Math.max(score, 80);
       }
     }
