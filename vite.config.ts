@@ -1,5 +1,6 @@
 import react from '@vitejs/plugin-react'
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
+import { neon } from '@neondatabase/serverless'
 
 function geocodeDevMiddleware(): Plugin {
   return {
@@ -91,9 +92,85 @@ function geocodeDevMiddleware(): Plugin {
   };
 }
 
+function kodeposDevMiddleware(connectionString: string): Plugin {
+  return {
+    name: 'kodepos-dev-middleware',
+    configureServer(server) {
+      server.middlewares.use('/api/kodepos', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+
+        if (req.method === 'OPTIONS') { res.statusCode = 200; return res.end(); }
+
+        if (!connectionString) {
+          res.statusCode = 200;
+          return res.end(JSON.stringify({ ok: false, configured: false, message: 'DATABASE_URL belum diset untuk dev. Buat file .env.local berisi DATABASE_URL=...' }));
+        }
+
+        try {
+          const sql = neon(connectionString);
+          await sql`CREATE TABLE IF NOT EXISTS kodepos_data (
+            id SERIAL PRIMARY KEY, kode_pos VARCHAR(10) NOT NULL, kelurahan TEXT, kecamatan TEXT,
+            kabupaten_kota TEXT, provinsi TEXT, status VARCHAR(20) DEFAULT 'AKTIF',
+            created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW());`;
+
+          if (req.method === 'GET') {
+            const rows = await sql`SELECT kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, status FROM kodepos_data ORDER BY id;`;
+            const data = (rows || []).map((r: any) => ({
+              kodePos: r.kode_pos ?? '', kelurahan: r.kelurahan ?? '', kecamatan: r.kecamatan ?? '',
+              kabupatenKota: r.kabupaten_kota ?? '', provinsi: r.provinsi ?? '', status: r.status ?? 'AKTIF',
+            }));
+            res.statusCode = 200;
+            return res.end(JSON.stringify({ ok: true, configured: true, count: data.length, data }));
+          }
+
+          if (req.method === 'POST') {
+            let raw = '';
+            for await (const chunk of req) raw += chunk;
+            const { rows, mode = 'replace' } = JSON.parse(raw || '{}');
+            if (!Array.isArray(rows) || rows.length === 0) {
+              res.statusCode = 400; return res.end(JSON.stringify({ ok: false, error: 'rows harus array tidak kosong.' }));
+            }
+            if (mode === 'replace') await sql`TRUNCATE TABLE kodepos_data RESTART IDENTITY;`;
+            const BATCH = 500;
+            for (let i = 0; i < rows.length; i += BATCH) {
+              const batch = rows.slice(i, i + BATCH);
+              const ph: string[] = []; const vals: any[] = [];
+              batch.forEach((r: any, j: number) => {
+                const b = j * 6;
+                ph.push(`($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6})`);
+                vals.push(String(r.kodePos ?? ''), String(r.kelurahan ?? ''), String(r.kecamatan ?? ''), String(r.kabupatenKota ?? ''), String(r.provinsi ?? ''), String(r.status ?? 'AKTIF'));
+              });
+              await sql.query(`INSERT INTO kodepos_data (kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, status) VALUES ${ph.join(',')} ON CONFLICT DO NOTHING;`, vals);
+            }
+            res.statusCode = 200;
+            return res.end(JSON.stringify({ ok: true, configured: true, inserted: rows.length, total: rows.length }));
+          }
+
+          if (req.method === 'DELETE') {
+            await sql`TRUNCATE TABLE kodepos_data RESTART IDENTITY;`;
+            res.statusCode = 200;
+            return res.end(JSON.stringify({ ok: true, configured: true }));
+          }
+
+          res.statusCode = 405;
+          return res.end(JSON.stringify({ ok: false, error: 'Method Not Allowed' }));
+        } catch (e: any) {
+          res.statusCode = 500;
+          return res.end(JSON.stringify({ ok: false, configured: true, error: e.message }));
+        }
+      });
+    },
+  };
+}
+
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [react(), geocodeDevMiddleware()],
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const dbUrl = env.DATABASE_URL || env.POSTGRES_URL || env.NEON_DATABASE_URL || '';
+
+  return {
+    plugins: [react(), geocodeDevMiddleware(), kodeposDevMiddleware(dbUrl)],
   build: {
     target: 'esnext',
     cssCodeSplit: true,
@@ -114,5 +191,6 @@ export default defineConfig({
       },
     },
   },
+  };
 })
 

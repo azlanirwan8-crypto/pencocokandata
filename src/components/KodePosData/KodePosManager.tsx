@@ -72,9 +72,24 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load persisted Kode Pos data on mount from IndexedDB
+  // Load Kode Pos: IndexedDB untuk tampil instan, lalu Neon (DB) sebagai sumber
+  // utama yang menimpa di background agar data yang di-push ke DB selalu tampil.
   useEffect(() => {
     let isMounted = true;
+
+    const applyList = (records: KodePosRecord[]) => {
+      setKodePosList(records);
+      onKodePosCountChange?.(records.length);
+      setItem('kodepos_master_data', records);
+    };
+
+    const refreshFromNeon = async () => {
+      const remote = await loadKodePosFromNeon();
+      if (remote && Array.isArray(remote) && remote.length > 0 && isMounted) {
+        applyList(remote as KodePosRecord[]);
+      }
+    };
+
     const loadSaved = async () => {
       try {
         const saved = await getItem<KodePosRecord[]>('kodepos_master_data');
@@ -82,24 +97,12 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
           if (!isMounted) return;
           setKodePosList(saved);
           onKodePosCountChange?.(saved.length);
-          return;
+        } else if (isMounted) {
+          setKodePosList(DEFAULT_KODEPOS_DATA);
+          onKodePosCountChange?.(DEFAULT_KODEPOS_DATA.length);
         }
-
-        // IndexedDB kosong — coba pulihkan dari Neon Postgres
-        const remote = await loadKodePosFromNeon();
-        if (remote && Array.isArray(remote) && remote.length > 0) {
-          if (!isMounted) return;
-          const records = remote as KodePosRecord[];
-          setKodePosList(records);
-          onKodePosCountChange?.(records.length);
-          setItem('kodepos_master_data', records);
-          return;
-        }
-
-        if (!isMounted) return;
-        setKodePosList(DEFAULT_KODEPOS_DATA);
-        onKodePosCountChange?.(DEFAULT_KODEPOS_DATA.length);
-        setItem('kodepos_master_data', DEFAULT_KODEPOS_DATA);
+        // Neon authoritative: timpa IndexedDB bila DB punya data
+        await refreshFromNeon();
       } catch (err) {
         console.warn('Error loading Kode Pos data:', err);
       }
