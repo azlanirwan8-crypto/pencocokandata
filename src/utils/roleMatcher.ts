@@ -32,6 +32,22 @@ export interface ResolvedRoleMapping {
 }
 
 /**
+ * Ekstraksi seluruh nama alias / riwayat nama cabang (seperti d/h = dahulu, ex = bekas, fka = formerly known as)
+ * Menghasilkan array string nama yang dinormalisasi: [namaUtama, ...namaDahulu]
+ * Contoh: "PROKLAMASI PADANG D/H JALAN AHMAD YANI PADANG" -> ["PROKLAMASI PADANG", "JALAN AHMAD YANI PADANG"]
+ */
+export function extractBranchAliases(rawName: string): string[] {
+  if (!rawName) return [];
+  const s = String(rawName).trim();
+  const dhRegex = /\b(?:D\/H|DH\/|D\s*\.\s*H|EX|FKA)\b/i;
+  if (!dhRegex.test(s)) {
+    return [s];
+  }
+  const parts = s.split(dhRegex).map((p) => p.trim()).filter(Boolean);
+  return parts;
+}
+
+/**
  * Normalizes branch name by stripping administrative prefixes and common noise.
  * Result is uppercase with only alphanumeric + spaces.
  */
@@ -39,6 +55,8 @@ export function normalizeBranchName(name: string): string {
   if (!name) return '';
   return name
     .toUpperCase()
+    // 0. Bersihkan nomor urut / bullet di awal (contoh: "9 • ", "1. ", "09 - ")
+    .replace(/^[\d\s•\-\.\)]+/, '')
     // 1. Bersihkan keterangan riwayat perubahan nama cabang (d/h = dahulu, ex = bekas, fka = formerly known as)
     .replace(/\b(D\/H|DH\/|D\s*\.\s*H|EX|FKA)\b[\s\S]*$/i, '')
     // 2. Bersihkan tipe unit administratif
@@ -132,8 +150,11 @@ export function resolveRoleMappingForBranch(
     lastRoleListRef = roleList;
   }
 
-  const cleanBranch = normalizeBranchName(branchName);
-  const cleanOutlet = normalizeBranchName(outletName || '');
+  const branchAliases = extractBranchAliases(branchName).map(b => normalizeIndonesianBranchAliases(normalizeBranchName(b))).filter(Boolean);
+  const outletAliases = extractBranchAliases(outletName || '').map(o => normalizeIndonesianBranchAliases(normalizeBranchName(o))).filter(Boolean);
+
+  const cleanBranch = branchAliases[0] || normalizeBranchName(branchName);
+  const cleanOutlet = outletAliases[0] || normalizeBranchName(outletName || '');
 
   // City: strip prefix → normalize → build no-space variant
   // FIX: "TOLI-TOLI" → cleanDati → "TOLI-TOLI" → strip [^A-Z0-9] → "TOLI TOLI"
@@ -155,7 +176,7 @@ export function resolveRoleMappingForBranch(
 
   const targetIsland = getIslandFromProvinsi(cleanProv || cleanAlm || cleanCity);
 
-  const cacheKey = `${cleanBranch}|${cleanOutlet}|${cleanCity}|${cleanKel}|${cleanKec}|${cleanProv.slice(0, 10)}|${cleanWil.slice(0, 10)}|${cleanAlm.slice(0, 30)}`;
+  const cacheKey = `${cleanBranch}|${cleanOutlet}|${branchAliases.join('~')}|${outletAliases.join('~')}|${cleanCity}|${cleanKel}|${cleanKec}|${cleanProv.slice(0, 10)}|${cleanWil.slice(0, 10)}|${cleanAlm.slice(0, 30)}`;
   if (roleResolveCache.has(cacheKey)) {
     return roleResolveCache.get(cacheKey) || null;
   }
@@ -165,16 +186,17 @@ export function resolveRoleMappingForBranch(
 
   for (const record of roleList) {
     const orgUpper = record.organisasiTujuan.toUpperCase();
-    const orgClean = normalizeBranchName(record.organisasiTujuan);
+    const orgClean = normalizeIndonesianBranchAliases(normalizeBranchName(record.organisasiTujuan));
     const orgNoSpace = noSpace(orgClean);
     const isKc = getUnitCategory(record.organisasiTujuan) === 'KC';
     let score = 0;
 
-    // ── TIER 1: Exact normalized branch or outlet match (+ no-space variant) ─
-    if (
-      (cleanBranch && (orgClean === cleanBranch || (cleanBranchNoSpace.length >= 3 && orgNoSpace === cleanBranchNoSpace))) ||
-      (cleanOutlet && (orgClean === cleanOutlet || (cleanOutletNoSpace.length >= 3 && orgNoSpace === cleanOutletNoSpace)))
-    ) {
+    // ── TIER 1: Exact normalized branch or outlet match (termasuk seluruh alias d/h & varian tanpa spasi) ─
+    const matchTier1 =
+      branchAliases.some(b => b === orgClean || (b.length >= 3 && noSpace(b) === orgNoSpace)) ||
+      outletAliases.some(o => o === orgClean || (o.length >= 3 && noSpace(o) === orgNoSpace));
+
+    if (matchTier1) {
       score = 100;
     }
 
@@ -183,28 +205,31 @@ export function resolveRoleMappingForBranch(
       const dashIdx = orgUpper.indexOf(' - ');
       const parentPart = orgUpper.substring(0, dashIdx);
       const subPart = orgUpper.substring(dashIdx + 3);
-      const subPartClean = normalizeBranchName(subPart);
+      const subPartClean = normalizeIndonesianBranchAliases(normalizeBranchName(subPart));
       const subPartNoSpace = noSpace(subPartClean);
-      const parentClean = normalizeBranchName(parentPart);
+      const parentClean = normalizeIndonesianBranchAliases(normalizeBranchName(parentPart));
       const parentNoSpace = noSpace(parentClean);
 
-      // Both Parent and Outlet match perfectly
-      if (
-        (cleanBranch && flexContains(parentClean, cleanBranch) && cleanOutlet && flexContains(subPartClean, cleanOutlet)) ||
-        (cleanOutlet && flexContains(parentClean, cleanOutlet) && cleanBranch && flexContains(subPartClean, cleanBranch))
-      ) {
+      // Both Parent and Outlet match perfectly (termasuk alias d/h)
+      const parentMatched = branchAliases.some(b => flexContains(parentClean, b)) || outletAliases.some(o => flexContains(parentClean, o));
+      const subMatched = outletAliases.some(o => flexContains(subPartClean, o) || flexMatch(subPartClean, o) || (subPartNoSpace.length >= 3 && subPartNoSpace === noSpace(o))) ||
+                         branchAliases.some(b => flexContains(subPartClean, b) || flexMatch(subPartClean, b) || (subPartNoSpace.length >= 3 && subPartNoSpace === noSpace(b)));
+
+      if (parentMatched && subMatched) {
         score = 100;
       }
 
-      // Sub-branch vs outlet
-      if (score < 99 && cleanOutlet && subPartClean.length >= 3) {
-        if (flexMatch(subPartClean, cleanOutlet) || (subPartNoSpace.length >= 3 && subPartNoSpace === cleanOutletNoSpace)) {
+      // Sub-branch vs outlet (termasuk alias)
+      if (score < 99 && subPartClean.length >= 3) {
+        const anyOutletSub = outletAliases.some(o => flexMatch(subPartClean, o) || (subPartNoSpace.length >= 3 && subPartNoSpace === noSpace(o)));
+        if (anyOutletSub) {
           score = Math.max(score, 99);
         }
       }
-      // Sub-branch vs branch
-      if (score < 98 && cleanBranch && subPartClean.length >= 3) {
-        if (flexMatch(subPartClean, cleanBranch) || (subPartNoSpace.length >= 3 && subPartNoSpace === cleanBranchNoSpace)) {
+      // Sub-branch vs branch (termasuk alias)
+      if (score < 98 && subPartClean.length >= 3) {
+        const anyBranchSub = branchAliases.some(b => flexMatch(subPartClean, b) || (subPartNoSpace.length >= 3 && subPartNoSpace === noSpace(b)));
+        if (anyBranchSub) {
           score = Math.max(score, 98);
         }
       }
@@ -529,9 +554,12 @@ export function auditRoleMasterConsistency(row: {
     roleType = 'KC';
   }
 
-  // 3. Evaluasi Keselarasan Nama Unit (dengan normalisasi singkatan Indonesia & varian tanpa spasi)
-  const cleanOutlet = normalizeIndonesianBranchAliases(normalizeBranchName(masterOutletRaw));
-  const cleanCabang = normalizeIndonesianBranchAliases(normalizeBranchName(masterCabangRaw));
+  // 3. Evaluasi Keselarasan Nama Unit (dengan normalisasi singkatan Indonesia & varian tanpa spasi & alias d/h)
+  const outletAliases = extractBranchAliases(masterOutletRaw).map(o => normalizeIndonesianBranchAliases(normalizeBranchName(o))).filter(Boolean);
+  const cabangAliases = extractBranchAliases(masterCabangRaw).map(c => normalizeIndonesianBranchAliases(normalizeBranchName(c))).filter(Boolean);
+
+  const cleanOutlet = outletAliases[0] || normalizeIndonesianBranchAliases(normalizeBranchName(masterOutletRaw));
+  const cleanCabang = cabangAliases[0] || normalizeIndonesianBranchAliases(normalizeBranchName(masterCabangRaw));
   const cleanRoleOrg = normalizeIndonesianBranchAliases(normalizeBranchName(roleOrgRaw));
 
   // Versi strip angka (sandi cabang seperti '197 TOLI TOLI' -> 'TOLI TOLI')
@@ -554,23 +582,27 @@ export function auditRoleMasterConsistency(row: {
     roleSubNoSpace = noSpace(roleSubClean);
   }
 
-  // A. Exact Name Match (termasuk varian tanpa spasi & strip sandi angka)
+  // A. Exact Name Match (termasuk varian tanpa spasi, strip sandi angka, dan semua alias d/h)
   const isExactOrgMatch =
-    (cleanOutlet && cleanRoleOrg === cleanOutlet) ||
-    (cleanCabang && cleanRoleOrg === cleanCabang) ||
-    (cleanCabangNoCode && cleanRoleOrg === cleanCabangNoCode) ||
-    (cleanRoleOrgNoSpace && (
-      (cleanOutletNoSpace && cleanRoleOrgNoSpace === cleanOutletNoSpace) ||
-      (cleanCabangNoSpace && cleanRoleOrgNoSpace === cleanCabangNoSpace)
-    ));
+    outletAliases.some(o => cleanRoleOrg === o || (cleanRoleOrgNoSpace.length >= 3 && cleanRoleOrgNoSpace === noSpace(o))) ||
+    cabangAliases.some(c => {
+      const cNoCode = c.replace(/^\d+\s*/, '').trim();
+      return cleanRoleOrg === c || cleanRoleOrg === cNoCode || (cleanRoleOrgNoSpace.length >= 3 && (cleanRoleOrgNoSpace === noSpace(c) || cleanRoleOrgNoSpace === noSpace(cNoCode)));
+    });
 
-  // B. Sub-Branch Match (e.g. A Yani matches Ahmad Yani)
+  // B. Sub-Branch Match (e.g. A Yani matches Ahmad Yani, Ahmad Yani Padang matches Jl A Yani Padang)
   const isSubMatch =
-    (cleanOutlet && roleSubClean && (roleSubClean.includes(cleanOutlet) || cleanOutlet.includes(roleSubClean))) ||
-    (cleanCabangNoCode && roleSubClean && (roleSubClean.includes(cleanCabangNoCode) || cleanCabangNoCode.includes(roleSubClean))) ||
+    (roleSubClean && outletAliases.some(o => roleSubClean.includes(o) || o.includes(roleSubClean))) ||
+    (roleSubClean && cabangAliases.some(c => {
+      const cNoCode = c.replace(/^\d+\s*/, '').trim();
+      return roleSubClean.includes(c) || c.includes(roleSubClean) || roleSubClean.includes(cNoCode) || cNoCode.includes(roleSubClean);
+    })) ||
     (cleanRoleOrgNoSpace && roleSubNoSpace && (
-      (cleanOutletNoSpace && (roleSubNoSpace.includes(cleanOutletNoSpace) || cleanOutletNoSpace.includes(roleSubNoSpace))) ||
-      (cleanCabangNoSpace && (roleSubNoSpace.includes(cleanCabangNoSpace) || cleanCabangNoSpace.includes(roleSubNoSpace)))
+      outletAliases.some(o => roleSubNoSpace.includes(noSpace(o)) || noSpace(o).includes(roleSubNoSpace)) ||
+      cabangAliases.some(c => {
+        const cNoSpace = noSpace(c.replace(/^\d+\s*/, '').trim());
+        return roleSubNoSpace.includes(cNoSpace) || cNoSpace.includes(roleSubNoSpace);
+      })
     ));
 
   // C. Parent Branch Match (e.g. Samarinda matches Samarinda)
@@ -582,12 +614,12 @@ export function auditRoleMasterConsistency(row: {
       (cleanCabangNoSpace && (roleParentNoSpace.includes(cleanCabangNoSpace) || cleanCabangNoSpace.includes(roleParentNoSpace)))
     ));
 
-  // D. Substring Containment (dengan varian tanpa spasi)
+  // D. Substring Containment (dengan varian tanpa spasi dan alias)
   const isSubstringMatch =
-    (cleanOutlet && cleanOutlet.length >= 3 && cleanRoleOrg.includes(cleanOutlet)) ||
+    outletAliases.some(o => o.length >= 3 && cleanRoleOrg.includes(o)) ||
     (cleanCabangNoCode && cleanCabangNoCode.length >= 3 && cleanRoleOrg.includes(cleanCabangNoCode)) ||
     (cleanRoleOrgNoSpace.length >= 3 && (
-      (cleanOutletNoSpace.length >= 3 && (cleanRoleOrgNoSpace.includes(cleanOutletNoSpace) || cleanOutletNoSpace.includes(cleanRoleOrgNoSpace))) ||
+      outletAliases.some(o => noSpace(o).length >= 3 && (cleanRoleOrgNoSpace.includes(noSpace(o)) || noSpace(o).includes(cleanRoleOrgNoSpace))) ||
       (cleanCabangNoSpace.length >= 3 && (cleanRoleOrgNoSpace.includes(cleanCabangNoSpace) || cleanCabangNoSpace.includes(cleanRoleOrgNoSpace)))
     ));
 
