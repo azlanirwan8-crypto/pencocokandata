@@ -3541,7 +3541,11 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
         onClose={() => setSelectedCandidateDetail(null)}
         data={selectedCandidateDetail}
         onApprove={(rowNo, m) => {
-          handleApproveSingle(rowNo, m);
+          const targetRow = selectedCandidateDetail?.targetRow;
+          const topRoles = targetRow ? findTopRoleMatchesByLocation(m, targetRow, roleMappingList || [], masterRows, 3) : [];
+          const selRoleIdx = selectedRoleByRow[rowNo] ?? 0;
+          const chosenRole = topRoles[selRoleIdx]?.rec;
+          handleApproveSingle(rowNo, m, chosenRole);
           setSelectedCandidateDetail(null);
         }}
         wilayahSettings={wilayahSettings}
