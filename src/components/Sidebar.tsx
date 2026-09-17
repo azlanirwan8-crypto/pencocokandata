@@ -8,11 +8,12 @@ import {
   ShieldCheck,
   Store,
   Users,
+  Mail,
   ChevronDown,
   ChevronRight
 } from 'lucide-react';
 
-export type ActiveTab = 'dashboard' | 'working' | 'wilayah' | 'pten' | 'master' | 'mapping_role';
+export type ActiveTab = 'dashboard' | 'working' | 'wilayah' | 'pten' | 'master' | 'mapping_role' | 'kodepos';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -23,6 +24,7 @@ interface SidebarProps {
   wilayahCount?: number;
   ptenCount?: number;
   roleMappingCount?: number;
+  kodeposCount?: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -34,9 +36,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   wilayahCount,
   ptenCount,
   roleMappingCount,
+  kodeposCount,
 }) => {
   // Is Data Master submenu expanded?
-  const isMasterActive = activeTab === 'master' || activeTab === 'wilayah' || activeTab === 'pten' || activeTab === 'mapping_role';
+  const isMasterActive = activeTab === 'master' || activeTab === 'wilayah' || activeTab === 'pten' || activeTab === 'mapping_role' || activeTab === 'kodepos';
   const [isMasterOpen, setIsMasterOpen] = useState<boolean>(true);
 
   // Auto-expand Data Master when one of its children becomes active
@@ -188,6 +191,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   {roleMappingCount !== undefined && roleMappingCount > 0 ? (
                     <span className="sidebar-sub-badge">
                       {roleMappingCount.toLocaleString('id-ID')}
+                    </span>
+                  ) : null}
+                </button>
+
+                {/* 3.e. Kode Pos */}
+                <button
+                  type="button"
+                  className={`sidebar-sub-item ${activeTab === 'kodepos' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('kodepos')}
+                  id="sidebar-btn-kodepos"
+                  title="Master Data Kode Pos Indonesia"
+                >
+                  <Mail size={14} />
+                  <span>Kode Pos</span>
+                  {kodeposCount !== undefined && kodeposCount > 0 ? (
+                    <span className="sidebar-sub-badge">
+                      {kodeposCount.toLocaleString('id-ID')}
                     </span>
                   ) : null}
                 </button>

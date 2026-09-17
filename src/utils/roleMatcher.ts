@@ -5,16 +5,20 @@ import { cleanDati, cleanText, textSimilarityScore } from './normalizer';
 /**
  * Standar Wilayah Administratif Pulau di Indonesia berdasarkan Provinsi/Teks
  */
-export function getIslandFromProvinsi(prov?: string): string {
+export function getIslandFromProvinsi(prov?: string, dati?: string, textFallback?: string): string {
   const p = String(prov || '').toUpperCase().replace(/PROVINSI\s*/i, '').trim();
-  if (/JAKARTA|JAWA|BANTEN|YOGYAKARTA|DIY/.test(p)) return 'Jawa';
-  if (/SUMATERA|ACEH|RIAU|JAMBI|BENGKULU|LAMPUNG|BANGKA/.test(p)) return 'Sumatera';
-  if (/KALIMANTAN/.test(p)) return 'Kalimantan';
-  if (/SULAWESI|GORONTALO/.test(p)) return 'Sulawesi';
-  if (/BALI/.test(p)) return 'Bali';
-  if (/NUSA TENGGARA|NTB|NTT/.test(p)) return 'Nusa Tenggara';
-  if (/MALUKU/.test(p)) return 'Maluku';
-  if (/PAPUA/.test(p)) return 'Papua';
+  const d = String(dati || '').toUpperCase();
+  const t = String(textFallback || '').toUpperCase();
+  const combined = `${p} ${d} ${t}`;
+
+  if (/JAKARTA|DKI|JAWA|BANTEN|YOGYAKARTA|DIY|BOGOR|BEKASI|DEPOK|TANGERANG|BANDUNG|SEMARANG|SURABAYA/.test(combined)) return 'Jawa';
+  if (/SUMATERA|ACEH|RIAU|JAMBI|BENGKULU|LAMPUNG|BANGKA|MEDAN|PALEMBANG|PADANG/.test(combined)) return 'Sumatera';
+  if (/KALIMANTAN|BANJARMASIN|PONTIANAK|BALIKPAPAN|SAMARINDA|BANJARBARU/.test(combined)) return 'Kalimantan';
+  if (/SULAWESI|GORONTALO|MAKASSAR|MANADO/.test(combined)) return 'Sulawesi';
+  if (/BALI|DENPASAR|BADUNG/.test(combined)) return 'Bali';
+  if (/NUSA TENGGARA|NTB|NTT|MATARAM|KUPANG/.test(combined)) return 'Nusa Tenggara';
+  if (/MALUKU|AMBON/.test(combined)) return 'Maluku';
+  if (/PAPUA|JAYAPURA/.test(combined)) return 'Papua';
   return 'Lainnya';
 }
 

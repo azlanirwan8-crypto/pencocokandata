@@ -82,16 +82,20 @@ interface TargetDataGridProps {
 /**
  * Standar Wilayah Administratif Pulau di Indonesia berdasarkan Provinsi
  */
-export function getIslandFromProvinsi(prov?: string): string {
+export function getIslandFromProvinsi(prov?: string, dati?: string, textFallback?: string): string {
   const p = String(prov || '').toUpperCase().replace(/PROVINSI\s*/i, '').trim();
-  if (/JAKARTA|JAWA|BANTEN|YOGYAKARTA|DIY/.test(p)) return 'Jawa';
-  if (/SUMATERA|ACEH|RIAU|JAMBI|BENGKULU|LAMPUNG|BANGKA/.test(p)) return 'Sumatera';
-  if (/KALIMANTAN/.test(p)) return 'Kalimantan';
-  if (/SULAWESI|GORONTALO/.test(p)) return 'Sulawesi';
-  if (/BALI/.test(p)) return 'Bali';
-  if (/NUSA TENGGARA|NTB|NTT/.test(p)) return 'Nusa Tenggara';
-  if (/MALUKU/.test(p)) return 'Maluku';
-  if (/PAPUA/.test(p)) return 'Papua';
+  const d = String(dati || '').toUpperCase();
+  const t = String(textFallback || '').toUpperCase();
+  const combined = `${p} ${d} ${t}`;
+
+  if (/JAKARTA|DKI|JAWA|BANTEN|YOGYAKARTA|DIY|BOGOR|BEKASI|DEPOK|TANGERANG|BANDUNG|SEMARANG|SURABAYA/.test(combined)) return 'Jawa';
+  if (/SUMATERA|ACEH|RIAU|JAMBI|BENGKULU|LAMPUNG|BANGKA|MEDAN|PALEMBANG|PADANG/.test(combined)) return 'Sumatera';
+  if (/KALIMANTAN|BANJARMASIN|PONTIANAK|BALIKPAPAN|SAMARINDA|BANJARBARU/.test(combined)) return 'Kalimantan';
+  if (/SULAWESI|GORONTALO|MAKASSAR|MANADO/.test(combined)) return 'Sulawesi';
+  if (/BALI|DENPASAR|BADUNG/.test(combined)) return 'Bali';
+  if (/NUSA TENGGARA|NTB|NTT|MATARAM|KUPANG/.test(combined)) return 'Nusa Tenggara';
+  if (/MALUKU|AMBON/.test(combined)) return 'Maluku';
+  if (/PAPUA|JAYAPURA/.test(combined)) return 'Papua';
   return 'Lainnya';
 }
 
@@ -197,10 +201,13 @@ export function findTopRoleMatchesByLocation(
       } else if (parentClean && cachedBranchMap.has(parentClean)) {
         resolvedMasterCache.set(orgName, cachedBranchMap.get(parentClean)!);
       } else {
-        // Fallback cepat 1 kali
+        // Fallback cerdas dengan boundary check ketat agar tidak salah menyangkut ke kota/daerah lain
         let best: MasterRow | null = null;
         let bestScore = -1;
         const tokens = cleanOrg.split(/\s+/).filter((t) => t.length >= 3);
+        const isShortOrg = cleanOrg.length <= 7;
+        const wordBoundaryRegex = new RegExp(`\\b${cleanOrg}\\b`, 'i');
+
         for (let i = 0; i < masterRows.length; i++) {
           const m = masterRows[i];
           const info = normalizeIndonesianBranchAliases(normalizeBranchName(m['Informasi Cabang'] || ''));
@@ -210,27 +217,41 @@ export function findTopRoleMatchesByLocation(
           let score = 0;
           if (info === cleanOrg || outlet === cleanOrg || (subPartClean && (info === subPartClean || outlet === subPartClean))) {
             score = 100;
-          } else if (info.includes(cleanOrg) || cleanOrg.includes(info)) {
+          } else if (subPartClean && (info.includes(subPartClean) || outlet.includes(subPartClean))) {
+            score = 92;
+          } else if (isShortOrg ? (wordBoundaryRegex.test(info) || wordBoundaryRegex.test(outlet)) : (info.includes(cleanOrg) || cleanOrg.includes(info))) {
             score = 85;
           } else if (outlet.includes(cleanOrg) || cleanOrg.includes(outlet)) {
-            score = 80;
-          } else if (kota && (kota.includes(cleanOrg) || cleanOrg.includes(kota))) {
+            score = isShortOrg ? (wordBoundaryRegex.test(outlet) ? 80 : 0) : 80;
+          } else if (kota && (kota === cleanOrg || (!isShortOrg && (kota.includes(cleanOrg) || cleanOrg.includes(kota))))) {
             score = 75;
           } else {
+            // Cek token spesifik (contoh 'THAMRIN' dari 'JAKARTA THAMRIN' cocok dengan outlet 'THAMRIN')
             let matched = 0;
+            let hasSignificantMatch = false;
             for (const t of tokens) {
-              if (info.includes(t) || outlet.includes(t) || kota.includes(t)) matched++;
+              if (['KOTA', 'KABUPATEN', 'PROVINSI', 'CABANG'].includes(t)) continue;
+              const tokenRegex = new RegExp(`\\b${t}\\b`, 'i');
+              if (tokenRegex.test(info) || tokenRegex.test(outlet)) {
+                matched++;
+                if (t.length >= 5) hasSignificantMatch = true;
+              } else if (tokenRegex.test(kota)) {
+                matched++;
+              }
             }
-            if (matched > 0) score = (matched / tokens.length) * 60;
+            if (matched > 0) {
+              score = (matched / tokens.length) * 60;
+              if (hasSignificantMatch) score += 20;
+            }
           }
-          if (String(m['Status Outlet'] || '').toUpperCase() === 'KC') score += 5;
+          if (score > 0 && String(m['Status Outlet'] || '').toUpperCase() === 'KC') score += 5;
           if (score > bestScore) {
             bestScore = score;
             best = m;
           }
           if (bestScore >= 90) break;
         }
-        resolvedMasterCache.set(orgName, best);
+        resolvedMasterCache.set(orgName, bestScore >= 50 ? best : null);
       }
     }
 
@@ -239,18 +260,18 @@ export function findTopRoleMatchesByLocation(
   }
 
   const fullRoleList = cachedFullRoleList || [];
-  if (fullRoleList.length === 0) return [];
 
   const candIdentifier = activeCandidateMaster?.['Sandi Cabang'] || activeCandidateMaster?.Cabang || activeCandidateMaster?.['Nama Outlet'] || String(targetRowFallback?.No || '');
-  const candProv = activeCandidateMaster?.Provinsi || targetRowFallback?.Provinsi || '';
+  const candProv = activeCandidateMaster?.Provinsi || activeCandidateMaster?.PROVINSI || targetRowFallback?.Provinsi || targetRowFallback?.PROVINSI || '';
   const candDati = activeCandidateMaster?.['Dati II'] || activeCandidateMaster?.['Kota/Dati II'] || targetRowFallback?.['Dati II'] || '';
-  const cacheKey = `${candIdentifier}|${candProv}|${candDati}|${count}`;
+  const candAlm = activeCandidateMaster?.ALAMAT || targetRowFallback?.ALAMAT || '';
+  const cacheKey = `${candIdentifier}|${candProv}|${candDati}|${candAlm.slice(0, 20)}|${count}`;
 
   if (roleMatchCache.has(cacheKey)) {
     return roleMatchCache.get(cacheKey)!;
   }
 
-  const candidateIsland = getIslandFromProvinsi(candProv);
+  const candidateIsland = getIslandFromProvinsi(candProv, candDati, candAlm);
 
   function resolveMaster(orgName: string): MasterRow | null {
     return resolvedMasterCache.get(orgName) || null;
@@ -285,17 +306,103 @@ export function findTopRoleMatchesByLocation(
     .filter(Boolean);
 
   const scored: (RoleMatchWithDistance & { nameMatchScore: number; isFullRole: boolean })[] = [];
+  const addedOrgKeys = new Set<string>();
 
+  // ── 0. LOGIKA CERDAS: Prioritaskan Cabang Utama (KC) Kandidat / Cabang Induk Lokal ──
+  const isCandidateKc = String(activeCandidateMaster?.['Status Outlet'] || '').trim().toUpperCase() === 'KC';
+
+  if (isCandidateKc && activeCandidateMaster) {
+    // KASUS A: Kandidat itu sendiri sudah merupakan KC (Cabang Utama seperti HARMONI)
+    const candOutletClean = normalizeIndonesianBranchAliases(normalizeBranchName(activeCandidateMaster['Nama Outlet'] || activeCandidateMaster.Cabang || ''));
+    const orgName = `${candOutletClean} BRANCH OFFICE`;
+    const distInfo = calculateRealDistance(candidateRowAsTarget, activeCandidateMaster);
+    scored.push({
+      rec: {
+        organisasiTujuan: orgName,
+        qrsCabsal: 1,
+        qrsCabapv1: 1,
+        qrsCabapv2: 1,
+        grandTotal: 3,
+      },
+      distanceKm: distInfo.distanceKm ?? 0,
+      formattedDistance: distInfo.formattedDistance || '0 km (Cabang Utama Ini)',
+      sameIsland: true,
+      branchCity: candDati || candProv || 'Lokal',
+      matchedMaster: activeCandidateMaster,
+      nameMatchScore: 200, // Prioritas mutlak nomor 1
+      isFullRole: true,
+    });
+    addedOrgKeys.add(orgName.toUpperCase());
+    addedOrgKeys.add(candOutletClean.toUpperCase());
+  } else if (activeCandidateMaster && masterRows && masterRows.length > 0) {
+    // KASUS B: Kandidat adalah KCP, cari Cabang Induk (KC) terdekat dari master
+    const parentCabangRaw = activeCandidateMaster.Cabang || '';
+    const parentClean = normalizeIndonesianBranchAliases(normalizeBranchName(parentCabangRaw));
+    let parentMaster: MasterRow | null = null;
+
+    if (parentClean) {
+      parentMaster = masterRows.find(m => {
+        const isKc = String(m['Status Outlet'] || '').toUpperCase() === 'KC';
+        if (!isKc) return false;
+        const o = normalizeIndonesianBranchAliases(normalizeBranchName(m['Nama Outlet'] || ''));
+        const c = normalizeIndonesianBranchAliases(normalizeBranchName(m.Cabang || ''));
+        return o === parentClean || c === parentClean || o.includes(parentClean);
+      }) || null;
+    }
+
+    // Jika belum ketemu dari nama cabang, cari KC terdekat di Dati II / Wilayah yang sama
+    if (!parentMaster && candDati) {
+      const candDatiClean = cleanText(candDati).toUpperCase();
+      parentMaster = masterRows.find(m => {
+        const isKc = String(m['Status Outlet'] || '').toUpperCase() === 'KC';
+        if (!isKc) return false;
+        const mDati = cleanText(m['Dati II'] || m['Kota/Dati II'] || m.Kota || '').toUpperCase();
+        return mDati && (mDati === candDatiClean || mDati.includes(candDatiClean) || candDatiClean.includes(mDati));
+      }) || null;
+    }
+
+    if (parentMaster) {
+      const pOutletClean = normalizeIndonesianBranchAliases(normalizeBranchName(parentMaster['Nama Outlet'] || parentMaster.Cabang || ''));
+      const distInfo = calculateRealDistance(candidateRowAsTarget, parentMaster);
+      const orgName = `${pOutletClean} BRANCH OFFICE`;
+      scored.push({
+        rec: {
+          organisasiTujuan: orgName,
+          qrsCabsal: 1,
+          qrsCabapv1: 1,
+          qrsCabapv2: 1,
+          grandTotal: 3,
+        },
+        distanceKm: distInfo.distanceKm,
+        formattedDistance: distInfo.formattedDistance || (distInfo.distanceKm !== null ? `~${distInfo.distanceKm} km` : 'jarak dekat'),
+        sameIsland: true,
+        branchCity: parentMaster['Dati II'] || candDati || '',
+        matchedMaster: parentMaster,
+        nameMatchScore: 180, // Prioritas tinggi cabang induk
+        isFullRole: true,
+      });
+      addedOrgKeys.add(orgName.toUpperCase());
+      addedOrgKeys.add(pOutletClean.toUpperCase());
+    }
+  }
+
+  // ── Evaluasi daftar Role Mapping yang tersedia ──
   for (const rec of fullRoleList) {
+    const orgClean = normalizeIndonesianBranchAliases(normalizeBranchName(rec.organisasiTujuan));
+    if (addedOrgKeys.has(rec.organisasiTujuan.toUpperCase()) || addedOrgKeys.has(orgClean.toUpperCase())) {
+      continue;
+    }
+
     const branchMaster = resolveMaster(rec.organisasiTujuan);
-    const branchProv = branchMaster?.Provinsi || '';
-    const branchIsland = getIslandFromProvinsi(branchProv);
+    const branchProv = branchMaster?.Provinsi || branchMaster?.PROVINSI || '';
     const branchCity = branchMaster?.['Dati II'] || branchMaster?.['Kota/Dati II'] || branchMaster?.Kota || '';
+    const branchAlm = branchMaster?.ALAMAT || '';
+    const branchIsland = getIslandFromProvinsi(branchProv, branchCity, branchAlm || rec.organisasiTujuan);
 
     // STRICT 1 PULAU: Hanya perbolehkan jika 1 pulau dengan kandidat
     const sameIsland = candidateIsland !== 'Lainnya' && branchIsland !== 'Lainnya'
       ? branchIsland === candidateIsland
-      : true;
+      : candidateIsland === 'Lainnya' || branchIsland === 'Lainnya';
 
     if (!sameIsland && candidateIsland !== 'Lainnya') {
       continue; // JANGAN nyebrang pulau!
@@ -310,7 +417,6 @@ export function findTopRoleMatchesByLocation(
     }
 
     // Hitung kesesuaian nama langsung antara organisasi role vs kandidat aktif / alias d/h
-    const orgClean = normalizeIndonesianBranchAliases(normalizeBranchName(rec.organisasiTujuan));
     const isFullRole = rec.qrsCabsal === 1 && rec.qrsCabapv1 === 1 && rec.qrsCabapv2 === 1;
 
     let subPartClean = '';
@@ -323,9 +429,6 @@ export function findTopRoleMatchesByLocation(
 
     let nameMatchScore = 0;
 
-    // 1. Kecocokan spesifik Outlet / Sub-Branch (termasuk alias d/h bekas nama seperti JL A YANI)
-    // Alias outlet/cabang harus benar-benar menyebut nama sub-branch (misal candOutlet mengandung "PASAR KABANJAHE" atau "AHMAD YANI")
-    // BUKAN kebalikannya di mana subPart yang mengandung nama kota cabang induk (misal subPart "PASAR KABANJAHE" mengandung "KABANJAHE")
     const subPartNoSpace = subPartClean ? subPartClean.replace(/\s+/g, '') : '';
     const isExactSubPart = subPartClean && (
       candOutletAliases.some(a => a === subPartClean || (subPartNoSpace.length >= 3 && a.replace(/\s+/g, '') === subPartNoSpace)) ||
@@ -351,7 +454,6 @@ export function findTopRoleMatchesByLocation(
     } else if (candOutletAliases.some(a => Math.abs(a.length - orgClean.length) <= 3 && textSimilarityScore(a, orgClean) >= 0.85)) {
       nameMatchScore = 95;
     } else if (candCabangAliases.some(a => a === orgClean || (parentClean && a === parentClean))) {
-      // 2. Kecocokan Cabang Induk / Parent (contoh 'PADANG BRANCH OFFICE' atau 'KABANJAHE BRANCH OFFICE')
       nameMatchScore = 85;
     } else if (candOutletAliases.some(a => a.length >= 4 && orgClean.includes(a))) {
       nameMatchScore = 70;
@@ -367,14 +469,22 @@ export function findTopRoleMatchesByLocation(
       nameMatchScore,
       isFullRole,
     });
+    addedOrgKeys.add(rec.organisasiTujuan.toUpperCase());
+    addedOrgKeys.add(orgClean.toUpperCase());
   }
 
+  // Jika sudah ada pilihan cabang lokal (< 50 km), buang cabang luar daerah yang sangat jauh (> 80 km)
+  const hasLocalChoice = scored.some(s => s.distanceKm !== null && s.distanceKm <= 50);
+  const candidatePool = hasLocalChoice
+    ? scored.filter(s => s.distanceKm === null || s.distanceKm <= 80)
+    : scored;
+
   // Prioritas Pengurutan:
-  // 1. Kecocokan Nama Spesifik Unit / Alias d/h (nameMatchScore >= 90) selalu nomor 1!
-  // 2. Jika jarak sama / hampir sama (selisih <= 2 km) atau salah satu KC: utamakan Cabang Utama (KC) daripada KCP!
+  // 1. Kecocokan Nama Spesifik / Cabang Induk Terverifikasi (nameMatchScore)
+  // 2. Cabang Utama (KC) vs KCP
   // 3. Jarak fisik terdekat
   // 4. Kelengkapan role (M=1, C=1, S=1)
-  scored.sort((a, b) => {
+  candidatePool.sort((a, b) => {
     // Top priority: direct name/alias match
     if (a.nameMatchScore !== b.nameMatchScore) {
       return b.nameMatchScore - a.nameMatchScore;
@@ -387,8 +497,6 @@ export function findTopRoleMatchesByLocation(
     if (a.distanceKm !== null && b.distanceKm !== null) {
       const distDiff = a.distanceKm - b.distanceKm;
 
-      // Jika selisih jarak <= 2 km (misal sama-sama 0,8 km):
-      // ATURAN EKSPLISIT: Ambil KC jika jaraknya sama/hampir sama!
       if (Math.abs(distDiff) <= 2) {
         if (aIsKc !== bIsKc) {
           return aIsKc ? -1 : 1;
@@ -399,17 +507,14 @@ export function findTopRoleMatchesByLocation(
         return distDiff;
       }
 
-      // Jika salah satu jauh lebih dekat (> 2 km), pilih yang lebih dekat
       if (Math.abs(distDiff) > 2) {
         return distDiff;
       }
 
-      // Utamakan KC jika tipe beda
       if (aIsKc !== bIsKc) {
         return aIsKc ? -1 : 1;
       }
 
-      // Utamakan yang role lengkap (KC)
       if (a.isFullRole !== b.isFullRole) {
         return a.isFullRole ? -1 : 1;
       }
@@ -430,7 +535,7 @@ export function findTopRoleMatchesByLocation(
     return 0;
   });
 
-  const result = scored.slice(0, count);
+  const result = candidatePool.slice(0, count);
   roleMatchCache.set(cacheKey, result);
   return result;
 }

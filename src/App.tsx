@@ -14,6 +14,7 @@ import { ExportAction } from './components/WorkingEngine/ExportAction';
 import { WilayahManager } from './components/WilayahData/WilayahManager';
 import { PTENManager } from './components/PTENData/PTENManager';
 import { RoleMappingManager } from './components/RoleMapping/RoleMappingManager';
+import { KodePosManager } from './components/KodePosData/KodePosManager';
 import type { ActiveTab } from './components/Sidebar';
 
 import type { MasterRow, TargetRow, MatchingStats, WilayahStat, WilayahSetting } from './types';
@@ -24,6 +25,7 @@ import type { RoleMappingRecord } from './components/RoleMapping/RoleMappingMana
 import { DEFAULT_ROLE_MAPPING_DATA, getUnitCategory, getWondrRecommendation } from './components/RoleMapping/RoleMappingManager';
 import type { PTENRecord } from './components/PTENData/PTENManager';
 import { DEFAULT_PTEN_DATA } from './components/PTENData/defaultPtenData';
+import { DEFAULT_KODEPOS_DATA } from './components/KodePosData/defaultKodePosData';
 import { buildPtenIndex, validatePtenForTarget } from './utils/ptenMatcher';
 import { resolveRoleMappingForBranch } from './utils/roleMatcher';
 
@@ -82,6 +84,7 @@ export const App: React.FC = () => {
   const [roleMappingList, setRoleMappingList] = useState<RoleMappingRecord[]>(DEFAULT_ROLE_MAPPING_DATA);
   const [ptenCount, setPtenCount] = useState<number>(DEFAULT_PTEN_DATA.length);
   const [roleMappingCount, setRoleMappingCount] = useState<number>(DEFAULT_ROLE_MAPPING_DATA.length);
+  const [kodePosCount, setKodePosCount] = useState<number>(DEFAULT_KODEPOS_DATA.length);
 
   // Matching Execution State
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -163,6 +166,14 @@ export const App: React.FC = () => {
         if (savedRoleMapping && Array.isArray(savedRoleMapping) && savedRoleMapping.length > 0) {
           setRoleMappingList(savedRoleMapping);
           setRoleMappingCount(savedRoleMapping.length);
+        }
+
+        const savedKodePos = await getItem<any[]>('kodepos_master_data');
+        if (savedKodePos && Array.isArray(savedKodePos) && savedKodePos.length > 0) {
+          setKodePosCount(savedKodePos.length);
+        } else {
+          setKodePosCount(DEFAULT_KODEPOS_DATA.length);
+          setItem('kodepos_master_data', DEFAULT_KODEPOS_DATA);
         }
       } catch (err) {
         console.warn('Local cache restore skipped:', err);
@@ -922,6 +933,7 @@ export const App: React.FC = () => {
         wilayahCount={wilayahSettings.length}
         ptenCount={ptenCount}
         roleMappingCount={roleMappingCount}
+        kodeposCount={kodePosCount}
       />
 
       {/* 2. Main Content Area */}
@@ -1264,6 +1276,13 @@ export const App: React.FC = () => {
           {activeTab === 'mapping_role' && (
             <RoleMappingManager
               onRoleMappingCountChange={(count) => setRoleMappingCount(count)}
+            />
+          )}
+
+          {/* MENU MASTER: KODE POS */}
+          {activeTab === 'kodepos' && (
+            <KodePosManager
+              onKodePosCountChange={(count) => setKodePosCount(count)}
             />
           )}
         </main>
