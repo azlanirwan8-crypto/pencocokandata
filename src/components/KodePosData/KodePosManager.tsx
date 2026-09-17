@@ -26,6 +26,7 @@ import {
 import * as XLSX from 'xlsx';
 import { getItem, setItem } from '../../utils/storage';
 import { DEFAULT_KODEPOS_DATA, type KodePosRecord } from './defaultKodePosData';
+import { saveKodePosToNeon } from '../../utils/neonSync';
 
 interface KodePosManagerProps {
   onKodePosCountChange?: (count: number) => void;
@@ -88,7 +89,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     };
   }, []);
 
-  // Save to IndexedDB
+  // Save to IndexedDB + background sync ke Neon Postgres
   const handleSaveData = async (listToSave = kodePosList) => {
     setErrorMsg(null);
     try {
@@ -96,6 +97,10 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
       onKodePosCountChange?.(listToSave.length);
       setSuccessMsg(`Berhasil menyimpan ${listToSave.length.toLocaleString('id-ID')} data Kode Pos!`);
       setTimeout(() => setSuccessMsg(null), 4000);
+      // Fire-and-forget sync ke Neon (tidak block UI)
+      saveKodePosToNeon(listToSave, 'replace').catch((e) =>
+        console.warn('Neon kodepos sync skipped (offline/no DB):', e)
+      );
     } catch (err: any) {
       setErrorMsg(err.message || 'Gagal menyimpan data Kode Pos');
       setTimeout(() => setErrorMsg(null), 4000);

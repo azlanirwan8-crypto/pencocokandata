@@ -28,6 +28,7 @@ export default async function handler(req: any, res: any) {
 
     let masterCount = 0;
     let targetCount = 0;
+    let kodeposCount = 0;
 
     try {
       const m = await sql`SELECT COUNT(*)::int as count FROM master_records;`;
@@ -43,6 +44,13 @@ export default async function handler(req: any, res: any) {
       // table might not have been created yet
     }
 
+    try {
+      const k = await sql`SELECT COUNT(*)::int as count FROM kodepos_data;`;
+      kodeposCount = k[0]?.count || 0;
+    } catch {
+      // table might not have been created yet
+    }
+
     return res.status(200).json({
       connected: true,
       provider: 'Neon Postgres (Vercel)',
@@ -50,6 +58,7 @@ export default async function handler(req: any, res: any) {
       tables: {
         masterRecords: masterCount,
         targetRecords: targetCount,
+        kodeposRecords: kodeposCount,
       },
     });
   } catch (error: any) {

@@ -8,6 +8,7 @@ export interface NeonStatus {
   tables?: {
     masterRecords: number;
     targetRecords: number;
+    kodeposRecords: number;
   };
 }
 
@@ -346,3 +347,75 @@ export async function saveWilayahToNeon(settings: WilayahSetting[]): Promise<boo
   }
 }
 
+/**
+ * Load Kode Pos Master Data from Neon DB via /api/kodepos
+ */
+export async function loadKodePosFromNeon(): Promise<any[] | null> {
+  try {
+    const res = await fetchWithRetry('/api/kodepos', {}, 8000, 2);
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json.ok && Array.isArray(json.data) && json.data.length > 0) {
+      return json.data;
+    }
+    return null;
+  } catch (err) {
+    console.warn('Neon kodepos load error:', err);
+    return null;
+  }
+}
+
+/**
+ * Save Kode Pos Master Data to Neon DB via /api/kodepos
+ * Chunks besar otomatis dipecah 5000 rows per request
+ */
+export async function saveKodePosToNeon(
+  rows: any[],
+  mode: 'replace' | 'append' = 'replace'
+): Promise<boolean> {
+  try {
+    // Chunk besar agar tidak timeout (ribuan data)
+    const CHUNK_SIZE = 5000;
+    let allSuccess = true;
+
+    for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+      const chunk = rows.slice(i, i + CHUNK_SIZE);
+      const chunkMode = i === 0 ? mode : 'append';
+
+      const res = await fetchWithRetry(
+        '/api/kodepos',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rows: chunk, mode: chunkMode }),
+        },
+        15000,
+        2
+      );
+
+      if (!res.ok) { allSuccess = false; break; }
+      const json = await res.json();
+      if (!json.ok) { allSuccess = false; break; }
+    }
+
+    return allSuccess;
+  } catch (err) {
+    console.warn('Neon kodepos save error:', err);
+    return false;
+  }
+}
+
+/**
+ * Clear Kode Pos Master Data from Neon DB via /api/kodepos
+ */
+export async function clearKodePosFromNeon(): Promise<boolean> {
+  try {
+    const res = await fetch('/api/kodepos', { method: 'DELETE' });
+    if (!res.ok) return false;
+    const json = await res.json();
+    return Boolean(json.ok);
+  } catch (err) {
+    console.warn('Neon kodepos delete error:', err);
+    return false;
+  }
+}
