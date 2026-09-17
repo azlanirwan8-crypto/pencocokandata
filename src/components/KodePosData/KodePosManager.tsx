@@ -19,7 +19,6 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  Filter,
   Copy,
   Check,
 } from 'lucide-react';
