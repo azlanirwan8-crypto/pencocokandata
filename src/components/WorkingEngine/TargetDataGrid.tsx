@@ -970,7 +970,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     });
 
     const allRecsToApprove: (RecommendationResult & { chosenRole?: RoleMappingRecord })[] = [];
-    const chunkSize = 15; // 15 baris per frame
+    const chunkSize = 250; // Proses 250 baris per frame agar jauh lebih cepat (sebelumnya 15 jadi terlalu lambat karena delay)
     let currentIndex = 0;
 
     const processNextBatch = () => {
@@ -1043,9 +1043,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
       });
 
       if (currentIndex < total) {
-        requestAnimationFrame(() => {
-          setTimeout(processNextBatch, 15);
-        });
+        setTimeout(processNextBatch, 0);
       } else {
         // Selesai 100% -> Segera terapkan ke Data Match tanpa tertahan
         setApprovalProgress({
@@ -1069,9 +1067,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
       }
     };
 
-    requestAnimationFrame(() => {
-      setTimeout(processNextBatch, 15);
-    });
+    setTimeout(processNextBatch, 0);
   };
 
 
