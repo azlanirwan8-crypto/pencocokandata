@@ -970,7 +970,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     });
 
     const allRecsToApprove: (RecommendationResult & { chosenRole?: RoleMappingRecord })[] = [];
-    const chunkSize = 15; // 15 baris per frame agar UI progress bar benar-benar terupdate tanpa freeze
+    const chunkSize = 15; // 15 baris per frame
     let currentIndex = 0;
 
     const processNextBatch = () => {
@@ -1044,7 +1044,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
 
       if (currentIndex < total) {
         requestAnimationFrame(() => {
-          setTimeout(processNextBatch, 0);
+          setTimeout(processNextBatch, 15);
         });
       } else {
         // Selesai 100% -> Segera terapkan ke Data Match tanpa tertahan
@@ -1069,7 +1069,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
       }
     };
 
-    setTimeout(processNextBatch, 0);
+    requestAnimationFrame(() => {
+      setTimeout(processNextBatch, 15);
+    });
   };
 
 
