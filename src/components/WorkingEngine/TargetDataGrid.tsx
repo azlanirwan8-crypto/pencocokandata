@@ -141,7 +141,7 @@ export function findTopRoleMatchesByLocation(
     lastRoleListCacheRef = roleMappingList;
   }
 
-  if (lastMasterRowsCacheRef !== masterRows) {
+  if (lastMasterRowsCacheRef !== masterRows || lastRoleListCacheRef !== roleMappingList) {
     roleMatchCache.clear();
     resolvedMasterCache.clear();
     cachedBranchMap = new Map<string, MasterRow>();
@@ -169,7 +169,73 @@ export function findTopRoleMatchesByLocation(
         if (norm && !cachedBranchMap.has(norm)) cachedBranchMap.set(norm, m);
       }
     }
+
+    // Pre-resolve semua organisasi role sekali saja dalam O(1) Map
+    for (const rec of (cachedFullRoleList || roleMappingList)) {
+      const orgName = rec.organisasiTujuan;
+      const cleanOrg = normalizeIndonesianBranchAliases(normalizeBranchName(orgName));
+      const cleanOrgNoSpace = cleanOrg.replace(/\s+/g, '');
+
+      let subPartClean = '';
+      let subPartNoSpace = '';
+      let parentClean = '';
+      if (orgName.toUpperCase().includes(' - ')) {
+        const parts = orgName.toUpperCase().split(' - ');
+        parentClean = normalizeIndonesianBranchAliases(normalizeBranchName(parts[0] || ''));
+        subPartClean = normalizeIndonesianBranchAliases(normalizeBranchName(parts[1] || ''));
+        subPartNoSpace = subPartClean.replace(/\s+/g, '');
+      }
+
+      if (cachedBranchMap.has(cleanOrg)) {
+        resolvedMasterCache.set(orgName, cachedBranchMap.get(cleanOrg)!);
+      } else if (cleanOrgNoSpace && cachedBranchMap.has(cleanOrgNoSpace)) {
+        resolvedMasterCache.set(orgName, cachedBranchMap.get(cleanOrgNoSpace)!);
+      } else if (subPartClean && cachedBranchMap.has(subPartClean)) {
+        resolvedMasterCache.set(orgName, cachedBranchMap.get(subPartClean)!);
+      } else if (subPartNoSpace && cachedBranchMap.has(subPartNoSpace)) {
+        resolvedMasterCache.set(orgName, cachedBranchMap.get(subPartNoSpace)!);
+      } else if (parentClean && cachedBranchMap.has(parentClean)) {
+        resolvedMasterCache.set(orgName, cachedBranchMap.get(parentClean)!);
+      } else {
+        // Fallback cepat 1 kali
+        let best: MasterRow | null = null;
+        let bestScore = -1;
+        const tokens = cleanOrg.split(/\s+/).filter((t) => t.length >= 3);
+        for (let i = 0; i < masterRows.length; i++) {
+          const m = masterRows[i];
+          const info = normalizeIndonesianBranchAliases(normalizeBranchName(m['Informasi Cabang'] || ''));
+          const outlet = normalizeIndonesianBranchAliases(normalizeBranchName(m['Nama Outlet'] || ''));
+          const kota = normalizeIndonesianBranchAliases(normalizeBranchName(m['Kota/Dati II'] || m['Dati II'] || m.Kota || ''));
+
+          let score = 0;
+          if (info === cleanOrg || outlet === cleanOrg || (subPartClean && (info === subPartClean || outlet === subPartClean))) {
+            score = 100;
+          } else if (info.includes(cleanOrg) || cleanOrg.includes(info)) {
+            score = 85;
+          } else if (outlet.includes(cleanOrg) || cleanOrg.includes(outlet)) {
+            score = 80;
+          } else if (kota && (kota.includes(cleanOrg) || cleanOrg.includes(kota))) {
+            score = 75;
+          } else {
+            let matched = 0;
+            for (const t of tokens) {
+              if (info.includes(t) || outlet.includes(t) || kota.includes(t)) matched++;
+            }
+            if (matched > 0) score = (matched / tokens.length) * 60;
+          }
+          if (String(m['Status Outlet'] || '').toUpperCase() === 'KC') score += 5;
+          if (score > bestScore) {
+            bestScore = score;
+            best = m;
+          }
+          if (bestScore >= 90) break;
+        }
+        resolvedMasterCache.set(orgName, best);
+      }
+    }
+
     lastMasterRowsCacheRef = masterRows;
+    lastRoleListCacheRef = roleMappingList;
   }
 
   const fullRoleList = cachedFullRoleList || [];
@@ -185,94 +251,9 @@ export function findTopRoleMatchesByLocation(
   }
 
   const candidateIsland = getIslandFromProvinsi(candProv);
-  const branchMap = cachedBranchMap || new Map<string, MasterRow>();
 
   function resolveMaster(orgName: string): MasterRow | null {
-    if (resolvedMasterCache.has(orgName)) {
-      return resolvedMasterCache.get(orgName)!;
-    }
-
-    const cleanOrg = normalizeIndonesianBranchAliases(normalizeBranchName(orgName));
-    const cleanOrgNoSpace = cleanOrg.replace(/\s+/g, '');
-
-    // Coba sub-branch bagian kanan (jika 'PARENT - SUB BRANCH')
-    let subPartClean = '';
-    let subPartNoSpace = '';
-    let parentClean = '';
-    if (orgName.toUpperCase().includes(' - ')) {
-      const parts = orgName.toUpperCase().split(' - ');
-      parentClean = normalizeIndonesianBranchAliases(normalizeBranchName(parts[0] || ''));
-      subPartClean = normalizeIndonesianBranchAliases(normalizeBranchName(parts[1] || ''));
-      subPartNoSpace = subPartClean.replace(/\s+/g, '');
-    }
-
-    if (branchMap.has(cleanOrg)) {
-      const found = branchMap.get(cleanOrg)!;
-      resolvedMasterCache.set(orgName, found);
-      return found;
-    }
-    if (cleanOrgNoSpace && branchMap.has(cleanOrgNoSpace)) {
-      const found = branchMap.get(cleanOrgNoSpace)!;
-      resolvedMasterCache.set(orgName, found);
-      return found;
-    }
-    if (subPartClean && branchMap.has(subPartClean)) {
-      const found = branchMap.get(subPartClean)!;
-      resolvedMasterCache.set(orgName, found);
-      return found;
-    }
-    if (subPartNoSpace && branchMap.has(subPartNoSpace)) {
-      const found = branchMap.get(subPartNoSpace)!;
-      resolvedMasterCache.set(orgName, found);
-      return found;
-    }
-    if (parentClean && branchMap.has(parentClean)) {
-      const found = branchMap.get(parentClean)!;
-      resolvedMasterCache.set(orgName, found);
-      return found;
-    }
-
-    const tokens = cleanOrg.split(/\s+/).filter((t) => t.length >= 3);
-    let best: MasterRow | null = null;
-    let bestScore = -1;
-
-    for (let i = 0; i < masterRows.length; i++) {
-      const m = masterRows[i];
-      const info = normalizeIndonesianBranchAliases(normalizeBranchName(m['Informasi Cabang'] || ''));
-      const outlet = normalizeIndonesianBranchAliases(normalizeBranchName(m['Nama Outlet'] || ''));
-      const kota = normalizeIndonesianBranchAliases(normalizeBranchName(m['Kota/Dati II'] || m['Dati II'] || m.Kota || ''));
-
-      let score = 0;
-      if (
-        info === cleanOrg || outlet === cleanOrg ||
-        (subPartClean && (info === subPartClean || outlet === subPartClean))
-      ) {
-        score = 100;
-      } else if (info.includes(cleanOrg) || cleanOrg.includes(info)) {
-        score = 85;
-      } else if (outlet.includes(cleanOrg) || cleanOrg.includes(outlet)) {
-        score = 80;
-      } else if (kota && (kota.includes(cleanOrg) || cleanOrg.includes(kota))) {
-        score = 75;
-      } else {
-        let matched = 0;
-        for (const t of tokens) {
-          if (info.includes(t) || outlet.includes(t) || kota.includes(t)) matched++;
-        }
-        if (matched > 0) score = (matched / tokens.length) * 60;
-      }
-
-      if (String(m['Status Outlet'] || '').toUpperCase() === 'KC') score += 5;
-
-      if (score > bestScore) {
-        bestScore = score;
-        best = m;
-      }
-      if (bestScore >= 90) break; // Early exit on high confidence
-    }
-
-    resolvedMasterCache.set(orgName, best);
-    return best;
+    return resolvedMasterCache.get(orgName) || null;
   }
 
   const candidateRowAsTarget: TargetRow = {
@@ -989,7 +970,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     });
 
     const allRecsToApprove: (RecommendationResult & { chosenRole?: RoleMappingRecord })[] = [];
-    const chunkSize = 400; // 400 baris per frame: 8.000 baris selesai dalam < 1.5 detik dengan animasi progress real
+    const chunkSize = 15; // 15 baris per frame agar UI progress bar benar-benar terupdate tanpa freeze
     let currentIndex = 0;
 
     const processNextBatch = () => {
@@ -1062,7 +1043,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
       });
 
       if (currentIndex < total) {
-        setTimeout(processNextBatch, 8);
+        requestAnimationFrame(() => {
+          setTimeout(processNextBatch, 0);
+        });
       } else {
         // Selesai 100% -> Segera terapkan ke Data Match tanpa tertahan
         setApprovalProgress({
@@ -1082,11 +1065,11 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           setApprovalProgress(null);
           setCheckerTab('matched');
           setPage(1);
-        }, 300);
+        }, 200);
       }
     };
 
-    setTimeout(processNextBatch, 10);
+    setTimeout(processNextBatch, 0);
   };
 
 
