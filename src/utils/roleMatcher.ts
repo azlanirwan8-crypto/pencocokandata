@@ -465,10 +465,24 @@ export function auditRoleMasterConsistency(row: {
 
   // 2. Ekstraksi Tipe Unit Role
   let roleType: 'KC' | 'KCP' | 'UNKNOWN' = 'UNKNOWN';
-  if (roleTipeRaw.includes('KC') || roleTipeRaw.includes('Utama') || getUnitCategory(roleOrgRaw) === 'KC') {
-    roleType = 'KC';
-  } else if (roleTipeRaw.includes('KCP') || roleTipeRaw.includes('Outlet') || getUnitCategory(roleOrgRaw) === 'KCP') {
+  const roleTipeUpper = roleTipeRaw.toUpperCase();
+  const orgCategory = getUnitCategory(roleOrgRaw);
+
+  if (
+    roleTipeUpper.includes('KCP') ||
+    roleTipeUpper.includes('OUTLET') ||
+    roleTipeUpper.includes('SUB BRANCH') ||
+    roleTipeUpper.includes('KANTOR KAS') ||
+    orgCategory === 'KCP'
+  ) {
     roleType = 'KCP';
+  } else if (
+    roleTipeUpper.includes('KC') ||
+    roleTipeUpper.includes('UTAMA') ||
+    roleTipeUpper.includes('BRANCH OFFICE') ||
+    orgCategory === 'KC'
+  ) {
+    roleType = 'KC';
   }
 
   // 3. Evaluasi Keselarasan Nama Unit (dengan normalisasi singkatan Indonesia & varian tanpa spasi)
