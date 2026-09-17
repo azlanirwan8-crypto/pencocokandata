@@ -174,8 +174,6 @@ export function resolveRoleMappingForBranch(
   const cleanProv = cleanText(provinsi || '').toUpperCase().replace(/^PROVINSI\s+/i, '');
   const cleanWil = cleanText(wilayah || '').toUpperCase();
 
-  const targetIsland = getIslandFromProvinsi(cleanProv || cleanAlm || cleanCity);
-
   const cacheKey = `${cleanBranch}|${cleanOutlet}|${branchAliases.join('~')}|${outletAliases.join('~')}|${cleanCity}|${cleanKel}|${cleanKec}|${cleanProv.slice(0, 10)}|${cleanWil.slice(0, 10)}|${cleanAlm.slice(0, 30)}`;
   if (roleResolveCache.has(cacheKey)) {
     return roleResolveCache.get(cacheKey) || null;
@@ -343,24 +341,6 @@ export function resolveRoleMappingForBranch(
       bestScore = score;
       bestRecord = record;
     }
-  }
-
-  // Fallback: strictly prioritize same island and KC branch
-  if (!bestRecord && roleList.length > 0) {
-    if (targetIsland && targetIsland !== 'Lainnya') {
-      bestRecord =
-        roleList.find((r) => {
-          const isKc = getUnitCategory(r.organisasiTujuan) === 'KC';
-          const rIsland = getIslandFromProvinsi(r.organisasiTujuan);
-          return isKc && rIsland === targetIsland;
-        }) ||
-        roleList.find((r) => getIslandFromProvinsi(r.organisasiTujuan) === targetIsland) ||
-        null;
-    }
-    if (!bestRecord) {
-      bestRecord = roleList.find((r) => getUnitCategory(r.organisasiTujuan) === 'KC') || roleList[0];
-    }
-    bestScore = 35;
   }
 
   if (bestRecord && bestScore >= MIN_THRESHOLD) {
