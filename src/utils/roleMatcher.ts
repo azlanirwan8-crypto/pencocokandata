@@ -2,6 +2,22 @@ import type { RoleMappingRecord } from '../components/RoleMapping/RoleMappingMan
 import { getUnitCategory, getWondrRecommendation } from '../components/RoleMapping/RoleMappingManager';
 import { cleanDati, cleanText } from './normalizer';
 
+/**
+ * Standar Wilayah Administratif Pulau di Indonesia berdasarkan Provinsi/Teks
+ */
+export function getIslandFromProvinsi(prov?: string): string {
+  const p = String(prov || '').toUpperCase().replace(/PROVINSI\s*/i, '').trim();
+  if (/JAKARTA|JAWA|BANTEN|YOGYAKARTA|DIY/.test(p)) return 'Jawa';
+  if (/SUMATERA|ACEH|RIAU|JAMBI|BENGKULU|LAMPUNG|BANGKA/.test(p)) return 'Sumatera';
+  if (/KALIMANTAN/.test(p)) return 'Kalimantan';
+  if (/SULAWESI|GORONTALO/.test(p)) return 'Sulawesi';
+  if (/BALI/.test(p)) return 'Bali';
+  if (/NUSA TENGGARA|NTB|NTT/.test(p)) return 'Nusa Tenggara';
+  if (/MALUKU/.test(p)) return 'Maluku';
+  if (/PAPUA/.test(p)) return 'Papua';
+  return 'Lainnya';
+}
+
 export interface ResolvedRoleMapping {
   organisasiRole: string;
   tipeUnitRole: 'Cabang Utama (KC)' | 'Outlet (KCP)';
@@ -136,6 +152,8 @@ export function resolveRoleMappingForBranch(
   const cleanAlm = cleanText(alamat || '').toUpperCase();
   const cleanProv = cleanText(provinsi || '').toUpperCase().replace(/^PROVINSI\s+/i, '');
   const cleanWil = cleanText(wilayah || '').toUpperCase();
+
+  const targetIsland = getIslandFromProvinsi(cleanProv || cleanAlm || cleanCity);
 
   const cacheKey = `${cleanBranch}|${cleanOutlet}|${cleanCity}|${cleanKel}|${cleanKec}|${cleanProv.slice(0, 10)}|${cleanWil.slice(0, 10)}|${cleanAlm.slice(0, 30)}`;
   if (roleResolveCache.has(cacheKey)) {
@@ -294,9 +312,21 @@ export function resolveRoleMappingForBranch(
     }
   }
 
-  // Fallback: only if NO score was produced at all (bestScore stays -1)
+  // Fallback: strictly prioritize same island and KC branch
   if (!bestRecord && roleList.length > 0) {
-    bestRecord = roleList.find((r) => getUnitCategory(r.organisasiTujuan) === 'KC') || roleList[0];
+    if (targetIsland && targetIsland !== 'Lainnya') {
+      bestRecord =
+        roleList.find((r) => {
+          const isKc = getUnitCategory(r.organisasiTujuan) === 'KC';
+          const rIsland = getIslandFromProvinsi(r.organisasiTujuan);
+          return isKc && rIsland === targetIsland;
+        }) ||
+        roleList.find((r) => getIslandFromProvinsi(r.organisasiTujuan) === targetIsland) ||
+        null;
+    }
+    if (!bestRecord) {
+      bestRecord = roleList.find((r) => getUnitCategory(r.organisasiTujuan) === 'KC') || roleList[0];
+    }
     bestScore = 35;
   }
 
