@@ -1784,9 +1784,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                 {roleMappingList.length > 0 && (
                   <th
                     style={{
-                      minWidth: '280px',
-                      maxWidth: '280px',
-                      width: '280px',
+                      minWidth: '340px',
                       background: '#f0fdf8',
                       color: '#059669',
                       borderBottom: '1px solid #e9ebec',
@@ -2379,9 +2377,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                               verticalAlign: 'top',
                               background: '#fafffe',
                               borderLeft: '2px solid rgba(16, 185, 129, 0.2)',
-                              minWidth: '280px',
-                              maxWidth: '280px',
-                              width: '280px',
+                              minWidth: '340px',
                               boxSizing: 'border-box',
                             }}
                           >
