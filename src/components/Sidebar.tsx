@@ -85,12 +85,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className={`sidebar-nav-item ${activeTab === 'working' ? 'active' : ''}`}
             onClick={() => setActiveTab('working')}
             id="sidebar-btn-working"
-            title="Data Analisa Pencocokan"
+            title="Data Analyst Pencocokan"
           >
             <div className="nav-item-icon">
               <FileCheck size={17} />
             </div>
-            <span className="nav-item-label">Data Analisa</span>
+            <span className="nav-item-label">Data Analyst</span>
             {targetCount !== undefined && targetCount > 0 && (
               <span className="sidebar-badge badge-target">{targetCount}</span>
             )}
@@ -136,7 +136,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   title="Master Setting Wilayah"
                 >
                   <Map size={14} />
-                  <span>Wilayah</span>
+                  <span>Data Wilayah</span>
                   {wilayahCount !== undefined && wilayahCount > 0 && (
                     <span className="sidebar-sub-badge">
                       {wilayahCount.toLocaleString('id-ID')}
@@ -153,7 +153,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   title="Master Data PTEN"
                 >
                   <ShieldCheck size={14} />
-                  <span>PTEN</span>
+                  <span>Data PTEN</span>
                   {ptenCount !== undefined && ptenCount > 0 ? (
                     <span className="sidebar-sub-badge">
                       {ptenCount.toLocaleString('id-ID')}
@@ -170,7 +170,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   title="Master Data Cabang & Outlet"
                 >
                   <Store size={14} />
-                  <span>Cabang</span>
+                  <span>Data Cabang</span>
                   {masterCount !== undefined && masterCount > 0 && (
                     <span className="sidebar-sub-badge">
                       {masterCount.toLocaleString('id-ID')}
@@ -187,7 +187,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   title="Master Mapping Role Organisasi"
                 >
                   <Users size={14} />
-                  <span>Mapping Role</span>
+                  <span>Data Mapping Role</span>
                   {roleMappingCount !== undefined && roleMappingCount > 0 ? (
                     <span className="sidebar-sub-badge">
                       {roleMappingCount.toLocaleString('id-ID')}
@@ -204,7 +204,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   title="Master Data Kode Pos Indonesia"
                 >
                   <Mail size={14} />
-                  <span>Kode Pos</span>
+                  <span>Data KodePos</span>
                   {kodeposCount !== undefined && kodeposCount > 0 ? (
                     <span className="sidebar-sub-badge">
                       {kodeposCount.toLocaleString('id-ID')}

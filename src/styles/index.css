@@ -842,7 +842,10 @@ body {
   border-bottom: 1px solid var(--border-subtle);
   color: #495057;
   background-color: #ffffff;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  vertical-align: top;
   font-size: 0.74rem;
   line-height: 1.35;
 }

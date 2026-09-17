@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { getItem, setItem } from '../../utils/storage';
+import { loadRoleMappingFromNeon, saveRoleMappingToNeon } from '../../utils/neonSync';
 
 export interface RoleMappingRecord {
   id?: string;
@@ -323,6 +324,13 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
   const [filterUnit, setFilterUnit] = useState<'ALL' | 'FULL' | 'KCP' | 'KC'>('ALL');
   const [showBanner, setShowBanner] = useState<boolean>(true);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Auto-dismiss the info banner after 20 seconds
+  useEffect(() => {
+    if (!showBanner) return;
+    const t = setTimeout(() => setShowBanner(false), 20000);
+    return () => clearTimeout(t);
+  }, [showBanner]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Pagination states (Default 10)
@@ -357,6 +365,12 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
         } else if (isMounted) {
           onRoleMappingCountChange?.(DEFAULT_ROLE_MAPPING_DATA.length);
         }
+        const neonRows = await loadRoleMappingFromNeon();
+        if (neonRows && Array.isArray(neonRows) && neonRows.length > 0 && isMounted) {
+          setRoleList(neonRows);
+          onRoleMappingCountChange?.(neonRows.length);
+          setItem('role_mapping_data', neonRows);
+        }
       } catch (err) {
         console.warn('Error loading Role Mapping data:', err);
       }
@@ -375,6 +389,7 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
       onRoleMappingCountChange?.(listToSave.length);
       setSuccessMsg(`Berhasil menyimpan ${listToSave.length.toLocaleString('id-ID')} data mapping role!`);
       setTimeout(() => setSuccessMsg(null), 4000);
+      saveRoleMappingToNeon(listToSave).catch(() => undefined);
     } catch (err: any) {
       setErrorMsg(err.message || 'Gagal menyimpan data mapping role');
       setTimeout(() => setErrorMsg(null), 4000);
@@ -389,7 +404,6 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
     let totalKc = 0;
     let totalKcp = 0;
     let totalFullRoles = 0;
-    let totalDistinctUsers = 0;
 
     roleList.forEach((r) => {
       if (r.qrsCabsal === 1) totalCabsal++;
@@ -405,8 +419,6 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
       } else {
         totalKcp++;
       }
-
-      totalDistinctUsers += Number(r.grandTotal) || 1;
     });
 
     return {
@@ -417,7 +429,6 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
       totalFullRoles,
       totalKc,
       totalKcp,
-      totalDistinctUsers,
     };
   }, [roleList]);
 
@@ -957,223 +968,87 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
       )}
 
       {/* 4 Focused Clickable Cards: Klik untuk filter data di tabel */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-          gap: '1rem',
-        }}
-      >
+      <div className="metrics-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
         {/* Card 1: Total Unit Kerja (Klik -> Filter ALL) */}
         <div
+          className="metric-card blue"
           onClick={() => handleCardClick('ALL')}
           style={{
-            background: '#ffffff',
-            borderRadius: '8px',
-            padding: '1rem 1.25rem',
-            border: filterUnit === 'ALL' ? '2px solid #405189' : '1px solid #e9ebec',
-            boxShadow: filterUnit === 'ALL' ? '0 3px 8px rgba(64, 81, 137, 0.15)' : '0 1px 2px rgba(0,0,0,0.04)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
             cursor: 'pointer',
-            transition: 'all 0.18s ease-in-out',
-            transform: filterUnit === 'ALL' ? 'translateY(-2px)' : 'none',
+            border: filterUnit === 'ALL' ? '2px solid #405189' : undefined,
           }}
           title="Klik untuk melihat Semua Cabang & Outlet"
         >
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Total Cabang & Outlet
-              </span>
-              {filterUnit === 'ALL' && (
-                <span style={{ fontSize: '0.62rem', background: '#405189', color: '#ffffff', padding: '0.05rem 0.35rem', borderRadius: '3px', fontWeight: 700 }}>
-                  Aktif
-                </span>
-              )}
-            </div>
-            <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#212529', marginTop: '0.25rem' }}>
-              {stats.totalOrganisasi.toLocaleString('id-ID')}
-            </div>
-            <div style={{ fontSize: '0.72rem', color: '#878a99', marginTop: '0.2rem' }}>
-              {stats.totalKc} Cabang Utama · {stats.totalKcp} Outlet
+          <div className="metric-header">
+            <span className="metric-title">Total Cabang & Outlet</span>
+            <div className="metric-icon-bubble">
+              <Building2 size={14} />
             </div>
           </div>
-          <div
-            style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '8px',
-              background: filterUnit === 'ALL' ? '#405189' : 'rgba(64, 81, 137, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: filterUnit === 'ALL' ? '#ffffff' : '#405189',
-              transition: 'all 0.18s',
-            }}
-          >
-            <Building2 size={22} />
+          <div className="metric-value">{stats.totalOrganisasi.toLocaleString('id-ID')}</div>
+          <div className="metric-footer">
+            {stats.totalKc} Cabang Utama · {stats.totalKcp} Outlet
           </div>
         </div>
 
         {/* Card 2: Role Lengkap (Klik -> Filter FULL) */}
         <div
+          className="metric-card emerald"
           onClick={() => handleCardClick('FULL')}
           style={{
-            background: '#ffffff',
-            borderRadius: '8px',
-            padding: '1rem 1.25rem',
-            border: filterUnit === 'FULL' ? '2px solid #0ab39c' : '1px solid #e9ebec',
-            boxShadow: filterUnit === 'FULL' ? '0 3px 8px rgba(10, 179, 156, 0.18)' : '0 1px 2px rgba(0,0,0,0.04)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
             cursor: 'pointer',
-            transition: 'all 0.18s ease-in-out',
-            transform: filterUnit === 'FULL' ? 'translateY(-2px)' : 'none',
+            border: filterUnit === 'FULL' ? '2px solid #0ab39c' : undefined,
           }}
           title="Klik untuk hanya melihat Cabang dengan 3 Role Lengkap"
         >
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Cabang 3 Role Lengkap
-              </span>
-              {filterUnit === 'FULL' && (
-                <span style={{ fontSize: '0.62rem', background: '#0ab39c', color: '#ffffff', padding: '0.05rem 0.35rem', borderRadius: '3px', fontWeight: 700 }}>
-                  Aktif
-                </span>
-              )}
-            </div>
-            <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#0ab39c', marginTop: '0.25rem' }}>
-              {stats.totalFullRoles.toLocaleString('id-ID')}
-            </div>
-            <div style={{ fontSize: '0.72rem', color: '#0ab39c', fontWeight: 600, marginTop: '0.2rem' }}>
-              Siap Alur Standar Wondr (Klik Filter)
+          <div className="metric-header">
+            <span className="metric-title">Cabang 3 Role Lengkap</span>
+            <div className="metric-icon-bubble">
+              <CheckCircle2 size={14} />
             </div>
           </div>
-          <div
-            style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '8px',
-              background: filterUnit === 'FULL' ? '#0ab39c' : 'rgba(10, 179, 156, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: filterUnit === 'FULL' ? '#ffffff' : '#0ab39c',
-              transition: 'all 0.18s',
-            }}
-          >
-            <CheckCircle2 size={22} />
-          </div>
+          <div className="metric-value">{stats.totalFullRoles.toLocaleString('id-ID')}</div>
+          <div className="metric-footer">Siap Alur Standar Wondr</div>
         </div>
 
         {/* Card 3: Outlet / Sub Branch (Klik -> Filter KCP) */}
         <div
+          className="metric-card cyan"
           onClick={() => handleCardClick('KCP')}
           style={{
-            background: '#ffffff',
-            borderRadius: '8px',
-            padding: '1rem 1.25rem',
-            border: filterUnit === 'KCP' ? '2px solid #299cdb' : '1px solid #e9ebec',
-            boxShadow: filterUnit === 'KCP' ? '0 3px 8px rgba(41, 156, 219, 0.18)' : '0 1px 2px rgba(0,0,0,0.04)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
             cursor: 'pointer',
-            transition: 'all 0.18s ease-in-out',
-            transform: filterUnit === 'KCP' ? 'translateY(-2px)' : 'none',
+            border: filterUnit === 'KCP' ? '2px solid #299cdb' : undefined,
           }}
           title="Klik untuk hanya melihat Outlet / Sub Branch (KCP)"
         >
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Outlet / Sub Branch (2 Role)
-              </span>
-              {filterUnit === 'KCP' && (
-                <span style={{ fontSize: '0.62rem', background: '#299cdb', color: '#ffffff', padding: '0.05rem 0.35rem', borderRadius: '3px', fontWeight: 700 }}>
-                  Aktif
-                </span>
-              )}
-            </div>
-            <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#299cdb', marginTop: '0.25rem' }}>
-              {stats.totalKcp.toLocaleString('id-ID')}
-            </div>
-            <div style={{ fontSize: '0.72rem', color: '#878a99', marginTop: '0.2rem' }}>
-              Sales & Penyetuju (Klik Filter)
+          <div className="metric-header">
+            <span className="metric-title">Outlet / Sub Branch (2 Role)</span>
+            <div className="metric-icon-bubble">
+              <GitBranch size={14} />
             </div>
           </div>
-          <div
-            style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '8px',
-              background: filterUnit === 'KCP' ? '#299cdb' : 'rgba(41, 156, 219, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: filterUnit === 'KCP' ? '#ffffff' : '#299cdb',
-              transition: 'all 0.18s',
-            }}
-          >
-            <GitBranch size={22} />
-          </div>
+          <div className="metric-value">{stats.totalKcp.toLocaleString('id-ID')}</div>
+          <div className="metric-footer">Sales & Penyetuju</div>
         </div>
 
         {/* Card 4: Cabang Utama / KC (Klik -> Filter KC) */}
         <div
+          className="metric-card amber"
           onClick={() => handleCardClick('KC')}
           style={{
-            background: '#ffffff',
-            borderRadius: '8px',
-            padding: '1rem 1.25rem',
-            border: filterUnit === 'KC' ? '2px solid #f7b84b' : '1px solid #e9ebec',
-            boxShadow: filterUnit === 'KC' ? '0 3px 8px rgba(247, 184, 75, 0.25)' : '0 1px 2px rgba(0,0,0,0.04)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
             cursor: 'pointer',
-            transition: 'all 0.18s ease-in-out',
-            transform: filterUnit === 'KC' ? 'translateY(-2px)' : 'none',
+            border: filterUnit === 'KC' ? '2px solid #f7b84b' : undefined,
           }}
           title="Klik untuk hanya melihat Cabang Utama (KC Induk)"
         >
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Cabang Utama (KC Induk)
-              </span>
-              {filterUnit === 'KC' && (
-                <span style={{ fontSize: '0.62rem', background: '#d68b0c', color: '#ffffff', padding: '0.05rem 0.35rem', borderRadius: '3px', fontWeight: 700 }}>
-                  Aktif
-                </span>
-              )}
-            </div>
-            <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#d68b0c', marginTop: '0.25rem' }}>
-              {stats.totalKc.toLocaleString('id-ID')}
-            </div>
-            <div style={{ fontSize: '0.72rem', color: '#878a99', marginTop: '0.2rem' }}>
-              Total {stats.totalDistinctUsers.toLocaleString('id-ID')} Pegawai (Klik Filter)
+          <div className="metric-header">
+            <span className="metric-title">Cabang Utama (KC Induk)</span>
+            <div className="metric-icon-bubble">
+              <Users size={14} />
             </div>
           </div>
-          <div
-            style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '8px',
-              background: filterUnit === 'KC' ? '#d68b0c' : 'rgba(247, 184, 75, 0.15)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: filterUnit === 'KC' ? '#ffffff' : '#d68b0c',
-              transition: 'all 0.18s',
-            }}
-          >
-            <Users size={22} />
-          </div>
+          <div className="metric-value">{stats.totalKc.toLocaleString('id-ID')}</div>
+          <div className="metric-footer">Unit KC Induk terdaftar</div>
         </div>
       </div>
 
@@ -1410,10 +1285,10 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
                       cursor: 'pointer',
                     }}
                   >
-                    <option value="ALL">Semua Unit Kerja</option>
-                    <option value="FULL">Cabang 3 Role Lengkap</option>
-                    <option value="KC">Cabang Utama (KC)</option>
-                    <option value="KCP">Outlet / Sub Branch (KCP)</option>
+                    <option value="ALL">Semua Unit Kerja ({stats.totalOrganisasi.toLocaleString('id-ID')})</option>
+                    <option value="FULL">Cabang 3 Role Lengkap ({stats.totalFullRoles.toLocaleString('id-ID')})</option>
+                    <option value="KC">Cabang Utama (KC) ({stats.totalKc.toLocaleString('id-ID')})</option>
+                    <option value="KCP">Outlet / Sub Branch (KCP) ({stats.totalKcp.toLocaleString('id-ID')})</option>
                   </select>
                 </div>
 
@@ -1466,17 +1341,13 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
                         <div>QRS_CABAPV2</div>
                         <div style={{ fontSize: '0.68rem', fontWeight: 500, color: '#878a99' }}>Penyetuju</div>
                       </th>
-                      <th style={{ width: '110px', textAlign: 'center' }}>
-                        <div>Grand Total</div>
-                        <div style={{ fontSize: '0.68rem', fontWeight: 500, color: '#878a99' }}>Jumlah Pegawai</div>
-                      </th>
                       <th style={{ width: '95px', textAlign: 'center' }}>AKSI</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredList.length === 0 ? (
                       <tr>
-                        <td colSpan={8} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
+                        <td colSpan={7} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
                           Tidak ada data mapping role yang cocok dengan filter pencarian.
                         </td>
                       </tr>
@@ -1576,24 +1447,6 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
                               ) : (
                                 <span style={{ color: '#adb5bd', fontWeight: 500 }}>-</span>
                               )}
-                            </td>
-
-                            {/* Grand Total Distinct User */}
-                            <td style={{ textAlign: 'center' }}>
-                              <span
-                                className="code-cell"
-                                style={{
-                                  fontWeight: 800,
-                                  fontSize: '0.84rem',
-                                  color: '#405189',
-                                  background: 'rgba(64, 81, 137, 0.08)',
-                                  padding: '0.2rem 0.65rem',
-                                  borderRadius: '4px',
-                                }}
-                                title={`${item.grandTotal} Pegawai Fisik`}
-                              >
-                                {item.grandTotal}
-                              </span>
                             </td>
 
                             {/* Actions */}
@@ -1846,35 +1699,6 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
                     </p>
                   </div>
 
-                  {/* Card 3: Grand Total Pegawai (ALL) */}
-                  <div
-                    onClick={() => handleCardClick('ALL')}
-                    style={{
-                      background: '#ffffff',
-                      padding: '0.95rem',
-                      borderRadius: '6px',
-                      border: filterUnit === 'ALL' ? '2px solid #405189' : '1px solid #e9ebec',
-                      boxShadow: filterUnit === 'ALL' ? '0 2px 6px rgba(64, 81, 137, 0.15)' : 'none',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s',
-                    }}
-                    title="Klik untuk melihat Semua Data Cabang & Outlet"
-                  >
-                    <div style={{ fontWeight: 700, color: '#405189', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <Users size={16} color="#405189" />
-                        <span>3. Makna Kolom Grand Total (Jumlah Pegawai)</span>
-                      </div>
-                      {filterUnit === 'ALL' && (
-                        <span style={{ fontSize: '0.62rem', background: '#405189', color: '#fff', padding: '0.05rem 0.35rem', borderRadius: '3px' }}>
-                          Semua
-                        </span>
-                      )}
-                    </div>
-                    <p style={{ margin: 0, color: '#495057', lineHeight: 1.55 }}>
-                      Menampilkan total banyaknya orang atau pegawai yang bertugas di unit tersebut. Angka 1 berarti semua tugas dipegang oleh 1 orang, sedangkan 2 atau 3 berarti peran sales dan persetujuan dipegang oleh staf yang berbeda.
-                    </p>
-                  </div>
                 </div>
               </div>
 
@@ -1909,14 +1733,13 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
                         <th style={{ width: '45px', textAlign: 'center' }}>No</th>
                         <th>Organisasi Tujuan</th>
                         <th style={{ width: '130px', textAlign: 'center' }}>Struktur Unit</th>
-                        <th style={{ width: '120px', textAlign: 'center' }}>Jumlah Pegawai</th>
                         <th>Alur Persetujuan Wondr Merchant</th>
                       </tr>
                     </thead>
                     <tbody>
                       {paginatedRows.length === 0 ? (
                         <tr>
-                          <td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: '#878a99' }}>
+                          <td colSpan={4} style={{ textAlign: 'center', padding: '2rem', color: '#878a99' }}>
                             Tidak ada data yang cocok dengan filter.
                           </td>
                         </tr>
@@ -1943,9 +1766,6 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
                                 >
                                   {isKc ? 'Cabang Utama' : 'Outlet (KCP)'}
                                 </span>
-                              </td>
-                              <td style={{ textAlign: 'center' }}>
-                                <strong>{item.grandTotal} Orang</strong>
                               </td>
                               <td>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -2251,30 +2071,6 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
                     </div>
                   </label>
                 </div>
-              </div>
-
-              {/* Clean Grand Total Input */}
-              <div>
-                <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#495057', marginBottom: '0.35rem' }}>
-                  Grand Total (Jumlah Pegawai) <span style={{ color: '#f06548' }}>*</span>
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  required
-                  disabled={modalMode === 'detail'}
-                  value={formData.grandTotal}
-                  onChange={(e) => setFormData({ ...formData, grandTotal: Math.max(1, parseInt(e.target.value, 10) || 1) })}
-                  style={{
-                    width: '100%',
-                    padding: '0.48rem 0.65rem',
-                    fontSize: '0.84rem',
-                    fontWeight: 600,
-                    borderRadius: '5px',
-                    border: '1px solid #ced4da',
-                    background: modalMode === 'detail' ? '#f8f9fa' : '#ffffff',
-                  }}
-                />
               </div>
 
               <div

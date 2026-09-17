@@ -50,7 +50,6 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [selectedProvinsi, setSelectedProvinsi] = useState<string>('ALL');
   
   // Pagination State (Default 10 data per halaman)
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -80,6 +79,13 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
   const [deleteTargetIndex, setDeleteTargetIndex] = useState<number | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
   const [showInfoBanner, setShowInfoBanner] = useState<boolean>(true);
+
+  // Auto-dismiss the info banner after 20 seconds
+  useEffect(() => {
+    if (!showInfoBanner) return;
+    const t = setTimeout(() => setShowInfoBanner(false), 20000);
+    return () => clearTimeout(t);
+  }, [showInfoBanner]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -126,12 +132,6 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
   // Filtered settings
   const filteredSettings = useMemo(() => {
     return settings.filter((item) => {
-      const matchProvinsi =
-        selectedProvinsi === 'ALL' ||
-        (item.provinsi || '').toLowerCase() === selectedProvinsi.toLowerCase();
-
-      if (!matchProvinsi) return false;
-
       if (!searchTerm.trim()) return true;
       const term = searchTerm.toLowerCase();
 
@@ -150,7 +150,7 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
         (item.telp || '').toLowerCase().includes(term)
       );
     });
-  }, [settings, searchTerm, selectedProvinsi]);
+  }, [settings, searchTerm]);
 
   // Unique provinsi list for filter and real metric calculation
   const provinsiList = useMemo(() => {
@@ -722,23 +722,6 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
                 </button>
               )}
             </div>
-
-            {/* Filter Provinsi */}
-            <select
-              className="filter-select"
-              value={selectedProvinsi}
-              onChange={(e) => {
-                setSelectedProvinsi(e.target.value);
-                setCurrentPage(1);
-              }}
-            >
-              <option value="ALL">Semua Provinsi ({provinsiList.length})</option>
-              {provinsiList.map((prov) => (
-                <option key={prov} value={prov}>
-                  {prov}
-                </option>
-              ))}
-            </select>
           </div>
 
           <div className="filter-group">

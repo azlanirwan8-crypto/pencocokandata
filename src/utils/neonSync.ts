@@ -406,11 +406,11 @@ export async function saveKodePosToNeon(
 }
 
 /**
- * Clear Kode Pos Master Data from Neon DB via /api/kodepos
+ * Clear Kode Pos Master Data from Neon DB via /api/kodepos?all=1
  */
 export async function clearKodePosFromNeon(): Promise<boolean> {
   try {
-    const res = await fetch('/api/kodepos', { method: 'DELETE' });
+    const res = await fetch('/api/kodepos?all=1', { method: 'DELETE' });
     if (!res.ok) return false;
     const json = await res.json();
     return Boolean(json.ok);
@@ -418,4 +418,225 @@ export async function clearKodePosFromNeon(): Promise<boolean> {
     console.warn('Neon kodepos delete error:', err);
     return false;
   }
+}
+
+export interface KodePosRow {
+  id?: number | null;
+  kodePos: string;
+  kelurahan: string;
+  kecamatan: string;
+  kabupatenKota: string;
+  provinsi: string;
+  status: string;
+}
+
+export interface KodePosPageQuery {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  provinsi?: string;
+  kota?: string;
+  status?: string;
+}
+
+function kodePosQuery(q: KodePosPageQuery): string {
+  const p = new URLSearchParams();
+  if (q.page) p.set('page', String(q.page));
+  if (q.pageSize) p.set('pageSize', String(q.pageSize));
+  if (q.search) p.set('search', q.search);
+  if (q.provinsi && q.provinsi !== 'ALL') p.set('provinsi', q.provinsi);
+  if (q.kota && q.kota !== 'ALL') p.set('kota', q.kota);
+  if (q.status && q.status !== 'ALL') p.set('status', q.status);
+  const s = p.toString();
+  return s ? `?${s}` : '';
+}
+
+export interface KodePosPageResult {
+  data: KodePosRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+/**
+ * Ambil SATU halaman data kode pos dari Neon (server-side pagination + filter)
+ */
+export async function fetchKodePosPage(q: KodePosPageQuery): Promise<KodePosPageResult | null> {
+  try {
+    const res = await fetchWithRetry(`/api/kodepos${kodePosQuery(q)}`, {}, 8000, 2);
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json.ok && Array.isArray(json.data)) {
+      return {
+        data: json.data,
+        total: json.total ?? json.data.length,
+        page: json.page ?? 1,
+        pageSize: json.pageSize ?? 25,
+        totalPages: json.totalPages ?? 1,
+      };
+    }
+    return null;
+  } catch (err) {
+    console.warn('Neon kodepos page error:', err);
+    return null;
+  }
+}
+
+export interface KodePosStats {
+  total: number;
+  totalProvinsi: number;
+  totalKota: number;
+  totalKecamatan: number;
+  totalKelurahan: number;
+  totalAktif: number;
+}
+
+/**
+ * Ambil statistik agregat global untuk KPI cards
+ */
+export async function fetchKodePosStats(): Promise<KodePosStats | null> {
+  try {
+    const res = await fetchWithRetry('/api/kodepos?view=stats', {}, 8000, 2);
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json.ok && json.stats) return json.stats as KodePosStats;
+    return null;
+  } catch (err) {
+    console.warn('Neon kodepos stats error:', err);
+    return null;
+  }
+}
+
+/**
+ * Ambil opsi dropdown provinsi + kota/kab (kota bisa difilter provinsi)
+ */
+export async function fetchKodePosOptions(provinsi?: string): Promise<{ provinsi: string[]; kota: string[] } | null> {
+  try {
+    const qs = provinsi && provinsi !== 'ALL' ? `?view=options&provinsi=${encodeURIComponent(provinsi)}` : '?view=options';
+    const res = await fetchWithRetry(`/api/kodepos${qs}`, {}, 8000, 2);
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json.ok) return { provinsi: json.provinsi || [], kota: json.kota || [] };
+    return null;
+  } catch (err) {
+    console.warn('Neon kodepos options error:', err);
+    return null;
+  }
+}
+
+/**
+ * Ambil semua baris yang cocok filter (untuk Ekspor Excel)
+ */
+export async function fetchKodePosExport(q: KodePosPageQuery): Promise<KodePosRow[] | null> {
+  try {
+    const res = await fetchWithRetry(`/api/kodepos?view=export${kodePosQuery(q).replace('?', '&')}`, {}, 60000, 1);
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json.ok && Array.isArray(json.data)) return json.data as KodePosRow[];
+    return null;
+  } catch (err) {
+    console.warn('Neon kodepos export error:', err);
+    return null;
+  }
+}
+
+/**
+ * Tambah satu baris kode pos (append)
+ */
+export async function createKodePosRow(row: KodePosRow): Promise<boolean> {
+  try {
+    const res = await fetchWithRetry(
+      '/api/kodepos',
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows: [row], mode: 'append' }) },
+      8000,
+      2
+    );
+    if (!res.ok) return false;
+    const json = await res.json();
+    return Boolean(json.ok);
+  } catch (err) {
+    console.warn('Neon kodepos create error:', err);
+    return false;
+  }
+}
+
+/**
+ * Update satu baris kode pos berdasarkan id
+ */
+export async function updateKodePosRow(id: number, row: KodePosRow): Promise<boolean> {
+  try {
+    const res = await fetchWithRetry(
+      `/api/kodepos?id=${id}`,
+      { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ row }) },
+      8000,
+      2
+    );
+    if (!res.ok) return false;
+    const json = await res.json();
+    return Boolean(json.ok);
+  } catch (err) {
+    console.warn('Neon kodepos update error:', err);
+    return false;
+  }
+}
+
+/**
+ * Hapus satu baris kode pos berdasarkan id
+ */
+export async function deleteKodePosRow(id: number): Promise<boolean> {
+  try {
+    const res = await fetchWithRetry(`/api/kodepos?id=${id}`, { method: 'DELETE' }, 8000, 2);
+    if (!res.ok) return false;
+    const json = await res.json();
+    return Boolean(json.ok);
+  } catch (err) {
+    console.warn('Neon kodepos delete-row error:', err);
+    return false;
+  }
+}
+
+/**
+ * Generic Neon app_store sync for an arbitrary key (used by PTEN & RoleMapping masters).
+ */
+async function loadKeyFromNeon<T>(endpoint: string): Promise<T | null> {
+  try {
+    const res = await fetchWithRetry(endpoint, { method: 'GET' });
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json && json.ok && json.configured && json.data) {
+      return json.data as T;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function saveKeyToNeon(endpoint: string, data: unknown): Promise<boolean> {
+  try {
+    const res = await fetchWithRetry(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) return false;
+    const json = await res.json();
+    return Boolean(json && json.ok);
+  } catch {
+    return false;
+  }
+}
+
+export function loadPtenFromNeon(): Promise<any[] | null> {
+  return loadKeyFromNeon<any[]>('/api/pten');
+}
+export function savePtenToNeon(rows: any[]): Promise<boolean> {
+  return saveKeyToNeon('/api/pten', rows);
+}
+export function loadRoleMappingFromNeon(): Promise<any[] | null> {
+  return loadKeyFromNeon<any[]>('/api/rolemapping');
+}
+export function saveRoleMappingToNeon(rows: any[]): Promise<boolean> {
+  return saveKeyToNeon('/api/rolemapping', rows);
 }

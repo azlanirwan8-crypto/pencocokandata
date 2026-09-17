@@ -115,13 +115,60 @@ function kodeposDevMiddleware(connectionString: string): Plugin {
             created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW());`;
 
           if (req.method === 'GET') {
-            const rows = await sql`SELECT kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, status FROM kodepos_data ORDER BY id;`;
-            const data = (rows || []).map((r: any) => ({
-              kodePos: r.kode_pos ?? '', kelurahan: r.kelurahan ?? '', kecamatan: r.kecamatan ?? '',
-              kabupatenKota: r.kabupaten_kota ?? '', provinsi: r.provinsi ?? '', status: r.status ?? 'AKTIF',
-            }));
+            const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
+            const view = url.searchParams.get('view') || 'page';
+            const search = (url.searchParams.get('search') || '').trim();
+            const prov = url.searchParams.get('provinsi');
+            const kota = url.searchParams.get('kota');
+            const status = url.searchParams.get('status');
+
+            const where: string[] = [];
+            const params: any[] = [];
+            if (prov) { params.push(prov); where.push(`provinsi = $${params.length}`); }
+            if (kota) { params.push(kota); where.push(`kabupaten_kota = $${params.length}`); }
+            if (status) { params.push(status); where.push(`upper(status) = upper($${params.length})`); }
+            if (search) {
+              const idx = params.length + 1;
+              params.push(`%${search}%`);
+              where.push(`(kode_pos ILIKE $${idx} OR kelurahan ILIKE $${idx} OR kecamatan ILIKE $${idx} OR kabupaten_kota ILIKE $${idx} OR provinsi ILIKE $${idx})`);
+            }
+            const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+            const map = (r: any) => ({ id: r.id ?? null, kodePos: r.kode_pos ?? '', kelurahan: r.kelurahan ?? '', kecamatan: r.kecamatan ?? '', kabupatenKota: r.kabupaten_kota ?? '', provinsi: r.provinsi ?? '', status: r.status ?? 'AKTIF' });
+
+            if (view === 'stats') {
+              const s = await sql`SELECT COUNT(*)::int AS total, COUNT(DISTINCT provinsi)::int AS provinsi, COUNT(DISTINCT kabupaten_kota)::int AS kota, COUNT(DISTINCT kecamatan)::int AS kecamatan, COUNT(DISTINCT kelurahan)::int AS kelurahan, COUNT(*) FILTER (WHERE upper(status) <> 'NON-AKTIF')::int AS aktif FROM kodepos_data;`;
+              const row = (s && s[0]) || {};
+              res.statusCode = 200;
+              return res.end(JSON.stringify({ ok: true, configured: true, stats: { total: row.total ?? 0, totalProvinsi: row.provinsi ?? 0, totalKota: row.kota ?? 0, totalKecamatan: row.kecamatan ?? 0, totalKelurahan: row.kelurahan ?? 0, totalAktif: row.aktif ?? 0 } }));
+            }
+
+            if (view === 'options') {
+              const provRows = await sql`SELECT DISTINCT provinsi FROM kodepos_data WHERE provinsi IS NOT NULL AND provinsi <> '' ORDER BY provinsi;`;
+              let kotaRows: any[];
+              if (prov) {
+                kotaRows = await sql.query(`SELECT DISTINCT kabupaten_kota FROM kodepos_data WHERE kabupaten_kota IS NOT NULL AND kabupaten_kota <> '' AND provinsi = $1 ORDER BY kabupaten_kota;`, [prov]);
+              } else {
+                kotaRows = await sql`SELECT DISTINCT kabupaten_kota FROM kodepos_data WHERE kabupaten_kota IS NOT NULL AND kabupaten_kota <> '' ORDER BY kabupaten_kota;`;
+              }
+              res.statusCode = 200;
+              return res.end(JSON.stringify({ ok: true, configured: true, provinsi: (provRows || []).map((r: any) => r.provinsi), kota: (kotaRows || []).map((r: any) => r.kabupaten_kota) }));
+            }
+
+            if (view === 'export') {
+              const rows = await sql.query(`SELECT id, kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, status FROM kodepos_data ${whereSql} ORDER BY id;`, params);
+              res.statusCode = 200;
+              return res.end(JSON.stringify({ ok: true, configured: true, count: (rows || []).length, data: (rows || []).map(map) }));
+            }
+
+            const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
+            const pageSize = Math.min(500, Math.max(1, parseInt(url.searchParams.get('pageSize') || '25', 10) || 25));
+            const countRes = await sql.query(`SELECT COUNT(*)::int AS n FROM kodepos_data ${whereSql};`, params);
+            const total = (countRes && countRes[0] && countRes[0].n) || 0;
+            const limitIdx = params.length + 1;
+            const offsetIdx = params.length + 2;
+            const rows = await sql.query(`SELECT id, kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, status FROM kodepos_data ${whereSql} ORDER BY id LIMIT $${limitIdx} OFFSET $${offsetIdx};`, [...params, pageSize, (page - 1) * pageSize]);
             res.statusCode = 200;
-            return res.end(JSON.stringify({ ok: true, configured: true, count: data.length, data }));
+            return res.end(JSON.stringify({ ok: true, configured: true, data: (rows || []).map(map), total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) }));
           }
 
           if (req.method === 'POST') {
@@ -147,10 +194,34 @@ function kodeposDevMiddleware(connectionString: string): Plugin {
             return res.end(JSON.stringify({ ok: true, configured: true, inserted: rows.length, total: rows.length }));
           }
 
-          if (req.method === 'DELETE') {
-            await sql`TRUNCATE TABLE kodepos_data RESTART IDENTITY;`;
+          if (req.method === 'PUT') {
+            const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
+            const id = parseInt(url.searchParams.get('id') || '', 10);
+            if (!id) { res.statusCode = 400; return res.end(JSON.stringify({ ok: false, error: 'id wajib diisi untuk update.' })); }
+            let rawPut = '';
+            for await (const chunk of req) rawPut += chunk;
+            const body = JSON.parse(rawPut || '{}');
+            const row = body.row || body;
+            await sql.query(`UPDATE kodepos_data SET kode_pos=$1, kelurahan=$2, kecamatan=$3, kabupaten_kota=$4, provinsi=$5, status=$6, updated_at=NOW() WHERE id=$7;`, [String(row.kodePos ?? ''), String(row.kelurahan ?? ''), String(row.kecamatan ?? ''), String(row.kabupatenKota ?? ''), String(row.provinsi ?? ''), String(row.status ?? 'AKTIF'), id]);
             res.statusCode = 200;
-            return res.end(JSON.stringify({ ok: true, configured: true }));
+            return res.end(JSON.stringify({ ok: true, configured: true, updated: 1 }));
+          }
+
+          if (req.method === 'DELETE') {
+            const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
+            const id = url.searchParams.get('id');
+            if (id) {
+              await sql.query(`DELETE FROM kodepos_data WHERE id=$1;`, [parseInt(id, 10)]);
+              res.statusCode = 200;
+              return res.end(JSON.stringify({ ok: true, configured: true, deleted: 1 }));
+            }
+            if (url.searchParams.get('all') === '1') {
+              await sql`TRUNCATE TABLE kodepos_data RESTART IDENTITY;`;
+              res.statusCode = 200;
+              return res.end(JSON.stringify({ ok: true, configured: true }));
+            }
+            res.statusCode = 400;
+            return res.end(JSON.stringify({ ok: false, error: 'DELETE butuh ?id=X (satu baris) atau ?all=1 (truncate).' }));
           }
 
           res.statusCode = 405;

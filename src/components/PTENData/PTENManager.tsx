@@ -22,6 +22,7 @@ import {
 import * as XLSX from 'xlsx';
 import type { TargetRow, MasterRow } from '../../types';
 import { getItem, setItem } from '../../utils/storage';
+import { loadPtenFromNeon, savePtenToNeon } from '../../utils/neonSync';
 
 import { DEFAULT_PTEN_DATA } from './defaultPtenData';
 
@@ -43,7 +44,6 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
   targetRows = [],
   onPtenCountChange,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'master' | 'audit'>('master');
   const [ptenList, setPtenList] = useState<PTENRecord[]>(DEFAULT_PTEN_DATA);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedKota, setSelectedKota] = useState<string>('ALL');
@@ -53,15 +53,12 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
   // Pagination states (Default 10)
   const [masterPage, setMasterPage] = useState<number>(1);
   const [masterPageSize, setMasterPageSize] = useState<number | 'ALL'>(10);
-  const [auditPage, setAuditPage] = useState<number>(1);
-  const [auditPageSize, setAuditPageSize] = useState<number | 'ALL'>(10);
 
   // Modals state
   const [modalMode, setModalMode] = useState<'create' | 'edit' | 'detail' | null>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [deleteTargetIndex, setDeleteTargetIndex] = useState<number | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
-  const [detailRow, setDetailRow] = useState<any | null>(null);
 
   const [formData, setFormData] = useState<PTENRecord>({
     kodePosPten: '',
@@ -86,6 +83,13 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
           onPtenCountChange?.(DEFAULT_PTEN_DATA.length);
           setItem('pten_master_data', DEFAULT_PTEN_DATA);
         }
+        // Refresh from Neon (authoritative DB) and mirror into IndexedDB
+        const neonRows = await loadPtenFromNeon();
+        if (neonRows && Array.isArray(neonRows) && neonRows.length > 0 && isMounted) {
+          setPtenList(neonRows);
+          onPtenCountChange?.(neonRows.length);
+          setItem('pten_master_data', neonRows);
+        }
       } catch (err) {
         console.warn('Error loading PTEN data:', err);
       }
@@ -96,7 +100,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
     };
   }, []);
 
-  // Save to IndexedDB
+  // Save to IndexedDB + mirror to Neon DB
   const handleSaveData = async (listToSave = ptenList) => {
     setErrorMsg(null);
     try {
@@ -104,18 +108,17 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
       onPtenCountChange?.(listToSave.length);
       setSuccessMsg(`Berhasil menyimpan ${listToSave.length.toLocaleString('id-ID')} data PTEN!`);
       setTimeout(() => setSuccessMsg(null), 4000);
+      savePtenToNeon(listToSave).catch(() => undefined);
     } catch (err: any) {
       setErrorMsg(err.message || 'Gagal menyimpan data PTEN');
       setTimeout(() => setErrorMsg(null), 4000);
     }
   };
 
-  // Analisa Audit PTEN dari Target Data
+  // Analisa kecocokan kode pos target vs PTEN (hanya untuk card informasi)
   const auditAnalysis = useMemo(() => {
     let same = 0;
     let diff = 0;
-    let empty = 0;
-    const diffRows: TargetRow[] = [];
 
     targetRows.forEach((r) => {
       const kp = String(r['KODE POS'] || '').trim();
@@ -126,30 +129,23 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
         same++;
       } else if (cek === 'DIFFERENT' || cek === 'TIDAK COCOK' || (kp && pten && kp !== pten)) {
         diff++;
-        diffRows.push(r);
-      } else {
-        empty++;
       }
     });
 
     return {
-      total: targetRows.length,
-      same,
       diff,
-      empty,
-      diffRows,
       matchPercentage: targetRows.length > 0 ? ((same / targetRows.length) * 100).toFixed(1) : '100',
     };
   }, [targetRows]);
 
-  // Unique Kota list (High-Speed O(N) Set)
-  const kotaList = useMemo(() => {
-    const set = new Set<string>();
+  // Unique Kota list + per-kota record counts (for dropdown totals)
+  const { kotaList, kotaCountMap } = useMemo(() => {
+    const counts = new Map<string, number>();
     for (let i = 0; i < ptenList.length; i++) {
       const k = ptenList[i]?.kotaPten?.trim();
-      if (k) set.add(k);
+      if (k) counts.set(k, (counts.get(k) || 0) + 1);
     }
-    return Array.from(set).sort();
+    return { kotaList: Array.from(counts.keys()).sort(), kotaCountMap: counts };
   }, [ptenList]);
 
   // Filtered PTEN Master (Optimized O(N) single-pass with pre-lowercased query)
@@ -166,8 +162,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
       return (
         p.kodePosPten?.toLowerCase().includes(q) ||
         p.kotaPten?.toLowerCase().includes(q) ||
-        p.kotaPtenMax15?.toLowerCase().includes(q) ||
-        p.status?.toLowerCase().includes(q)
+        p.kotaPtenMax15?.toLowerCase().includes(q)
       );
     });
   }, [ptenList, selectedKota, searchTerm]);
@@ -183,18 +178,6 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
     const start = (masterPage - 1) * masterPageSize;
     return filteredPten.slice(start, start + masterPageSize);
   }, [filteredPten, masterPage, masterPageSize]);
-
-  // Audit Pagination
-  const totalAuditPages = auditPageSize === 'ALL' ? 1 : Math.max(1, Math.ceil(auditAnalysis.diffRows.length / auditPageSize));
-  useEffect(() => {
-    if (auditPage > totalAuditPages) setAuditPage(1);
-  }, [totalAuditPages, auditPage]);
-
-  const paginatedAuditRows = useMemo(() => {
-    if (auditPageSize === 'ALL') return auditAnalysis.diffRows;
-    const start = (auditPage - 1) * auditPageSize;
-    return auditAnalysis.diffRows.slice(start, start + auditPageSize);
-  }, [auditAnalysis.diffRows, auditPage, auditPageSize]);
 
   // Helper for compact sliding pagination
   const getPaginationRange = (curr: number, total: number): (number | string)[] => {
@@ -330,7 +313,6 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
         'KODEPOS (yang digunakan untuk pendaftaran merchant)': p.kodePosPten,
         'KOTA/KABUPATEN': p.kotaPten,
         'KOTA/KABUPATEN MAX 15 DIGIT (yang digunakan untuk pendaftaran merchant)': p.kotaPtenMax15 || p.kotaPten,
-        'STATUS': p.status,
       }))
     );
     const wb = XLSX.utils.book_new();
@@ -380,7 +362,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
       kodePosPten: cleanKodePos || formData.kodePosPten.trim(),
       kotaPten: formData.kotaPten.trim().toUpperCase(),
       kotaPtenMax15: (formData.kotaPtenMax15 || formData.kotaPten).trim().toUpperCase(),
-      status: formData.status,
+      status: formData.status || 'AKTIF',
     };
 
     let updatedList: PTENRecord[];
@@ -574,21 +556,9 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
         </div>
       )}
 
-      {/* 4 Stats Cards matching Wilayah & Cabang */}
+      {/* Stats Cards */}
       <div className="metrics-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-        {/* Card 1: Total Kode Pos PTEN */}
-        <div className="metric-card blue">
-          <div className="metric-header">
-            <span className="metric-title">Total Kode Pos PTEN</span>
-            <div className="metric-icon-bubble">
-              <ShieldCheck size={14} />
-            </div>
-          </div>
-          <div className="metric-value">{ptenList.length.toLocaleString('id-ID')}</div>
-          <div className="metric-footer">Baris referensi master PTEN</div>
-        </div>
-
-        {/* Card 2: Cakupan Kota/Kab */}
+        {/* Card: Cakupan Kota/Kab */}
         <div className="metric-card cyan">
           <div className="metric-header">
             <span className="metric-title">Cakupan Kota / Kab</span>
@@ -600,7 +570,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
           <div className="metric-footer">Kota/Kabupaten unik terdaftar</div>
         </div>
 
-        {/* Card 3: Kode Pos Aktif */}
+        {/* Card: Kode Pos Aktif */}
         <div className="metric-card emerald">
           <div className="metric-header">
             <span className="metric-title">Kode Pos Aktif</span>
@@ -614,7 +584,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
           <div className="metric-footer">Referensi berstatus AKTIF</div>
         </div>
 
-        {/* Card 4: Audit Integritas Target */}
+        {/* Card: Kecocokan Data Target */}
         <div className={`metric-card ${auditAnalysis.diff > 0 ? 'rose' : 'emerald'}`}>
           <div className="metric-header">
             <span className="metric-title">Kecocokan Data Target</span>
@@ -691,33 +661,6 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
         </div>
       ) : (
         <div className="glass-card" style={{ padding: '1.15rem 1.35rem' }}>
-          {/* Sub-Tabs Nav: Master PTEN vs Audit Perbedaan */}
-          <div className="nav-tabs" style={{ width: 'fit-content', marginBottom: '1rem' }}>
-            <button
-              type="button"
-              className={`nav-tab-btn${activeSubTab === 'master' ? ' active' : ''}`}
-              onClick={() => setActiveSubTab('master')}
-            >
-              <ShieldCheck size={14} />
-              <span>Daftar Master PTEN</span>
-              <span className="nav-tab-badge">{ptenList.length.toLocaleString('id-ID')} Baris</span>
-            </button>
-
-            <button
-              type="button"
-              className={`nav-tab-btn${activeSubTab === 'audit' ? ' active' : ''}`}
-              onClick={() => setActiveSubTab('audit')}
-            >
-              <AlertCircle size={14} />
-              <span>Audit Perbedaan Kode Pos</span>
-              {auditAnalysis.diff > 0 && (
-                <span className="nav-tab-badge">{auditAnalysis.diff}</span>
-              )}
-            </button>
-          </div>
-
-          {activeSubTab === 'master' ? (
-            <>
               {/* Filter Toolbar without top counter */}
               <div className="filter-toolbar" style={{ marginBottom: '1rem' }}>
                 <div className="filter-group" style={{ flex: 1, minWidth: '260px' }}>
@@ -742,10 +685,10 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
                     value={selectedKota}
                     onChange={(e) => setSelectedKota(e.target.value)}
                   >
-                    <option value="ALL">Semua Kota/Kab ({kotaList.length})</option>
+                    <option value="ALL">Semua Kota/Kab (Total: {ptenList.length.toLocaleString('id-ID')})</option>
                     {kotaList.map((k) => (
                       <option key={k} value={k}>
-                        {k}
+                        {k} ({(kotaCountMap.get(k) || 0).toLocaleString('id-ID')})
                       </option>
                     ))}
                   </select>
@@ -781,14 +724,13 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
                       <th style={{ width: '130px', textAlign: 'center' }}>KODEPOS</th>
                       <th>KOTA / KABUPATEN</th>
                       <th>KOTA/KABUPATEN MAX 15 DIGIT</th>
-                      <th style={{ width: '90px', textAlign: 'center' }}>STATUS</th>
                       <th style={{ width: '95px', textAlign: 'center' }}>AKSI</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredPten.length === 0 ? (
                       <tr>
-                        <td colSpan={6} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
+                        <td colSpan={5} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
                           Tidak ada data master PTEN yang cocok dengan filter pencarian.
                         </td>
                       </tr>
@@ -811,11 +753,6 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
                             <td style={{ fontWeight: 600, color: '#212529' }}>{item.kotaPten}</td>
                             <td style={{ color: '#495057', fontFamily: 'var(--font-mono)', fontSize: '0.74rem' }}>
                               {item.kotaPtenMax15 || item.kotaPten}
-                            </td>
-                            <td style={{ textAlign: 'center' }}>
-                              <span className={`badge ${item.status === 'AKTIF' ? 'badge-match' : 'badge-level2'}`} style={{ fontSize: '0.68rem' }}>
-                                {item.status}
-                              </span>
                             </td>
                             <td style={{ textAlign: 'center' }}>
                               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
@@ -990,281 +927,6 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
                   </div>
                 </div>
               )}
-            </>
-          ) : (
-            /* Audit View: Perbedaan Kode Pos PTEN */
-            <div>
-              {/* Flow Explanation Banner */}
-              <div
-                style={{
-                  background: 'linear-gradient(135deg, rgba(64, 81, 137, 0.05) 0%, rgba(41, 156, 219, 0.05) 100%)',
-                  border: '1px solid rgba(64, 81, 137, 0.15)',
-                  borderRadius: '8px',
-                  padding: '1rem 1.25rem',
-                  marginBottom: '1.25rem',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.6rem' }}>
-                  <ShieldCheck size={17} color="#405189" />
-                  <strong style={{ fontSize: '0.86rem', color: '#405189' }}>
-                    Alur Kerja & Cara Pengecekan Audit Kode Pos PTEN
-                  </strong>
-                </div>
-
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                    gap: '0.75rem',
-                    fontSize: '0.76rem',
-                    color: '#495057',
-                  }}
-                >
-                  <div style={{ background: '#ffffff', padding: '0.65rem 0.85rem', borderRadius: '6px', border: '1px solid #e9ebec' }}>
-                    <div style={{ fontWeight: 700, color: '#405189', marginBottom: '0.2rem' }}>1. Data Target Diunggah</div>
-                    <span>Data target dari berkas Excel memuat kolom <code>KODE POS</code> dan lokasi/nama outlet.</span>
-                  </div>
-
-                  <div style={{ background: '#ffffff', padding: '0.65rem 0.85rem', borderRadius: '6px', border: '1px solid #e9ebec' }}>
-                    <div style={{ fontWeight: 700, color: '#299cdb', marginBottom: '0.2rem' }}>2. Lookup Master PTEN</div>
-                    <span>Sistem mencocokkan kota/alamat target terhadap database resmi PTEN untuk memperoleh <code>KODE POS PTEN</code>.</span>
-                  </div>
-
-                  <div style={{ background: '#ffffff', padding: '0.65rem 0.85rem', borderRadius: '6px', border: '1px solid #e9ebec' }}>
-                    <div style={{ fontWeight: 700, color: '#f06548', marginBottom: '0.2rem' }}>3. Verifikasi & Flagging</div>
-                    <span>Jika <strong>Kode Pos Target ≠ Kode Pos PTEN</strong>, data otomatis diklasifikasikan sebagai <code>TIDAK COCOK</code> untuk dikoreksi.</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="section-header" style={{ flexWrap: 'wrap', marginBottom: '1rem' }}>
-                <div>
-                  <h4 className="section-title" style={{ margin: '0 0 0.25rem' }}>
-                    Daftar Outlet Target dengan Perbedaan Kode Pos PTEN
-                  </h4>
-                  <p className="section-subtitle" style={{ margin: 0 }}>
-                    Menampilkan baris data target di mana Kode Pos terdaftar berbeda dengan master referensi PTEN.
-                  </p>
-                </div>
-
-                <div className="filter-group">
-                  <label style={{ fontSize: '0.78rem', color: '#878a99' }}>Tampilkan:</label>
-                  <select
-                    className="filter-select"
-                    value={auditPageSize}
-                    onChange={(e) => {
-                      const val = e.target.value === 'ALL' ? 'ALL' : Number(e.target.value);
-                      setAuditPageSize(val);
-                      setAuditPage(1);
-                    }}
-                  >
-                    <option value={10}>10 Baris</option>
-                    <option value={25}>25 Baris</option>
-                    <option value={50}>50 Baris</option>
-                    <option value="ALL">Lihat Semua ({auditAnalysis.diffRows.length})</option>
-                  </select>
-                </div>
-              </div>
-
-              {auditAnalysis.diffRows.length === 0 ? (
-                <div
-                  style={{
-                    padding: '2.5rem 1.5rem',
-                    textAlign: 'center',
-                    background: '#fafbfe',
-                    borderRadius: '6px',
-                    border: '1px dashed #ced4da',
-                  }}
-                >
-                  <CheckCircle2 size={32} color="#0ab39c" style={{ margin: '0 auto 0.5rem' }} />
-                  <h4 style={{ fontSize: '0.92rem', fontWeight: 700, color: '#212529', margin: '0 0 0.25rem' }}>
-                    100% Seluruh Kode Pos Target Cocok dengan PTEN!
-                  </h4>
-                  <p style={{ fontSize: '0.78rem', color: '#878a99', margin: 0 }}>
-                    Tidak ditemukan perbedaan antara Kode Pos Target dengan Master PTEN.
-                  </p>
-                </div>
-              ) : (
-                <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', overflowX: 'auto', maxHeight: '550px' }}>
-                  <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
-                    <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
-                      <tr>
-                        <th style={{ width: '45px', textAlign: 'center' }}>No</th>
-                        <th>Wilayah</th>
-                        <th>Sandi Cabang</th>
-                        <th>Nama Outlet</th>
-                        <th style={{ width: '120px', textAlign: 'center' }}>KODEPOS TARGET</th>
-                        <th style={{ width: '120px', textAlign: 'center' }}>KODEPOS PTEN</th>
-                        <th style={{ width: '110px', textAlign: 'center' }}>STATUS</th>
-                        <th style={{ width: '70px', textAlign: 'center' }}>DETAIL</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paginatedAuditRows.map((r, idx) => {
-                        const displayRowNo =
-                          auditPageSize === 'ALL'
-                            ? idx + 1
-                            : (auditPage - 1) * (auditPageSize as number) + idx + 1;
-
-                        return (
-                          <tr key={idx} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
-                            <td style={{ textAlign: 'center', color: '#878a99' }}>{displayRowNo}</td>
-                            <td>{r.Wilayah || '-'}</td>
-                            <td style={{ fontWeight: 600 }}>{r['Sandi Cabang'] || r.Cabang || '-'}</td>
-                            <td>{r['Nama Outlet'] || '-'}</td>
-                            <td style={{ textAlign: 'center' }}>
-                              <span className="code-cell" style={{ background: '#e8f7f5', color: '#0ab39c', fontWeight: 700 }}>
-                                {r['KODE POS'] || '-'}
-                              </span>
-                            </td>
-                            <td style={{ textAlign: 'center' }}>
-                              <span className="code-cell" style={{ background: '#fff0ee', color: '#f06548', fontWeight: 700 }}>
-                                {r['KODE POS PTEN'] || '-'}
-                              </span>
-                            </td>
-                            <td style={{ textAlign: 'center' }}>
-                              <span
-                                style={{
-                                  display: 'inline-block',
-                                  padding: '0.15rem 0.45rem',
-                                  borderRadius: '4px',
-                                  fontSize: '0.68rem',
-                                  fontWeight: 700,
-                                  background: 'rgba(240, 101, 72, 0.1)',
-                                  color: '#f06548',
-                                  border: '1px solid rgba(240, 101, 72, 0.3)',
-                                }}
-                              >
-                                TIDAK COCOK
-                              </span>
-                            </td>
-                            <td style={{ textAlign: 'center' }}>
-                              <button
-                                type="button"
-                                onClick={() => setDetailRow(r)}
-                                className="btn btn-outline btn-sm"
-                                style={{ padding: '0.2rem 0.45rem', fontSize: '0.72rem' }}
-                              >
-                                <Eye size={12} />
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {/* Audit Pagination Footer with Compact Sliding Range */}
-              {auditPageSize !== 'ALL' && totalAuditPages > 1 && (
-                <div
-                  className="pagination-row"
-                  style={{
-                    flexWrap: 'wrap',
-                    gap: '0.75rem',
-                    marginTop: '1rem',
-                    borderTop: '1px solid #e9ebec',
-                  }}
-                >
-                  <div style={{ fontSize: '0.78rem', color: '#878a99' }}>
-                    Halaman <strong style={{ color: '#212529' }}>{auditPage}</strong> dari{' '}
-                    <strong style={{ color: '#212529' }}>{totalAuditPages}</strong>
-                  </div>
-
-                  <div className="pagination-controls">
-                    <button
-                      type="button"
-                      className="btn btn-outline btn-sm"
-                      onClick={() => setAuditPage(1)}
-                      disabled={auditPage === 1}
-                      title="Halaman Pertama"
-                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.74rem' }}
-                    >
-                      <ChevronsLeft size={13} />
-                    </button>
-
-                    <button
-                      type="button"
-                      className="btn btn-outline btn-sm"
-                      onClick={() => setAuditPage((p) => Math.max(1, p - 1))}
-                      disabled={auditPage === 1}
-                      title="Halaman Sebelumnya"
-                      style={{ padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}
-                    >
-                      <ChevronLeft size={13} />
-                    </button>
-
-                    {getPaginationRange(auditPage, totalAuditPages).map((p, idx) => {
-                      if (typeof p === 'string') {
-                        return (
-                          <span
-                            key={p + idx}
-                            style={{
-                              minWidth: '22px',
-                              height: '28px',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: '0.74rem',
-                              color: '#878a99',
-                              userSelect: 'none',
-                            }}
-                          >
-                            ...
-                          </span>
-                        );
-                      }
-                      return (
-                        <button
-                          key={p}
-                          type="button"
-                          onClick={() => setAuditPage(p)}
-                          style={{
-                            minWidth: '28px',
-                            height: '28px',
-                            padding: '0 0.4rem',
-                            fontSize: '0.74rem',
-                            fontWeight: auditPage === p ? 700 : 500,
-                            borderRadius: '4px',
-                            border: auditPage === p ? '1px solid #405189' : '1px solid #ced4da',
-                            background: auditPage === p ? '#405189' : '#ffffff',
-                            color: auditPage === p ? '#ffffff' : '#495057',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s',
-                          }}
-                        >
-                          {p}
-                        </button>
-                      );
-                    })}
-
-                    <button
-                      type="button"
-                      className="btn btn-outline btn-sm"
-                      onClick={() => setAuditPage((p) => Math.min(totalAuditPages, p + 1))}
-                      disabled={auditPage === totalAuditPages}
-                      title="Halaman Berikutnya"
-                      style={{ padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}
-                    >
-                      <ChevronRight size={13} />
-                    </button>
-
-                    <button
-                      type="button"
-                      className="btn btn-outline btn-sm"
-                      onClick={() => setAuditPage(totalAuditPages)}
-                      disabled={auditPage === totalAuditPages}
-                      title="Halaman Terakhir"
-                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.74rem' }}
-                    >
-                      <ChevronsRight size={13} />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       )}
 
@@ -1301,20 +963,6 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
                       onChange={(e) => setFormData({ ...formData, kodePosPten: e.target.value })}
                       style={{ background: modalMode === 'detail' ? '#f8f9fa' : '#ffffff' }}
                     />
-                  </div>
-
-                  <div className="form-field">
-                    <label className="form-label">STATUS</label>
-                    <select
-                      className="form-control"
-                      disabled={modalMode === 'detail'}
-                      value={formData.status}
-                      onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                      style={{ background: modalMode === 'detail' ? '#f8f9fa' : '#ffffff' }}
-                    >
-                      <option value="AKTIF">AKTIF</option>
-                      <option value="NON-AKTIF">NON-AKTIF</option>
-                    </select>
                   </div>
                 </div>
 
@@ -1436,50 +1084,6 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
         </div>
       )}
 
-      {/* Audit Detail Modal */}
-      {detailRow && (
-        <div className="modal-backdrop">
-          <div className="modal-container" style={{ maxWidth: '520px' }}>
-            <div className="modal-header">
-              <h4 className="modal-title">Detail Rekonsiliasi Kode Pos PTEN</h4>
-              <button type="button" className="modal-close" onClick={() => setDetailRow(null)}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="modal-body" style={{ fontSize: '0.8rem' }}>
-              <div>
-                <span style={{ color: '#878a99', display: 'block', fontSize: '0.72rem' }}>Nama Outlet / Lokasi</span>
-                <strong style={{ color: '#212529' }}>{detailRow['Nama Outlet'] || detailRow.Cabang || '-'}</strong>
-              </div>
-              <div>
-                <span style={{ color: '#878a99', display: 'block', fontSize: '0.72rem' }}>Alamat Lengkap</span>
-                <div>{detailRow.ALAMAT || '-'}</div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginTop: '0.25rem' }}>
-                <div style={{ background: '#e8f7f5', padding: '0.65rem', borderRadius: '4px', border: '1px solid #b7ebe4' }}>
-                  <span style={{ color: '#0ab39c', fontWeight: 600, display: 'block', fontSize: '0.72rem' }}>Kode Pos Target</span>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0ab39c', fontFamily: 'var(--font-mono)' }}>
-                    {detailRow['KODE POS'] || '-'}
-                  </div>
-                </div>
-                <div style={{ background: '#fff0ee', padding: '0.65rem', borderRadius: '4px', border: '1px solid #fedcd6' }}>
-                  <span style={{ color: '#f06548', fontWeight: 600, display: 'block', fontSize: '0.72rem' }}>Kode Pos PTEN</span>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#f06548', fontFamily: 'var(--font-mono)' }}>
-                    {detailRow['KODE POS PTEN'] || '-'}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="modal-footer">
-              <button type="button" className="btn btn-outline btn-sm" onClick={() => setDetailRow(null)}>
-                Tutup
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

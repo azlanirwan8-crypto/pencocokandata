@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Mail,
   Search,
@@ -25,9 +25,19 @@ import {
   Info,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { getItem, setItem } from '../../utils/storage';
-import { DEFAULT_KODEPOS_DATA, type KodePosRecord } from './defaultKodePosData';
-import { saveKodePosToNeon, loadKodePosFromNeon } from '../../utils/neonSync';
+import { DEFAULT_KODEPOS_DATA } from './defaultKodePosData';
+import {
+  saveKodePosToNeon,
+  fetchKodePosPage,
+  fetchKodePosStats,
+  fetchKodePosOptions,
+  fetchKodePosExport,
+  createKodePosRow,
+  updateKodePosRow,
+  deleteKodePosRow,
+  type KodePosRow,
+  type KodePosStats,
+} from '../../utils/neonSync';
 
 interface KodePosManagerProps {
   onKodePosCountChange?: (count: number) => void;
@@ -36,32 +46,47 @@ interface KodePosManagerProps {
 export const KodePosManager: React.FC<KodePosManagerProps> = ({
   onKodePosCountChange,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'list' | 'lookup'>('list');
-  const [kodePosList, setKodePosList] = useState<KodePosRecord[]>(DEFAULT_KODEPOS_DATA);
+  // Server-driven data (Neon Postgres adalah satu-satunya sumber data)
+  const [rows, setRows] = useState<KodePosRow[]>([]);
+  const [total, setTotal] = useState<number>(0);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [reloadKey, setReloadKey] = useState<number>(0);
+
+  const [stats, setStats] = useState<KodePosStats>({
+    total: 0,
+    totalProvinsi: 0,
+    totalKota: 0,
+    totalKecamatan: 0,
+    totalKelurahan: 0,
+    totalAktif: 0,
+  });
+  const [provinsiOptions, setProvinsiOptions] = useState<string[]>([]);
+  const [kotaOptions, setKotaOptions] = useState<string[]>([]);
+
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [debouncedSearch, setDebouncedSearch] = useState<string>('');
   const [selectedProvinsi, setSelectedProvinsi] = useState<string>('ALL');
   const [selectedKota, setSelectedKota] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
+
   const [showBanner, setShowBanner] = useState<boolean>(true);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Quick lookup state
-  const [lookupQuery, setLookupQuery] = useState<string>('');
-
-  // Pagination states (Default 10)
+  // Pagination states
   const [page, setPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number | 'ALL'>(10);
+  const [pageSize, setPageSize] = useState<number>(10);
 
   // Modals state
   const [modalMode, setModalMode] = useState<'create' | 'edit' | 'detail' | null>(null);
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [deleteTargetIndex, setDeleteTargetIndex] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<KodePosRow | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
-  const [detailItem, setDetailItem] = useState<KodePosRecord | null>(null);
+  const [detailItem, setDetailItem] = useState<KodePosRow | null>(null);
 
-  const [formData, setFormData] = useState<KodePosRecord>({
+  const [formData, setFormData] = useState<KodePosRow>({
     kodePos: '',
     kelurahan: '',
     kecamatan: '',
@@ -72,201 +97,113 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load Kode Pos: IndexedDB untuk tampil instan, lalu Neon (DB) sebagai sumber
-  // utama yang menimpa di background agar data yang di-push ke DB selalu tampil.
+  // Auto-dismiss the info banner after 20 seconds
   useEffect(() => {
-    let isMounted = true;
+    if (!showBanner) return;
+    const t = setTimeout(() => setShowBanner(false), 20000);
+    return () => clearTimeout(t);
+  }, [showBanner]);
 
-    const applyList = (records: KodePosRecord[]) => {
-      setKodePosList(records);
-      onKodePosCountChange?.(records.length);
-      setItem('kodepos_master_data', records);
-    };
+  // Debounce pencarian agar tidak menembak DB tiap ketikan
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 350);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
 
-    const refreshFromNeon = async () => {
-      const remote = await loadKodePosFromNeon();
-      if (remote && Array.isArray(remote) && remote.length > 0 && isMounted) {
-        applyList(remote as KodePosRecord[]);
-      }
-    };
-
-    const loadSaved = async () => {
-      try {
-        const saved = await getItem<KodePosRecord[]>('kodepos_master_data');
-        if (saved && Array.isArray(saved) && saved.length > 0) {
-          if (!isMounted) return;
-          setKodePosList(saved);
-          onKodePosCountChange?.(saved.length);
-        } else if (isMounted) {
-          setKodePosList(DEFAULT_KODEPOS_DATA);
-          onKodePosCountChange?.(DEFAULT_KODEPOS_DATA.length);
-        }
-        // Neon authoritative: timpa IndexedDB bila DB punya data
-        await refreshFromNeon();
-      } catch (err) {
-        console.warn('Error loading Kode Pos data:', err);
-      }
-    };
-    loadSaved();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  // Save to IndexedDB + background sync ke Neon Postgres
-  const handleSaveData = async (listToSave = kodePosList) => {
-    setErrorMsg(null);
-    try {
-      await setItem('kodepos_master_data', listToSave);
-      onKodePosCountChange?.(listToSave.length);
-      setSuccessMsg(`Berhasil menyimpan ${listToSave.length.toLocaleString('id-ID')} data Kode Pos!`);
-      setTimeout(() => setSuccessMsg(null), 4000);
-      // Fire-and-forget sync ke Neon (tidak block UI)
-      saveKodePosToNeon(listToSave, 'replace').catch((e) =>
-        console.warn('Neon kodepos sync skipped (offline/no DB):', e)
-      );
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Gagal menyimpan data Kode Pos');
-      setTimeout(() => setErrorMsg(null), 4000);
-    }
-  };
-
-  // KPI Statistics Calculation
-  const stats = useMemo(() => {
-    const uniqueProvinsi = new Set<string>();
-    const uniqueKota = new Set<string>();
-    const uniqueKecamatan = new Set<string>();
-    const uniqueKelurahan = new Set<string>();
-    let aktifCount = 0;
-
-    kodePosList.forEach((item) => {
-      if (item.provinsi) uniqueProvinsi.add(item.provinsi.trim().toUpperCase());
-      if (item.kabupatenKota) uniqueKota.add(item.kabupatenKota.trim().toUpperCase());
-      if (item.kecamatan) uniqueKecamatan.add(item.kecamatan.trim().toUpperCase());
-      if (item.kelurahan) uniqueKelurahan.add(item.kelurahan.trim().toUpperCase());
-      if (item.status !== 'NON-AKTIF') aktifCount++;
-    });
-
-    return {
-      totalRecords: kodePosList.length,
-      totalProvinsi: uniqueProvinsi.size,
-      totalKota: uniqueKota.size,
-      totalKecamatan: uniqueKecamatan.size,
-      totalKelurahan: uniqueKelurahan.size,
-      totalAktif: aktifCount,
-    };
-  }, [kodePosList]);
-
-  // Unique Dropdown Options
-  const provinsiOptions = useMemo(() => {
-    const setP = new Set<string>();
-    kodePosList.forEach((item) => {
-      if (item.provinsi) setP.add(item.provinsi.trim());
-    });
-    return Array.from(setP).sort((a, b) => a.localeCompare(b));
-  }, [kodePosList]);
-
-  const kotaOptions = useMemo(() => {
-    const setK = new Set<string>();
-    kodePosList.forEach((item) => {
-      if (selectedProvinsi === 'ALL' || item.provinsi?.trim().toUpperCase() === selectedProvinsi.toUpperCase()) {
-        if (item.kabupatenKota) setK.add(item.kabupatenKota.trim());
-      }
-    });
-    return Array.from(setK).sort((a, b) => a.localeCompare(b));
-  }, [kodePosList, selectedProvinsi]);
-
-  // Filtered index list — track original indices so the table can edit/delete
-  // without calling kodePosList.indexOf per row (O(n^2) freeze on large data).
-  const filteredIdx = useMemo(() => {
-    const q = searchTerm.trim().toLowerCase();
-    const provFilter = selectedProvinsi.toUpperCase();
-    const kotaFilter = selectedKota.toUpperCase();
-    const statusFilter = selectedStatus.toUpperCase();
-
-    const result: number[] = [];
-    for (let i = 0; i < kodePosList.length; i++) {
-      const item = kodePosList[i];
-      if (selectedProvinsi !== 'ALL' && item.provinsi?.trim().toUpperCase() !== provFilter) {
-        continue;
-      }
-      if (selectedKota !== 'ALL' && item.kabupatenKota?.trim().toUpperCase() !== kotaFilter) {
-        continue;
-      }
-      if (selectedStatus !== 'ALL' && (item.status || 'AKTIF').toUpperCase() !== statusFilter) {
-        continue;
-      }
-      if (
-        !q ||
-        item.kodePos?.toLowerCase().includes(q) ||
-        item.kelurahan?.toLowerCase().includes(q) ||
-        item.kecamatan?.toLowerCase().includes(q) ||
-        item.kabupatenKota?.toLowerCase().includes(q) ||
-        item.provinsi?.toLowerCase().includes(q)
-      ) {
-        result.push(i);
-      }
-    }
-    return result;
-  }, [kodePosList, searchTerm, selectedProvinsi, selectedKota, selectedStatus]);
-
-  const filteredList = useMemo(() => filteredIdx.map((i) => kodePosList[i]), [filteredIdx, kodePosList]);
-
-  // Reset page when filter changes
+  // Reset ke halaman 1 saat filter / pencarian berubah
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, selectedProvinsi, selectedKota, selectedStatus]);
+  }, [debouncedSearch, selectedProvinsi, selectedKota, selectedStatus]);
 
-  // Pagination calculation
-  const totalPages = pageSize === 'ALL' ? 1 : Math.max(1, Math.ceil(filteredList.length / pageSize));
+  const refreshStats = useCallback(async () => {
+    const s = await fetchKodePosStats();
+    if (s) {
+      setStats(s);
+      onKodePosCountChange?.(s.total);
+    }
+  }, [onKodePosCountChange]);
+
+  // Muat statistik KPI saat mount & setelah mutasi
+  useEffect(() => {
+    refreshStats();
+  }, [refreshStats]);
+
+  // Muat opsi dropdown provinsi + kota (kota mengikuti provinsi terpilih)
+  useEffect(() => {
+    let alive = true;
+    fetchKodePosOptions(selectedProvinsi).then((r) => {
+      if (!alive || !r) return;
+      setProvinsiOptions(r.provinsi);
+      setKotaOptions(r.kota);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [selectedProvinsi]);
+
+  // Muat SATU halaman data dari Neon (server-side pagination + filter)
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    fetchKodePosPage({
+      page,
+      pageSize,
+      search: debouncedSearch,
+      provinsi: selectedProvinsi,
+      kota: selectedKota,
+      status: selectedStatus,
+    }).then((r) => {
+      if (!alive) return;
+      if (r) {
+        setRows(r.data);
+        setTotal(r.total);
+        setTotalPages(r.totalPages);
+        setErrorMsg(null);
+      } else {
+        setRows([]);
+        setTotal(0);
+        setTotalPages(1);
+        setErrorMsg('Gagal memuat data Kode Pos dari database.');
+      }
+      setLoading(false);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [page, pageSize, debouncedSearch, selectedProvinsi, selectedKota, selectedStatus, reloadKey]);
+
+  // Jaga page tetap valid bila totalPages menyusut
   useEffect(() => {
     if (page > totalPages) setPage(1);
   }, [totalPages, page]);
 
-  const paginatedList = useMemo(() => {
-    const idxSlice =
-      pageSize === 'ALL'
-        ? filteredIdx
-        : filteredIdx.slice((page - 1) * (pageSize as number), (page - 1) * (pageSize as number) + (pageSize as number));
-    return idxSlice.map((i) => ({ rec: kodePosList[i], idx: i }));
-  }, [filteredIdx, kodePosList, page, pageSize]);
-
   // Compact sliding pagination helper matching RoleMapping & PTEN
-  const getPaginationRange = (curr: number, total: number): (number | string)[] => {
-    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const getPaginationRange = (curr: number, tp: number): (number | string)[] => {
+    if (tp <= 7) return Array.from({ length: tp }, (_, i) => i + 1);
     const pages: (number | string)[] = [1];
     let start = Math.max(2, curr - 1);
-    let end = Math.min(total - 1, curr + 1);
+    let end = Math.min(tp - 1, curr + 1);
     if (curr <= 3) {
       start = 2;
       end = 4;
-    } else if (curr >= total - 2) {
-      start = total - 3;
-      end = total - 1;
+    } else if (curr >= tp - 2) {
+      start = tp - 3;
+      end = tp - 1;
     }
     if (start > 2) pages.push('ell-start');
     for (let i = start; i <= end; i++) pages.push(i);
-    if (end < total - 1) pages.push('ell-end');
-    pages.push(total);
+    if (end < tp - 1) pages.push('ell-end');
+    pages.push(tp);
     return pages;
   };
 
-  // Quick lookup search results
-  const lookupResults = useMemo(() => {
-    if (!lookupQuery.trim()) return [];
-    const q = lookupQuery.trim().toLowerCase();
-    return kodePosList.filter(
-      (item) =>
-        item.kodePos?.toLowerCase().includes(q) ||
-        item.kelurahan?.toLowerCase().includes(q) ||
-        item.kecamatan?.toLowerCase().includes(q) ||
-        item.kabupatenKota?.toLowerCase().includes(q) ||
-        item.provinsi?.toLowerCase().includes(q)
-    ).slice(0, 50);
-  }, [kodePosList, lookupQuery]);
+  const refreshAfterMutation = () => {
+    refreshStats();
+    setReloadKey((k) => k + 1);
+  };
 
   // Handle Create / Update Form Submit
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.kodePos.trim()) {
       alert('Kode Pos wajib diisi!');
@@ -277,7 +214,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
       return;
     }
 
-    const cleanRecord: KodePosRecord = {
+    const cleanRecord: KodePosRow = {
       kodePos: formData.kodePos.trim(),
       kelurahan: formData.kelurahan.trim(),
       kecamatan: formData.kecamatan.trim(),
@@ -286,48 +223,60 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
       status: formData.status || 'AKTIF',
     };
 
-    let updatedList: KodePosRecord[];
+    let ok = false;
     if (modalMode === 'create') {
-      updatedList = [cleanRecord, ...kodePosList];
-      setSuccessMsg(`Berhasil menambahkan Kode Pos ${cleanRecord.kodePos} (${cleanRecord.kelurahan})!`);
-    } else if (modalMode === 'edit' && editingIndex !== null) {
-      updatedList = [...kodePosList];
-      updatedList[editingIndex] = cleanRecord;
-      setSuccessMsg(`Berhasil memperbarui data Kode Pos ${cleanRecord.kodePos}!`);
+      ok = await createKodePosRow(cleanRecord);
+      if (ok) setSuccessMsg(`Berhasil menambahkan Kode Pos ${cleanRecord.kodePos} (${cleanRecord.kelurahan})!`);
+    } else if (modalMode === 'edit' && editingId !== null) {
+      ok = await updateKodePosRow(editingId, cleanRecord);
+      if (ok) setSuccessMsg(`Berhasil memperbarui data Kode Pos ${cleanRecord.kodePos}!`);
     } else {
       return;
     }
 
-    setKodePosList(updatedList);
-    handleSaveData(updatedList);
-    setModalMode(null);
-    setEditingIndex(null);
-    setTimeout(() => setSuccessMsg(null), 4000);
+    if (ok) {
+      setModalMode(null);
+      setEditingId(null);
+      refreshAfterMutation();
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } else {
+      setErrorMsg('Gagal menyimpan data Kode Pos ke database.');
+      setTimeout(() => setErrorMsg(null), 4000);
+    }
   };
 
   // Handle Delete Record
-  const handleConfirmDelete = () => {
-    if (deleteTargetIndex === null) return;
-    const target = kodePosList[deleteTargetIndex];
-    const updated = kodePosList.filter((_, idx) => idx !== deleteTargetIndex);
-    setKodePosList(updated);
-    handleSaveData(updated);
-    setDeleteTargetIndex(null);
-    setSuccessMsg(`Berhasil menghapus data Kode Pos ${target?.kodePos || ''}!`);
-    setTimeout(() => setSuccessMsg(null), 4000);
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget || deleteTarget.id == null) return;
+    const ok = await deleteKodePosRow(deleteTarget.id);
+    if (ok) {
+      setDeleteTarget(null);
+      setSuccessMsg(`Berhasil menghapus data Kode Pos ${deleteTarget.kodePos || ''}!`);
+      refreshAfterMutation();
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } else {
+      setDeleteTarget(null);
+      setErrorMsg('Gagal menghapus data Kode Pos dari database.');
+      setTimeout(() => setErrorMsg(null), 4000);
+    }
   };
 
   // Handle Reset to Default
-  const handleConfirmReset = () => {
-    setKodePosList(DEFAULT_KODEPOS_DATA);
-    handleSaveData(DEFAULT_KODEPOS_DATA);
+  const handleConfirmReset = async () => {
+    const ok = await saveKodePosToNeon(DEFAULT_KODEPOS_DATA, 'replace');
     setShowResetConfirm(false);
-    setSelectedProvinsi('ALL');
-    setSelectedKota('ALL');
-    setSelectedStatus('ALL');
-    setSearchTerm('');
-    setSuccessMsg('Data Kode Pos berhasil dikembalikan ke data standar bawaan!');
-    setTimeout(() => setSuccessMsg(null), 4000);
+    if (ok) {
+      setSelectedProvinsi('ALL');
+      setSelectedKota('ALL');
+      setSelectedStatus('ALL');
+      setSearchTerm('');
+      setSuccessMsg('Data Kode Pos berhasil dikembalikan ke data standar bawaan!');
+      refreshAfterMutation();
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } else {
+      setErrorMsg('Gagal mereset data Kode Pos ke database.');
+      setTimeout(() => setErrorMsg(null), 4000);
+    }
   };
 
   // Import from Excel
@@ -336,7 +285,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
         const bstr = evt.target?.result;
         const wb = XLSX.read(bstr, { type: 'binary' });
@@ -349,7 +298,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
           return;
         }
 
-        const imported: KodePosRecord[] = [];
+        const imported: KodePosRow[] = [];
         const seenKeys = new Set<string>();
 
         rawJson.forEach((row) => {
@@ -428,10 +377,15 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
           return;
         }
 
-        setKodePosList(imported);
-        handleSaveData(imported);
-        setSuccessMsg(`Berhasil mengimpor ${imported.length.toLocaleString('id-ID')} data Kode Pos dari Excel!`);
-        setTimeout(() => setSuccessMsg(null), 5000);
+        const ok = await saveKodePosToNeon(imported, 'replace');
+        if (ok) {
+          setSuccessMsg(`Berhasil mengimpor ${imported.length.toLocaleString('id-ID')} data Kode Pos dari Excel!`);
+          refreshAfterMutation();
+          setTimeout(() => setSuccessMsg(null), 5000);
+        } else {
+          setErrorMsg('Gagal menyimpan hasil impor ke database.');
+          setTimeout(() => setErrorMsg(null), 5000);
+        }
         if (fileInputRef.current) fileInputRef.current.value = '';
       } catch (err: any) {
         setErrorMsg(`Gagal memproses file Excel: ${err.message}`);
@@ -476,11 +430,21 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     XLSX.writeFile(wb, 'Template_Upload_Master_Kode_Pos.xlsx');
   };
 
-  // Export to Excel
-  const handleExport = () => {
-    const exportData = filteredList.length > 0 ? filteredList : kodePosList;
+  // Export to Excel (ambil semua baris yang cocok filter dari server)
+  const handleExport = async () => {
+    const exportRows = await fetchKodePosExport({
+      search: debouncedSearch,
+      provinsi: selectedProvinsi,
+      kota: selectedKota,
+      status: selectedStatus,
+    });
+    if (!exportRows || exportRows.length === 0) {
+      setErrorMsg('Tidak ada data untuk diekspor.');
+      setTimeout(() => setErrorMsg(null), 4000);
+      return;
+    }
     const ws = XLSX.utils.json_to_sheet(
-      exportData.map((r, idx) => ({
+      exportRows.map((r, idx) => ({
         'NO': idx + 1,
         'KODE POS': r.kodePos,
         'KELURAHAN / DESA': r.kelurahan,
@@ -501,6 +465,9 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
+
+  const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = Math.min(page * pageSize, total);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '2rem' }}>
@@ -545,7 +512,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                   color: '#405189',
                 }}
               >
-                {kodePosList.length.toLocaleString('id-ID')} Data
+                {stats.total.toLocaleString('id-ID')} Data
               </span>
             </div>
             <div className="section-subtitle">
@@ -578,7 +545,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
             type="button"
             className="btn btn-outline btn-sm"
             onClick={handleExport}
-            disabled={kodePosList.length === 0}
+            disabled={total === 0}
             style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
           >
             <Download size={14} />
@@ -618,7 +585,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                 provinsi: '',
                 status: 'AKTIF',
               });
-              setEditingIndex(null);
+              setEditingId(null);
               setModalMode('create');
             }}
             style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
@@ -664,7 +631,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                 Database Master Kode Pos & Wilayah Administrasi Seluruh Indonesia
               </h4>
               <p style={{ fontSize: '0.82rem', color: '#4a5568', margin: 0, lineHeight: 1.55 }}>
-                Tersimpan <strong>{stats.totalRecords.toLocaleString('id-ID')} Kode Pos</strong> yang mencakup{' '}
+                Tersimpan <strong>{stats.total.toLocaleString('id-ID')} Kode Pos</strong> yang mencakup{' '}
                 <strong>{stats.totalProvinsi} Provinsi</strong>, <strong>{stats.totalKota} Kota/Kabupaten</strong>,{' '}
                 <strong>{stats.totalKecamatan} Kecamatan</strong>, dan <strong>{stats.totalKelurahan} Kelurahan/Desa</strong>.{' '}
                 Data ini digunakan sebagai referensi lookup dan verifikasi alamat pada sistem pencocokan data.
@@ -752,8 +719,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
       )}
 
       {/* 3. 5 KPI Metric Cards matching other menus */}
-      <div className="metrics-grid">
-        {/* Card 1: Total Kode Pos */}
+      <div className="metrics-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
         <div
           className="metric-card blue"
           onClick={() => {
@@ -774,11 +740,10 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               <Mail size={14} />
             </div>
           </div>
-          <div className="metric-value">{stats.totalRecords.toLocaleString('id-ID')}</div>
+          <div className="metric-value">{stats.total.toLocaleString('id-ID')}</div>
           <div className="metric-footer">{stats.totalAktif.toLocaleString('id-ID')} Aktif</div>
         </div>
 
-        {/* Card 2: Total Provinsi */}
         <div className="metric-card emerald">
           <div className="metric-header">
             <span className="metric-title">TOTAL PROVINSI</span>
@@ -790,7 +755,6 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
           <div className="metric-footer">Cakupan Nasional</div>
         </div>
 
-        {/* Card 3: Total Kota / Kab */}
         <div className="metric-card amber">
           <div className="metric-header">
             <span className="metric-title">TOTAL KOTA / KAB</span>
@@ -802,7 +766,6 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
           <div className="metric-footer">Dati II Terdaftar</div>
         </div>
 
-        {/* Card 4: Total Kecamatan */}
         <div className="metric-card purple">
           <div className="metric-header">
             <span className="metric-title">TOTAL KECAMATAN</span>
@@ -814,7 +777,6 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
           <div className="metric-footer">Wilayah Kecamatan</div>
         </div>
 
-        {/* Card 5: Total Kelurahan */}
         <div className="metric-card cyan">
           <div className="metric-header">
             <span className="metric-title">TOTAL KELURAHAN</span>
@@ -827,607 +789,446 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
         </div>
       </div>
 
-      {/* 4. Main Card Container with Sub-tabs */}
+      {/* 4. Main Card Container with List */}
       <div className="glass-card" style={{ padding: '1.15rem 1.35rem' }}>
-        {/* Sub-Tabs Navigation */}
-        <div className="nav-tabs" style={{ display: 'inline-flex', marginBottom: '1rem' }}>
-          <button
-            type="button"
-            className={`nav-tab-btn${activeSubTab === 'list' ? ' active' : ''}`}
-            onClick={() => setActiveSubTab('list')}
-          >
-            <Mail size={14} />
-            <span>Daftar Kode Pos Indonesia</span>
-            <span className="nav-tab-badge">{filteredList.length.toLocaleString('id-ID')}</span>
-          </button>
-
-          <button
-            type="button"
-            className={`nav-tab-btn${activeSubTab === 'lookup' ? ' active' : ''}`}
-            onClick={() => setActiveSubTab('lookup')}
-          >
-            <Search size={14} />
-            <span>Pencarian Cepat & Verifikasi Kode Pos</span>
-          </button>
-        </div>
-
-        {/* Tab 1: List View */}
-        {activeSubTab === 'list' && (
-          <>
-            {/* Filter Toolbar */}
-            <div className="filter-toolbar" style={{ marginBottom: '1rem' }}>
-              <div className="filter-group" style={{ flex: 1, minWidth: '260px' }}>
-                {/* Search Bar */}
-                <div className="search-input-wrapper">
-                  <Search size={14} className="search-icon-pos" />
-                  <input
-                    type="text"
-                    className="search-input"
-                    placeholder="Cari Kode Pos, Kelurahan, Kota, Provinsi..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                  {searchTerm && (
-                    <button
-                      type="button"
-                      onClick={() => setSearchTerm('')}
-                      style={{
-                        position: 'absolute',
-                        right: '8px',
-                        background: 'none',
-                        border: 'none',
-                        color: '#878a99',
-                        cursor: 'pointer',
-                        padding: 0,
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <X size={13} />
-                    </button>
-                  )}
-                </div>
-
-                {/* Filter Provinsi Dropdown */}
-                <select
-                  className="filter-select"
-                  value={selectedProvinsi}
-                  onChange={(e) => {
-                    setSelectedProvinsi(e.target.value);
-                    setSelectedKota('ALL');
-                  }}
-                >
-                  <option value="ALL">Semua Provinsi ({provinsiOptions.length})</option>
-                  {provinsiOptions.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-
-                {/* Filter Kota Dropdown */}
-                <select
-                  className="filter-select"
-                  value={selectedKota}
-                  onChange={(e) => setSelectedKota(e.target.value)}
-                >
-                  <option value="ALL">Semua Kota/Kab ({kotaOptions.length})</option>
-                  {kotaOptions.map((k) => (
-                    <option key={k} value={k}>
-                      {k}
-                    </option>
-                  ))}
-                </select>
-
-                {/* Filter Status */}
-                <select
-                  className="filter-select"
-                  value={selectedStatus}
-                  onChange={(e) => setSelectedStatus(e.target.value)}
-                >
-                  <option value="ALL">Semua Status</option>
-                  <option value="AKTIF">Status AKTIF</option>
-                  <option value="NON-AKTIF">Status NON-AKTIF</option>
-                </select>
-              </div>
-
-              {/* Page Size Selector */}
-              <div className="filter-group">
-                <label style={{ fontSize: '0.75rem', color: '#878a99' }}>Tampilkan:</label>
-                <select
-                  className="filter-select"
-                  value={pageSize}
-                  onChange={(e) => {
-                    const val = e.target.value === 'ALL' ? 'ALL' : Number(e.target.value);
-                    setPageSize(val);
-                    setPage(1);
-                  }}
-                >
-                  <option value={10}>10 Baris</option>
-                  <option value={25}>25 Baris</option>
-                  <option value={50}>50 Baris</option>
-                  <option value={100}>100 Baris</option>
-                  <option value={250}>250 Baris</option>
-                  <option value="ALL">Lihat Semua ({filteredList.length})</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Active Filter Indicator Badge */}
-            {(searchTerm || selectedProvinsi !== 'ALL' || selectedKota !== 'ALL' || selectedStatus !== 'ALL') && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  background: '#f8f9fa',
-                  padding: '0.4rem 0.75rem',
-                  borderRadius: '5px',
-                  border: '1px solid #e9ebec',
-                  fontSize: '0.78rem',
-                  marginBottom: '0.85rem',
-                  color: '#495057',
-                }}
-              >
-                <Filter size={14} color="#405189" />
-                <span>
-                  Menampilkan filter:{' '}
-                  {searchTerm && <strong>Pencarian: "{searchTerm}" </strong>}
-                  {selectedProvinsi !== 'ALL' && <strong>Provinsi: {selectedProvinsi} </strong>}
-                  {selectedKota !== 'ALL' && <strong>Kota: {selectedKota} </strong>}
-                  {selectedStatus !== 'ALL' && <strong>Status: {selectedStatus} </strong>}
-                  ({filteredList.length} data ditemukan)
-                </span>
+        {/* Filter Toolbar */}
+        <div className="filter-toolbar" style={{ marginBottom: '1rem' }}>
+          <div className="filter-group" style={{ flex: 1, minWidth: '260px' }}>
+            {/* Search Bar */}
+            <div className="search-input-wrapper">
+              <Search size={14} className="search-icon-pos" />
+              <input
+                type="text"
+                className="search-input"
+                placeholder="Cari Kode Pos, Kelurahan, Kota, Provinsi..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              {searchTerm && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setSearchTerm('');
-                    setSelectedProvinsi('ALL');
-                    setSelectedKota('ALL');
-                    setSelectedStatus('ALL');
-                  }}
+                  onClick={() => setSearchTerm('')}
                   style={{
+                    position: 'absolute',
+                    right: '8px',
                     background: 'none',
                     border: 'none',
-                    color: '#f06548',
-                    fontSize: '0.76rem',
-                    fontWeight: 600,
+                    color: '#878a99',
                     cursor: 'pointer',
-                    padding: '0 0.3rem',
-                    textDecoration: 'underline',
-                    marginLeft: 'auto',
+                    padding: 0,
+                    display: 'inline-flex',
+                    alignItems: 'center',
                   }}
                 >
-                  Reset Filter (Lihat Semua)
+                  <X size={13} />
                 </button>
-              </div>
-            )}
+              )}
+            </div>
 
-            {/* Modern Table Container */}
-            <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', overflowX: 'auto', maxHeight: '580px' }}>
-              <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
-                <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
-                  <tr>
-                    <th style={{ width: '45px', textAlign: 'center' }}>No</th>
-                    <th style={{ width: '130px' }}>KODE POS</th>
-                    <th>KELURAHAN / DESA</th>
-                    <th>KECAMATAN</th>
-                    <th>KOTA / KABUPATEN</th>
-                    <th>PROVINSI</th>
-                    <th style={{ width: '95px', textAlign: 'center' }}>STATUS</th>
-                    <th style={{ width: '100px', textAlign: 'center' }}>AKSI</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredList.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
-                          <Mail size={32} color="#adb5bd" />
-                          <span style={{ fontWeight: 600 }}>Tidak ada data Kode Pos yang cocok dengan kriteria pencarian.</span>
-                          <span style={{ fontSize: '0.74rem' }}>Coba ubah kata kunci atau reset filter di atas.</span>
+            {/* Filter Provinsi Dropdown */}
+            <select
+              className="filter-select"
+              value={selectedProvinsi}
+              onChange={(e) => {
+                setSelectedProvinsi(e.target.value);
+                setSelectedKota('ALL');
+              }}
+            >
+              <option value="ALL">Semua Provinsi ({provinsiOptions.length})</option>
+              {provinsiOptions.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+
+            {/* Filter Kota Dropdown */}
+            <select
+              className="filter-select"
+              value={selectedKota}
+              onChange={(e) => setSelectedKota(e.target.value)}
+            >
+              <option value="ALL">Semua Kota/Kab ({kotaOptions.length})</option>
+              {kotaOptions.map((k) => (
+                <option key={k} value={k}>
+                  {k}
+                </option>
+              ))}
+            </select>
+
+            {/* Filter Status */}
+            <select
+              className="filter-select"
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+            >
+              <option value="ALL">Semua Status</option>
+              <option value="AKTIF">Status AKTIF</option>
+              <option value="NON-AKTIF">Status NON-AKTIF</option>
+            </select>
+          </div>
+
+          {/* Page Size Selector */}
+          <div className="filter-group">
+            <label style={{ fontSize: '0.75rem', color: '#878a99' }}>Tampilkan:</label>
+            <select
+              className="filter-select"
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(1);
+              }}
+            >
+              <option value={10}>10 Baris</option>
+              <option value={25}>25 Baris</option>
+              <option value={50}>50 Baris</option>
+              <option value={100}>100 Baris</option>
+              <option value={250}>250 Baris</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Active Filter Indicator Badge */}
+        {(searchTerm || selectedProvinsi !== 'ALL' || selectedKota !== 'ALL' || selectedStatus !== 'ALL') && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              background: '#f8f9fa',
+              padding: '0.4rem 0.75rem',
+              borderRadius: '5px',
+              border: '1px solid #e9ebec',
+              fontSize: '0.78rem',
+              marginBottom: '0.85rem',
+              color: '#495057',
+            }}
+          >
+            <Filter size={14} color="#405189" />
+            <span>
+              Menampilkan filter:{' '}
+              {searchTerm && <strong>Pencarian: "{searchTerm}" </strong>}
+              {selectedProvinsi !== 'ALL' && <strong>Provinsi: {selectedProvinsi} </strong>}
+              {selectedKota !== 'ALL' && <strong>Kota: {selectedKota} </strong>}
+              {selectedStatus !== 'ALL' && <strong>Status: {selectedStatus} </strong>}
+              ({total.toLocaleString('id-ID')} data ditemukan)
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchTerm('');
+                setSelectedProvinsi('ALL');
+                setSelectedKota('ALL');
+                setSelectedStatus('ALL');
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#f06548',
+                fontSize: '0.76rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                padding: '0 0.3rem',
+                textDecoration: 'underline',
+                marginLeft: 'auto',
+              }}
+            >
+              Reset Filter (Lihat Semua)
+            </button>
+          </div>
+        )}
+
+        {/* Modern Table Container */}
+        <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', overflowX: 'auto', maxHeight: '580px' }}>
+          <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
+              <tr>
+                <th style={{ width: '45px', textAlign: 'center' }}>No</th>
+                <th style={{ width: '130px' }}>KODE POS</th>
+                <th>KELURAHAN / DESA</th>
+                <th>KECAMATAN</th>
+                <th>KOTA / KABUPATEN</th>
+                <th>PROVINSI</th>
+                <th style={{ width: '95px', textAlign: 'center' }}>STATUS</th>
+                <th style={{ width: '100px', textAlign: 'center' }}>AKSI</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && rows.length === 0 ? (
+                <tr>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
+                    Memuat data dari database...
+                  </td>
+                </tr>
+              ) : total === 0 ? (
+                <tr>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                      <Mail size={32} color="#adb5bd" />
+                      <span style={{ fontWeight: 600 }}>Tidak ada data Kode Pos yang cocok dengan kriteria pencarian.</span>
+                      <span style={{ fontSize: '0.74rem' }}>Coba ubah kata kunci atau reset filter di atas.</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                rows.map((item, pos) => {
+                  const displayRowNo = (page - 1) * pageSize + pos + 1;
+                  const rowKey = `kp-${item.id ?? pos}`;
+
+                  return (
+                    <tr key={rowKey} style={{ background: pos % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
+                      <td style={{ textAlign: 'center', color: '#878a99' }}>{displayRowNo}</td>
+
+                      {/* Kode Pos Cell with Copy */}
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <span
+                            className="code-cell"
+                            style={{
+                              fontWeight: 800,
+                              fontSize: '0.84rem',
+                              color: '#405189',
+                              background: 'rgba(64, 81, 137, 0.08)',
+                              padding: '0.2rem 0.55rem',
+                              borderRadius: '4px',
+                              fontFamily: 'monospace',
+                              letterSpacing: '0.5px',
+                            }}
+                          >
+                            {item.kodePos}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText(item.kodePos, rowKey)}
+                            title="Salin Kode Pos"
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: copiedId === rowKey ? '#0ab39c' : '#adb5bd',
+                              cursor: 'pointer',
+                              padding: '2px',
+                            }}
+                          >
+                            {copiedId === rowKey ? <Check size={12} /> : <Copy size={12} />}
+                          </button>
+                        </div>
+                      </td>
+
+                      {/* Kelurahan */}
+                      <td style={{ fontWeight: 600, color: '#212529' }}>
+                        {item.kelurahan || '-'}
+                      </td>
+
+                      {/* Kecamatan */}
+                      <td style={{ color: '#495057' }}>
+                        {item.kecamatan || '-'}
+                      </td>
+
+                      {/* Kota / Kabupaten */}
+                      <td style={{ color: '#495057' }}>
+                        {item.kabupatenKota || '-'}
+                      </td>
+
+                      {/* Provinsi */}
+                      <td>
+                        <span
+                          style={{
+                            fontSize: '0.72rem',
+                            padding: '0.12rem 0.45rem',
+                            borderRadius: '3px',
+                            background: '#f1f3f5',
+                            color: '#495057',
+                            fontWeight: 500,
+                          }}
+                        >
+                          {item.provinsi || '-'}
+                        </span>
+                      </td>
+
+                      {/* Status */}
+                      <td style={{ textAlign: 'center' }}>
+                        <span
+                          style={{
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                            padding: '0.15rem 0.45rem',
+                            borderRadius: '4px',
+                            background: item.status === 'NON-AKTIF' ? 'rgba(240, 101, 72, 0.12)' : 'rgba(10, 179, 156, 0.12)',
+                            color: item.status === 'NON-AKTIF' ? '#f06548' : '#0ab39c',
+                          }}
+                        >
+                          {item.status || 'AKTIF'}
+                        </span>
+                      </td>
+
+                      {/* Actions */}
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDetailItem(item);
+                              setModalMode('detail');
+                            }}
+                            title="Lihat Detail Kode Pos"
+                            style={{
+                              background: 'rgba(41, 156, 219, 0.1)',
+                              border: '1px solid rgba(41, 156, 219, 0.25)',
+                              color: '#299cdb',
+                              borderRadius: '4px',
+                              padding: '0.22rem 0.35rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <Eye size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFormData({ ...item });
+                              setEditingId(item.id ?? null);
+                              setModalMode('edit');
+                            }}
+                            title="Edit Data Kode Pos"
+                            style={{
+                              background: 'rgba(64, 81, 137, 0.1)',
+                              border: '1px solid rgba(64, 81, 137, 0.25)',
+                              color: '#405189',
+                              borderRadius: '4px',
+                              padding: '0.22rem 0.35rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <Edit size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget(item)}
+                            title="Hapus Data Kode Pos"
+                            style={{
+                              background: 'rgba(240, 101, 72, 0.1)',
+                              border: '1px solid rgba(240, 101, 72, 0.25)',
+                              color: '#f06548',
+                              borderRadius: '4px',
+                              padding: '0.22rem 0.35rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <Trash2 size={12} />
+                          </button>
                         </div>
                       </td>
                     </tr>
-                  ) : (
-                    paginatedList.map(({ rec: item, idx: originalIdx }, pos) => {
-                      const displayRowNo =
-                        pageSize === 'ALL'
-                          ? pos + 1
-                          : (page - 1) * (pageSize as number) + pos + 1;
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
 
-                      return (
-                        <tr key={`kp-${originalIdx}`} style={{ background: pos % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
-                          <td style={{ textAlign: 'center', color: '#878a99' }}>{displayRowNo}</td>
+        {/* Pagination Footer */}
+        {totalPages > 1 && (
+          <div
+            className="pagination-row"
+            style={{
+              flexWrap: 'wrap',
+              gap: '0.75rem',
+              marginTop: '1rem',
+              borderTop: '1px solid #e9ebec',
+            }}
+          >
+            <span>
+              Menampilkan <strong>{rangeStart.toLocaleString('id-ID')}</strong> -{' '}
+              <strong>{rangeEnd.toLocaleString('id-ID')}</strong> dari{' '}
+              <strong>{total.toLocaleString('id-ID')}</strong> entri
+            </span>
 
-                          {/* Kode Pos Cell with Copy */}
-                          <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                              <span
-                                className="code-cell"
-                                style={{
-                                  fontWeight: 800,
-                                  fontSize: '0.84rem',
-                                  color: '#405189',
-                                  background: 'rgba(64, 81, 137, 0.08)',
-                                  padding: '0.2rem 0.55rem',
-                                  borderRadius: '4px',
-                                  fontFamily: 'monospace',
-                                  letterSpacing: '0.5px',
-                                }}
-                              >
-                                {item.kodePos}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleCopyText(item.kodePos, `kp-${originalIdx}`)}
-                                title="Salin Kode Pos"
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  color: copiedId === `kp-${originalIdx}` ? '#0ab39c' : '#adb5bd',
-                                  cursor: 'pointer',
-                                  padding: '2px',
-                                }}
-                              >
-                                {copiedId === `kp-${originalIdx}` ? <Check size={12} /> : <Copy size={12} />}
-                              </button>
-                            </div>
-                          </td>
-
-                          {/* Kelurahan */}
-                          <td style={{ fontWeight: 600, color: '#212529' }}>
-                            {item.kelurahan || '-'}
-                          </td>
-
-                          {/* Kecamatan */}
-                          <td style={{ color: '#495057' }}>
-                            {item.kecamatan || '-'}
-                          </td>
-
-                          {/* Kota / Kabupaten */}
-                          <td style={{ color: '#495057' }}>
-                            {item.kabupatenKota || '-'}
-                          </td>
-
-                          {/* Provinsi */}
-                          <td>
-                            <span
-                              style={{
-                                fontSize: '0.72rem',
-                                padding: '0.12rem 0.45rem',
-                                borderRadius: '3px',
-                                background: '#f1f3f5',
-                                color: '#495057',
-                                fontWeight: 500,
-                              }}
-                            >
-                              {item.provinsi || '-'}
-                            </span>
-                          </td>
-
-                          {/* Status */}
-                          <td style={{ textAlign: 'center' }}>
-                            <span
-                              style={{
-                                fontSize: '0.68rem',
-                                fontWeight: 700,
-                                padding: '0.15rem 0.45rem',
-                                borderRadius: '4px',
-                                background: item.status === 'NON-AKTIF' ? 'rgba(240, 101, 72, 0.12)' : 'rgba(10, 179, 156, 0.12)',
-                                color: item.status === 'NON-AKTIF' ? '#f06548' : '#0ab39c',
-                              }}
-                            >
-                              {item.status || 'AKTIF'}
-                            </span>
-                          </td>
-
-                          {/* Actions */}
-                          <td style={{ textAlign: 'center' }}>
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setDetailItem(item);
-                                  setModalMode('detail');
-                                }}
-                                title="Lihat Detail Kode Pos"
-                                style={{
-                                  background: 'rgba(41, 156, 219, 0.1)',
-                                  border: '1px solid rgba(41, 156, 219, 0.25)',
-                                  color: '#299cdb',
-                                  borderRadius: '4px',
-                                  padding: '0.22rem 0.35rem',
-                                  cursor: 'pointer',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                }}
-                              >
-                                <Eye size={12} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setFormData({ ...item });
-                                  setEditingIndex(originalIdx);
-                                  setModalMode('edit');
-                                }}
-                                title="Edit Data Kode Pos"
-                                style={{
-                                  background: 'rgba(64, 81, 137, 0.1)',
-                                  border: '1px solid rgba(64, 81, 137, 0.25)',
-                                  color: '#405189',
-                                  borderRadius: '4px',
-                                  padding: '0.22rem 0.35rem',
-                                  cursor: 'pointer',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                }}
-                              >
-                                <Edit size={12} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setDeleteTargetIndex(originalIdx);
-                                }}
-                                title="Hapus Data Kode Pos"
-                                style={{
-                                  background: 'rgba(240, 101, 72, 0.1)',
-                                  border: '1px solid rgba(240, 101, 72, 0.25)',
-                                  color: '#f06548',
-                                  borderRadius: '4px',
-                                  padding: '0.22rem 0.35rem',
-                                  cursor: 'pointer',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                }}
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination Footer */}
-            {pageSize !== 'ALL' && totalPages > 1 && (
-              <div
-                className="pagination-row"
-                style={{
-                  flexWrap: 'wrap',
-                  gap: '0.75rem',
-                  marginTop: '1rem',
-                  borderTop: '1px solid #e9ebec',
-                }}
+            <div className="pagination-controls">
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => setPage(1)}
+                disabled={page === 1}
+                title="Halaman Pertama"
+                style={{ padding: '0.25rem 0.5rem', fontSize: '0.74rem' }}
               >
-                <span>
-                  Menampilkan <strong>{((page - 1) * (pageSize as number)) + 1}</strong> -{' '}
-                  <strong>{Math.min(page * (pageSize as number), filteredList.length)}</strong> dari{' '}
-                  <strong>{filteredList.length.toLocaleString('id-ID')}</strong> entri
-                </span>
+                <ChevronsLeft size={13} />
+              </button>
 
-                <div className="pagination-controls">
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                title="Halaman Sebelumnya"
+                style={{ padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}
+              >
+                <ChevronLeft size={13} />
+              </button>
+
+              {getPaginationRange(page, totalPages).map((p, idx) => {
+                if (p === 'ell-start' || p === 'ell-end') {
+                  return (
+                    <span key={`ell-${idx}`} style={{ padding: '0 0.35rem', color: '#878a99', fontSize: '0.75rem' }}>
+                      ...
+                    </span>
+                  );
+                }
+                return (
                   <button
+                    key={p}
                     type="button"
-                    className="btn btn-outline btn-sm"
-                    onClick={() => setPage(1)}
-                    disabled={page === 1}
-                    title="Halaman Pertama"
-                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.74rem' }}
-                  >
-                    <ChevronsLeft size={13} />
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm"
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    title="Halaman Sebelumnya"
-                    style={{ padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}
-                  >
-                    <ChevronLeft size={13} />
-                  </button>
-
-                  {getPaginationRange(page, totalPages).map((p, idx) => {
-                    if (p === 'ell-start' || p === 'ell-end') {
-                      return (
-                        <span key={`ell-${idx}`} style={{ padding: '0 0.35rem', color: '#878a99', fontSize: '0.75rem' }}>
-                          ...
-                        </span>
-                      );
-                    }
-                    return (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => setPage(p as number)}
-                        style={{
-                          minWidth: '28px',
-                          height: '28px',
-                          padding: '0 0.4rem',
-                          fontSize: '0.74rem',
-                          fontWeight: page === p ? 700 : 500,
-                          borderRadius: '4px',
-                          border: page === p ? '1px solid #405189' : '1px solid #ced4da',
-                          background: page === p ? '#405189' : '#ffffff',
-                          color: page === p ? '#ffffff' : '#495057',
-                          cursor: 'pointer',
-                          transition: 'all 0.15s',
-                        }}
-                      >
-                        {p}
-                      </button>
-                    );
-                  })}
-
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm"
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                    title="Halaman Berikutnya"
-                    style={{ padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}
-                  >
-                    <ChevronRight size={13} />
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm"
-                    onClick={() => setPage(totalPages)}
-                    disabled={page === totalPages}
-                    title="Halaman Terakhir"
-                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.74rem' }}
-                  >
-                    <ChevronsRight size={13} />
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Tab 2: Quick Lookup & Validation */}
-        {activeSubTab === 'lookup' && (
-          <div>
-            <div style={{ background: '#f8f9fa', padding: '1.25rem', borderRadius: '8px', border: '1px solid #e9ebec', marginBottom: '1.25rem' }}>
-              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#212529', margin: '0 0 0.5rem' }}>
-                Pencarian Cepat Kode Pos & Wilayah
-              </h4>
-              <p style={{ fontSize: '0.8rem', color: '#878a99', margin: '0 0 1rem' }}>
-                Ketik 5-digit kode pos atau nama kelurahan/kecamatan/kota untuk mencari data wilayah secara instan.
-              </p>
-
-              <div style={{ position: 'relative', maxWidth: '500px' }}>
-                <Search
-                  size={16}
-                  style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#878a99' }}
-                />
-                <input
-                  type="text"
-                  placeholder="Contoh: 10110 atau Gambir atau Surabaya..."
-                  value={lookupQuery}
-                  onChange={(e) => setLookupQuery(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.6rem 0.85rem 0.6rem 2.3rem',
-                    fontSize: '0.85rem',
-                    borderRadius: '6px',
-                    border: '1px solid #ced4da',
-                    background: '#ffffff',
-                    fontWeight: 500,
-                  }}
-                  autoFocus
-                />
-                {lookupQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setLookupQuery('')}
+                    onClick={() => setPage(p as number)}
                     style={{
-                      position: 'absolute',
-                      right: '10px',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      background: 'none',
-                      border: 'none',
-                      color: '#878a99',
+                      minWidth: '28px',
+                      height: '28px',
+                      padding: '0 0.4rem',
+                      fontSize: '0.74rem',
+                      fontWeight: page === p ? 700 : 500,
+                      borderRadius: '4px',
+                      border: page === p ? '1px solid #405189' : '1px solid #ced4da',
+                      background: page === p ? '#405189' : '#ffffff',
+                      color: page === p ? '#ffffff' : '#495057',
                       cursor: 'pointer',
+                      transition: 'all 0.15s',
                     }}
                   >
-                    <X size={15} />
+                    {p}
                   </button>
-                )}
-              </div>
+                );
+              })}
+
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                title="Halaman Berikutnya"
+                style={{ padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}
+              >
+                <ChevronRight size={13} />
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => setPage(totalPages)}
+                disabled={page === totalPages}
+                title="Halaman Terakhir"
+                style={{ padding: '0.25rem 0.5rem', fontSize: '0.74rem' }}
+              >
+                <ChevronsRight size={13} />
+              </button>
             </div>
-
-            {lookupQuery.trim() ? (
-              <div>
-                <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#495057', marginBottom: '0.75rem' }}>
-                  Hasil Pencarian ({lookupResults.length} data ditemukan):
-                </div>
-
-                {lookupResults.length === 0 ? (
-                  <div style={{ padding: '2rem', textAlign: 'center', color: '#878a99', background: '#ffffff', borderRadius: '6px', border: '1px dashed #ced4da' }}>
-                    Tidak ditemukan kode pos atau wilayah yang sesuai dengan "{lookupQuery}".
-                  </div>
-                ) : (
-                  <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', overflowX: 'auto', maxHeight: '420px' }}>
-                    <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
-                      <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
-                        <tr>
-                          <th style={{ width: '45px', textAlign: 'center' }}>No</th>
-                          <th style={{ width: '120px' }}>KODE POS</th>
-                          <th>KELURAHAN / DESA</th>
-                          <th>KECAMATAN</th>
-                          <th>KOTA / KABUPATEN</th>
-                          <th>PROVINSI</th>
-                          <th style={{ width: '90px', textAlign: 'center' }}>STATUS</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {lookupResults.map((item, idx) => (
-                          <tr key={idx} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
-                            <td style={{ textAlign: 'center', color: '#878a99' }}>{idx + 1}</td>
-                            <td>
-                              <span
-                                className="code-cell"
-                                style={{
-                                  fontWeight: 800,
-                                  color: '#405189',
-                                  background: 'rgba(64, 81, 137, 0.08)',
-                                  padding: '0.15rem 0.5rem',
-                                  borderRadius: '4px',
-                                  fontFamily: 'monospace',
-                                }}
-                              >
-                                {item.kodePos}
-                              </span>
-                            </td>
-                            <td style={{ fontWeight: 600, color: '#212529' }}>{item.kelurahan || '-'}</td>
-                            <td style={{ color: '#495057' }}>{item.kecamatan || '-'}</td>
-                            <td style={{ color: '#495057' }}>{item.kabupatenKota || '-'}</td>
-                            <td>
-                              <span style={{ fontSize: '0.72rem', padding: '0.1rem 0.4rem', borderRadius: '3px', background: '#f1f3f5', color: '#495057' }}>
-                                {item.provinsi || '-'}
-                              </span>
-                            </td>
-                            <td style={{ textAlign: 'center' }}>
-                              <span
-                                style={{
-                                  fontSize: '0.68rem',
-                                  fontWeight: 700,
-                                  padding: '0.12rem 0.45rem',
-                                  borderRadius: '4px',
-                                  background: item.status === 'NON-AKTIF' ? 'rgba(240, 101, 72, 0.12)' : 'rgba(10, 179, 156, 0.12)',
-                                  color: item.status === 'NON-AKTIF' ? '#f06548' : '#0ab39c',
-                                }}
-                              >
-                                {item.status || 'AKTIF'}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div style={{ padding: '2.5rem', textAlign: 'center', color: '#878a99', background: '#ffffff', borderRadius: '6px', border: '1px dashed #ced4da' }}>
-                <Search size={28} color="#adb5bd" style={{ marginBottom: '0.5rem' }} />
-                <div style={{ fontWeight: 600 }}>Silakan masukkan kata kunci pada kotak pencarian di atas.</div>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -1636,7 +1437,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
       )}
 
       {/* 7. Modal: Delete Confirmation */}
-      {deleteTargetIndex !== null && (
+      {deleteTarget && (
         <div className="modal-backdrop">
           <div className="modal-container" style={{ maxWidth: '420px' }}>
             <div className="modal-header">
@@ -1647,7 +1448,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               <button
                 type="button"
                 className="modal-close"
-                onClick={() => setDeleteTargetIndex(null)}
+                onClick={() => setDeleteTarget(null)}
               >
                 <X size={16} />
               </button>
@@ -1670,8 +1471,8 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                 <Trash2 size={24} />
               </div>
               <p style={{ fontSize: '0.82rem', color: '#878a99', margin: 0, lineHeight: 1.5 }}>
-                Data Kode Pos <strong>{kodePosList[deleteTargetIndex]?.kodePos}</strong> (
-                {kodePosList[deleteTargetIndex]?.kelurahan}) akan dihapus dari daftar referensi.
+                Data Kode Pos <strong>{deleteTarget.kodePos}</strong> (
+                {deleteTarget.kelurahan}) akan dihapus dari daftar referensi.
               </p>
             </div>
 
@@ -1679,7 +1480,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               <button
                 type="button"
                 className="btn btn-outline btn-sm"
-                onClick={() => setDeleteTargetIndex(null)}
+                onClick={() => setDeleteTarget(null)}
               >
                 Batal
               </button>
