@@ -626,23 +626,7 @@ export const App: React.FC = () => {
       if (mode === 'append' && prev.length > 0) {
         const startNo = prev.length;
         const indexedNewRows = newRows.map((r, idx) => {
-          // 1. Validasi PTEN Instan
           const ptenRes = validatePtenForTarget(r['KODE POS'], r['Dati II'] || r.Kota || '', ptenIndex);
-          // 2. Validasi Role Mapping jika ada nama cabang
-          const branchCandidate = r.Cabang || r['Sandi Cabang'] || r['Nama Outlet'] || r.Sandi || '';
-          const outletCandidate = r['Nama Outlet'] || '';
-          const roleRes = resolveRoleMappingForBranch(
-            branchCandidate,
-            r['Dati II'] || r.Kota,
-            r.Kelurahan,
-            r.Kecamatan,
-            r.ALAMAT,
-            roleMappingList,
-            outletCandidate,
-            r.Provinsi,
-            r.Wilayah
-          );
-
           return {
             ...r,
             No: r.No !== undefined && String(r.No).trim() !== '' ? r.No : startNo + idx + 1,
@@ -650,35 +634,13 @@ export const App: React.FC = () => {
             'KOTA PTEN': r['KOTA PTEN'] || ptenRes.kotaPten,
             'KODE POS PTEN': r['KODE POS PTEN'] || ptenRes.kodePosPten,
             'CEK KODE POS + PTEN': r['CEK KODE POS + PTEN'] || ptenRes.statusPten,
-            organisasiRole: roleRes?.organisasiRole || r.organisasiRole,
-            tipeUnitRole: roleRes?.tipeUnitRole || r.tipeUnitRole,
-            alurWondr: roleRes?.alurWondr || r.alurWondr,
-            flowDescription: roleRes?.flowDescription || r.flowDescription,
-            roleCabsal: roleRes?.qrsCabsal ?? r.roleCabsal,
-            roleCabapv1: roleRes?.qrsCabapv1 ?? r.roleCabapv1,
-            roleCabapv2: roleRes?.qrsCabapv2 ?? r.roleCabapv2,
-            roleGrandTotal: roleRes?.grandTotal ?? r.roleGrandTotal,
           };
         });
         finalRows = [...prev, ...indexedNewRows];
       } else {
-        // Mode Replace (default): Urutan 100% murni persis sesuai file Excel yang diunggah
+        // Mode Replace (default): Urutan 100% murni persis sesuai file Excel yang diunggah (0ms instan tanpa lag)
         finalRows = newRows.map((r, idx) => {
           const ptenRes = validatePtenForTarget(r['KODE POS'], r['Dati II'] || r.Kota || '', ptenIndex);
-          const branchCandidate = r.Cabang || r['Sandi Cabang'] || r['Nama Outlet'] || r.Sandi || '';
-          const outletCandidate = r['Nama Outlet'] || '';
-          const roleRes = resolveRoleMappingForBranch(
-            branchCandidate,
-            r['Dati II'] || r.Kota,
-            r.Kelurahan,
-            r.Kecamatan,
-            r.ALAMAT,
-            roleMappingList,
-            outletCandidate,
-            r.Provinsi,
-            r.Wilayah
-          );
-
           return {
             ...r,
             No: r.No !== undefined && String(r.No).trim() !== '' ? r.No : idx + 1,
@@ -686,14 +648,6 @@ export const App: React.FC = () => {
             'KOTA PTEN': r['KOTA PTEN'] || ptenRes.kotaPten,
             'KODE POS PTEN': r['KODE POS PTEN'] || ptenRes.kodePosPten,
             'CEK KODE POS + PTEN': r['CEK KODE POS + PTEN'] || ptenRes.statusPten,
-            organisasiRole: roleRes?.organisasiRole || r.organisasiRole,
-            tipeUnitRole: roleRes?.tipeUnitRole || r.tipeUnitRole,
-            alurWondr: roleRes?.alurWondr || r.alurWondr,
-            flowDescription: roleRes?.flowDescription || r.flowDescription,
-            roleCabsal: roleRes?.qrsCabsal ?? r.roleCabsal,
-            roleCabapv1: roleRes?.qrsCabapv1 ?? r.roleCabapv1,
-            roleCabapv2: roleRes?.qrsCabapv2 ?? r.roleCabapv2,
-            roleGrandTotal: roleRes?.grandTotal ?? r.roleGrandTotal,
           };
         });
       }
