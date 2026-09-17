@@ -30,6 +30,32 @@ export function normalizeBranchName(name: string): string {
 }
 
 /**
+ * Removes all spaces for no-space variant comparison.
+ * Handles: "TOLI TOLI" === "TOLITOLI", "PEMATANG SIANTAR" === "PEMATANGSIANTAR", etc.
+ */
+function noSpace(s: string): string {
+  return s.replace(/\s+/g, '');
+}
+
+/**
+ * Smart multi-variant containment. Checks both spaced and no-space forms.
+ * Fixes bug: "TOLI TOLI" (from TOLI-TOLI) not matching "TOLITOLI" in org name.
+ */
+function flexContains(haystack: string, needle: string): boolean {
+  if (!haystack || !needle || needle.length < 3) return false;
+  if (haystack.includes(needle)) return true;
+  const nsHaystack = noSpace(haystack);
+  const nsNeedle = noSpace(needle);
+  if (nsNeedle.length >= 3 && nsHaystack.includes(nsNeedle)) return true;
+  return false;
+}
+
+/** Bidirectional flex containment. */
+function flexMatch(a: string, b: string): boolean {
+  return flexContains(a, b) || flexContains(b, a);
+}
+
+/**
  * Compute Jaccard-like token-intersection ratio between two strings.
  * Returns 0.0–1.0. Only counts tokens with length >= minLen.
  */
@@ -43,7 +69,6 @@ function tokenIntersectionRatio(a: string, b: string, minLen = 3): number {
   for (const t of setA) {
     if (setB.has(t)) intersection++;
   }
-  // Use smaller set as denominator (precision-oriented)
   return intersection / Math.min(setA.size, setB.size);
 }
 
@@ -51,16 +76,17 @@ function tokenIntersectionRatio(a: string, b: string, minLen = 3): number {
  * Smart Multi-Tier Role Mapping Resolver
  *
  * Score tiers (only results with score >= MIN_THRESHOLD are returned):
- *  100  — Exact normalized branch name match
+ *  100  — Exact normalized branch name match (incl. no-space variant)
  *   98  — Sub branch name in org matches cleaned branch name
  *   95  — Sub branch name matches kelurahan
  *   92  — Sub branch name matches kecamatan
  *   90  — Address contains sub branch name
  *   85  — Cleaned branch substring match in org name
+ *   82  — Parent org part matches branch name or city
  *   80  — Address contains main org name tokens
  *   75  — City/Dati II matches KC record name (KC gets +5 bonus)
  *   60  — City/Dati II matches KCP record name
- *  <50  — Token intersection score (fallback only, requires ratio >= 0.5)
+ *  <50  — Token intersection score (fallback only)
  */
 const MIN_THRESHOLD = 30;
 
@@ -88,10 +114,19 @@ export function resolveRoleMappingForBranch(
 
   const cleanBranch = normalizeBranchName(branchName);
   const cleanOutlet = normalizeBranchName(outletName || '');
+
+  // City: strip prefix → normalize → build no-space variant
+  // FIX: "TOLI-TOLI" → cleanDati → "TOLI-TOLI" → strip [^A-Z0-9] → "TOLI TOLI"
+  //       noSpace("TOLI TOLI") → "TOLITOLI" which matches "TOLITOLI BRANCH OFFICE"
   const cleanCity = cleanDati(dati2 || '')
     .replace(/^(KOTA|KABUPATEN|KAB|KODYA|ADM\.|ADM)\s+/i, '')
     .trim()
     .toUpperCase();
+  const cleanCityNorm = normalizeBranchName(cleanCity);     // removes hyphens→space
+  const cleanCityNoSpace = noSpace(cleanCityNorm);           // "TOLI TOLI" → "TOLITOLI"
+  const cleanBranchNoSpace = noSpace(cleanBranch);
+  const cleanOutletNoSpace = noSpace(cleanOutlet);
+
   const cleanKel = cleanText(kelurahan || '').toUpperCase();
   const cleanKec = cleanText(kecamatan || '').toUpperCase();
   const cleanAlm = cleanText(alamat || '').toUpperCase();
@@ -109,119 +144,128 @@ export function resolveRoleMappingForBranch(
   for (const record of roleList) {
     const orgUpper = record.organisasiTujuan.toUpperCase();
     const orgClean = normalizeBranchName(record.organisasiTujuan);
+    const orgNoSpace = noSpace(orgClean);
     const isKc = getUnitCategory(record.organisasiTujuan) === 'KC';
     let score = 0;
 
-    // ── TIER 1: Exact normalized branch or outlet match ──────────────────
-    if ((cleanBranch && orgClean === cleanBranch) || (cleanOutlet && orgClean === cleanOutlet)) {
+    // ── TIER 1: Exact normalized branch or outlet match (+ no-space variant) ─
+    if (
+      (cleanBranch && (orgClean === cleanBranch || (cleanBranchNoSpace.length >= 3 && orgNoSpace === cleanBranchNoSpace))) ||
+      (cleanOutlet && (orgClean === cleanOutlet || (cleanOutletNoSpace.length >= 3 && orgNoSpace === cleanOutletNoSpace)))
+    ) {
       score = 100;
     }
 
-    // ── TIER 2: Sub-branch part matching (e.g. BANJARMASIN BRANCH OFFICE - PASAR BARU SUB BRANCH) ──
+    // ── TIER 2: Sub-branch part matching ─────────────────────────────────
     if (orgUpper.includes(' - ')) {
       const dashIdx = orgUpper.indexOf(' - ');
       const parentPart = orgUpper.substring(0, dashIdx);
       const subPart = orgUpper.substring(dashIdx + 3);
       const subPartClean = normalizeBranchName(subPart);
+      const subPartNoSpace = noSpace(subPartClean);
       const parentClean = normalizeBranchName(parentPart);
+      const parentNoSpace = noSpace(parentClean);
 
-      // Both Parent and Outlet match perfectly (e.g. Cabang BANJARMASIN + Outlet PASAR BARU)
+      // Both Parent and Outlet match perfectly
       if (
-        (cleanBranch && parentClean.includes(cleanBranch) && cleanOutlet && subPartClean.includes(cleanOutlet)) ||
-        (cleanOutlet && parentClean.includes(cleanOutlet) && cleanBranch && subPartClean.includes(cleanBranch))
+        (cleanBranch && flexContains(parentClean, cleanBranch) && cleanOutlet && flexContains(subPartClean, cleanOutlet)) ||
+        (cleanOutlet && flexContains(parentClean, cleanOutlet) && cleanBranch && flexContains(subPartClean, cleanBranch))
       ) {
         score = 100;
       }
 
-      // Sub-branch name vs outlet name
+      // Sub-branch vs outlet
       if (score < 99 && cleanOutlet && subPartClean.length >= 3) {
-        if (subPartClean === cleanOutlet || subPartClean.includes(cleanOutlet) || cleanOutlet.includes(subPartClean)) {
+        if (flexMatch(subPartClean, cleanOutlet) || (subPartNoSpace.length >= 3 && subPartNoSpace === cleanOutletNoSpace)) {
           score = Math.max(score, 99);
         }
       }
-
-      // Sub-branch name vs branch name
+      // Sub-branch vs branch
       if (score < 98 && cleanBranch && subPartClean.length >= 3) {
-        if (subPartClean === cleanBranch || subPartClean.includes(cleanBranch) || cleanBranch.includes(subPartClean)) {
+        if (flexMatch(subPartClean, cleanBranch) || (subPartNoSpace.length >= 3 && subPartNoSpace === cleanBranchNoSpace)) {
           score = Math.max(score, 98);
         }
       }
-      // Sub-branch name vs kelurahan
+      // Sub-branch vs kelurahan
       if (cleanKel && subPartClean.length >= 3) {
-        if (subPartClean.includes(cleanKel) || cleanKel.includes(subPartClean)) {
-          score = Math.max(score, 95);
-        }
+        if (flexMatch(subPartClean, cleanKel)) score = Math.max(score, 95);
       }
-      // Sub-branch name vs kecamatan
+      // Sub-branch vs kecamatan
       if (cleanKec && subPartClean.length >= 3) {
-        if (subPartClean.includes(cleanKec) || cleanKec.includes(subPartClean)) {
-          score = Math.max(score, 92);
-        }
+        if (flexMatch(subPartClean, cleanKec)) score = Math.max(score, 92);
       }
-      // Address contains sub-branch part
-      if (cleanAlm && subPartClean.length >= 4 && cleanAlm.includes(subPartClean)) {
+      // Address contains sub-branch
+      if (cleanAlm && subPartClean.length >= 4 && (cleanAlm.includes(subPartClean) || cleanAlm.includes(subPartNoSpace))) {
         score = Math.max(score, 90);
       }
-      // Parent part vs branch name (e.g., MATARAM vs KC MATARAM)
+      // Parent part vs branch name (with no-space fix)
       if (cleanBranch && parentClean.length >= 3) {
-        if (parentClean === cleanBranch || parentClean.includes(cleanBranch) || cleanBranch.includes(parentClean)) {
+        if (flexMatch(parentClean, cleanBranch) || (parentNoSpace.length >= 3 && parentNoSpace === cleanBranchNoSpace)) {
           score = Math.max(score, 82);
+        }
+      }
+      // ★ FIX: Parent part vs city — "TOLITOLI" parent must match "TOLI TOLI" city ★
+      if (score < 82 && cleanCityNorm && parentClean.length >= 3) {
+        if (flexMatch(parentClean, cleanCityNorm) || (parentNoSpace.length >= 3 && parentNoSpace === cleanCityNoSpace)) {
+          score = Math.max(score, isKc ? 82 : 75);
         }
       }
     }
 
-    // ── TIER 3: Substring containment ─────────────────────────────────────
+    // ── TIER 3: Substring containment (with no-space variants) ───────────
     if (score === 0) {
       if (cleanOutlet) {
-        const outletInOrg = orgClean.includes(cleanOutlet);
-        const orgInOutlet = cleanOutlet.includes(orgClean) && orgClean.length >= 4;
-        if (outletInOrg || orgInOutlet) score = 88;
+        if (flexMatch(orgClean, cleanOutlet) || (cleanOutletNoSpace.length >= 3 && orgNoSpace === cleanOutletNoSpace)) score = 88;
       }
       if (score === 0 && cleanBranch) {
-        const branchInOrg = orgClean.includes(cleanBranch);
-        const orgInBranch = cleanBranch.includes(orgClean) && orgClean.length >= 4;
-        if (branchInOrg || orgInBranch) score = 85;
+        if (flexMatch(orgClean, cleanBranch) || (cleanBranchNoSpace.length >= 3 && orgNoSpace === cleanBranchNoSpace)) score = 85;
       }
     }
 
     // ── TIER 4: Address scanning ─────────────────────────────────────────
     if (score < 80 && cleanAlm && orgClean.length >= 4) {
-      if (cleanAlm.includes(orgClean)) {
+      if (cleanAlm.includes(orgClean) || cleanAlm.includes(orgNoSpace)) {
         score = Math.max(score, 80);
       }
     }
 
-    // ── TIER 5: City / Dati II matching to nearest branch office ─────────
-    if (score === 0 && cleanCity.length >= 3) {
-      if (orgClean.includes(cleanCity) || cleanCity.includes(orgClean)) {
+    // ── TIER 5: City / Dati II matching ★ MAIN FIX for TOLI-TOLI bug ★ ──
+    // Checks both spaced ("TOLI TOLI") and no-space ("TOLITOLI") variants
+    if (score === 0 && cleanCityNorm.length >= 3) {
+      const cityHitsOrg =
+        orgClean.includes(cleanCityNorm) ||
+        cleanCityNorm.includes(orgClean) ||
+        (cleanCityNoSpace.length >= 3 && (orgNoSpace.includes(cleanCityNoSpace) || cleanCityNoSpace.includes(orgNoSpace)));
+
+      if (cityHitsOrg) {
         score = isKc ? 75 : 60;
       }
     }
 
-    // ── TIER 6: Kelurahan/Kecamatan vs main (non-sub) org tokens ─────────
+    // ── TIER 6: Kelurahan/Kecamatan vs main org tokens ───────────────────
     if (score === 0) {
-      if (cleanKel.length >= 3 && orgClean.includes(cleanKel)) score = Math.max(score, 70);
-      if (cleanKec.length >= 3 && orgClean.includes(cleanKec)) score = Math.max(score, 65);
+      if (cleanKel.length >= 3 && flexMatch(orgClean, cleanKel)) score = Math.max(score, 70);
+      if (cleanKec.length >= 3 && flexMatch(orgClean, cleanKec)) score = Math.max(score, 65);
     }
 
-    // ── TIER 7: Wilayah Kanwil token matching (e.g. W12 -> JAKARTA KOTA) ─
+    // ── TIER 7: Wilayah Kanwil token matching ────────────────────────────
     if (score === 0 && cleanWil.length >= 3) {
       const wilName = cleanWil.replace(/^WILAYAH\s*\d+\s*[-:]*\s*/i, '').trim();
-      if (wilName && (orgClean.includes(wilName) || wilName.includes(orgClean))) {
+      if (wilName && flexMatch(orgClean, wilName)) {
         score = isKc ? 55 : 45;
       }
     }
 
-    // ── TIER 8: Province capital KC matching (e.g. BALI -> DENPASAR KC) ──
+    // ── TIER 8: Province capital KC matching ─────────────────────────────
     if (score === 0 && cleanProv.length >= 3) {
-      if (orgClean.includes(cleanProv) || cleanProv.includes(orgClean)) {
+      if (flexMatch(orgClean, cleanProv)) {
         score = isKc ? 50 : 40;
       }
     }
 
     // ── TIER 9: Token-intersection fallback ──────────────────────────────
-    if (score === 0 && (cleanBranch.length >= 3 || cleanOutlet.length >= 3 || cleanCity.length >= 3)) {
-      const targetToken = cleanOutlet || cleanBranch || cleanCity;
+    if (score === 0 && (cleanBranch.length >= 3 || cleanOutlet.length >= 3 || cleanCityNorm.length >= 3)) {
+      const targetToken = cleanOutlet || cleanBranch || cleanCityNorm;
       const ratio = tokenIntersectionRatio(targetToken, orgClean, 3);
       if (ratio >= 0.4) {
         score = Math.round(ratio * 65);
@@ -234,7 +278,7 @@ export function resolveRoleMappingForBranch(
     }
   }
 
-  // Fallback: If still not matched, pick first KC in the same Wilayah or roleList fallback
+  // Fallback: only if NO score was produced at all (bestScore stays -1)
   if (!bestRecord && roleList.length > 0) {
     bestRecord = roleList.find((r) => getUnitCategory(r.organisasiTujuan) === 'KC') || roleList[0];
     bestScore = 35;

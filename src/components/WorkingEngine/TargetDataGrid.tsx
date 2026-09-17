@@ -184,6 +184,8 @@ export function findTopRoleMatchesByLocation(
       .replace(/\b(BRANCH OFFICE|SUB BRANCH|MAIN BRANCH|KC|KCP|KK|KANTOR CABANG)\b/g, '')
       .trim();
 
+    const cleanOrgNoSpace = cleanOrg.replace(/\s+/g, '');
+
     if (branchMap.has(cleanOrg)) {
       const found = branchMap.get(cleanOrg)!;
       resolvedMasterCache.set(orgName, found);
@@ -200,11 +202,20 @@ export function findTopRoleMatchesByLocation(
       const outlet = cleanText(m['Nama Outlet']).toUpperCase();
       const kota = cleanText(m['Kota/Dati II'] || m['Dati II'] || m.Kota).toUpperCase();
 
+      const infoNoSpace = info.replace(/[^A-Z0-9]/g, '');
+      const outletNoSpace = outlet.replace(/[^A-Z0-9]/g, '');
+      const kotaNoSpace = kota.replace(/[^A-Z0-9]/g, '');
+
       let score = 0;
-      if (info === cleanOrg || outlet === cleanOrg) score = 100;
-      else if (info.includes(cleanOrg) || cleanOrg.includes(info)) score = 85;
-      else if (outlet.includes(cleanOrg) || cleanOrg.includes(outlet)) score = 80;
-      else {
+      if (info === cleanOrg || outlet === cleanOrg || (cleanOrgNoSpace && (infoNoSpace === cleanOrgNoSpace || outletNoSpace === cleanOrgNoSpace))) {
+        score = 100;
+      } else if (info.includes(cleanOrg) || cleanOrg.includes(info) || (cleanOrgNoSpace && (infoNoSpace.includes(cleanOrgNoSpace) || cleanOrgNoSpace.includes(infoNoSpace)))) {
+        score = 85;
+      } else if (outlet.includes(cleanOrg) || cleanOrg.includes(outlet) || (cleanOrgNoSpace && (outletNoSpace.includes(cleanOrgNoSpace) || cleanOrgNoSpace.includes(outletNoSpace)))) {
+        score = 80;
+      } else if (kota && (kota.includes(cleanOrg) || cleanOrg.includes(kota) || (cleanOrgNoSpace && (kotaNoSpace.includes(cleanOrgNoSpace) || cleanOrgNoSpace.includes(kotaNoSpace))))) {
+        score = 75;
+      } else {
         let matched = 0;
         for (const t of tokens) {
           if (info.includes(t) || outlet.includes(t) || kota.includes(t)) matched++;
