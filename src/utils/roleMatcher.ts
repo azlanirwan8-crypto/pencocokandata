@@ -458,38 +458,67 @@ export function auditRoleMasterConsistency(row: {
     roleType = 'KCP';
   }
 
-  // 3. Evaluasi Keselarasan Nama Unit (dengan normalisasi singkatan Indonesia)
+  // 3. Evaluasi Keselarasan Nama Unit (dengan normalisasi singkatan Indonesia & varian tanpa spasi)
   const cleanOutlet = normalizeIndonesianBranchAliases(normalizeBranchName(masterOutletRaw));
   const cleanCabang = normalizeIndonesianBranchAliases(normalizeBranchName(masterCabangRaw));
   const cleanRoleOrg = normalizeIndonesianBranchAliases(normalizeBranchName(roleOrgRaw));
 
+  // Versi strip angka (sandi cabang seperti '197 TOLI TOLI' -> 'TOLI TOLI')
+  const cleanCabangNoCode = cleanCabang.replace(/^\d+\s*/, '').trim();
+
+  // Versi tanpa spasi (mengatasi 'TOLI TOLI' vs 'TOLITOLI')
+  const cleanOutletNoSpace = noSpace(cleanOutlet);
+  const cleanCabangNoSpace = noSpace(cleanCabangNoCode || cleanCabang);
+  const cleanRoleOrgNoSpace = noSpace(cleanRoleOrg);
+
   let roleParentClean = '';
   let roleSubClean = '';
+  let roleParentNoSpace = '';
+  let roleSubNoSpace = '';
   if (roleOrgRaw.toUpperCase().includes(' - ')) {
     const parts = roleOrgRaw.toUpperCase().split(' - ');
     roleParentClean = normalizeIndonesianBranchAliases(normalizeBranchName(parts[0] || ''));
     roleSubClean = normalizeIndonesianBranchAliases(normalizeBranchName(parts[1] || ''));
+    roleParentNoSpace = noSpace(roleParentClean);
+    roleSubNoSpace = noSpace(roleSubClean);
   }
 
-  // A. Exact Name Match
+  // A. Exact Name Match (termasuk varian tanpa spasi & strip sandi angka)
   const isExactOrgMatch =
     (cleanOutlet && cleanRoleOrg === cleanOutlet) ||
-    (cleanCabang && cleanRoleOrg === cleanCabang);
+    (cleanCabang && cleanRoleOrg === cleanCabang) ||
+    (cleanCabangNoCode && cleanRoleOrg === cleanCabangNoCode) ||
+    (cleanRoleOrgNoSpace && (
+      (cleanOutletNoSpace && cleanRoleOrgNoSpace === cleanOutletNoSpace) ||
+      (cleanCabangNoSpace && cleanRoleOrgNoSpace === cleanCabangNoSpace)
+    ));
 
   // B. Sub-Branch Match (e.g. A Yani matches Ahmad Yani)
   const isSubMatch =
     (cleanOutlet && roleSubClean && (roleSubClean.includes(cleanOutlet) || cleanOutlet.includes(roleSubClean))) ||
-    (cleanCabang && roleSubClean && (roleSubClean.includes(cleanCabang) || cleanCabang.includes(roleSubClean)));
+    (cleanCabangNoCode && roleSubClean && (roleSubClean.includes(cleanCabangNoCode) || cleanCabangNoCode.includes(roleSubClean))) ||
+    (cleanRoleOrgNoSpace && roleSubNoSpace && (
+      (cleanOutletNoSpace && (roleSubNoSpace.includes(cleanOutletNoSpace) || cleanOutletNoSpace.includes(roleSubNoSpace))) ||
+      (cleanCabangNoSpace && (roleSubNoSpace.includes(cleanCabangNoSpace) || cleanCabangNoSpace.includes(roleSubNoSpace)))
+    ));
 
   // C. Parent Branch Match (e.g. Samarinda matches Samarinda)
   const isParentMatch =
-    (cleanCabang && roleParentClean && (roleParentClean.includes(cleanCabang) || cleanCabang.includes(roleParentClean))) ||
-    (cleanOutlet && roleParentClean && (roleParentClean.includes(cleanOutlet) || cleanOutlet.includes(roleParentClean)));
+    (cleanCabangNoCode && roleParentClean && (roleParentClean.includes(cleanCabangNoCode) || cleanCabangNoCode.includes(roleParentClean))) ||
+    (cleanOutlet && roleParentClean && (roleParentClean.includes(cleanOutlet) || cleanOutlet.includes(roleParentClean))) ||
+    (roleParentNoSpace && (
+      (cleanOutletNoSpace && (roleParentNoSpace.includes(cleanOutletNoSpace) || cleanOutletNoSpace.includes(roleParentNoSpace))) ||
+      (cleanCabangNoSpace && (roleParentNoSpace.includes(cleanCabangNoSpace) || cleanCabangNoSpace.includes(roleParentNoSpace)))
+    ));
 
-  // D. Substring Containment
+  // D. Substring Containment (dengan varian tanpa spasi)
   const isSubstringMatch =
     (cleanOutlet && cleanOutlet.length >= 3 && cleanRoleOrg.includes(cleanOutlet)) ||
-    (cleanCabang && cleanCabang.length >= 3 && cleanRoleOrg.includes(cleanCabang));
+    (cleanCabangNoCode && cleanCabangNoCode.length >= 3 && cleanRoleOrg.includes(cleanCabangNoCode)) ||
+    (cleanRoleOrgNoSpace.length >= 3 && (
+      (cleanOutletNoSpace.length >= 3 && (cleanRoleOrgNoSpace.includes(cleanOutletNoSpace) || cleanOutletNoSpace.includes(cleanRoleOrgNoSpace))) ||
+      (cleanCabangNoSpace.length >= 3 && (cleanRoleOrgNoSpace.includes(cleanCabangNoSpace) || cleanCabangNoSpace.includes(cleanRoleOrgNoSpace)))
+    ));
 
   let nameStatus: 'exact' | 'similar' | 'parent_match' | 'different' | 'none' = 'different';
 
