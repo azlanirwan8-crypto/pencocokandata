@@ -1892,22 +1892,22 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                         {(() => {
                           const activeRank = activeCandidateByRow[r.No] || 1;
                           const activeCand = candidates.find((c) => c.rank === activeRank) || candidates[0];
-                          const m = activeCand.master;
-                          const isTop1 = activeCand.rank === 1;
+                          const m = activeCand?.master;
+                          const isTop1 = activeCand?.rank === 1;
 
                           const badgeBg = isTop1
                             ? 'rgba(10, 179, 156, 0.12)'
-                            : activeCand.rank === 2
+                            : activeCand?.rank === 2
                             ? 'rgba(247, 184, 75, 0.15)'
                             : 'rgba(53, 119, 241, 0.1)';
-                          const badgeColor = isTop1 ? '#0ab39c' : activeCand.rank === 2 ? '#d97706' : '#3577f1';
+                          const badgeColor = isTop1 ? '#0ab39c' : activeCand?.rank === 2 ? '#d97706' : '#3577f1';
                           const cardBorder = isTop1 ? '1px solid rgba(10, 179, 156, 0.35)' : '1px solid #e9ebec';
                           const cardBg = isTop1 ? '#ffffff' : '#fafafa';
 
                           const candWilayahInfo = extractWilayahFromBranchCode(
-                            m['Branch Code'] || m['Kode Cabang'] || r['Branch Code'] || r['Kode Cabang'] || '',
+                            m?.['Branch Code'] || m?.['Kode Cabang'] || r?.['Branch Code'] || r?.['Kode Cabang'] || '',
                             wilayahSettings,
-                            m.Wilayah || r.Wilayah || '-'
+                            m?.Wilayah || r?.Wilayah || '-'
                           );
 
                           return (
