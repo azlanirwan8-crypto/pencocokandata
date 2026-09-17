@@ -13,6 +13,7 @@ import {
   findSharedStreetOrLandmark,
 } from './normalizer.ts';
 import { calculateRealDistance } from './geoDistance.ts';
+import { extractBranchAliases, normalizeIndonesianBranchAliases, normalizeBranchName } from './roleMatcher.ts';
 
 export interface CandidateOption {
   master: MasterRow;
@@ -750,6 +751,31 @@ export function evaluateUserPrefilledAudit(
     if (uCabang && mCabang && (uCabang === mCabang || mCabang.includes(uCabang) || uCabang.includes(mCabang))) return true;
     if (uSandiCabang && (uSandiCabang === mSandiCabang || (mSandi && uSandiCabang.includes(mSandi)) || (mCabang && uSandiCabang.includes(mCabang)))) return true;
     if (uOutlet && mOutlet && (uOutlet === mOutlet || mOutlet.includes(uOutlet))) return true;
+
+    // Evaluasi seluruh alias d/h (bekas nama / relokasi) dan normalisasi singkatan
+    const mAliases = [
+      ...extractBranchAliases(String(m['Nama Outlet'] || '')),
+      ...extractBranchAliases(String(m.Cabang || m['Sandi Cabang'] || ''))
+    ].map(a => normalizeIndonesianBranchAliases(normalizeBranchName(a))).filter(Boolean);
+
+    const uAliases = [
+      ...extractBranchAliases(prefilledOutlet),
+      ...extractBranchAliases(prefilledCabang),
+      ...extractBranchAliases(prefilledSandiCabang)
+    ].map(a => normalizeIndonesianBranchAliases(normalizeBranchName(a))).filter(Boolean);
+
+    for (const u of uAliases) {
+      if (!u || u.length < 3) continue;
+      for (const ma of mAliases) {
+        if (!ma || ma.length < 3) continue;
+        if (u === ma || u.includes(ma) || ma.includes(u)) return true;
+        const uNoSpace = u.replace(/\s+/g, '');
+        const maNoSpace = ma.replace(/\s+/g, '');
+        if (uNoSpace.length >= 4 && (uNoSpace === maNoSpace || uNoSpace.includes(maNoSpace) || maNoSpace.includes(uNoSpace))) {
+          return true;
+        }
+      }
+    }
 
     return false;
   };

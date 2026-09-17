@@ -388,8 +388,9 @@ export function normalizeIndonesianBranchAliases(str: string): string {
   // 1. Singkatan Jalan & Gelar
   s = s.replace(/\b(JL\.|JLN\.|JALAN|JL|JLN)\b/g, '');
   s = s.replace(/\b(JEND\.|JENDERAL|JEND)\b/g, '');
-  s = s.replace(/\b(LETJEN\.|LETJEN|MAYJEN\.|MAYJEN|KOLONEL|KOL\.)\b/g, '');
-  s = s.replace(/\b(PROF\.|PROFESOR|PROF|DR\.|DOKTER)\b/g, '');
+  s = s.replace(/\b(LETJEN\.|LETJEN|MAYJEN\.|MAYJEN|KOLONEL|KOL\.|KAPTEN|KAPT\.|MAYOR|MAY\.)\b/g, '');
+  s = s.replace(/\b(PROF\.|PROFESOR|PROF|DR\.|DOKTER|DRS\.|DRS|IR\.|IR)\b/g, '');
+  s = s.replace(/\b(KH\.|K\.H\.|KYAI\s+HAJI|HAJI|HJ\.|H\.)\b/g, '');
 
   // 2. Singkatan Nama Tokoh / Pahlawan
   s = s.replace(/\b(ACHMAD|ACH\.|ACH|AHM\.|AHM)\b/g, 'AHMAD');
@@ -403,9 +404,21 @@ export function normalizeIndonesianBranchAliases(str: string): string {
   s = s.replace(/\b(P\.?\s*DIPONEGORO)\b/g, 'DIPONEGORO');
   s = s.replace(/\b(I\.?\s*BONJOL)\b/g, 'IMAM BONJOL');
   s = s.replace(/\b(SULTAN\s+HASANUDDIN)\b/g, 'HASANUDDIN');
+  s = s.replace(/\b(R\.?\s*E\.?\s*MARTADINATA|RE\s+MARTADINATA)\b/g, 'RE MARTADINATA');
+  s = s.replace(/\b(W\.?\s*R\.?\s*SUPRATMAN|WR\s+SUPRATMAN)\b/g, 'WR SUPRATMAN');
+  s = s.replace(/\b(D\.?\s*I\.?\s*PANJAITAN|DI\s+PANJAITAN)\b/g, 'DI PANJAITAN');
+  s = s.replace(/\b(K\.?\s*H\.?\s*WASYID)\b/g, 'KH WASYID');
+  s = s.replace(/\b(SUDIRMAN|P\.?\s*SUDIRMAN|PANGLIMA\s+SUDIRMAN)\b/g, 'SUDIRMAN');
 
-  // 3. Singkatan Tempat / Kota Khusus (TANGSEL -> TANGERANG SELATAN, dll)
+  // 3. Singkatan Tempat / Wilayah Umum
   s = s.replace(/\bTANGSEL\b/g, 'TANGERANG SELATAN');
+  s = s.replace(/\bJAKSEL\b/g, 'JAKARTA SELATAN');
+  s = s.replace(/\bJAKBAR\b/g, 'JAKARTA BARAT');
+  s = s.replace(/\bJAKPUS\b/g, 'JAKARTA PUSAT');
+  s = s.replace(/\bJAKUT\b/g, 'JAKARTA UTARA');
+  s = s.replace(/\bJAKTIM\b/g, 'JAKARTA TIMUR');
+  s = s.replace(/\bBJB\b/g, 'BANJARBARU');
+  s = s.replace(/\bBJM\b/g, 'BANJARMASIN');
 
   return s.replace(/\s+/g, ' ').trim();
 }
