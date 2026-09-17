@@ -146,17 +146,24 @@ export function findTopRoleMatchesByLocation(
     resolvedMasterCache.clear();
     cachedBranchMap = new Map<string, MasterRow>();
     for (const m of masterRows) {
-      const info = cleanText(m['Informasi Cabang']).toUpperCase();
-      const outlet = cleanText(m['Nama Outlet']).toUpperCase();
-      const cabang = cleanText(m.Cabang).toUpperCase();
-      const sandi = cleanText(m['Sandi Cabang']).toUpperCase();
-      if (info && !cachedBranchMap.has(info)) cachedBranchMap.set(info, m);
-      if (outlet && !cachedBranchMap.has(outlet)) cachedBranchMap.set(outlet, m);
-      if (cabang && !cachedBranchMap.has(cabang)) cachedBranchMap.set(cabang, m);
-      if (sandi && !cachedBranchMap.has(sandi)) cachedBranchMap.set(sandi, m);
+      const rawInfo = cleanText(m['Informasi Cabang'] || '').toUpperCase();
+      const rawOutlet = cleanText(m['Nama Outlet'] || '').toUpperCase();
+      const rawCabang = cleanText(m.Cabang || '').toUpperCase();
+      const rawSandi = cleanText(m['Sandi Cabang'] || '').toUpperCase();
+      if (rawInfo && !cachedBranchMap.has(rawInfo)) cachedBranchMap.set(rawInfo, m);
+      if (rawOutlet && !cachedBranchMap.has(rawOutlet)) cachedBranchMap.set(rawOutlet, m);
+      if (rawCabang && !cachedBranchMap.has(rawCabang)) cachedBranchMap.set(rawCabang, m);
+      if (rawSandi && !cachedBranchMap.has(rawSandi)) cachedBranchMap.set(rawSandi, m);
+
+      const normInfo = normalizeIndonesianBranchAliases(normalizeBranchName(m['Informasi Cabang'] || ''));
+      const normOutlet = normalizeIndonesianBranchAliases(normalizeBranchName(m['Nama Outlet'] || ''));
+      const normCabang = normalizeIndonesianBranchAliases(normalizeBranchName(m.Cabang || ''));
+      if (normInfo && !cachedBranchMap.has(normInfo)) cachedBranchMap.set(normInfo, m);
+      if (normOutlet && !cachedBranchMap.has(normOutlet)) cachedBranchMap.set(normOutlet, m);
+      if (normCabang && !cachedBranchMap.has(normCabang)) cachedBranchMap.set(normCabang, m);
 
       // Daftarkan semua alias d/h (bekas nama / historical alias) ke branchMap
-      const aliases = [...extractBranchAliases(info), ...extractBranchAliases(outlet)];
+      const aliases = [...extractBranchAliases(rawInfo), ...extractBranchAliases(rawOutlet)];
       for (const a of aliases) {
         const norm = normalizeIndonesianBranchAliases(normalizeBranchName(a));
         if (norm && !cachedBranchMap.has(norm)) cachedBranchMap.set(norm, m);
@@ -191,14 +198,21 @@ export function findTopRoleMatchesByLocation(
     // Coba sub-branch bagian kanan (jika 'PARENT - SUB BRANCH')
     let subPartClean = '';
     let subPartNoSpace = '';
+    let parentClean = '';
     if (orgName.toUpperCase().includes(' - ')) {
       const parts = orgName.toUpperCase().split(' - ');
+      parentClean = normalizeIndonesianBranchAliases(normalizeBranchName(parts[0] || ''));
       subPartClean = normalizeIndonesianBranchAliases(normalizeBranchName(parts[1] || ''));
       subPartNoSpace = subPartClean.replace(/\s+/g, '');
     }
 
     if (branchMap.has(cleanOrg)) {
       const found = branchMap.get(cleanOrg)!;
+      resolvedMasterCache.set(orgName, found);
+      return found;
+    }
+    if (cleanOrgNoSpace && branchMap.has(cleanOrgNoSpace)) {
+      const found = branchMap.get(cleanOrgNoSpace)!;
       resolvedMasterCache.set(orgName, found);
       return found;
     }
@@ -209,6 +223,11 @@ export function findTopRoleMatchesByLocation(
     }
     if (subPartNoSpace && branchMap.has(subPartNoSpace)) {
       const found = branchMap.get(subPartNoSpace)!;
+      resolvedMasterCache.set(orgName, found);
+      return found;
+    }
+    if (parentClean && branchMap.has(parentClean)) {
+      const found = branchMap.get(parentClean)!;
       resolvedMasterCache.set(orgName, found);
       return found;
     }
@@ -223,33 +242,17 @@ export function findTopRoleMatchesByLocation(
       const outlet = normalizeIndonesianBranchAliases(normalizeBranchName(m['Nama Outlet'] || ''));
       const kota = normalizeIndonesianBranchAliases(normalizeBranchName(m['Kota/Dati II'] || m['Dati II'] || m.Kota || ''));
 
-      const infoNoSpace = info.replace(/[^A-Z0-9]/g, '');
-      const outletNoSpace = outlet.replace(/[^A-Z0-9]/g, '');
-      const kotaNoSpace = kota.replace(/[^A-Z0-9]/g, '');
-
-      // Evaluasi juga seluruh alias d/h
-      const mAliases = [
-        ...extractBranchAliases(m['Informasi Cabang'] || ''),
-        ...extractBranchAliases(m['Nama Outlet'] || '')
-      ].map(a => normalizeIndonesianBranchAliases(normalizeBranchName(a))).filter(Boolean);
-
       let score = 0;
       if (
         info === cleanOrg || outlet === cleanOrg ||
-        (subPartClean && (info === subPartClean || outlet === subPartClean)) ||
-        mAliases.some(a => a === cleanOrg || (subPartClean && a === subPartClean)) ||
-        (cleanOrgNoSpace && (infoNoSpace === cleanOrgNoSpace || outletNoSpace === cleanOrgNoSpace))
+        (subPartClean && (info === subPartClean || outlet === subPartClean))
       ) {
         score = 100;
-      } else if (
-        subPartClean && mAliases.some(a => a.includes(subPartClean) || subPartClean.includes(a))
-      ) {
-        score = 95;
-      } else if (info.includes(cleanOrg) || cleanOrg.includes(info) || (cleanOrgNoSpace && (infoNoSpace.includes(cleanOrgNoSpace) || cleanOrgNoSpace.includes(infoNoSpace)))) {
+      } else if (info.includes(cleanOrg) || cleanOrg.includes(info)) {
         score = 85;
-      } else if (outlet.includes(cleanOrg) || cleanOrg.includes(outlet) || (cleanOrgNoSpace && (outletNoSpace.includes(cleanOrgNoSpace) || cleanOrgNoSpace.includes(outletNoSpace)))) {
+      } else if (outlet.includes(cleanOrg) || cleanOrg.includes(outlet)) {
         score = 80;
-      } else if (kota && (kota.includes(cleanOrg) || cleanOrg.includes(kota) || (cleanOrgNoSpace && (kotaNoSpace.includes(cleanOrgNoSpace) || cleanOrgNoSpace.includes(kotaNoSpace))))) {
+      } else if (kota && (kota.includes(cleanOrg) || cleanOrg.includes(kota))) {
         score = 75;
       } else {
         let matched = 0;
@@ -265,7 +268,7 @@ export function findTopRoleMatchesByLocation(
         bestScore = score;
         best = m;
       }
-      if (bestScore >= 95) break; // Early exit on high confidence
+      if (bestScore >= 90) break; // Early exit on high confidence
     }
 
     resolvedMasterCache.set(orgName, best);
@@ -352,21 +355,19 @@ export function findTopRoleMatchesByLocation(
       candCabangAliases.some(a => a.includes(subPartClean) || (subPartNoSpace.length >= 3 && a.replace(/\s+/g, '').includes(subPartNoSpace)))
     );
 
-    const isFuzzySubPart = subPartClean && (
-      candOutletAliases.some(a => textSimilarityScore(a, subPartClean) >= 0.85) ||
-      candCabangAliases.some(a => textSimilarityScore(a, subPartClean) >= 0.85)
-    );
-    const isFuzzyOrgMatch = candOutletAliases.some(a => textSimilarityScore(a, orgClean) >= 0.85);
-
     if (isExactSubPart) {
       nameMatchScore = 110;
     } else if (isSpecificSubPart) {
       nameMatchScore = 105;
     } else if (candOutletAliases.some(a => a === orgClean)) {
       nameMatchScore = 100;
-    } else if (isFuzzySubPart) {
+    } else if (
+      subPartClean &&
+      (candOutletAliases.some(a => Math.abs(a.length - subPartClean.length) <= 3 && textSimilarityScore(a, subPartClean) >= 0.85) ||
+       candCabangAliases.some(a => Math.abs(a.length - subPartClean.length) <= 3 && textSimilarityScore(a, subPartClean) >= 0.85))
+    ) {
       nameMatchScore = 98;
-    } else if (isFuzzyOrgMatch) {
+    } else if (candOutletAliases.some(a => Math.abs(a.length - orgClean.length) <= 3 && textSimilarityScore(a, orgClean) >= 0.85)) {
       nameMatchScore = 95;
     } else if (candCabangAliases.some(a => a === orgClean || (parentClean && a === parentClean))) {
       // 2. Kecocokan Cabang Induk / Parent (contoh 'PADANG BRANCH OFFICE' atau 'KABANJAHE BRANCH OFFICE')
