@@ -435,18 +435,13 @@ export function auditRoleMasterConsistency(row: {
     };
   }
 
-  // 1. Ekstraksi Tipe Unit Master
+  // 1. Ekstraksi Tipe Unit Master (KCP/KK dicek lebih dulu untuk mencegah salah klasifikasi)
   let masterType: 'KC' | 'KCP' | 'UNKNOWN' = 'UNKNOWN';
   if (
-    masterStatusRaw === 'KC' ||
-    masterStatusRaw.includes('CABANG UTAMA') ||
-    masterStatusRaw.includes('BRANCH OFFICE') ||
-    masterStatusRaw.includes('KANWIL')
-  ) {
-    masterType = 'KC';
-  } else if (
     masterStatusRaw === 'KCP' ||
     masterStatusRaw === 'KK' ||
+    masterStatusRaw.includes('KCP') ||
+    masterStatusRaw.includes('KK') ||
     masterStatusRaw.includes('KANTOR KAS') ||
     masterStatusRaw.includes('PEMBANTU') ||
     masterStatusRaw.includes('SUB BRANCH') ||
@@ -454,6 +449,13 @@ export function auditRoleMasterConsistency(row: {
     masterStatusRaw.includes('KLN')
   ) {
     masterType = 'KCP';
+  } else if (
+    masterStatusRaw === 'KC' ||
+    masterStatusRaw.includes('CABANG UTAMA') ||
+    masterStatusRaw.includes('BRANCH OFFICE') ||
+    masterStatusRaw.includes('KANWIL')
+  ) {
+    masterType = 'KC';
   } else {
     const combinedMasterText = `${masterOutletRaw} ${masterCabangRaw}`.toUpperCase();
     if (/\b(KCP|KK|KAS|KLN|PEMBANTU)\b/.test(combinedMasterText)) {
