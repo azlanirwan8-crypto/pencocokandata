@@ -191,13 +191,10 @@ export function resolveRoleMappingForBranch(
     const isKc = getUnitCategory(record.organisasiTujuan) === 'KC';
     let score = 0;
 
-    // ── TIER 1: Exact normalized branch or outlet match (termasuk seluruh alias d/h & varian tanpa spasi) ─
-    const matchTier1 =
-      branchAliases.some(b => b === orgClean || (b.length >= 3 && noSpace(b) === orgNoSpace)) ||
-      outletAliases.some(o => o === orgClean || (o.length >= 3 && noSpace(o) === orgNoSpace));
-
-    if (matchTier1) {
-      score = 100;
+    // ── TIER 1: Exact direct match pada nama unit spesifik (Outlet) ─────
+    const isDirectOutletMatch = outletAliases.some(o => o === orgClean || (o.length >= 3 && noSpace(o) === orgNoSpace));
+    if (isDirectOutletMatch) {
+      score = 105;
     }
 
     // ── TIER 2: Sub-branch part matching ─────────────────────────────────
@@ -210,23 +207,24 @@ export function resolveRoleMappingForBranch(
       const parentClean = normalizeIndonesianBranchAliases(normalizeBranchName(parentPart));
       const parentNoSpace = noSpace(parentClean);
 
-      // Both Parent and Outlet match perfectly (termasuk alias d/h)
+      // Both Parent and Outlet match perfectly (termasuk alias d/h seperti PADANG + AHMAD YANI)
       const parentMatched = branchAliases.some(b => flexContains(parentClean, b)) || outletAliases.some(o => flexContains(parentClean, o));
       const subMatched = outletAliases.some(o => flexContains(subPartClean, o) || flexMatch(subPartClean, o) || (subPartNoSpace.length >= 3 && subPartNoSpace === noSpace(o))) ||
                          branchAliases.some(b => flexContains(subPartClean, b) || flexMatch(subPartClean, b) || (subPartNoSpace.length >= 3 && subPartNoSpace === noSpace(b)));
 
       if (parentMatched && subMatched) {
-        score = 100;
+        score = 110; // Prioritas tertinggi mutlak: Cabang Induk DAN Sub-Branch/Alias sama persis!
       }
 
-      // Sub-branch vs outlet (termasuk alias)
-      if (score < 99 && subPartClean.length >= 3) {
+      // Sub-branch vs outlet spesifik (termasuk alias d/h)
+      if (score < 105 && subPartClean.length >= 3) {
         const anyOutletSub = outletAliases.some(o => flexMatch(subPartClean, o) || (subPartNoSpace.length >= 3 && subPartNoSpace === noSpace(o)));
         if (anyOutletSub) {
-          score = Math.max(score, 99);
+          score = Math.max(score, 102);
         }
       }
-      // Sub-branch vs branch (termasuk alias)
+
+      // Sub-branch vs branch
       if (score < 98 && subPartClean.length >= 3) {
         const anyBranchSub = branchAliases.some(b => flexMatch(subPartClean, b) || (subPartNoSpace.length >= 3 && subPartNoSpace === noSpace(b)));
         if (anyBranchSub) {
@@ -269,7 +267,13 @@ export function resolveRoleMappingForBranch(
       }
     }
 
-    // ── TIER 3: Substring containment (with no-space variants) ───────────
+    // ── TIER 3: Match pada Cabang Induk (Branch / Kota), skor 90 (di bawah sub-branch spesifik) ──
+    const isDirectBranchMatch = branchAliases.some(b => b === orgClean || (b.length >= 3 && noSpace(b) === orgNoSpace));
+    if (score < 90 && isDirectBranchMatch) {
+      score = 90;
+    }
+
+    // ── TIER 4: Substring containment (with no-space variants) ───────────
     if (score === 0) {
       if (cleanOutlet) {
         if (flexMatch(orgClean, cleanOutlet) || (cleanOutletNoSpace.length >= 3 && orgNoSpace === cleanOutletNoSpace)) score = 88;
