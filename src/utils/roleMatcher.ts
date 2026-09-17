@@ -23,7 +23,11 @@ export function normalizeBranchName(name: string): string {
   if (!name) return '';
   return name
     .toUpperCase()
-    .replace(/\b(KC|KCP|KK|KANTOR CABANG|KANTOR CABANG PEMBANTU|KANTOR KAS|BRANCH OFFICE|SUB BRANCH|MAIN BRANCH|INDUK|SENTRA)\b/g, '')
+    // 1. Bersihkan keterangan riwayat perubahan nama cabang (d/h = dahulu, ex = bekas, fka = formerly known as)
+    .replace(/\b(D\/H|DH\/|D\s*\.\s*H|EX|FKA)\b[\s\S]*$/i, '')
+    // 2. Bersihkan tipe unit administratif
+    .replace(/\b(KC|KCP|KK|KANTOR CABANG|KANTOR CABANG PEMBANTU|KANTOR KAS|BRANCH OFFICE|SUB BRANCH|MAIN BRANCH|INDUK|SENTRA|OUTLET|KANTOR|CABANG)\b/g, '')
+    // 3. Bersihkan karakter non-alphanumeric (tanda hubung '-', titik '.', slash '/', dll menjadi spasi)
     .replace(/[^A-Z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -314,10 +318,15 @@ export function resolveRoleMappingForBranch(
 export function normalizeIndonesianBranchAliases(str: string): string {
   if (!str) return '';
   let s = str.toUpperCase().trim();
-  s = s.replace(/\b(ACHMAD|ACH\.|ACH|AHM\.|AHM)\b/g, 'AHMAD');
-  s = s.replace(/\bA\s+YANI\b|\bA\.?\s*YANI\b/g, 'AHMAD YANI');
+  // 1. Singkatan Jalan & Gelar
+  s = s.replace(/\b(JL\.|JLN\.|JALAN|JL|JLN)\b/g, '');
   s = s.replace(/\b(JEND\.|JENDERAL|JEND)\b/g, '');
   s = s.replace(/\b(LETJEN\.|LETJEN|MAYJEN\.|MAYJEN|KOLONEL|KOL\.)\b/g, '');
+  s = s.replace(/\b(PROF\.|PROFESOR|PROF|DR\.|DOKTER)\b/g, '');
+
+  // 2. Singkatan Nama Tokoh / Pahlawan
+  s = s.replace(/\b(ACHMAD|ACH\.|ACH|AHM\.|AHM)\b/g, 'AHMAD');
+  s = s.replace(/\bA\s+YANI\b|\bA\.?\s*YANI\b/g, 'AHMAD YANI');
   s = s.replace(/\b(M\.?\s*T\.?\s*HARYONO|MT\s+HARYONO)\b/g, 'MT HARYONO');
   s = s.replace(/\b(T\.?\s*B\.?\s*SIMATUPANG|TB\s+SIMATUPANG)\b/g, 'TB SIMATUPANG');
   s = s.replace(/\b(H\.?\s*R\.?\s*RASUNA\s+SAID|HR\s+RASUNA\s+SAID)\b/g, 'RASUNA SAID');
@@ -327,6 +336,10 @@ export function normalizeIndonesianBranchAliases(str: string): string {
   s = s.replace(/\b(P\.?\s*DIPONEGORO)\b/g, 'DIPONEGORO');
   s = s.replace(/\b(I\.?\s*BONJOL)\b/g, 'IMAM BONJOL');
   s = s.replace(/\b(SULTAN\s+HASANUDDIN)\b/g, 'HASANUDDIN');
+
+  // 3. Singkatan Tempat / Kota Khusus (TANGSEL -> TANGERANG SELATAN, dll)
+  s = s.replace(/\bTANGSEL\b/g, 'TANGERANG SELATAN');
+
   return s.replace(/\s+/g, ' ').trim();
 }
 
