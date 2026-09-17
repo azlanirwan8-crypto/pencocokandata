@@ -21,7 +21,7 @@ import type { RecommendationResult } from './utils/recommender';
 import { buildMasterIndex, analyzeMasterHealth, executeChunkMatching } from './utils/matcher';
 import { formatWilayahName, extractWilayahFromBranchCode } from './utils/normalizer';
 import type { RoleMappingRecord } from './components/RoleMapping/RoleMappingManager';
-import { DEFAULT_ROLE_MAPPING_DATA } from './components/RoleMapping/RoleMappingManager';
+import { DEFAULT_ROLE_MAPPING_DATA, getUnitCategory, getWondrRecommendation } from './components/RoleMapping/RoleMappingManager';
 import type { PTENRecord } from './components/PTENData/PTENManager';
 import { DEFAULT_PTEN_DATA } from './components/PTENData/defaultPtenData';
 import { buildPtenIndex, validatePtenForTarget } from './utils/ptenMatcher';
@@ -674,18 +674,19 @@ export const App: React.FC = () => {
 
     React.startTransition(() => {
       setTargetRows((prev) => {
+        const updated = [...prev];
         const nowStr = new Date().toISOString();
-        const updated: TargetRow[] = new Array(prev.length);
 
         for (let i = 0; i < prev.length; i++) {
           const row = prev[i];
           const rowNoKey = String(row.No).trim();
-          const matchedMaster = recMap.get(rowNoKey);
-          if (!matchedMaster) {
+          const recItem = recMap.get(rowNoKey);
+          if (!recItem) {
             updated[i] = row;
             continue;
           }
 
+          const matchedMaster = recItem.recommendedMaster;
           const branchCode = matchedMaster['Branch Code'] || matchedMaster['Kode Cabang'] || '';
           const resolved = extractWilayahFromBranchCode(
             branchCode,
@@ -695,6 +696,11 @@ export const App: React.FC = () => {
 
           // PENTING: Untuk kecepatan instan 8.000+ baris, gunakan data master & PTEN langsung dari rekomendasi
           const ptenRes = validatePtenForTarget(row['KODE POS'], row['Dati II'] || row.Kota || '', ptenIndex);
+
+          // Tentukan role mapping dari chosenRole rekomendasi
+          const finalRoleRecord = recItem.chosenRole;
+          const isKc = finalRoleRecord ? getUnitCategory(finalRoleRecord.organisasiTujuan) === 'KC' : false;
+          const wondr = finalRoleRecord ? getWondrRecommendation(finalRoleRecord) : null;
 
           updated[i] = {
             ...row,
@@ -716,6 +722,14 @@ export const App: React.FC = () => {
             'KOTA PTEN': ptenRes.kotaPten,
             'KODE POS PTEN': ptenRes.kodePosPten,
             'CEK KODE POS + PTEN': ptenRes.statusPten,
+            organisasiRole: finalRoleRecord ? finalRoleRecord.organisasiTujuan : '',
+            tipeUnitRole: finalRoleRecord ? (isKc ? 'Cabang Utama (KC)' : 'Outlet (KCP)') : undefined,
+            alurWondr: wondr?.tier || '',
+            flowDescription: wondr?.desc || '',
+            roleCabsal: finalRoleRecord?.qrsCabsal,
+            roleCabapv1: finalRoleRecord?.qrsCabapv1,
+            roleCabapv2: finalRoleRecord?.qrsCabapv2,
+            roleGrandTotal: finalRoleRecord?.grandTotal,
             _matchedAt: nowStr,
             _matchedBy: 'Operator (Approval)',
           };
@@ -734,7 +748,7 @@ export const App: React.FC = () => {
   };
 
   // Setujui Satu Rekomendasi Per Baris
-  const handleApproveSingleRecommendation = (rowNo: number | string, matchedMaster: MasterRow) => {
+  const handleApproveSingleRecommendation = (rowNo: number | string, matchedMaster: MasterRow, chosenRole?: RoleMappingRecord) => {
     const targetNoStr = String(rowNo).trim();
     setTargetRows((prev) => {
       const updated = prev.map((row) => {
@@ -749,19 +763,35 @@ export const App: React.FC = () => {
 
         // Validasi PTEN & Role Mapping
         const ptenRes = validatePtenForTarget(row['KODE POS'], row['Dati II'] || row.Kota || '', ptenIndex);
-        const branchNameToLook = matchedMaster.Cabang || matchedMaster['Sandi Cabang'] || matchedMaster['Nama Outlet'] || '';
-        const outletNameToLook = matchedMaster['Nama Outlet'] || '';
-        const roleRes = resolveRoleMappingForBranch(
-          branchNameToLook,
-          row['Dati II'] || row.Kota,
-          row.Kelurahan,
-          row.Kecamatan,
-          row.ALAMAT || matchedMaster.ALAMAT,
-          roleMappingList,
-          outletNameToLook,
-          matchedMaster.Provinsi || row.Provinsi,
-          resolved.wilayahName !== '-' ? resolved.wilayahName : (row.Wilayah || '-')
-        );
+
+        let finalRoleRecord = chosenRole;
+        if (!finalRoleRecord && roleMappingList.length > 0) {
+          const branchNameToLook = matchedMaster.Cabang || matchedMaster['Sandi Cabang'] || matchedMaster['Nama Outlet'] || '';
+          const outletNameToLook = matchedMaster['Nama Outlet'] || '';
+          const roleRes = resolveRoleMappingForBranch(
+            branchNameToLook,
+            row['Dati II'] || row.Kota,
+            row.Kelurahan,
+            row.Kecamatan,
+            row.ALAMAT || matchedMaster.ALAMAT,
+            roleMappingList,
+            outletNameToLook,
+            matchedMaster.Provinsi || row.Provinsi,
+            resolved.wilayahName !== '-' ? resolved.wilayahName : (row.Wilayah || '-')
+          );
+          if (roleRes) {
+            finalRoleRecord = {
+              organisasiTujuan: roleRes.organisasiRole,
+              qrsCabsal: roleRes.qrsCabsal,
+              qrsCabapv1: roleRes.qrsCabapv1,
+              qrsCabapv2: roleRes.qrsCabapv2,
+              grandTotal: roleRes.grandTotal,
+            };
+          }
+        }
+
+        const isKc = finalRoleRecord ? getUnitCategory(finalRoleRecord.organisasiTujuan) === 'KC' : false;
+        const wondr = finalRoleRecord ? getWondrRecommendation(finalRoleRecord) : null;
 
         return {
           ...row,
@@ -783,14 +813,14 @@ export const App: React.FC = () => {
           'KOTA PTEN': ptenRes.kotaPten,
           'KODE POS PTEN': ptenRes.kodePosPten,
           'CEK KODE POS + PTEN': ptenRes.statusPten,
-          organisasiRole: roleRes?.organisasiRole || row.organisasiRole,
-          tipeUnitRole: roleRes?.tipeUnitRole || row.tipeUnitRole,
-          alurWondr: roleRes?.alurWondr || row.alurWondr,
-          flowDescription: roleRes?.flowDescription || row.flowDescription,
-          roleCabsal: roleRes?.qrsCabsal ?? row.roleCabsal,
-          roleCabapv1: roleRes?.qrsCabapv1 ?? row.roleCabapv1,
-          roleCabapv2: roleRes?.qrsCabapv2 ?? row.roleCabapv2,
-          roleGrandTotal: roleRes?.grandTotal ?? row.roleGrandTotal,
+          organisasiRole: finalRoleRecord ? finalRoleRecord.organisasiTujuan : '',
+          tipeUnitRole: finalRoleRecord ? (isKc ? 'Cabang Utama (KC)' : 'Outlet (KCP)') : undefined,
+          alurWondr: wondr?.tier || '',
+          flowDescription: wondr?.desc || '',
+          roleCabsal: finalRoleRecord?.qrsCabsal,
+          roleCabapv1: finalRoleRecord?.qrsCabapv1,
+          roleCabapv2: finalRoleRecord?.qrsCabapv2,
+          roleGrandTotal: finalRoleRecord?.grandTotal,
           _matchedAt: new Date().toISOString(),
           _matchedBy: 'Operator (Approval)',
         };

@@ -68,8 +68,8 @@ interface TargetDataGridProps {
   searchTerm: string;
   onSearchChange: (search: string) => void;
   onExecuteMatching: () => void;
-  onApproveAllRecommendations: (recommendations: RecommendationResult[]) => void;
-  onApproveRecommendation: (rowNo: number | string, recommendedMaster: MasterRow) => void;
+  onApproveAllRecommendations: (recommendations: (RecommendationResult & { chosenRole?: RoleMappingRecord })[]) => void;
+  onApproveRecommendation: (rowNo: number | string, recommendedMaster: MasterRow, chosenRole?: RoleMappingRecord) => void;
   onRevertRecommendation?: (rowNo: number | string) => void;
   isProcessing: boolean;
   canExecute: boolean;
@@ -879,17 +879,17 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
   };
 
   // Setujui satu rekomendasi (Langsung update state rekomendasi lokal agar instan 0ms)
-  const handleApproveSingle = (rowNo: number | string, m: MasterRow) => {
+  const handleApproveSingle = (rowNo: number | string, m: MasterRow, chosenRole?: RoleMappingRecord) => {
     const targetNoStr = String(rowNo).trim();
     setRecommendations((prev) => prev.filter((r) => String(r.targetRow.No).trim() !== targetNoStr));
-    onApproveRecommendation(rowNo, m);
+    onApproveRecommendation(rowNo, m, chosenRole);
   };
 
   // Setujui Rekomendasi Terpilih (Batch Selected Approval - Non-blocking dengan Progress)
   const handleApproveSelected = () => {
     if (selectedRowNos.size === 0) return;
     const selectedStrSet = new Set(Array.from(selectedRowNos).map((s) => String(s).trim()));
-    const selectedRecs: RecommendationResult[] = [];
+    const selectedRecs: (RecommendationResult & { chosenRole?: RoleMappingRecord })[] = [];
     const total = selectedRowNos.size;
 
     setApprovalProgress({
@@ -903,19 +903,30 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
       const recNoStr = String(rec.targetRow.No).trim();
       if (selectedStrSet.has(recNoStr)) {
         const activeRank = activeCandidateByRow[rec.targetRow.No];
+        let targetMaster = rec.recommendedMaster;
+        let chosenScore = rec.score;
+        let chosenReason = rec.reason;
+
         if (activeRank && rec.candidates) {
           const chosen = rec.candidates.find((c) => c.rank === activeRank);
           if (chosen) {
-            selectedRecs.push({
-              ...rec,
-              recommendedMaster: chosen.master,
-              score: chosen.score,
-              reason: chosen.reason,
-            });
-            return;
+            targetMaster = chosen.master;
+            chosenScore = chosen.score;
+            chosenReason = chosen.reason;
           }
         }
-        selectedRecs.push(rec);
+
+        const topRoles = findTopRoleMatchesByLocation(targetMaster, rec.targetRow, roleMappingList || [], masterRows, 3);
+        const selRoleIdx = selectedRoleByRow[rec.targetRow.No] ?? 0;
+        const chosenRole = topRoles[selRoleIdx]?.rec;
+
+        selectedRecs.push({
+          ...rec,
+          recommendedMaster: targetMaster,
+          score: chosenScore,
+          reason: chosenReason,
+          chosenRole,
+        });
       }
     });
 
@@ -977,7 +988,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
       existingRecMap.set(String(rec.targetRow.No).trim(), rec);
     });
 
-    const allRecsToApprove: RecommendationResult[] = [];
+    const allRecsToApprove: (RecommendationResult & { chosenRole?: RoleMappingRecord })[] = [];
     const chunkSize = 400; // 400 baris per frame: 8.000 baris selesai dalam < 1.5 detik dengan animasi progress real
     let currentIndex = 0;
 
@@ -1013,19 +1024,30 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
 
         if (rec) {
           const activeRank = activeCandidateByRow[row.No];
+          let targetMaster = rec.recommendedMaster;
+          let chosenScore = rec.score;
+          let chosenReason = rec.reason;
+
           if (activeRank && rec.candidates) {
             const chosen = rec.candidates.find((c) => c.rank === activeRank);
             if (chosen) {
-              allRecsToApprove.push({
-                ...rec,
-                recommendedMaster: chosen.master,
-                score: chosen.score,
-                reason: chosen.reason,
-              });
-              continue;
+              targetMaster = chosen.master;
+              chosenScore = chosen.score;
+              chosenReason = chosen.reason;
             }
           }
-          allRecsToApprove.push(rec);
+
+          const topRoles = findTopRoleMatchesByLocation(targetMaster, row, roleMappingList || [], masterRows, 3);
+          const selRoleIdx = selectedRoleByRow[row.No] ?? 0;
+          const chosenRole = topRoles[selRoleIdx]?.rec;
+
+          allRecsToApprove.push({
+            ...rec,
+            recommendedMaster: targetMaster,
+            score: chosenScore,
+            reason: chosenReason,
+            chosenRole,
+          });
         }
       }
 
@@ -2193,7 +2215,12 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                     <button
                                       type="button"
                                       className="btn btn-outline btn-sm"
-                                      onClick={() => handleApproveSingle(r.No, m)}
+                                      onClick={() => {
+                                        const topRolesForThisMaster = findTopRoleMatchesByLocation(m, r, roleMappingList || [], masterRows, 3);
+                                        const selectedRoleIdx = selectedRoleByRow[r.No] ?? 0;
+                                        const chosenRole = topRolesForThisMaster[selectedRoleIdx]?.rec;
+                                        handleApproveSingle(r.No, m, chosenRole);
+                                      }}
                                       style={{
                                         fontSize: '0.69rem',
                                         padding: '0.16rem 0.52rem',
