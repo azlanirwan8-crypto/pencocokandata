@@ -136,7 +136,38 @@ export const App: React.FC = () => {
         }
 
         if (savedTarget && savedTarget.rows && savedTarget.rows.length > 0) {
-          setTargetRows(savedTarget.rows);
+          const activeRole = (savedRoleMapping && savedRoleMapping.length > 0) ? savedRoleMapping : DEFAULT_ROLE_MAPPING_DATA;
+          const reAlignedRows = savedTarget.rows.map((r) => {
+            const branchCand = r.Cabang || r['Sandi Cabang'] || r['Nama Outlet'] || r.Sandi || '';
+            const outletCand = r['Nama Outlet'] || '';
+            const resolved = resolveRoleMappingForBranch(
+              branchCand,
+              r['Dati II'] || r.Kota,
+              r.Kelurahan,
+              r.Kecamatan,
+              r.ALAMAT,
+              activeRole,
+              outletCand,
+              r.Provinsi,
+              r.Wilayah
+            );
+            if (resolved && (!r.organisasiRole || (resolved.matchScore >= 95 && resolved.organisasiRole !== r.organisasiRole))) {
+              return {
+                ...r,
+                organisasiRole: resolved.organisasiRole,
+                tipeUnitRole: resolved.tipeUnitRole,
+                alurWondr: resolved.alurWondr,
+                flowDescription: resolved.flowDescription,
+                roleCabsal: resolved.qrsCabsal ?? r.roleCabsal,
+                roleCabapv1: resolved.qrsCabapv1 ?? r.roleCabapv1,
+                roleCabapv2: resolved.qrsCabapv2 ?? r.roleCabapv2,
+                roleGrandTotal: resolved.grandTotal ?? r.roleGrandTotal,
+              };
+            }
+            return r;
+          });
+
+          setTargetRows(reAlignedRows);
           setTargetFileName(savedTarget.fileName || '');
           setInitialTargetCount(savedTarget.initialCount || savedTarget.rows.length);
           setMatchedDone(savedTarget.matchedDone || false);
@@ -206,11 +237,42 @@ export const App: React.FC = () => {
             // Jika data lokal IndexedDB memiliki data match lebih banyak (baru disetujui),
             // pertahankan data lokal dan langsung dorong (push) pembaruan tersebut ke Neon DB!
             if (neonMatchedCount > localMatchedCount) {
-              setTargetRows(neonRows);
+              const activeRole = roleMappingList.length > 0 ? roleMappingList : DEFAULT_ROLE_MAPPING_DATA;
+              const reAlignedNeonRows = neonRows.map((r) => {
+                const branchCand = r.Cabang || r['Sandi Cabang'] || r['Nama Outlet'] || r.Sandi || '';
+                const outletCand = r['Nama Outlet'] || '';
+                const resolved = resolveRoleMappingForBranch(
+                  branchCand,
+                  r['Dati II'] || r.Kota,
+                  r.Kelurahan,
+                  r.Kecamatan,
+                  r.ALAMAT,
+                  activeRole,
+                  outletCand,
+                  r.Provinsi,
+                  r.Wilayah
+                );
+                if (resolved && (!r.organisasiRole || (resolved.matchScore >= 95 && resolved.organisasiRole !== r.organisasiRole))) {
+                  return {
+                    ...r,
+                    organisasiRole: resolved.organisasiRole,
+                    tipeUnitRole: resolved.tipeUnitRole,
+                    alurWondr: resolved.alurWondr,
+                    flowDescription: resolved.flowDescription,
+                    roleCabsal: resolved.qrsCabsal ?? r.roleCabsal,
+                    roleCabapv1: resolved.qrsCabapv1 ?? r.roleCabapv1,
+                    roleCabapv2: resolved.qrsCabapv2 ?? r.roleCabapv2,
+                    roleGrandTotal: resolved.grandTotal ?? r.roleGrandTotal,
+                  };
+                }
+                return r;
+              });
+
+              setTargetRows(reAlignedNeonRows);
               setTargetFileName(neonTarget.value.fileName || '');
               setInitialTargetCount(neonTarget.value.initialCount || neonRows.length);
               setMatchedDone(neonTarget.value.matchedDone || false);
-              setItem('target_data', neonTarget.value).catch(() => {});
+              setItem('target_data', { ...neonTarget.value, rows: reAlignedNeonRows }).catch(() => {});
             } else if (localTarget && localTarget.rows && localTarget.rows.length > 0) {
               // Data lokal lebih mutakhir -> sinkronkan data lokal ke Neon Postgres
               saveTargetToNeon(localTarget).catch(() => {});
@@ -576,7 +638,9 @@ export const App: React.FC = () => {
             r.Kecamatan,
             r.ALAMAT,
             roleMappingList,
-            outletCandidate
+            outletCandidate,
+            r.Provinsi,
+            r.Wilayah
           );
 
           return {
@@ -610,7 +674,9 @@ export const App: React.FC = () => {
             r.Kecamatan,
             r.ALAMAT,
             roleMappingList,
-            outletCandidate
+            outletCandidate,
+            r.Provinsi,
+            r.Wilayah
           );
 
           return {
@@ -746,7 +812,9 @@ export const App: React.FC = () => {
             row.Kecamatan,
             row.ALAMAT || matchedMaster.ALAMAT,
             roleMappingList,
-            outletNameToLook
+            outletNameToLook,
+            matchedMaster.Provinsi || row.Provinsi,
+            resolved.wilayahName !== '-' ? resolved.wilayahName : (row.Wilayah || '-')
           );
 
           updated[i] = {
@@ -819,7 +887,9 @@ export const App: React.FC = () => {
           row.Kecamatan,
           row.ALAMAT || matchedMaster.ALAMAT,
           roleMappingList,
-          outletNameToLook
+          outletNameToLook,
+          matchedMaster.Provinsi || row.Provinsi,
+          resolved.wilayahName !== '-' ? resolved.wilayahName : (row.Wilayah || '-')
         );
 
         return {

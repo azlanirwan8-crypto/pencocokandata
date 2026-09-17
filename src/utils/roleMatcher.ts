@@ -1,6 +1,6 @@
 import type { RoleMappingRecord } from '../components/RoleMapping/RoleMappingManager';
 import { getUnitCategory, getWondrRecommendation } from '../components/RoleMapping/RoleMappingManager';
-import { cleanDati, cleanText } from './normalizer';
+import { cleanDati, cleanText, textSimilarityScore } from './normalizer';
 
 /**
  * Standar Wilayah Administratif Pulau di Indonesia berdasarkan Provinsi/Teks
@@ -208,17 +208,21 @@ export function resolveRoleMappingForBranch(
       const parentNoSpace = noSpace(parentClean);
 
       // Both Parent and Outlet match perfectly (termasuk alias d/h seperti PADANG + AHMAD YANI)
+      // Sub-branch match harus spesifik: alias outlet/cabang harus benar-benar menyebut nama sub-branch (misal: outlet mengandung "PASAR KABANJAHE" atau "AHMAD YANI")
+      // BUKAN kebalikannya di mana subPart yang mengandung nama kota induk (misal subPart "PASAR KABANJAHE" mengandung "KABANJAHE")
       const parentMatched = branchAliases.some(b => flexContains(parentClean, b)) || outletAliases.some(o => flexContains(parentClean, o));
-      const subMatched = outletAliases.some(o => flexContains(subPartClean, o) || flexMatch(subPartClean, o) || (subPartNoSpace.length >= 3 && subPartNoSpace === noSpace(o))) ||
-                         branchAliases.some(b => flexContains(subPartClean, b) || flexMatch(subPartClean, b) || (subPartNoSpace.length >= 3 && subPartNoSpace === noSpace(b)));
+      const subMatchedExact = outletAliases.some(o => o === subPartClean || (subPartNoSpace.length >= 3 && subPartNoSpace === noSpace(o))) ||
+                              branchAliases.some(b => b === subPartClean || (subPartNoSpace.length >= 3 && subPartNoSpace === noSpace(b)));
+      const subMatchedSpecific = outletAliases.some(o => o.includes(subPartClean) || (subPartNoSpace.length >= 3 && noSpace(o).includes(subPartNoSpace))) ||
+                                 branchAliases.some(b => b.includes(subPartClean) || (subPartNoSpace.length >= 3 && noSpace(b).includes(subPartNoSpace)));
 
-      if (parentMatched && subMatched) {
+      if (parentMatched && (subMatchedExact || subMatchedSpecific)) {
         score = 110; // Prioritas tertinggi mutlak: Cabang Induk DAN Sub-Branch/Alias sama persis!
       }
 
-      // Sub-branch vs outlet spesifik (termasuk alias d/h)
+      // Sub-branch vs outlet spesifik (termasuk alias d/h dan fuzzy similarity >= 85%)
       if (score < 105 && subPartClean.length >= 3) {
-        const anyOutletSub = outletAliases.some(o => flexMatch(subPartClean, o) || (subPartNoSpace.length >= 3 && subPartNoSpace === noSpace(o)));
+        const anyOutletSub = outletAliases.some(o => o === subPartClean || o.includes(subPartClean) || (subPartNoSpace.length >= 3 && (noSpace(o) === subPartNoSpace || noSpace(o).includes(subPartNoSpace))) || textSimilarityScore(o, subPartClean) >= 0.85);
         if (anyOutletSub) {
           score = Math.max(score, 102);
         }
@@ -226,7 +230,7 @@ export function resolveRoleMappingForBranch(
 
       // Sub-branch vs branch
       if (score < 98 && subPartClean.length >= 3) {
-        const anyBranchSub = branchAliases.some(b => flexMatch(subPartClean, b) || (subPartNoSpace.length >= 3 && subPartNoSpace === noSpace(b)));
+        const anyBranchSub = branchAliases.some(b => b === subPartClean || b.includes(subPartClean) || (subPartNoSpace.length >= 3 && (noSpace(b) === subPartNoSpace || noSpace(b).includes(subPartNoSpace))) || textSimilarityScore(b, subPartClean) >= 0.85);
         if (anyBranchSub) {
           score = Math.max(score, 98);
         }
@@ -640,11 +644,20 @@ export function auditRoleMasterConsistency(row: {
       (cleanCabangNoSpace.length >= 3 && (cleanRoleOrgNoSpace.includes(cleanCabangNoSpace) || cleanCabangNoSpace.includes(cleanRoleOrgNoSpace)))
     ));
 
+  // E. Fuzzy / Similarity Match (toleransi typo/perbedaan ejaan >= 85%, misal: SANGATA vs SANGATTA)
+  const isFuzzySimilarityMatch =
+    (roleSubClean && outletAliases.some(o => textSimilarityScore(o, roleSubClean) >= 0.85)) ||
+    outletAliases.some(o => textSimilarityScore(o, cleanRoleOrg) >= 0.85) ||
+    (cleanCabangNoCode && textSimilarityScore(cleanCabangNoCode, cleanRoleOrg) >= 0.85) ||
+    (cleanCabangNoCode && roleParentClean && textSimilarityScore(cleanCabangNoCode, roleParentClean) >= 0.85);
+
   let nameStatus: 'exact' | 'similar' | 'parent_match' | 'different' | 'none' = 'different';
 
   if (isExactOrgMatch || (cleanOutlet && cleanCabang && roleParentClean.includes(cleanCabang) && roleSubClean.includes(cleanOutlet))) {
     nameStatus = 'exact';
   } else if (isSubMatch) {
+    nameStatus = 'similar';
+  } else if (isFuzzySimilarityMatch) {
     nameStatus = 'similar';
   } else if (isParentMatch) {
     nameStatus = 'parent_match';

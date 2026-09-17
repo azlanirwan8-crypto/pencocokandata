@@ -35,7 +35,7 @@ import { ProximityGuideModal } from './ProximityGuideModal';
 import { CandidateDetailModal } from './CandidateDetailModal';
 import { DEFAULT_PTEN_DATA } from '../PTENData/defaultPtenData';
 import type { PTENRecord } from '../PTENData/PTENManager';
-import { formatWilayahName, extractWilayahFromBranchCode, cleanKelurahan, cleanKecamatan, cleanText } from '../../utils/normalizer';
+import { formatWilayahName, extractWilayahFromBranchCode, cleanKelurahan, cleanKecamatan, cleanText, textSimilarityScore } from '../../utils/normalizer';
 
 export interface ColumnOption {
   key: string;
@@ -340,16 +340,37 @@ export function findTopRoleMatchesByLocation(
     let nameMatchScore = 0;
 
     // 1. Kecocokan spesifik Outlet / Sub-Branch (termasuk alias d/h bekas nama seperti JL A YANI)
-    // Ini adalah identitas spesifik unit fisik, berikan prioritas tertinggi (100 - 110)
-    if (subPartClean && candOutletAliases.some(a => a === subPartClean || a.includes(subPartClean) || subPartClean.includes(a))) {
+    // Alias outlet/cabang harus benar-benar menyebut nama sub-branch (misal candOutlet mengandung "PASAR KABANJAHE" atau "AHMAD YANI")
+    // BUKAN kebalikannya di mana subPart yang mengandung nama kota cabang induk (misal subPart "PASAR KABANJAHE" mengandung "KABANJAHE")
+    const subPartNoSpace = subPartClean ? subPartClean.replace(/\s+/g, '') : '';
+    const isExactSubPart = subPartClean && (
+      candOutletAliases.some(a => a === subPartClean || (subPartNoSpace.length >= 3 && a.replace(/\s+/g, '') === subPartNoSpace)) ||
+      candCabangAliases.some(a => a === subPartClean || (subPartNoSpace.length >= 3 && a.replace(/\s+/g, '') === subPartNoSpace))
+    );
+    const isSpecificSubPart = subPartClean && (
+      candOutletAliases.some(a => a.includes(subPartClean) || (subPartNoSpace.length >= 3 && a.replace(/\s+/g, '').includes(subPartNoSpace))) ||
+      candCabangAliases.some(a => a.includes(subPartClean) || (subPartNoSpace.length >= 3 && a.replace(/\s+/g, '').includes(subPartNoSpace)))
+    );
+
+    const isFuzzySubPart = subPartClean && (
+      candOutletAliases.some(a => textSimilarityScore(a, subPartClean) >= 0.85) ||
+      candCabangAliases.some(a => textSimilarityScore(a, subPartClean) >= 0.85)
+    );
+    const isFuzzyOrgMatch = candOutletAliases.some(a => textSimilarityScore(a, orgClean) >= 0.85);
+
+    if (isExactSubPart) {
       nameMatchScore = 110;
-    } else if (candOutletAliases.some(a => a === orgClean)) {
+    } else if (isSpecificSubPart) {
       nameMatchScore = 105;
-    } else if (subPartClean && candOutletAliases.some(a => a.length >= 4 && (orgClean.includes(a) || a.includes(orgClean)))) {
+    } else if (candOutletAliases.some(a => a === orgClean)) {
       nameMatchScore = 100;
+    } else if (isFuzzySubPart) {
+      nameMatchScore = 98;
+    } else if (isFuzzyOrgMatch) {
+      nameMatchScore = 95;
     } else if (candCabangAliases.some(a => a === orgClean || (parentClean && a === parentClean))) {
-      // 2. Kecocokan Cabang Induk / Parent saja (contoh 'PADANG BRANCH OFFICE')
-      nameMatchScore = 80;
+      // 2. Kecocokan Cabang Induk / Parent (contoh 'PADANG BRANCH OFFICE' atau 'KABANJAHE BRANCH OFFICE')
+      nameMatchScore = 85;
     } else if (candOutletAliases.some(a => a.length >= 4 && orgClean.includes(a))) {
       nameMatchScore = 70;
     }
@@ -368,22 +389,45 @@ export function findTopRoleMatchesByLocation(
 
   // Prioritas Pengurutan:
   // 1. Kecocokan Nama Spesifik Unit / Alias d/h (nameMatchScore >= 90) selalu nomor 1!
-  // 2. Jarak fisik terdekat sebagai penentu utama
-  // 3. Kelengkapan role (M=1, C=1, S=1)
+  // 2. Jika jarak sama / hampir sama (selisih <= 2 km) atau salah satu KC: utamakan Cabang Utama (KC) daripada KCP!
+  // 3. Jarak fisik terdekat
+  // 4. Kelengkapan role (M=1, C=1, S=1)
   scored.sort((a, b) => {
     // Top priority: direct name/alias match
     if (a.nameMatchScore !== b.nameMatchScore) {
       return b.nameMatchScore - a.nameMatchScore;
     }
 
-    // Jika salah satu memiliki jarak valid
+    const aIsKc = getUnitCategory(a.rec.organisasiTujuan) === 'KC';
+    const bIsKc = getUnitCategory(b.rec.organisasiTujuan) === 'KC';
+
+    // Jika kedua kandidat memiliki jarak valid
     if (a.distanceKm !== null && b.distanceKm !== null) {
       const distDiff = a.distanceKm - b.distanceKm;
-      // Jika salah satu jauh lebih dekat (> 5 km), pilih yang lebih dekat
-      if (Math.abs(distDiff) > 5) {
+
+      // Jika selisih jarak <= 2 km (misal sama-sama 0,8 km):
+      // ATURAN EKSPLISIT: Ambil KC jika jaraknya sama/hampir sama!
+      if (Math.abs(distDiff) <= 2) {
+        if (aIsKc !== bIsKc) {
+          return aIsKc ? -1 : 1;
+        }
+        if (a.isFullRole !== b.isFullRole) {
+          return a.isFullRole ? -1 : 1;
+        }
         return distDiff;
       }
-      // Jika jarak sangat mirip, utamakan yang role lengkap (KC)
+
+      // Jika salah satu jauh lebih dekat (> 2 km), pilih yang lebih dekat
+      if (Math.abs(distDiff) > 2) {
+        return distDiff;
+      }
+
+      // Utamakan KC jika tipe beda
+      if (aIsKc !== bIsKc) {
+        return aIsKc ? -1 : 1;
+      }
+
+      // Utamakan yang role lengkap (KC)
       if (a.isFullRole !== b.isFullRole) {
         return a.isFullRole ? -1 : 1;
       }
@@ -392,6 +436,10 @@ export function findTopRoleMatchesByLocation(
 
     if (a.distanceKm === null && b.distanceKm !== null) return 1;
     if (b.distanceKm === null && a.distanceKm !== null) return -1;
+
+    if (aIsKc !== bIsKc) {
+      return aIsKc ? -1 : 1;
+    }
 
     if (a.isFullRole !== b.isFullRole) {
       return a.isFullRole ? -1 : 1;
@@ -1002,17 +1050,20 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           stage: 'Selesai! Memperbarui tampilan Data Match...',
         });
 
+        // 1. Langsung tutup modal dan pindah tab ke 'matched' seketika
         setTimeout(() => {
-          onApproveAllRecommendations(allRecsToApprove);
+          setApprovalProgress(null);
           setSelectedRowNos(new Set());
           setRecommendations([]);
           setIsComputingRecs(false);
-          setApprovalProgress(null);
-
-          // 4. Pindah langsung ke Tab 3 (Data Match)
           setCheckerTab('matched');
           setPage(1);
-        }, 250);
+
+          // 2. Eksekusi callback update targetRows pada tick berikutnya
+          setTimeout(() => {
+            onApproveAllRecommendations(allRecsToApprove);
+          }, 30);
+        }, 500);
       }
     };
 
@@ -2771,6 +2822,43 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                 paginatedRows.map((r) => {
                   const isMatched = r._isMatched ?? (r.Sandi !== '' || r['Sandi Cabang'] !== '');
 
+                  // Resolusi Role Mapping Dinamis & Real-time:
+                  // Selalu evaluasi apakah ada mapping spesifik (sub-branch/alias) yang lebih baik
+                  // daripada string lama yang tersimpan di memori/DB.
+                  const activeRoleList = (roleMappingList && roleMappingList.length > 0) ? roleMappingList : DEFAULT_ROLE_MAPPING_DATA;
+                  let effectiveRoleOrg = r.organisasiRole || '';
+                  let effectiveRoleType = r.tipeUnitRole || '';
+                  let effectiveAlur = r.alurWondr || '';
+
+                  if (activeRoleList.length > 0) {
+                    const resolved = resolveRoleMappingForBranch(
+                      r.Cabang || r['Sandi Cabang'] || r['Nama Outlet'] || r.Sandi || '',
+                      r['Dati II'] || r.Kota,
+                      r.Kelurahan,
+                      r.Kecamatan,
+                      r.ALAMAT,
+                      activeRoleList,
+                      r['Nama Outlet'] || '',
+                      r.Provinsi,
+                      r.Wilayah
+                    );
+                    if (resolved) {
+                      // Gunakan resolved jika roleOrg masih kosong, ATAU jika roleOrg lama bertipe KC sementara resolved menemukan sub-branch spesifik yang lebih akurat
+                      if (!effectiveRoleOrg || (resolved.matchScore >= 95 && resolved.organisasiRole !== effectiveRoleOrg)) {
+                        effectiveRoleOrg = resolved.organisasiRole;
+                        effectiveRoleType = resolved.tipeUnitRole;
+                        effectiveAlur = resolved.alurWondr;
+                      }
+                    }
+                  }
+
+                  const rowWithEffectiveRole: TargetRow = {
+                    ...r,
+                    organisasiRole: effectiveRoleOrg,
+                    tipeUnitRole: effectiveRoleType,
+                    alurWondr: effectiveAlur,
+                  };
+
                   return (
                     <tr
                       key={String(r.No)}
@@ -2930,7 +3018,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                           {(() => {
                             const val = r['Nama Outlet'];
                             if (!val) return <span style={{ color: '#878a99' }}>-</span>;
-                            const audit = auditRoleMasterConsistency(r);
+                            const audit = auditRoleMasterConsistency(rowWithEffectiveRole);
                             if (audit.hasRole && !audit.isNameMatched) {
                               return (
                                 <div style={{ display: 'inline-flex', flexDirection: 'column', gap: '0.15rem' }}>
@@ -2948,7 +3036,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                       whiteSpace: 'nowrap',
                                       fontWeight: 600,
                                     }}
-                                    title={`Beda dengan Role: ${r.organisasiRole || '-'}`}
+                                    title={`Beda dengan Role: ${rowWithEffectiveRole.organisasiRole || '-'}`}
                                   >
                                     ⚠️ Beda dr Role
                                   </span>
@@ -2964,7 +3052,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                           {(() => {
                             const val = r['Status Outlet'];
                             if (!val) return <span style={{ color: '#878a99' }}>-</span>;
-                            const audit = auditRoleMasterConsistency(r);
+                            const audit = auditRoleMasterConsistency(rowWithEffectiveRole);
                             if (audit.hasRole && !audit.isTypeMatched) {
                               return (
                                 <div style={{ display: 'inline-flex', flexDirection: 'column', gap: '0.15rem', alignItems: 'center' }}>
@@ -2990,7 +3078,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                         </td>
                       )}
                       {!hiddenCols.has('ALAMAT') && (
-                        <td style={{ minWidth: '180px', maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', verticalAlign: 'middle' }} title={r.ALAMAT}>
+                        <td style={{ minWidth: '240px', maxWidth: '380px', whiteSpace: 'normal', wordBreak: 'break-word', verticalAlign: 'middle', lineHeight: 1.4 }} title={r.ALAMAT}>
                           {r.ALAMAT || <span style={{ color: '#878a99' }}>-</span>}
                         </td>
                       )}
@@ -3062,41 +3150,14 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                       {!hiddenCols.has('RoleMapping') && (
                         <td style={{ padding: '0.4rem 0.55rem', verticalAlign: 'middle', textAlign: 'center' }}>
                           {(() => {
-                            const activeRoleList = (roleMappingList && roleMappingList.length > 0) ? roleMappingList : DEFAULT_ROLE_MAPPING_DATA;
-                            let effectiveRoleOrg = r.organisasiRole || '';
-                            let effectiveRoleType = r.tipeUnitRole || '';
-                            let effectiveAlur = r.alurWondr || '';
-
-                            if (!effectiveRoleOrg && activeRoleList.length > 0) {
-                              const resolved = resolveRoleMappingForBranch(
-                                r.Cabang || r['Sandi Cabang'] || r['Nama Outlet'] || r.Sandi || '',
-                                r['Dati II'] || r.Kota,
-                                r.Kelurahan,
-                                r.Kecamatan,
-                                r.ALAMAT,
-                                activeRoleList,
-                                r['Nama Outlet'] || '',
-                                r.Provinsi,
-                                r.Wilayah
-                              );
-                              if (resolved) {
-                                effectiveRoleOrg = resolved.organisasiRole;
-                                effectiveRoleType = resolved.tipeUnitRole;
-                                effectiveAlur = resolved.alurWondr;
-                              }
-                            }
+                            const effectiveRoleOrg = rowWithEffectiveRole.organisasiRole || '';
+                            const effectiveRoleType = rowWithEffectiveRole.tipeUnitRole || '';
 
                             if (!effectiveRoleOrg && !effectiveRoleType) {
                               return <span style={{ color: '#adb5bd', fontSize: '0.72rem' }}>-</span>;
                             }
 
-                            const tempRow = {
-                              ...r,
-                              organisasiRole: effectiveRoleOrg,
-                              tipeUnitRole: effectiveRoleType,
-                              alurWondr: effectiveAlur,
-                            };
-                            const audit = auditRoleMasterConsistency(tempRow);
+                            const audit = auditRoleMasterConsistency(rowWithEffectiveRole);
 
                             return (
                               <div
@@ -3579,6 +3640,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                 borderRadius: '6px',
                 border: '1px solid #e2e8f0',
                 fontWeight: 500,
+                marginBottom: approvalProgress.percent === 100 ? '0.75rem' : '0',
               }}
             >
               <span>Diproses:</span>
@@ -3586,6 +3648,28 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                 {approvalProgress.current.toLocaleString('id-ID')} / {approvalProgress.total.toLocaleString('id-ID')} Baris
               </strong>
             </div>
+
+            {/* Tombol Tutup Cadangan jika 100% */}
+            {approvalProgress.percent === 100 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setApprovalProgress(null);
+                  setCheckerTab('matched');
+                  setPage(1);
+                }}
+                className="btn btn-primary btn-sm"
+                style={{
+                  fontSize: '0.8rem',
+                  padding: '0.4rem 1.25rem',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  marginTop: '0.5rem',
+                }}
+              >
+                Lihat Data Match Sekarang
+              </button>
+            )}
           </div>
         </div>
       )}
