@@ -21,11 +21,13 @@ import {
   ChevronsRight,
   Copy,
   Check,
+  Filter,
+  Info,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { getItem, setItem } from '../../utils/storage';
 import { DEFAULT_KODEPOS_DATA, type KodePosRecord } from './defaultKodePosData';
-import { saveKodePosToNeon } from '../../utils/neonSync';
+import { saveKodePosToNeon, loadKodePosFromNeon } from '../../utils/neonSync';
 
 interface KodePosManagerProps {
   onKodePosCountChange?: (count: number) => void;
@@ -34,13 +36,19 @@ interface KodePosManagerProps {
 export const KodePosManager: React.FC<KodePosManagerProps> = ({
   onKodePosCountChange,
 }) => {
+  const [activeSubTab, setActiveSubTab] = useState<'list' | 'lookup'>('list');
   const [kodePosList, setKodePosList] = useState<KodePosRecord[]>(DEFAULT_KODEPOS_DATA);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedProvinsi, setSelectedProvinsi] = useState<string>('ALL');
   const [selectedKota, setSelectedKota] = useState<string>('ALL');
+  const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
+  const [showBanner, setShowBanner] = useState<boolean>(true);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Quick lookup state
+  const [lookupQuery, setLookupQuery] = useState<string>('');
 
   // Pagination states (Default 10)
   const [page, setPage] = useState<number>(1);
@@ -70,14 +78,28 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     const loadSaved = async () => {
       try {
         const saved = await getItem<KodePosRecord[]>('kodepos_master_data');
-        if (saved && Array.isArray(saved) && saved.length > 0 && isMounted) {
+        if (saved && Array.isArray(saved) && saved.length > 0) {
+          if (!isMounted) return;
           setKodePosList(saved);
           onKodePosCountChange?.(saved.length);
-        } else if (isMounted) {
-          setKodePosList(DEFAULT_KODEPOS_DATA);
-          onKodePosCountChange?.(DEFAULT_KODEPOS_DATA.length);
-          setItem('kodepos_master_data', DEFAULT_KODEPOS_DATA);
+          return;
         }
+
+        // IndexedDB kosong — coba pulihkan dari Neon Postgres
+        const remote = await loadKodePosFromNeon();
+        if (remote && Array.isArray(remote) && remote.length > 0) {
+          if (!isMounted) return;
+          const records = remote as KodePosRecord[];
+          setKodePosList(records);
+          onKodePosCountChange?.(records.length);
+          setItem('kodepos_master_data', records);
+          return;
+        }
+
+        if (!isMounted) return;
+        setKodePosList(DEFAULT_KODEPOS_DATA);
+        onKodePosCountChange?.(DEFAULT_KODEPOS_DATA.length);
+        setItem('kodepos_master_data', DEFAULT_KODEPOS_DATA);
       } catch (err) {
         console.warn('Error loading Kode Pos data:', err);
       }
@@ -151,35 +173,46 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     return Array.from(setK).sort((a, b) => a.localeCompare(b));
   }, [kodePosList, selectedProvinsi]);
 
-  // Filtered List with Memoization for instant search
-  const filteredList = useMemo(() => {
+  // Filtered index list — track original indices so the table can edit/delete
+  // without calling kodePosList.indexOf per row (O(n^2) freeze on large data).
+  const filteredIdx = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
     const provFilter = selectedProvinsi.toUpperCase();
     const kotaFilter = selectedKota.toUpperCase();
+    const statusFilter = selectedStatus.toUpperCase();
 
-    return kodePosList.filter((item) => {
+    const result: number[] = [];
+    for (let i = 0; i < kodePosList.length; i++) {
+      const item = kodePosList[i];
       if (selectedProvinsi !== 'ALL' && item.provinsi?.trim().toUpperCase() !== provFilter) {
-        return false;
+        continue;
       }
       if (selectedKota !== 'ALL' && item.kabupatenKota?.trim().toUpperCase() !== kotaFilter) {
-        return false;
+        continue;
       }
-      if (!q) return true;
-
-      return (
+      if (selectedStatus !== 'ALL' && (item.status || 'AKTIF').toUpperCase() !== statusFilter) {
+        continue;
+      }
+      if (
+        !q ||
         item.kodePos?.toLowerCase().includes(q) ||
         item.kelurahan?.toLowerCase().includes(q) ||
         item.kecamatan?.toLowerCase().includes(q) ||
         item.kabupatenKota?.toLowerCase().includes(q) ||
         item.provinsi?.toLowerCase().includes(q)
-      );
-    });
-  }, [kodePosList, searchTerm, selectedProvinsi, selectedKota]);
+      ) {
+        result.push(i);
+      }
+    }
+    return result;
+  }, [kodePosList, searchTerm, selectedProvinsi, selectedKota, selectedStatus]);
+
+  const filteredList = useMemo(() => filteredIdx.map((i) => kodePosList[i]), [filteredIdx, kodePosList]);
 
   // Reset page when filter changes
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, selectedProvinsi, selectedKota]);
+  }, [searchTerm, selectedProvinsi, selectedKota, selectedStatus]);
 
   // Pagination calculation
   const totalPages = pageSize === 'ALL' ? 1 : Math.max(1, Math.ceil(filteredList.length / pageSize));
@@ -188,10 +221,46 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
   }, [totalPages, page]);
 
   const paginatedList = useMemo(() => {
-    if (pageSize === 'ALL') return filteredList;
-    const start = (page - 1) * pageSize;
-    return filteredList.slice(start, start + pageSize);
-  }, [filteredList, page, pageSize]);
+    const idxSlice =
+      pageSize === 'ALL'
+        ? filteredIdx
+        : filteredIdx.slice((page - 1) * (pageSize as number), (page - 1) * (pageSize as number) + (pageSize as number));
+    return idxSlice.map((i) => ({ rec: kodePosList[i], idx: i }));
+  }, [filteredIdx, kodePosList, page, pageSize]);
+
+  // Compact sliding pagination helper matching RoleMapping & PTEN
+  const getPaginationRange = (curr: number, total: number): (number | string)[] => {
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    const pages: (number | string)[] = [1];
+    let start = Math.max(2, curr - 1);
+    let end = Math.min(total - 1, curr + 1);
+    if (curr <= 3) {
+      start = 2;
+      end = 4;
+    } else if (curr >= total - 2) {
+      start = total - 3;
+      end = total - 1;
+    }
+    if (start > 2) pages.push('ell-start');
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (end < total - 1) pages.push('ell-end');
+    pages.push(total);
+    return pages;
+  };
+
+  // Quick lookup search results
+  const lookupResults = useMemo(() => {
+    if (!lookupQuery.trim()) return [];
+    const q = lookupQuery.trim().toLowerCase();
+    return kodePosList.filter(
+      (item) =>
+        item.kodePos?.toLowerCase().includes(q) ||
+        item.kelurahan?.toLowerCase().includes(q) ||
+        item.kecamatan?.toLowerCase().includes(q) ||
+        item.kabupatenKota?.toLowerCase().includes(q) ||
+        item.provinsi?.toLowerCase().includes(q)
+    ).slice(0, 50);
+  }, [kodePosList, lookupQuery]);
 
   // Handle Create / Update Form Submit
   const handleFormSubmit = (e: React.FormEvent) => {
@@ -250,11 +319,15 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     setKodePosList(DEFAULT_KODEPOS_DATA);
     handleSaveData(DEFAULT_KODEPOS_DATA);
     setShowResetConfirm(false);
-    setSuccessMsg(`Berhasil mereset data Kode Pos ke data standar bawaan (${DEFAULT_KODEPOS_DATA.length} data)!`);
+    setSelectedProvinsi('ALL');
+    setSelectedKota('ALL');
+    setSelectedStatus('ALL');
+    setSearchTerm('');
+    setSuccessMsg('Data Kode Pos berhasil dikembalikan ke data standar bawaan!');
     setTimeout(() => setSuccessMsg(null), 4000);
   };
 
-  // Excel Import
+  // Import from Excel
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -269,90 +342,97 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
         const rawJson: any[] = XLSX.utils.sheet_to_json(ws);
 
         if (!rawJson || rawJson.length === 0) {
-          alert('Berkas Excel kosong atau tidak terbaca.');
+          setErrorMsg('File Excel kosong atau format tidak sesuai.');
           return;
         }
 
-        const imported: KodePosRecord[] = rawJson.map((row: any) => {
-          const kp = String(
+        const imported: KodePosRecord[] = [];
+        const seenKeys = new Set<string>();
+
+        rawJson.forEach((row) => {
+          const kpRaw = String(
             row['KODE POS'] ||
             row['KODEPOS'] ||
             row['Kode Pos'] ||
-            row['Kode_Pos'] ||
-            row['Postal Code'] ||
+            row['kodepos'] ||
+            row['kode_pos'] ||
             row['POSTAL CODE'] ||
-            row['Zip'] ||
-            row['ZIP'] ||
+            row['Postal Code'] ||
             ''
           ).trim();
 
-          const kel = String(
+          const cleanKp = kpRaw.replace(/\D/g, '').padStart(5, '0').slice(-5);
+
+          const kelurahan = String(
             row['KELURAHAN'] ||
             row['Kelurahan'] ||
             row['DESA'] ||
             row['Desa'] ||
-            row['Kelurahan / Desa'] ||
+            row['KELURAHAN / DESA'] ||
             row['Kelurahan/Desa'] ||
+            row['kelurahan'] ||
             ''
           ).trim();
 
-          const kec = String(
+          const kecamatan = String(
             row['KECAMATAN'] ||
             row['Kecamatan'] ||
-            row['Distrik'] ||
-            row['DISTRIK'] ||
+            row['kecamatan'] ||
             ''
           ).trim();
 
           const kabKota = String(
-            row['KOTA'] ||
-            row['Kota'] ||
+            row['KABUPATEN/KOTA'] ||
+            row['KABUPATEN / KOTA'] ||
             row['KABUPATEN'] ||
             row['Kabupaten'] ||
-            row['KABUPATEN/KOTA'] ||
-            row['Kabupaten/Kota'] ||
+            row['KOTA'] ||
+            row['Kota'] ||
+            row['Kota/Kabupaten'] ||
             row['DATI II'] ||
             row['Dati II'] ||
-            row['Kota/Kab'] ||
-            row['KOTA / KABUPATEN'] ||
             ''
           ).trim();
 
-          const prov = String(
+          const provinsi = String(
             row['PROVINSI'] ||
             row['Provinsi'] ||
-            row['PROPINSI'] ||
-            row['Propinsi'] ||
-            row['DATI I'] ||
-            row['Dati I'] ||
+            row['provinsi'] ||
             ''
           ).trim();
 
-          const rawStatus = String(row['STATUS'] || row['Status'] || 'AKTIF').toUpperCase();
-          const status: 'AKTIF' | 'NON-AKTIF' = rawStatus.includes('NON') ? 'NON-AKTIF' : 'AKTIF';
+          const statusRaw = String(row['STATUS'] || row['Status'] || 'AKTIF').trim().toUpperCase();
+          const status: 'AKTIF' | 'NON-AKTIF' = statusRaw === 'NON-AKTIF' || statusRaw === 'NON AKTIF' ? 'NON-AKTIF' : 'AKTIF';
 
-          return {
-            kodePos: kp,
-            kelurahan: kel,
-            kecamatan: kec,
-            kabupatenKota: kabKota,
-            provinsi: prov,
-            status,
-          };
-        }).filter((item) => Boolean(item.kodePos));
+          if (cleanKp && (kelurahan || kecamatan || kabKota)) {
+            const key = `${cleanKp}-${kelurahan}-${kecamatan}-${kabKota}`;
+            if (!seenKeys.has(key)) {
+              seenKeys.add(key);
+              imported.push({
+                kodePos: cleanKp,
+                kelurahan,
+                kecamatan,
+                kabupatenKota: kabKota,
+                provinsi,
+                status,
+              });
+            }
+          }
+        });
 
         if (imported.length === 0) {
-          alert('Tidak ada baris data dengan kolom KODE POS yang valid.');
+          setErrorMsg('Tidak ditemukan kolom Kode Pos yang valid dalam berkas Excel!');
           return;
         }
 
         setKodePosList(imported);
         handleSaveData(imported);
+        setSuccessMsg(`Berhasil mengimpor ${imported.length.toLocaleString('id-ID')} data Kode Pos dari Excel!`);
+        setTimeout(() => setSuccessMsg(null), 5000);
         if (fileInputRef.current) fileInputRef.current.value = '';
-        setSuccessMsg(`Berhasil mengimpor ${imported.length.toLocaleString('id-ID')} baris data Kode Pos!`);
-        setTimeout(() => setSuccessMsg(null), 4000);
       } catch (err: any) {
-        alert('Gagal membaca format file Excel: ' + err.message);
+        setErrorMsg(`Gagal memproses file Excel: ${err.message}`);
+        setTimeout(() => setErrorMsg(null), 5000);
       }
     };
     reader.readAsBinaryString(file);
@@ -370,7 +450,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
         'STATUS': 'AKTIF',
       },
       {
-        'KODE POS': '40111',
+        'KODE POS': '40115',
         'KELURAHAN': 'Braga',
         'KECAMATAN': 'Sumur Bandung',
         'KABUPATEN/KOTA': 'Kota Bandung',
@@ -420,109 +500,144 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      {/* 1. Header Card with Actions */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '2rem' }}>
+      {/* 1. Top Header Card matching Wilayah, PTEN & Role Mapping */}
       <div
-        className="glass-card"
         style={{
-          padding: '0.85rem 1.25rem',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
-          gap: '0.75rem',
+          gap: '0.85rem',
           background: '#ffffff',
+          padding: '1.15rem 1.4rem',
           borderRadius: '8px',
           border: '1px solid #e9ebec',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
           <div
             style={{
-              width: '36px',
-              height: '36px',
+              width: '42px',
+              height: '42px',
               borderRadius: '8px',
-              background: 'rgba(53, 119, 241, 0.1)',
+              background: 'linear-gradient(135deg, rgba(64, 81, 137, 0.15) 0%, rgba(53, 119, 241, 0.15) 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#3577f1',
-              flexShrink: 0,
+              color: '#405189',
+              border: '1px solid rgba(64, 81, 137, 0.3)',
             }}
           >
-            <Mail size={19} />
+            <Mail size={22} />
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <h2 style={{ fontSize: '1rem', fontWeight: 700, color: '#212529', margin: 0 }}>
+              <h3 style={{ fontSize: '1.08rem', fontWeight: 700, color: '#212529', margin: 0 }}>
                 Master Data Kode Pos Indonesia
-              </h2>
+              </h3>
               <span
                 style={{
-                  fontSize: '0.68rem',
+                  fontSize: '0.72rem',
                   fontWeight: 700,
-                  padding: '0.15rem 0.45rem',
+                  padding: '0.15rem 0.5rem',
                   borderRadius: '4px',
-                  background: 'rgba(53, 119, 241, 0.12)',
-                  color: '#3577f1',
+                  background: 'rgba(64, 81, 137, 0.1)',
+                  color: '#405189',
                 }}
               >
                 {kodePosList.length.toLocaleString('id-ID')} Data
               </span>
             </div>
-            <p style={{ fontSize: '0.75rem', color: '#878a99', margin: '0.1rem 0 0' }}>
-              Pusat referensi wilayah kode pos, kelurahan, kecamatan, kota/kabupaten & provinsi nasional
+            <p style={{ fontSize: '0.82rem', color: '#878a99', margin: '0.2rem 0 0' }}>
+              Referensi resmi kode pos wilayah kelurahan, kecamatan, kota/kabupaten & provinsi seluruh Indonesia.
             </p>
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+        {/* Action Buttons Toolbar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
           <input
-            type="file"
             ref={fileInputRef}
+            type="file"
+            accept=".xlsx, .xls, .csv"
             onChange={handleFileUpload}
-            accept=".xlsx,.xls,.csv"
             style={{ display: 'none' }}
           />
 
           <button
             type="button"
-            className="btn btn-sm btn-outline-secondary"
-            onClick={handleDownloadTemplate}
-            title="Download Template Format Excel"
-            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem' }}
-          >
-            <Download size={13} />
-            <span>Template</span>
-          </button>
-
-          <button
-            type="button"
-            className="btn btn-sm btn-outline-secondary"
-            onClick={handleExport}
-            title="Export Data ke Excel"
-            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem' }}
-          >
-            <Download size={13} />
-            <span>Export Excel</span>
-          </button>
-
-          <button
-            type="button"
-            className="btn btn-sm btn-primary"
+            className="btn btn-primary btn-sm"
             onClick={() => fileInputRef.current?.click()}
-            title="Import Data dari Berkas Excel"
-            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem' }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              padding: '0.45rem 0.95rem',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+            }}
           >
-            <Upload size={13} />
-            <span>Import Excel</span>
+            <Upload size={14} />
+            <span>Impor Excel</span>
           </button>
 
           <button
             type="button"
-            className="btn btn-sm btn-success"
+            className="btn btn-outline btn-sm"
+            onClick={handleExport}
+            disabled={kodePosList.length === 0}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              padding: '0.45rem 0.9rem',
+              fontSize: '0.8rem',
+            }}
+          >
+            <Download size={14} />
+            <span>Ekspor Excel</span>
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={handleDownloadTemplate}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              padding: '0.45rem 0.85rem',
+              fontSize: '0.8rem',
+            }}
+          >
+            <Download size={13} />
+            <span>Template Excel</span>
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={() => setShowResetConfirm(true)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              padding: '0.45rem 0.85rem',
+              fontSize: '0.8rem',
+              color: '#f06548',
+              borderColor: 'rgba(240, 101, 72, 0.3)',
+            }}
+            title="Kembalikan ke data Kode Pos bawaan"
+          >
+            <RefreshCw size={13} />
+            <span>Reset Standar</span>
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-success btn-sm"
             onClick={() => {
               setFormData({
                 kodePos: '',
@@ -535,123 +650,233 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               setEditingIndex(null);
               setModalMode('create');
             }}
-            title="Tambah Data Kode Pos Baru"
-            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem' }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              padding: '0.45rem 0.95rem',
+              fontSize: '0.8rem',
+              background: '#0ab39c',
+              borderColor: '#0ab39c',
+              color: '#ffffff',
+            }}
           >
-            <Plus size={13} />
+            <Plus size={14} />
             <span>Tambah Data</span>
-          </button>
-
-          <button
-            type="button"
-            className="btn btn-sm btn-outline-danger"
-            onClick={() => setShowResetConfirm(true)}
-            title="Reset ke Data Bawaan"
-            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem' }}
-          >
-            <RefreshCw size={13} />
-            <span>Reset</span>
           </button>
         </div>
       </div>
+
+      {/* 2. Informative Executive Banner */}
+      {showBanner && (
+        <div
+          style={{
+            background: 'linear-gradient(135deg, #f0f4ff 0%, #e6f7ff 100%)',
+            borderRadius: '8px',
+            border: '1px solid #d0e2ff',
+            padding: '1.1rem 1.35rem',
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: '0.85rem',
+            boxShadow: '0 1px 2px rgba(64, 81, 137, 0.04)',
+            position: 'relative',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem', flex: 1 }}>
+            <div
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                background: '#405189',
+                color: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                marginTop: '0.1rem',
+              }}
+            >
+              <Info size={18} />
+            </div>
+            <div>
+              <h4 style={{ fontSize: '0.92rem', fontWeight: 700, color: '#2d3748', margin: '0 0 0.35rem' }}>
+                Database Master Kode Pos & Wilayah Administrasi Seluruh Indonesia
+              </h4>
+              <p style={{ fontSize: '0.82rem', color: '#4a5568', margin: 0, lineHeight: 1.55 }}>
+                Tersimpan <strong>{stats.totalRecords.toLocaleString('id-ID')} Kode Pos</strong> yang mencakup{' '}
+                <strong>{stats.totalProvinsi} Provinsi</strong>, <strong>{stats.totalKota} Kota/Kabupaten</strong>,{' '}
+                <strong>{stats.totalKecamatan} Kecamatan</strong>, dan <strong>{stats.totalKelurahan} Kelurahan/Desa</strong>.{' '}
+                Data ini digunakan sebagai referensi lookup dan verifikasi alamat pada sistem pencocokan data.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowBanner(false)}
+            title="Tutup informasi ini"
+            aria-label="Tutup"
+            style={{
+              background: 'rgba(64, 81, 137, 0.08)',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '0.35rem',
+              cursor: 'pointer',
+              color: '#405189',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       {/* Notifications */}
       {successMsg && (
         <div
           style={{
-            padding: '0.65rem 1rem',
-            background: '#f0fdf4',
-            border: '1px solid #bbf7d0',
+            background: '#e8f7f5',
+            color: '#0ab39c',
+            border: '1px solid #b7ebe4',
+            padding: '0.75rem 1.25rem',
             borderRadius: '6px',
-            color: '#15803d',
-            fontSize: '0.78rem',
+            fontSize: '0.84rem',
             display: 'flex',
             alignItems: 'center',
-            gap: '0.5rem',
+            justifyContent: 'space-between',
           }}
         >
-          <CheckCircle2 size={16} color="#16a34a" />
-          <span>{successMsg}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <CheckCircle2 size={16} />
+            <span>{successMsg}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSuccessMsg(null)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#0ab39c' }}
+          >
+            <X size={14} />
+          </button>
         </div>
       )}
 
       {errorMsg && (
         <div
           style={{
-            padding: '0.65rem 1rem',
-            background: '#fef2f2',
-            border: '1px solid #fecaca',
+            background: '#fff0ee',
+            color: '#f06548',
+            border: '1px solid #fedcd6',
+            padding: '0.75rem 1.25rem',
             borderRadius: '6px',
-            color: '#b91c1c',
-            fontSize: '0.78rem',
+            fontSize: '0.84rem',
             display: 'flex',
             alignItems: 'center',
-            gap: '0.5rem',
+            justifyContent: 'space-between',
           }}
         >
-          <AlertCircle size={16} color="#dc2626" />
-          <span>{errorMsg}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <AlertCircle size={16} />
+            <span>{errorMsg}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setErrorMsg(null)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f06548' }}
+          >
+            <X size={14} />
+          </button>
         </div>
       )}
 
-      {/* 2. KPI Metric Cards */}
+      {/* 3. 5 KPI Metric Cards matching other menus */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-          gap: '0.75rem',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '1rem',
         }}
       >
+        {/* Card 1: Total Kode Pos */}
         <div
-          className="metric-card"
+          onClick={() => {
+            setSelectedProvinsi('ALL');
+            setSelectedKota('ALL');
+            setSelectedStatus('ALL');
+            setSearchTerm('');
+          }}
           style={{
-            padding: '0.85rem 1rem',
             background: '#ffffff',
-            border: '1px solid #e9ebec',
             borderRadius: '8px',
+            padding: '1rem 1.25rem',
+            border: selectedProvinsi === 'ALL' && !searchTerm ? '2px solid #405189' : '1px solid #e9ebec',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
             display: 'flex',
             alignItems: 'center',
-            gap: '0.75rem',
+            justifyContent: 'space-between',
+            cursor: 'pointer',
+            transition: 'all 0.18s ease-in-out',
           }}
+          title="Klik untuk melihat Semua Kode Pos"
         >
+          <div>
+            <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              TOTAL KODE POS
+            </span>
+            <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#212529', marginTop: '0.25rem' }}>
+              {stats.totalRecords.toLocaleString('id-ID')}
+            </div>
+            <div style={{ fontSize: '0.72rem', color: '#878a99', marginTop: '0.2rem' }}>
+              {stats.totalAktif.toLocaleString('id-ID')} Aktif
+            </div>
+          </div>
           <div
             style={{
-              width: '38px',
-              height: '38px',
+              width: '44px',
+              height: '44px',
               borderRadius: '8px',
-              background: 'rgba(53, 119, 241, 0.1)',
+              background: 'rgba(64, 81, 137, 0.1)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#3577f1',
+              color: '#405189',
             }}
           >
-            <Mail size={18} />
-          </div>
-          <div>
-            <div style={{ fontSize: '0.72rem', color: '#878a99', fontWeight: 600 }}>TOTAL KODE POS</div>
-            <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#212529' }}>
-              {stats.totalRecords.toLocaleString('id-ID')}
-            </div>
+            <Mail size={22} />
           </div>
         </div>
 
+        {/* Card 2: Total Provinsi */}
         <div
-          className="metric-card"
           style={{
-            padding: '0.85rem 1rem',
             background: '#ffffff',
-            border: '1px solid #e9ebec',
             borderRadius: '8px',
+            padding: '1rem 1.25rem',
+            border: '1px solid #e9ebec',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
             display: 'flex',
             alignItems: 'center',
-            gap: '0.75rem',
+            justifyContent: 'space-between',
           }}
         >
+          <div>
+            <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              TOTAL PROVINSI
+            </span>
+            <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#0ab39c', marginTop: '0.25rem' }}>
+              {stats.totalProvinsi.toLocaleString('id-ID')}
+            </div>
+            <div style={{ fontSize: '0.72rem', color: '#878a99', marginTop: '0.2rem' }}>
+              Cakupan Nasional
+            </div>
+          </div>
           <div
             style={{
-              width: '38px',
-              height: '38px',
+              width: '44px',
+              height: '44px',
               borderRadius: '8px',
               background: 'rgba(10, 179, 156, 0.1)',
               display: 'flex',
@@ -660,100 +885,118 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               color: '#0ab39c',
             }}
           >
-            <MapPin size={18} />
-          </div>
-          <div>
-            <div style={{ fontSize: '0.72rem', color: '#878a99', fontWeight: 600 }}>TOTAL PROVINSI</div>
-            <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#0ab39c' }}>
-              {stats.totalProvinsi.toLocaleString('id-ID')}
-            </div>
+            <MapPin size={22} />
           </div>
         </div>
 
+        {/* Card 3: Total Kota / Kab */}
         <div
-          className="metric-card"
           style={{
-            padding: '0.85rem 1rem',
             background: '#ffffff',
-            border: '1px solid #e9ebec',
             borderRadius: '8px',
+            padding: '1rem 1.25rem',
+            border: '1px solid #e9ebec',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
             display: 'flex',
             alignItems: 'center',
-            gap: '0.75rem',
+            justifyContent: 'space-between',
           }}
         >
-          <div
-            style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '8px',
-              background: 'rgba(247, 184, 75, 0.12)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#d97706',
-            }}
-          >
-            <Building2 size={18} />
-          </div>
           <div>
-            <div style={{ fontSize: '0.72rem', color: '#878a99', fontWeight: 600 }}>TOTAL KOTA / KAB</div>
-            <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#d97706' }}>
+            <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              TOTAL KOTA / KAB
+            </span>
+            <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#d68b0c', marginTop: '0.25rem' }}>
               {stats.totalKota.toLocaleString('id-ID')}
             </div>
+            <div style={{ fontSize: '0.72rem', color: '#878a99', marginTop: '0.2rem' }}>
+              Dati II Terdaftar
+            </div>
           </div>
-        </div>
-
-        <div
-          className="metric-card"
-          style={{
-            padding: '0.85rem 1rem',
-            background: '#ffffff',
-            border: '1px solid #e9ebec',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.75rem',
-          }}
-        >
           <div
             style={{
-              width: '38px',
-              height: '38px',
+              width: '44px',
+              height: '44px',
               borderRadius: '8px',
-              background: 'rgba(99, 102, 241, 0.1)',
+              background: 'rgba(247, 184, 75, 0.15)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#6366f1',
+              color: '#d68b0c',
             }}
           >
-            <Sparkles size={18} />
-          </div>
-          <div>
-            <div style={{ fontSize: '0.72rem', color: '#878a99', fontWeight: 600 }}>TOTAL KECAMATAN</div>
-            <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#6366f1' }}>
-              {stats.totalKecamatan.toLocaleString('id-ID')}
-            </div>
+            <Building2 size={22} />
           </div>
         </div>
 
+        {/* Card 4: Total Kecamatan */}
         <div
-          className="metric-card"
           style={{
-            padding: '0.85rem 1rem',
             background: '#ffffff',
-            border: '1px solid #e9ebec',
             borderRadius: '8px',
+            padding: '1rem 1.25rem',
+            border: '1px solid #e9ebec',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
             display: 'flex',
             alignItems: 'center',
-            gap: '0.75rem',
+            justifyContent: 'space-between',
           }}
         >
+          <div>
+            <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              TOTAL KECAMATAN
+            </span>
+            <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#3577f1', marginTop: '0.25rem' }}>
+              {stats.totalKecamatan.toLocaleString('id-ID')}
+            </div>
+            <div style={{ fontSize: '0.72rem', color: '#878a99', marginTop: '0.2rem' }}>
+              Wilayah Kecamatan
+            </div>
+          </div>
           <div
             style={{
-              width: '38px',
-              height: '38px',
+              width: '44px',
+              height: '44px',
+              borderRadius: '8px',
+              background: 'rgba(53, 119, 241, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#3577f1',
+            }}
+          >
+            <Sparkles size={22} />
+          </div>
+        </div>
+
+        {/* Card 5: Total Kelurahan */}
+        <div
+          style={{
+            background: '#ffffff',
+            borderRadius: '8px',
+            padding: '1rem 1.25rem',
+            border: '1px solid #e9ebec',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div>
+            <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              TOTAL KELURAHAN
+            </span>
+            <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#299cdb', marginTop: '0.25rem' }}>
+              {stats.totalKelurahan.toLocaleString('id-ID')}
+            </div>
+            <div style={{ fontSize: '0.72rem', color: '#878a99', marginTop: '0.2rem' }}>
+              Kelurahan / Desa
+            </div>
+          </div>
+          <div
+            style={{
+              width: '44px',
+              height: '44px',
               borderRadius: '8px',
               background: 'rgba(41, 156, 219, 0.1)',
               display: 'flex',
@@ -762,420 +1005,722 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               color: '#299cdb',
             }}
           >
-            <CheckCircle2 size={18} />
-          </div>
-          <div>
-            <div style={{ fontSize: '0.72rem', color: '#878a99', fontWeight: 600 }}>TOTAL KELURAHAN</div>
-            <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#299cdb' }}>
-              {stats.totalKelurahan.toLocaleString('id-ID')}
-            </div>
+            <CheckCircle2 size={22} />
           </div>
         </div>
       </div>
 
-      {/* 3. Filter & Table Toolbar */}
+      {/* 4. Main Card Container with Sub-tabs */}
       <div
-        className="glass-card"
         style={{
-          padding: '0.75rem 1rem',
           background: '#ffffff',
           borderRadius: '8px',
           border: '1px solid #e9ebec',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '0.75rem',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          padding: '1.15rem 1.35rem',
         }}
       >
-        {/* Search & Select Filters */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', flex: 1 }}>
-          {/* Quick Search */}
-          <div style={{ position: 'relative', minWidth: '220px', flex: 1, maxWidth: '340px' }}>
-            <Search
-              size={14}
-              style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#878a99' }}
-            />
-            <input
-              type="text"
-              className="form-control form-control-sm"
-              placeholder="Cari Kode Pos, Kelurahan, Kecamatan, Kota..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{ paddingLeft: '30px', fontSize: '0.78rem', height: '32px' }}
-            />
-            {searchTerm && (
-              <button
-                type="button"
-                onClick={() => setSearchTerm('')}
+        {/* Sub-Tabs Navigation */}
+        <div
+          style={{
+            display: 'inline-flex',
+            background: '#f3f6f9',
+            padding: '3px',
+            borderRadius: '6px',
+            border: '1px solid #e9ebec',
+            marginBottom: '1rem',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('list')}
+            style={{
+              padding: '0.4rem 0.95rem',
+              fontSize: '0.8rem',
+              fontWeight: activeSubTab === 'list' ? 700 : 500,
+              color: activeSubTab === 'list' ? '#405189' : '#878a99',
+              background: activeSubTab === 'list' ? '#ffffff' : 'transparent',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              boxShadow: activeSubTab === 'list' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+              transition: 'all 0.15s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+            }}
+          >
+            <Mail size={14} style={{ color: activeSubTab === 'list' ? '#405189' : '#878a99' }} />
+            <span>Daftar Kode Pos Indonesia</span>
+            <span
+              style={{
+                background: activeSubTab === 'list' ? '#eef0f7' : '#e9ebec',
+                color: activeSubTab === 'list' ? '#405189' : '#878a99',
+                padding: '0.05rem 0.35rem',
+                borderRadius: '10px',
+                fontSize: '0.68rem',
+                fontWeight: 600,
+              }}
+            >
+              {filteredList.length.toLocaleString('id-ID')}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('lookup')}
+            style={{
+              padding: '0.4rem 0.95rem',
+              fontSize: '0.8rem',
+              fontWeight: activeSubTab === 'lookup' ? 700 : 500,
+              color: activeSubTab === 'lookup' ? '#405189' : '#878a99',
+              background: activeSubTab === 'lookup' ? '#ffffff' : 'transparent',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              boxShadow: activeSubTab === 'lookup' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+              transition: 'all 0.15s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+            }}
+          >
+            <Search size={14} style={{ color: activeSubTab === 'lookup' ? '#405189' : '#878a99' }} />
+            <span>Pencarian Cepat & Verifikasi Kode Pos</span>
+          </button>
+        </div>
+
+        {/* Tab 1: List View */}
+        {activeSubTab === 'list' && (
+          <>
+            {/* Filter Toolbar */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '0.75rem',
+                marginBottom: '1rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: '260px', flexWrap: 'wrap' }}>
+                {/* Search Bar */}
+                <div style={{ position: 'relative', flex: 1, minWidth: '220px', maxWidth: '340px' }}>
+                  <Search
+                    size={15}
+                    style={{ position: 'absolute', left: '0.65rem', top: '50%', transform: 'translateY(-50%)', color: '#878a99' }}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Cari Kode Pos, Kelurahan, Kota, Provinsi..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.45rem 0.75rem 0.45rem 2.1rem',
+                      fontSize: '0.8rem',
+                      borderRadius: '5px',
+                      border: '1px solid #ced4da',
+                      background: '#ffffff',
+                    }}
+                  />
+                  {searchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchTerm('')}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        color: '#878a99',
+                        cursor: 'pointer',
+                        padding: 0,
+                      }}
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Filter Provinsi Dropdown */}
+                <select
+                  value={selectedProvinsi}
+                  onChange={(e) => {
+                    setSelectedProvinsi(e.target.value);
+                    setSelectedKota('ALL');
+                  }}
+                  style={{
+                    padding: '0.45rem 0.75rem',
+                    fontSize: '0.8rem',
+                    borderRadius: '5px',
+                    border: '1px solid #ced4da',
+                    background: '#ffffff',
+                    color: '#495057',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="ALL">Semua Provinsi ({provinsiOptions.length})</option>
+                  {provinsiOptions.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Filter Kota Dropdown */}
+                <select
+                  value={selectedKota}
+                  onChange={(e) => setSelectedKota(e.target.value)}
+                  style={{
+                    padding: '0.45rem 0.75rem',
+                    fontSize: '0.8rem',
+                    borderRadius: '5px',
+                    border: '1px solid #ced4da',
+                    background: '#ffffff',
+                    color: '#495057',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="ALL">Semua Kota/Kab ({kotaOptions.length})</option>
+                  {kotaOptions.map((k) => (
+                    <option key={k} value={k}>
+                      {k}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Filter Status */}
+                <select
+                  value={selectedStatus}
+                  onChange={(e) => setSelectedStatus(e.target.value)}
+                  style={{
+                    padding: '0.45rem 0.75rem',
+                    fontSize: '0.8rem',
+                    borderRadius: '5px',
+                    border: '1px solid #ced4da',
+                    background: '#ffffff',
+                    color: '#495057',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="ALL">Semua Status</option>
+                  <option value="AKTIF">Status AKTIF</option>
+                  <option value="NON-AKTIF">Status NON-AKTIF</option>
+                </select>
+              </div>
+
+              {/* Page Size Selector */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <label style={{ fontSize: '0.78rem', color: '#878a99' }}>Tampilkan:</label>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    const val = e.target.value === 'ALL' ? 'ALL' : Number(e.target.value);
+                    setPageSize(val);
+                    setPage(1);
+                  }}
+                  style={{
+                    padding: '0.35rem 0.65rem',
+                    fontSize: '0.78rem',
+                    borderRadius: '4px',
+                    border: '1px solid #ced4da',
+                    background: '#ffffff',
+                    color: '#495057',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value={10}>10 Baris</option>
+                  <option value={25}>25 Baris</option>
+                  <option value={50}>50 Baris</option>
+                  <option value={100}>100 Baris</option>
+                  <option value={250}>250 Baris</option>
+                  <option value="ALL">Lihat Semua ({filteredList.length})</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Active Filter Indicator Badge */}
+            {(searchTerm || selectedProvinsi !== 'ALL' || selectedKota !== 'ALL' || selectedStatus !== 'ALL') && (
+              <div
                 style={{
-                  position: 'absolute',
-                  right: '8px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  color: '#878a99',
-                  cursor: 'pointer',
-                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  background: '#f8f9fa',
+                  padding: '0.4rem 0.75rem',
+                  borderRadius: '5px',
+                  border: '1px solid #e9ebec',
+                  fontSize: '0.78rem',
+                  marginBottom: '0.85rem',
+                  color: '#495057',
                 }}
               >
-                <X size={13} />
-              </button>
+                <Filter size={14} color="#405189" />
+                <span>
+                  Menampilkan filter:{' '}
+                  {searchTerm && <strong>Pencarian: "{searchTerm}" </strong>}
+                  {selectedProvinsi !== 'ALL' && <strong>Provinsi: {selectedProvinsi} </strong>}
+                  {selectedKota !== 'ALL' && <strong>Kota: {selectedKota} </strong>}
+                  {selectedStatus !== 'ALL' && <strong>Status: {selectedStatus} </strong>}
+                  ({filteredList.length} data ditemukan)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setSelectedProvinsi('ALL');
+                    setSelectedKota('ALL');
+                    setSelectedStatus('ALL');
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#f06548',
+                    fontSize: '0.76rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    padding: '0 0.3rem',
+                    textDecoration: 'underline',
+                    marginLeft: 'auto',
+                  }}
+                >
+                  Reset Filter (Lihat Semua)
+                </button>
+              </div>
             )}
-          </div>
 
-          {/* Filter Provinsi */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <label style={{ fontSize: '0.74rem', fontWeight: 600, color: '#495057', whiteSpace: 'nowrap' }}>
-              Provinsi:
-            </label>
-            <select
-              className="form-select form-select-sm"
-              value={selectedProvinsi}
-              onChange={(e) => {
-                setSelectedProvinsi(e.target.value);
-                setSelectedKota('ALL');
-              }}
-              style={{ fontSize: '0.75rem', height: '32px', minWidth: '150px' }}
-            >
-              <option value="ALL">Semua Provinsi ({provinsiOptions.length})</option>
-              {provinsiOptions.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Filter Kota */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <label style={{ fontSize: '0.74rem', fontWeight: 600, color: '#495057', whiteSpace: 'nowrap' }}>
-              Kota/Kab:
-            </label>
-            <select
-              className="form-select form-select-sm"
-              value={selectedKota}
-              onChange={(e) => setSelectedKota(e.target.value)}
-              style={{ fontSize: '0.75rem', height: '32px', minWidth: '150px' }}
-            >
-              <option value="ALL">Semua Kota/Kab ({kotaOptions.length})</option>
-              {kotaOptions.map((k) => (
-                <option key={k} value={k}>
-                  {k}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Page Size & Counter */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-          <span style={{ fontSize: '0.75rem', color: '#878a99' }}>
-            Menampilkan <strong>{filteredList.length.toLocaleString('id-ID')}</strong> dari{' '}
-            <strong>{kodePosList.length.toLocaleString('id-ID')}</strong> data
-          </span>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-            <span style={{ fontSize: '0.74rem', color: '#495057' }}>Baris:</span>
-            <select
-              className="form-select form-select-sm"
-              value={pageSize}
-              onChange={(e) => setPageSize(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))}
-              style={{ fontSize: '0.75rem', height: '32px', width: '75px' }}
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-              <option value={250}>250</option>
-              <option value="ALL">Semua</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* 4. Data Table */}
-      <div
-        style={{
-          background: '#ffffff',
-          borderRadius: '8px',
-          border: '1px solid #e9ebec',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
-          overflow: 'hidden',
-        }}
-      >
-        <div className="table-responsive" style={{ maxHeight: '600px', overflowY: 'auto' }}>
-          <table className="table table-hover align-middle mb-0" style={{ fontSize: '0.78rem' }}>
-            <thead
-              style={{
-                background: '#f8f9fa',
-                color: '#495057',
-                position: 'sticky',
-                top: 0,
-                zIndex: 10,
-                boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
-              }}
-            >
-              <tr>
-                <th style={{ width: '45px', textAlign: 'center' }}>No</th>
-                <th style={{ minWidth: '110px' }}>Kode Pos</th>
-                <th style={{ minWidth: '160px' }}>Kelurahan / Desa</th>
-                <th style={{ minWidth: '150px' }}>Kecamatan</th>
-                <th style={{ minWidth: '170px' }}>Kota / Kabupaten</th>
-                <th style={{ minWidth: '150px' }}>Provinsi</th>
-                <th style={{ width: '90px', textAlign: 'center' }}>Status</th>
-                <th style={{ width: '110px', textAlign: 'center' }}>Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedList.length === 0 ? (
-                <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '3rem 1rem', color: '#878a99' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
-                      <Mail size={36} color="#adb5bd" />
-                      <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>Tidak ada data Kode Pos yang sesuai</span>
-                      <span style={{ fontSize: '0.74rem' }}>
-                        Coba sesuaikan kata kunci pencarian atau ubah filter provinsi/kota.
-                      </span>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                paginatedList.map((item, idx) => {
-                  const globalIdx = pageSize === 'ALL' ? idx : (page - 1) * (typeof pageSize === 'number' ? pageSize : 10) + idx;
-                  const originalIndex = kodePosList.findIndex(
-                    (r) =>
-                      r.kodePos === item.kodePos &&
-                      r.kelurahan === item.kelurahan &&
-                      r.kecamatan === item.kecamatan &&
-                      r.kabupatenKota === item.kabupatenKota
-                  );
-
-                  return (
-                    <tr key={`kp-${item.kodePos}-${idx}`}>
-                      <td style={{ textAlign: 'center', color: '#878a99', fontWeight: 600 }}>
-                        {globalIdx + 1}
-                      </td>
-
-                      {/* Kode Pos Badge */}
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                          <span
-                            style={{
-                              fontWeight: 700,
-                              fontFamily: 'monospace',
-                              fontSize: '0.82rem',
-                              padding: '0.15rem 0.45rem',
-                              borderRadius: '4px',
-                              background: 'rgba(53, 119, 241, 0.09)',
-                              color: '#3577f1',
-                              border: '1px solid rgba(53, 119, 241, 0.25)',
-                              letterSpacing: '0.5px',
-                            }}
-                          >
-                            {item.kodePos}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleCopyText(item.kodePos, `kp-${idx}`)}
-                            title="Salin Kode Pos"
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              color: copiedId === `kp-${idx}` ? '#10b981' : '#adb5bd',
-                              cursor: 'pointer',
-                              padding: '2px',
-                            }}
-                          >
-                            {copiedId === `kp-${idx}` ? <Check size={12} /> : <Copy size={12} />}
-                          </button>
-                        </div>
-                      </td>
-
-                      {/* Kelurahan */}
-                      <td style={{ fontWeight: 600, color: '#212529' }}>
-                        {item.kelurahan || '-'}
-                      </td>
-
-                      {/* Kecamatan */}
-                      <td style={{ color: '#495057' }}>
-                        {item.kecamatan || '-'}
-                      </td>
-
-                      {/* Kota / Kabupaten */}
-                      <td style={{ color: '#495057' }}>
-                        {item.kabupatenKota || '-'}
-                      </td>
-
-                      {/* Provinsi */}
-                      <td>
-                        <span
-                          style={{
-                            fontSize: '0.72rem',
-                            padding: '0.1rem 0.4rem',
-                            borderRadius: '3px',
-                            background: '#f1f3f5',
-                            color: '#495057',
-                            fontWeight: 500,
-                          }}
-                        >
-                          {item.provinsi || '-'}
-                        </span>
-                      </td>
-
-                      {/* Status */}
-                      <td style={{ textAlign: 'center' }}>
-                        <span
-                          style={{
-                            fontSize: '0.68rem',
-                            fontWeight: 700,
-                            padding: '0.15rem 0.45rem',
-                            borderRadius: '4px',
-                            background: item.status === 'NON-AKTIF' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
-                            color: item.status === 'NON-AKTIF' ? '#dc2626' : '#059669',
-                          }}
-                        >
-                          {item.status || 'AKTIF'}
-                        </span>
-                      </td>
-
-                      {/* Actions */}
-                      <td style={{ textAlign: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}>
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-ghost-primary"
-                            onClick={() => {
-                              setDetailItem(item);
-                              setModalMode('detail');
-                            }}
-                            title="Lihat Detail"
-                            style={{ padding: '0.2rem 0.35rem', color: '#3577f1' }}
-                          >
-                            <Eye size={13} />
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-ghost-warning"
-                            onClick={() => {
-                              setFormData({ ...item });
-                              setEditingIndex(originalIndex >= 0 ? originalIndex : idx);
-                              setModalMode('edit');
-                            }}
-                            title="Edit Data"
-                            style={{ padding: '0.2rem 0.35rem', color: '#d97706' }}
-                          >
-                            <Edit size={13} />
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-ghost-danger"
-                            onClick={() => {
-                              setDeleteTargetIndex(originalIndex >= 0 ? originalIndex : idx);
-                            }}
-                            title="Hapus Data"
-                            style={{ padding: '0.2rem 0.35rem', color: '#dc2626' }}
-                          >
-                            <Trash2 size={13} />
-                          </button>
+            {/* Modern Table Container */}
+            <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', overflowX: 'auto', maxHeight: '580px' }}>
+              <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
+                  <tr>
+                    <th style={{ width: '45px', textAlign: 'center' }}>No</th>
+                    <th style={{ width: '130px' }}>KODE POS</th>
+                    <th>KELURAHAN / DESA</th>
+                    <th>KECAMATAN</th>
+                    <th>KOTA / KABUPATEN</th>
+                    <th>PROVINSI</th>
+                    <th style={{ width: '95px', textAlign: 'center' }}>STATUS</th>
+                    <th style={{ width: '100px', textAlign: 'center' }}>AKSI</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredList.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                          <Mail size={32} color="#adb5bd" />
+                          <span style={{ fontWeight: 600 }}>Tidak ada data Kode Pos yang cocok dengan kriteria pencarian.</span>
+                          <span style={{ fontSize: '0.74rem' }}>Coba ubah kata kunci atau reset filter di atas.</span>
                         </div>
                       </td>
                     </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                  ) : (
+                    paginatedList.map(({ rec: item, idx: originalIdx }, pos) => {
+                      const displayRowNo =
+                        pageSize === 'ALL'
+                          ? pos + 1
+                          : (page - 1) * (pageSize as number) + pos + 1;
 
-        {/* Pagination Footer */}
-        {pageSize !== 'ALL' && totalPages > 1 && (
-          <div
-            style={{
-              padding: '0.65rem 1rem',
-              background: '#f8f9fa',
-              borderTop: '1px solid #e9ebec',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '0.5rem',
-            }}
-          >
-            <span style={{ fontSize: '0.74rem', color: '#878a99' }}>
-              Halaman <strong>{page}</strong> dari <strong>{totalPages}</strong> ({filteredList.length.toLocaleString('id-ID')} Total)
-            </span>
+                      return (
+                        <tr key={`kp-${originalIdx}`} style={{ background: pos % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
+                          <td style={{ textAlign: 'center', color: '#878a99' }}>{displayRowNo}</td>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-              <button
-                type="button"
-                className="btn btn-sm btn-outline-secondary"
-                disabled={page <= 1}
-                onClick={() => setPage(1)}
-                title="Halaman Pertama"
-                style={{ padding: '0.2rem 0.45rem' }}
+                          {/* Kode Pos Cell with Copy */}
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                              <span
+                                className="code-cell"
+                                style={{
+                                  fontWeight: 800,
+                                  fontSize: '0.84rem',
+                                  color: '#405189',
+                                  background: 'rgba(64, 81, 137, 0.08)',
+                                  padding: '0.2rem 0.55rem',
+                                  borderRadius: '4px',
+                                  fontFamily: 'monospace',
+                                  letterSpacing: '0.5px',
+                                }}
+                              >
+                                {item.kodePos}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyText(item.kodePos, `kp-${originalIdx}`)}
+                                title="Salin Kode Pos"
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  color: copiedId === `kp-${originalIdx}` ? '#0ab39c' : '#adb5bd',
+                                  cursor: 'pointer',
+                                  padding: '2px',
+                                }}
+                              >
+                                {copiedId === `kp-${originalIdx}` ? <Check size={12} /> : <Copy size={12} />}
+                              </button>
+                            </div>
+                          </td>
+
+                          {/* Kelurahan */}
+                          <td style={{ fontWeight: 600, color: '#212529' }}>
+                            {item.kelurahan || '-'}
+                          </td>
+
+                          {/* Kecamatan */}
+                          <td style={{ color: '#495057' }}>
+                            {item.kecamatan || '-'}
+                          </td>
+
+                          {/* Kota / Kabupaten */}
+                          <td style={{ color: '#495057' }}>
+                            {item.kabupatenKota || '-'}
+                          </td>
+
+                          {/* Provinsi */}
+                          <td>
+                            <span
+                              style={{
+                                fontSize: '0.72rem',
+                                padding: '0.12rem 0.45rem',
+                                borderRadius: '3px',
+                                background: '#f1f3f5',
+                                color: '#495057',
+                                fontWeight: 500,
+                              }}
+                            >
+                              {item.provinsi || '-'}
+                            </span>
+                          </td>
+
+                          {/* Status */}
+                          <td style={{ textAlign: 'center' }}>
+                            <span
+                              style={{
+                                fontSize: '0.68rem',
+                                fontWeight: 700,
+                                padding: '0.15rem 0.45rem',
+                                borderRadius: '4px',
+                                background: item.status === 'NON-AKTIF' ? 'rgba(240, 101, 72, 0.12)' : 'rgba(10, 179, 156, 0.12)',
+                                color: item.status === 'NON-AKTIF' ? '#f06548' : '#0ab39c',
+                              }}
+                            >
+                              {item.status || 'AKTIF'}
+                            </span>
+                          </td>
+
+                          {/* Actions */}
+                          <td style={{ textAlign: 'center' }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDetailItem(item);
+                                  setModalMode('detail');
+                                }}
+                                title="Lihat Detail Kode Pos"
+                                style={{
+                                  background: 'rgba(41, 156, 219, 0.1)',
+                                  border: '1px solid rgba(41, 156, 219, 0.25)',
+                                  color: '#299cdb',
+                                  borderRadius: '4px',
+                                  padding: '0.22rem 0.35rem',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                <Eye size={12} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setFormData({ ...item });
+                                  setEditingIndex(originalIdx);
+                                  setModalMode('edit');
+                                }}
+                                title="Edit Data Kode Pos"
+                                style={{
+                                  background: 'rgba(64, 81, 137, 0.1)',
+                                  border: '1px solid rgba(64, 81, 137, 0.25)',
+                                  color: '#405189',
+                                  borderRadius: '4px',
+                                  padding: '0.22rem 0.35rem',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                <Edit size={12} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDeleteTargetIndex(originalIdx);
+                                }}
+                                title="Hapus Data Kode Pos"
+                                style={{
+                                  background: 'rgba(240, 101, 72, 0.1)',
+                                  border: '1px solid rgba(240, 101, 72, 0.25)',
+                                  color: '#f06548',
+                                  borderRadius: '4px',
+                                  padding: '0.22rem 0.35rem',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Footer */}
+            {pageSize !== 'ALL' && totalPages > 1 && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '0.75rem',
+                  marginTop: '1rem',
+                  paddingTop: '0.75rem',
+                  borderTop: '1px solid #e9ebec',
+                }}
               >
-                <ChevronsLeft size={13} />
-              </button>
+                <span style={{ fontSize: '0.78rem', color: '#878a99' }}>
+                  Menampilkan <strong>{((page - 1) * (pageSize as number)) + 1}</strong> -{' '}
+                  <strong>{Math.min(page * (pageSize as number), filteredList.length)}</strong> dari{' '}
+                  <strong>{filteredList.length.toLocaleString('id-ID')}</strong> entri
+                </span>
 
-              <button
-                type="button"
-                className="btn btn-sm btn-outline-secondary"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                title="Halaman Sebelumnya"
-                style={{ padding: '0.2rem 0.45rem' }}
-              >
-                <ChevronLeft size={13} />
-              </button>
-
-              {/* Page Number Badges */}
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                let pNum = page - 2 + i;
-                if (page < 3) pNum = i + 1;
-                if (page > totalPages - 2) pNum = totalPages - 4 + i;
-                if (pNum < 1 || pNum > totalPages) return null;
-
-                return (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                   <button
-                    key={pNum}
                     type="button"
-                    className={`btn btn-sm ${page === pNum ? 'btn-primary' : 'btn-outline-secondary'}`}
-                    onClick={() => setPage(pNum)}
+                    className="btn btn-outline btn-sm"
+                    onClick={() => setPage(1)}
+                    disabled={page === 1}
+                    title="Halaman Pertama"
+                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.74rem' }}
+                  >
+                    <ChevronsLeft size={13} />
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    title="Halaman Sebelumnya"
+                    style={{ padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}
+                  >
+                    <ChevronLeft size={13} />
+                  </button>
+
+                  {getPaginationRange(page, totalPages).map((p, idx) => {
+                    if (p === 'ell-start' || p === 'ell-end') {
+                      return (
+                        <span key={`ell-${idx}`} style={{ padding: '0 0.35rem', color: '#878a99', fontSize: '0.75rem' }}>
+                          ...
+                        </span>
+                      );
+                    }
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setPage(p as number)}
+                        style={{
+                          minWidth: '28px',
+                          height: '28px',
+                          padding: '0 0.4rem',
+                          fontSize: '0.74rem',
+                          fontWeight: page === p ? 700 : 500,
+                          borderRadius: '4px',
+                          border: page === p ? '1px solid #405189' : '1px solid #ced4da',
+                          background: page === p ? '#405189' : '#ffffff',
+                          color: page === p ? '#ffffff' : '#495057',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        {p}
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    title="Halaman Berikutnya"
+                    style={{ padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}
+                  >
+                    <ChevronRight size={13} />
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={() => setPage(totalPages)}
+                    disabled={page === totalPages}
+                    title="Halaman Terakhir"
+                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.74rem' }}
+                  >
+                    <ChevronsRight size={13} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Tab 2: Quick Lookup & Validation */}
+        {activeSubTab === 'lookup' && (
+          <div>
+            <div style={{ background: '#f8f9fa', padding: '1.25rem', borderRadius: '8px', border: '1px solid #e9ebec', marginBottom: '1.25rem' }}>
+              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#212529', margin: '0 0 0.5rem' }}>
+                Pencarian Cepat Kode Pos & Wilayah
+              </h4>
+              <p style={{ fontSize: '0.8rem', color: '#878a99', margin: '0 0 1rem' }}>
+                Ketik 5-digit kode pos atau nama kelurahan/kecamatan/kota untuk mencari data wilayah secara instan.
+              </p>
+
+              <div style={{ position: 'relative', maxWidth: '500px' }}>
+                <Search
+                  size={16}
+                  style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#878a99' }}
+                />
+                <input
+                  type="text"
+                  placeholder="Contoh: 10110 atau Gambir atau Surabaya..."
+                  value={lookupQuery}
+                  onChange={(e) => setLookupQuery(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem 0.85rem 0.6rem 2.3rem',
+                    fontSize: '0.85rem',
+                    borderRadius: '6px',
+                    border: '1px solid #ced4da',
+                    background: '#ffffff',
+                    fontWeight: 500,
+                  }}
+                  autoFocus
+                />
+                {lookupQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setLookupQuery('')}
                     style={{
-                      padding: '0.2rem 0.55rem',
-                      fontSize: '0.74rem',
-                      fontWeight: page === pNum ? 700 : 400,
+                      position: 'absolute',
+                      right: '10px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      color: '#878a99',
+                      cursor: 'pointer',
                     }}
                   >
-                    {pNum}
+                    <X size={15} />
                   </button>
-                );
-              })}
-
-              <button
-                type="button"
-                className="btn btn-sm btn-outline-secondary"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                title="Halaman Selanjutnya"
-                style={{ padding: '0.2rem 0.45rem' }}
-              >
-                <ChevronRight size={13} />
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-sm btn-outline-secondary"
-                disabled={page >= totalPages}
-                onClick={() => setPage(totalPages)}
-                title="Halaman Terakhir"
-                style={{ padding: '0.2rem 0.45rem' }}
-              >
-                <ChevronsRight size={13} />
-              </button>
+                )}
+              </div>
             </div>
+
+            {lookupQuery.trim() ? (
+              <div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#495057', marginBottom: '0.75rem' }}>
+                  Hasil Pencarian ({lookupResults.length} data ditemukan):
+                </div>
+
+                {lookupResults.length === 0 ? (
+                  <div style={{ padding: '2rem', textAlign: 'center', color: '#878a99', background: '#ffffff', borderRadius: '6px', border: '1px dashed #ced4da' }}>
+                    Tidak ditemukan kode pos atau wilayah yang sesuai dengan "{lookupQuery}".
+                  </div>
+                ) : (
+                  <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', overflowX: 'auto', maxHeight: '420px' }}>
+                    <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
+                      <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
+                        <tr>
+                          <th style={{ width: '45px', textAlign: 'center' }}>No</th>
+                          <th style={{ width: '120px' }}>KODE POS</th>
+                          <th>KELURAHAN / DESA</th>
+                          <th>KECAMATAN</th>
+                          <th>KOTA / KABUPATEN</th>
+                          <th>PROVINSI</th>
+                          <th style={{ width: '90px', textAlign: 'center' }}>STATUS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lookupResults.map((item, idx) => (
+                          <tr key={idx} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
+                            <td style={{ textAlign: 'center', color: '#878a99' }}>{idx + 1}</td>
+                            <td>
+                              <span
+                                className="code-cell"
+                                style={{
+                                  fontWeight: 800,
+                                  color: '#405189',
+                                  background: 'rgba(64, 81, 137, 0.08)',
+                                  padding: '0.15rem 0.5rem',
+                                  borderRadius: '4px',
+                                  fontFamily: 'monospace',
+                                }}
+                              >
+                                {item.kodePos}
+                              </span>
+                            </td>
+                            <td style={{ fontWeight: 600, color: '#212529' }}>{item.kelurahan || '-'}</td>
+                            <td style={{ color: '#495057' }}>{item.kecamatan || '-'}</td>
+                            <td style={{ color: '#495057' }}>{item.kabupatenKota || '-'}</td>
+                            <td>
+                              <span style={{ fontSize: '0.72rem', padding: '0.1rem 0.4rem', borderRadius: '3px', background: '#f1f3f5', color: '#495057' }}>
+                                {item.provinsi || '-'}
+                              </span>
+                            </td>
+                            <td style={{ textAlign: 'center' }}>
+                              <span
+                                style={{
+                                  fontSize: '0.68rem',
+                                  fontWeight: 700,
+                                  padding: '0.12rem 0.45rem',
+                                  borderRadius: '4px',
+                                  background: item.status === 'NON-AKTIF' ? 'rgba(240, 101, 72, 0.12)' : 'rgba(10, 179, 156, 0.12)',
+                                  color: item.status === 'NON-AKTIF' ? '#f06548' : '#0ab39c',
+                                }}
+                              >
+                                {item.status || 'AKTIF'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ padding: '2.5rem', textAlign: 'center', color: '#878a99', background: '#ffffff', borderRadius: '6px', border: '1px dashed #ced4da' }}>
+                <Search size={28} color="#adb5bd" style={{ marginBottom: '0.5rem' }} />
+                <div style={{ fontWeight: 600 }}>Silakan masukkan kata kunci pada kotak pencarian di atas.</div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1206,7 +1751,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Mail size={16} color="#3577f1" />
+                <Mail size={16} color="#405189" />
                 <h4 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 700, color: '#212529' }}>
                   {modalMode === 'create' ? 'Tambah Data Kode Pos' : 'Edit Data Kode Pos'}
                 </h4>
@@ -1224,48 +1769,65 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                 <div>
                   <label style={{ fontSize: '0.76rem', fontWeight: 600, color: '#495057', display: 'block', marginBottom: '0.25rem' }}>
-                    Kode Pos (5 Digit) <span style={{ color: '#dc2626' }}>*</span>
+                    Kode Pos (5 Digit) <span style={{ color: '#f06548' }}>*</span>
                   </label>
                   <input
                     type="text"
                     required
                     maxLength={5}
-                    className="form-control form-control-sm"
                     placeholder="Contoh: 10110"
                     value={formData.kodePos}
                     onChange={(e) => setFormData({ ...formData, kodePos: e.target.value.replace(/\D/g, '') })}
-                    style={{ fontSize: '0.82rem', fontFamily: 'monospace', fontWeight: 700 }}
+                    style={{
+                      width: '100%',
+                      padding: '0.45rem 0.75rem',
+                      fontSize: '0.82rem',
+                      fontFamily: 'monospace',
+                      fontWeight: 700,
+                      borderRadius: '5px',
+                      border: '1px solid #ced4da',
+                    }}
                   />
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                   <div>
                     <label style={{ fontSize: '0.76rem', fontWeight: 600, color: '#495057', display: 'block', marginBottom: '0.25rem' }}>
-                      Kelurahan / Desa <span style={{ color: '#dc2626' }}>*</span>
+                      Kelurahan / Desa <span style={{ color: '#f06548' }}>*</span>
                     </label>
                     <input
                       type="text"
                       required
-                      className="form-control form-control-sm"
                       placeholder="Contoh: Gambir"
                       value={formData.kelurahan}
                       onChange={(e) => setFormData({ ...formData, kelurahan: e.target.value })}
-                      style={{ fontSize: '0.8rem' }}
+                      style={{
+                        width: '100%',
+                        padding: '0.45rem 0.75rem',
+                        fontSize: '0.8rem',
+                        borderRadius: '5px',
+                        border: '1px solid #ced4da',
+                      }}
                     />
                   </div>
 
                   <div>
                     <label style={{ fontSize: '0.76rem', fontWeight: 600, color: '#495057', display: 'block', marginBottom: '0.25rem' }}>
-                      Kecamatan <span style={{ color: '#dc2626' }}>*</span>
+                      Kecamatan <span style={{ color: '#f06548' }}>*</span>
                     </label>
                     <input
                       type="text"
                       required
-                      className="form-control form-control-sm"
                       placeholder="Contoh: Gambir"
                       value={formData.kecamatan}
                       onChange={(e) => setFormData({ ...formData, kecamatan: e.target.value })}
-                      style={{ fontSize: '0.8rem' }}
+                      style={{
+                        width: '100%',
+                        padding: '0.45rem 0.75rem',
+                        fontSize: '0.8rem',
+                        borderRadius: '5px',
+                        border: '1px solid #ced4da',
+                      }}
                     />
                   </div>
                 </div>
@@ -1277,11 +1839,16 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                     </label>
                     <input
                       type="text"
-                      className="form-control form-control-sm"
                       placeholder="Contoh: Kota Jakarta Pusat"
                       value={formData.kabupatenKota}
                       onChange={(e) => setFormData({ ...formData, kabupatenKota: e.target.value })}
-                      style={{ fontSize: '0.8rem' }}
+                      style={{
+                        width: '100%',
+                        padding: '0.45rem 0.75rem',
+                        fontSize: '0.8rem',
+                        borderRadius: '5px',
+                        border: '1px solid #ced4da',
+                      }}
                     />
                   </div>
 
@@ -1291,11 +1858,16 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                     </label>
                     <input
                       type="text"
-                      className="form-control form-control-sm"
                       placeholder="Contoh: DKI Jakarta"
                       value={formData.provinsi}
                       onChange={(e) => setFormData({ ...formData, provinsi: e.target.value })}
-                      style={{ fontSize: '0.8rem' }}
+                      style={{
+                        width: '100%',
+                        padding: '0.45rem 0.75rem',
+                        fontSize: '0.8rem',
+                        borderRadius: '5px',
+                        border: '1px solid #ced4da',
+                      }}
                     />
                   </div>
                 </div>
@@ -1305,10 +1877,16 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                     Status Data
                   </label>
                   <select
-                    className="form-select form-select-sm"
                     value={formData.status || 'AKTIF'}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value as 'AKTIF' | 'NON-AKTIF' })}
-                    style={{ fontSize: '0.8rem' }}
+                    style={{
+                      width: '100%',
+                      padding: '0.45rem 0.75rem',
+                      fontSize: '0.8rem',
+                      borderRadius: '5px',
+                      border: '1px solid #ced4da',
+                      background: '#ffffff',
+                    }}
                   >
                     <option value="AKTIF">AKTIF (Digunakan)</option>
                     <option value="NON-AKTIF">NON-AKTIF (Diabaikan)</option>
@@ -1329,12 +1907,12 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               >
                 <button
                   type="button"
-                  className="btn btn-sm btn-outline-secondary"
+                  className="btn btn-outline btn-sm"
                   onClick={() => setModalMode(null)}
                 >
                   Batal
                 </button>
-                <button type="submit" className="btn btn-sm btn-primary">
+                <button type="submit" className="btn btn-primary btn-sm">
                   {modalMode === 'create' ? 'Simpan Data' : 'Simpan Perubahan'}
                 </button>
               </div>
@@ -1369,7 +1947,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Eye size={16} color="#3577f1" />
+                <Eye size={16} color="#405189" />
                 <h4 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 700, color: '#212529' }}>
                   Detail Referensi Kode Pos
                 </h4>
@@ -1388,32 +1966,48 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                 style={{
                   textAlign: 'center',
                   padding: '0.85rem',
-                  background: 'rgba(53, 119, 241, 0.06)',
+                  background: 'rgba(64, 81, 137, 0.06)',
                   borderRadius: '6px',
-                  border: '1px solid rgba(53, 119, 241, 0.15)',
+                  border: '1px solid rgba(64, 81, 137, 0.15)',
                 }}
               >
                 <div style={{ fontSize: '0.72rem', color: '#878a99', fontWeight: 600 }}>KODE POS RESMI</div>
-                <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#3577f1', letterSpacing: '1px', fontFamily: 'monospace' }}>
+                <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#405189', letterSpacing: '1px', fontFamily: 'monospace' }}>
                   {detailItem.kodePos}
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '0.5rem', fontSize: '0.8rem', marginTop: '0.5rem' }}>
-                <span style={{ color: '#878a99' }}>Kelurahan / Desa:</span>
-                <span style={{ fontWeight: 600, color: '#212529' }}>{detailItem.kelurahan || '-'}</span>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem', fontSize: '0.8rem' }}>
+                <div style={{ background: '#f8f9fa', padding: '0.6rem 0.75rem', borderRadius: '5px' }}>
+                  <div style={{ fontSize: '0.7rem', color: '#878a99', fontWeight: 600 }}>KELURAHAN / DESA</div>
+                  <div style={{ fontWeight: 600, color: '#212529', marginTop: '0.15rem' }}>{detailItem.kelurahan || '-'}</div>
+                </div>
+                <div style={{ background: '#f8f9fa', padding: '0.6rem 0.75rem', borderRadius: '5px' }}>
+                  <div style={{ fontSize: '0.7rem', color: '#878a99', fontWeight: 600 }}>KECAMATAN</div>
+                  <div style={{ fontWeight: 600, color: '#212529', marginTop: '0.15rem' }}>{detailItem.kecamatan || '-'}</div>
+                </div>
+                <div style={{ background: '#f8f9fa', padding: '0.6rem 0.75rem', borderRadius: '5px' }}>
+                  <div style={{ fontSize: '0.7rem', color: '#878a99', fontWeight: 600 }}>KOTA / KABUPATEN</div>
+                  <div style={{ fontWeight: 600, color: '#212529', marginTop: '0.15rem' }}>{detailItem.kabupatenKota || '-'}</div>
+                </div>
+                <div style={{ background: '#f8f9fa', padding: '0.6rem 0.75rem', borderRadius: '5px' }}>
+                  <div style={{ fontSize: '0.7rem', color: '#878a99', fontWeight: 600 }}>PROVINSI</div>
+                  <div style={{ fontWeight: 600, color: '#212529', marginTop: '0.15rem' }}>{detailItem.provinsi || '-'}</div>
+                </div>
+              </div>
 
-                <span style={{ color: '#878a99' }}>Kecamatan:</span>
-                <span style={{ fontWeight: 600, color: '#212529' }}>{detailItem.kecamatan || '-'}</span>
-
-                <span style={{ color: '#878a99' }}>Kota / Kabupaten:</span>
-                <span style={{ fontWeight: 600, color: '#212529' }}>{detailItem.kabupatenKota || '-'}</span>
-
-                <span style={{ color: '#878a99' }}>Provinsi:</span>
-                <span style={{ fontWeight: 600, color: '#212529' }}>{detailItem.provinsi || '-'}</span>
-
-                <span style={{ color: '#878a99' }}>Status:</span>
-                <span style={{ fontWeight: 700, color: detailItem.status === 'NON-AKTIF' ? '#dc2626' : '#059669' }}>
+              <div style={{ background: '#f8f9fa', padding: '0.6rem 0.75rem', borderRadius: '5px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                <span style={{ fontSize: '0.72rem', color: '#878a99', fontWeight: 600 }}>STATUS OPERASIONAL</span>
+                <span
+                  style={{
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    padding: '0.15rem 0.45rem',
+                    borderRadius: '4px',
+                    background: detailItem.status === 'NON-AKTIF' ? 'rgba(240, 101, 72, 0.12)' : 'rgba(10, 179, 156, 0.12)',
+                    color: detailItem.status === 'NON-AKTIF' ? '#f06548' : '#0ab39c',
+                  }}
+                >
                   {detailItem.status || 'AKTIF'}
                 </span>
               </div>
@@ -1431,7 +2025,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
             >
               <button
                 type="button"
-                className="btn btn-sm btn-primary"
+                className="btn btn-outline btn-sm"
                 onClick={() => setModalMode(null)}
               >
                 Tutup
@@ -1454,52 +2048,46 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
               border: '1px solid #e9ebec',
               overflow: 'hidden',
+              textAlign: 'center',
+              padding: '1.5rem',
             }}
           >
-            <div style={{ padding: '1.25rem', textAlign: 'center' }}>
-              <div
-                style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '50%',
-                  background: 'rgba(239, 68, 68, 0.12)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#dc2626',
-                  marginBottom: '0.75rem',
-                }}
-              >
-                <Trash2 size={22} />
-              </div>
-              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#212529', margin: '0 0 0.35rem' }}>
-                Hapus Data Kode Pos?
-              </h4>
-              <p style={{ fontSize: '0.78rem', color: '#878a99', margin: 0 }}>
-                Apakah Anda yakin ingin menghapus data Kode Pos{' '}
-                <strong>{kodePosList[deleteTargetIndex]?.kodePos}</strong> ({kodePosList[deleteTargetIndex]?.kelurahan})?
-              </p>
-            </div>
-
             <div
               style={{
-                padding: '0.75rem 1.25rem',
-                borderTop: '1px solid #e9ebec',
+                width: '48px',
+                height: '48px',
+                borderRadius: '50%',
+                background: 'rgba(240, 101, 72, 0.1)',
+                color: '#f06548',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'flex-end',
-                gap: '0.5rem',
-                background: '#f8f9fa',
+                justifyContent: 'center',
+                margin: '0 auto 1rem',
               }}
             >
+              <Trash2 size={24} />
+            </div>
+            <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#212529', margin: '0 0 0.5rem' }}>
+              Hapus Data Kode Pos?
+            </h4>
+            <p style={{ fontSize: '0.82rem', color: '#878a99', margin: '0 0 1.25rem', lineHeight: 1.5 }}>
+              Data Kode Pos <strong>{kodePosList[deleteTargetIndex]?.kodePos}</strong> (
+              {kodePosList[deleteTargetIndex]?.kelurahan}) akan dihapus dari daftar referensi.
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
               <button
                 type="button"
-                className="btn btn-sm btn-outline-secondary"
+                className="btn btn-outline btn-sm"
                 onClick={() => setDeleteTargetIndex(null)}
               >
                 Batal
               </button>
-              <button type="button" className="btn btn-sm btn-danger" onClick={handleConfirmDelete}>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={handleConfirmDelete}
+                style={{ background: '#f06548', borderColor: '#f06548', color: '#ffffff' }}
+              >
                 Ya, Hapus Data
               </button>
             </div>
@@ -1520,52 +2108,47 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
               border: '1px solid #e9ebec',
               overflow: 'hidden',
+              textAlign: 'center',
+              padding: '1.5rem',
             }}
           >
-            <div style={{ padding: '1.25rem', textAlign: 'center' }}>
-              <div
-                style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '50%',
-                  background: 'rgba(247, 184, 75, 0.12)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#d97706',
-                  marginBottom: '0.75rem',
-                }}
-              >
-                <RefreshCw size={22} />
-              </div>
-              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#212529', margin: '0 0 0.35rem' }}>
-                Reset ke Data Awal Bawaan?
-              </h4>
-              <p style={{ fontSize: '0.78rem', color: '#878a99', margin: 0 }}>
-                Data Kode Pos saat ini akan dikembalikan ke data percontohan standar awal ({DEFAULT_KODEPOS_DATA.length} data).
-              </p>
-            </div>
-
             <div
               style={{
-                padding: '0.75rem 1.25rem',
-                borderTop: '1px solid #e9ebec',
+                width: '48px',
+                height: '48px',
+                borderRadius: '50%',
+                background: 'rgba(240, 101, 72, 0.1)',
+                color: '#f06548',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'flex-end',
-                gap: '0.5rem',
-                background: '#f8f9fa',
+                justifyContent: 'center',
+                margin: '0 auto 1rem',
               }}
             >
+              <RefreshCw size={24} />
+            </div>
+            <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#212529', margin: '0 0 0.5rem' }}>
+              Kembalikan ke Data Bawaan?
+            </h4>
+            <p style={{ fontSize: '0.82rem', color: '#878a99', margin: '0 0 1.25rem', lineHeight: 1.5 }}>
+              Semua data tambahan / modifikasi kode pos saat ini akan digantikan kembali dengan daftar standar{' '}
+              <strong>{DEFAULT_KODEPOS_DATA.length} Kode Pos</strong> bawaan sistem.
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
               <button
                 type="button"
-                className="btn btn-sm btn-outline-secondary"
+                className="btn btn-outline btn-sm"
                 onClick={() => setShowResetConfirm(false)}
               >
                 Batal
               </button>
-              <button type="button" className="btn btn-sm btn-warning" onClick={handleConfirmReset}>
-                Ya, Reset Sekarang
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={handleConfirmReset}
+                style={{ background: '#f06548', borderColor: '#f06548', color: '#ffffff' }}
+              >
+                Ya, Reset Standar
               </button>
             </div>
           </div>

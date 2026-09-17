@@ -67,20 +67,25 @@ export default async function handler(req: any, res: any) {
       );
     `;
 
-    // GET
+    // GET — baca dari tabel kodepos_data (source of truth, menampung semua chunk)
     if (req.method === 'GET') {
       const result = await sql`
-        SELECT data, updated_at FROM app_store
-        WHERE key = 'kodepos_master_data' LIMIT 1;
+        SELECT kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, status
+        FROM kodepos_data
+        ORDER BY id;
       `;
-      if (result && result.length > 0 && result[0].data) {
-        const dataArr = Array.isArray(result[0].data) ? result[0].data : [];
-        return res.status(200).json({ ok: true, configured: true, count: dataArr.length, data: dataArr, updatedAt: result[0].updated_at });
-      }
-      return res.status(200).json({ ok: true, configured: true, count: 0, data: [] });
+      const data = (result || []).map((r: any) => ({
+        kodePos: r.kode_pos ?? '',
+        kelurahan: r.kelurahan ?? '',
+        kecamatan: r.kecamatan ?? '',
+        kabupatenKota: r.kabupaten_kota ?? '',
+        provinsi: r.provinsi ?? '',
+        status: r.status ?? 'AKTIF',
+      }));
+      return res.status(200).json({ ok: true, configured: true, count: data.length, data });
     }
 
-    // POST
+    // POST — simpan batch (replace/append) dengan INSERT multi-baris
     if (req.method === 'POST') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
       const { rows, mode = 'replace' } = body;
@@ -93,25 +98,32 @@ export default async function handler(req: any, res: any) {
         await sql`TRUNCATE TABLE kodepos_data RESTART IDENTITY;`;
       }
 
-      const CHUNK = 500;
+      const BATCH = 500; // 500 baris x 6 kolom = 3000 parameter (aman di bawah limit 65535)
       let inserted = 0;
-      for (let i = 0; i < rows.length; i += CHUNK) {
-        const chunk = rows.slice(i, i + CHUNK);
-        for (const r of chunk) {
-          await sql`
-            INSERT INTO kodepos_data (kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, status, updated_at)
-            VALUES (${r.kodePos||''}, ${r.kelurahan||''}, ${r.kecamatan||''}, ${r.kabupatenKota||''}, ${r.provinsi||''}, ${r.status||'AKTIF'}, NOW())
-            ON CONFLICT DO NOTHING;
-          `;
-          inserted++;
-        }
+      for (let i = 0; i < rows.length; i += BATCH) {
+        const batch = rows.slice(i, i + BATCH);
+        const placeholders: string[] = [];
+        const values: any[] = [];
+        batch.forEach((r: any, j: number) => {
+          const b = j * 6;
+          placeholders.push(`($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6})`);
+          values.push(
+            String(r.kodePos ?? ''),
+            String(r.kelurahan ?? ''),
+            String(r.kecamatan ?? ''),
+            String(r.kabupatenKota ?? ''),
+            String(r.provinsi ?? ''),
+            String(r.status ?? 'AKTIF')
+          );
+        });
+        await sql.query(
+          `INSERT INTO kodepos_data (kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, status)
+           VALUES ${placeholders.join(',')}
+           ON CONFLICT DO NOTHING;`,
+          values
+        );
+        inserted += batch.length;
       }
-
-      const dataJson = JSON.stringify(rows);
-      await sql`
-        INSERT INTO app_store (key, data, updated_at) VALUES ('kodepos_master_data', ${dataJson}::jsonb, NOW())
-        ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW();
-      `;
 
       return res.status(200).json({ ok: true, configured: true, inserted, total: rows.length, message: `${inserted} data kode pos berhasil disimpan ke Neon Postgres.` });
     }
