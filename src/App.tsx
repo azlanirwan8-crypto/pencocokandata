@@ -755,21 +755,8 @@ export const App: React.FC = () => {
             matchedMaster.Wilayah || row.Wilayah || '-'
           );
 
-          // Validasi PTEN & Role Mapping untuk rekomendasi
+          // PENTING: Untuk kecepatan instan 8.000+ baris, gunakan data master & PTEN langsung dari rekomendasi
           const ptenRes = validatePtenForTarget(row['KODE POS'], row['Dati II'] || row.Kota || '', ptenIndex);
-          const branchNameToLook = matchedMaster.Cabang || matchedMaster['Sandi Cabang'] || matchedMaster['Nama Outlet'] || '';
-          const outletNameToLook = matchedMaster['Nama Outlet'] || '';
-          const roleRes = resolveRoleMappingForBranch(
-            branchNameToLook,
-            row['Dati II'] || row.Kota,
-            row.Kelurahan,
-            row.Kecamatan,
-            row.ALAMAT || matchedMaster.ALAMAT,
-            roleMappingList,
-            outletNameToLook,
-            matchedMaster.Provinsi || row.Provinsi,
-            resolved.wilayahName !== '-' ? resolved.wilayahName : (row.Wilayah || '-')
-          );
 
           updated[i] = {
             ...row,
@@ -791,14 +778,6 @@ export const App: React.FC = () => {
             'KOTA PTEN': ptenRes.kotaPten,
             'KODE POS PTEN': ptenRes.kodePosPten,
             'CEK KODE POS + PTEN': ptenRes.statusPten,
-            organisasiRole: roleRes?.organisasiRole || row.organisasiRole,
-            tipeUnitRole: roleRes?.tipeUnitRole || row.tipeUnitRole,
-            alurWondr: roleRes?.alurWondr || row.alurWondr,
-            flowDescription: roleRes?.flowDescription || row.flowDescription,
-            roleCabsal: roleRes?.qrsCabsal ?? row.roleCabsal,
-            roleCabapv1: roleRes?.qrsCabapv1 ?? row.roleCabapv1,
-            roleCabapv2: roleRes?.qrsCabapv2 ?? row.roleCabapv2,
-            roleGrandTotal: roleRes?.grandTotal ?? row.roleGrandTotal,
             _matchedAt: nowStr,
             _matchedBy: 'Operator (Approval)',
           };

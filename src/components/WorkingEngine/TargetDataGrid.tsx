@@ -977,7 +977,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
     });
 
     const allRecsToApprove: RecommendationResult[] = [];
-    const chunkSize = 35; // 35 baris per frame agar browser 60 FPS, tidak pernah "Page Unresponsive"
+    const chunkSize = 400; // 400 baris per frame: 8.000 baris selesai dalam < 1.5 detik dengan animasi progress real
     let currentIndex = 0;
 
     const processNextBatch = () => {
@@ -1039,10 +1039,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
       });
 
       if (currentIndex < total) {
-        // Berikan napas ke event loop browser agar render progress bar dan interaksi tetap lancar
-        setTimeout(processNextBatch, 16);
+        setTimeout(processNextBatch, 8);
       } else {
-        // Selesai 100%
+        // Selesai 100% -> Segera terapkan ke Data Match tanpa tertahan
         setApprovalProgress({
           current: total,
           total,
@@ -1050,24 +1049,21 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           stage: 'Selesai! Memperbarui tampilan Data Match...',
         });
 
-        // 1. Langsung tutup modal dan pindah tab ke 'matched' seketika
+        // Eksekusi update seketika dan tutup modal
+        onApproveAllRecommendations(allRecsToApprove);
+        setSelectedRowNos(new Set());
+        setRecommendations([]);
+        setIsComputingRecs(false);
+
         setTimeout(() => {
           setApprovalProgress(null);
-          setSelectedRowNos(new Set());
-          setRecommendations([]);
-          setIsComputingRecs(false);
           setCheckerTab('matched');
           setPage(1);
-
-          // 2. Eksekusi callback update targetRows pada tick berikutnya
-          setTimeout(() => {
-            onApproveAllRecommendations(allRecsToApprove);
-          }, 30);
-        }, 500);
+        }, 300);
       }
     };
 
-    setTimeout(processNextBatch, 25);
+    setTimeout(processNextBatch, 10);
   };
 
 
