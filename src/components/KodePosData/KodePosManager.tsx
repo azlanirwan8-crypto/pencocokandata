@@ -506,17 +506,13 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '2rem' }}>
       {/* 1. Top Header Card matching Wilayah, PTEN & Role Mapping */}
       <div
+        className="glass-card"
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           gap: '0.85rem',
-          background: '#ffffff',
-          padding: '1.15rem 1.4rem',
-          borderRadius: '8px',
-          border: '1px solid #e9ebec',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
@@ -531,15 +527,14 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               justifyContent: 'center',
               color: '#405189',
               border: '1px solid rgba(64, 81, 137, 0.3)',
+              flexShrink: 0,
             }}
           >
             <Mail size={22} />
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <h3 style={{ fontSize: '1.08rem', fontWeight: 700, color: '#212529', margin: 0 }}>
-                Master Data Kode Pos Indonesia
-              </h3>
+            <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span>Master Data Kode Pos Indonesia</span>
               <span
                 style={{
                   fontSize: '0.72rem',
@@ -553,9 +548,9 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                 {kodePosList.length.toLocaleString('id-ID')} Data
               </span>
             </div>
-            <p style={{ fontSize: '0.82rem', color: '#878a99', margin: '0.2rem 0 0' }}>
+            <div className="section-subtitle">
               Referensi resmi kode pos wilayah kelurahan, kecamatan, kota/kabupaten & provinsi seluruh Indonesia.
-            </p>
+            </div>
           </div>
         </div>
 
@@ -573,14 +568,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
             type="button"
             className="btn btn-primary btn-sm"
             onClick={() => fileInputRef.current?.click()}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              padding: '0.45rem 0.95rem',
-              fontSize: '0.8rem',
-              fontWeight: 600,
-            }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
           >
             <Upload size={14} />
             <span>Impor Excel</span>
@@ -591,13 +579,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
             className="btn btn-outline btn-sm"
             onClick={handleExport}
             disabled={kodePosList.length === 0}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              padding: '0.45rem 0.9rem',
-              fontSize: '0.8rem',
-            }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
           >
             <Download size={14} />
             <span>Ekspor Excel</span>
@@ -607,13 +589,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
             type="button"
             className="btn btn-outline btn-sm"
             onClick={handleDownloadTemplate}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              padding: '0.45rem 0.85rem',
-              fontSize: '0.8rem',
-            }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
           >
             <Download size={13} />
             <span>Template Excel</span>
@@ -623,15 +599,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
             type="button"
             className="btn btn-outline btn-sm"
             onClick={() => setShowResetConfirm(true)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              padding: '0.45rem 0.85rem',
-              fontSize: '0.8rem',
-              color: '#f06548',
-              borderColor: 'rgba(240, 101, 72, 0.3)',
-            }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#f06548', borderColor: 'rgba(240, 101, 72, 0.3)' }}
             title="Kembalikan ke data Kode Pos bawaan"
           >
             <RefreshCw size={13} />
@@ -653,16 +621,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               setEditingIndex(null);
               setModalMode('create');
             }}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              padding: '0.45rem 0.95rem',
-              fontSize: '0.8rem',
-              background: '#0ab39c',
-              borderColor: '#0ab39c',
-              color: '#ffffff',
-            }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
           >
             <Plus size={14} />
             <span>Tambah Data</span>
@@ -673,17 +632,14 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
       {/* 2. Informative Executive Banner */}
       {showBanner && (
         <div
+          className="glass-card"
           style={{
             background: 'linear-gradient(135deg, #f0f4ff 0%, #e6f7ff 100%)',
-            borderRadius: '8px',
             border: '1px solid #d0e2ff',
-            padding: '1.1rem 1.35rem',
             display: 'flex',
             alignItems: 'flex-start',
             justifyContent: 'space-between',
             gap: '0.85rem',
-            boxShadow: '0 1px 2px rgba(64, 81, 137, 0.04)',
-            position: 'relative',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem', flex: 1 }}>
@@ -796,15 +752,10 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
       )}
 
       {/* 3. 5 KPI Metric Cards matching other menus */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '1rem',
-        }}
-      >
+      <div className="metrics-grid">
         {/* Card 1: Total Kode Pos */}
         <div
+          className="metric-card blue"
           onClick={() => {
             setSelectedProvinsi('ALL');
             setSelectedKota('ALL');
@@ -812,283 +763,90 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
             setSearchTerm('');
           }}
           style={{
-            background: '#ffffff',
-            borderRadius: '8px',
-            padding: '1rem 1.25rem',
-            border: selectedProvinsi === 'ALL' && !searchTerm ? '2px solid #405189' : '1px solid #e9ebec',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
             cursor: 'pointer',
-            transition: 'all 0.18s ease-in-out',
+            border: selectedProvinsi === 'ALL' && !searchTerm ? '2px solid #405189' : undefined,
           }}
           title="Klik untuk melihat Semua Kode Pos"
         >
-          <div>
-            <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              TOTAL KODE POS
-            </span>
-            <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#212529', marginTop: '0.25rem' }}>
-              {stats.totalRecords.toLocaleString('id-ID')}
-            </div>
-            <div style={{ fontSize: '0.72rem', color: '#878a99', marginTop: '0.2rem' }}>
-              {stats.totalAktif.toLocaleString('id-ID')} Aktif
+          <div className="metric-header">
+            <span className="metric-title">TOTAL KODE POS</span>
+            <div className="metric-icon-bubble">
+              <Mail size={14} />
             </div>
           </div>
-          <div
-            style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '8px',
-              background: 'rgba(64, 81, 137, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#405189',
-            }}
-          >
-            <Mail size={22} />
-          </div>
+          <div className="metric-value">{stats.totalRecords.toLocaleString('id-ID')}</div>
+          <div className="metric-footer">{stats.totalAktif.toLocaleString('id-ID')} Aktif</div>
         </div>
 
         {/* Card 2: Total Provinsi */}
-        <div
-          style={{
-            background: '#ffffff',
-            borderRadius: '8px',
-            padding: '1rem 1.25rem',
-            border: '1px solid #e9ebec',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div>
-            <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              TOTAL PROVINSI
-            </span>
-            <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#0ab39c', marginTop: '0.25rem' }}>
-              {stats.totalProvinsi.toLocaleString('id-ID')}
-            </div>
-            <div style={{ fontSize: '0.72rem', color: '#878a99', marginTop: '0.2rem' }}>
-              Cakupan Nasional
+        <div className="metric-card emerald">
+          <div className="metric-header">
+            <span className="metric-title">TOTAL PROVINSI</span>
+            <div className="metric-icon-bubble">
+              <MapPin size={14} />
             </div>
           </div>
-          <div
-            style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '8px',
-              background: 'rgba(10, 179, 156, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#0ab39c',
-            }}
-          >
-            <MapPin size={22} />
-          </div>
+          <div className="metric-value">{stats.totalProvinsi.toLocaleString('id-ID')}</div>
+          <div className="metric-footer">Cakupan Nasional</div>
         </div>
 
         {/* Card 3: Total Kota / Kab */}
-        <div
-          style={{
-            background: '#ffffff',
-            borderRadius: '8px',
-            padding: '1rem 1.25rem',
-            border: '1px solid #e9ebec',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div>
-            <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              TOTAL KOTA / KAB
-            </span>
-            <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#d68b0c', marginTop: '0.25rem' }}>
-              {stats.totalKota.toLocaleString('id-ID')}
-            </div>
-            <div style={{ fontSize: '0.72rem', color: '#878a99', marginTop: '0.2rem' }}>
-              Dati II Terdaftar
+        <div className="metric-card amber">
+          <div className="metric-header">
+            <span className="metric-title">TOTAL KOTA / KAB</span>
+            <div className="metric-icon-bubble">
+              <Building2 size={14} />
             </div>
           </div>
-          <div
-            style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '8px',
-              background: 'rgba(247, 184, 75, 0.15)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#d68b0c',
-            }}
-          >
-            <Building2 size={22} />
-          </div>
+          <div className="metric-value">{stats.totalKota.toLocaleString('id-ID')}</div>
+          <div className="metric-footer">Dati II Terdaftar</div>
         </div>
 
         {/* Card 4: Total Kecamatan */}
-        <div
-          style={{
-            background: '#ffffff',
-            borderRadius: '8px',
-            padding: '1rem 1.25rem',
-            border: '1px solid #e9ebec',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div>
-            <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              TOTAL KECAMATAN
-            </span>
-            <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#3577f1', marginTop: '0.25rem' }}>
-              {stats.totalKecamatan.toLocaleString('id-ID')}
-            </div>
-            <div style={{ fontSize: '0.72rem', color: '#878a99', marginTop: '0.2rem' }}>
-              Wilayah Kecamatan
+        <div className="metric-card purple">
+          <div className="metric-header">
+            <span className="metric-title">TOTAL KECAMATAN</span>
+            <div className="metric-icon-bubble">
+              <Sparkles size={14} />
             </div>
           </div>
-          <div
-            style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '8px',
-              background: 'rgba(53, 119, 241, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#3577f1',
-            }}
-          >
-            <Sparkles size={22} />
-          </div>
+          <div className="metric-value">{stats.totalKecamatan.toLocaleString('id-ID')}</div>
+          <div className="metric-footer">Wilayah Kecamatan</div>
         </div>
 
         {/* Card 5: Total Kelurahan */}
-        <div
-          style={{
-            background: '#ffffff',
-            borderRadius: '8px',
-            padding: '1rem 1.25rem',
-            border: '1px solid #e9ebec',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div>
-            <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              TOTAL KELURAHAN
-            </span>
-            <div style={{ fontSize: '1.45rem', fontWeight: 700, color: '#299cdb', marginTop: '0.25rem' }}>
-              {stats.totalKelurahan.toLocaleString('id-ID')}
-            </div>
-            <div style={{ fontSize: '0.72rem', color: '#878a99', marginTop: '0.2rem' }}>
-              Kelurahan / Desa
+        <div className="metric-card cyan">
+          <div className="metric-header">
+            <span className="metric-title">TOTAL KELURAHAN</span>
+            <div className="metric-icon-bubble">
+              <CheckCircle2 size={14} />
             </div>
           </div>
-          <div
-            style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '8px',
-              background: 'rgba(41, 156, 219, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#299cdb',
-            }}
-          >
-            <CheckCircle2 size={22} />
-          </div>
+          <div className="metric-value">{stats.totalKelurahan.toLocaleString('id-ID')}</div>
+          <div className="metric-footer">Kelurahan / Desa</div>
         </div>
       </div>
 
       {/* 4. Main Card Container with Sub-tabs */}
-      <div
-        style={{
-          background: '#ffffff',
-          borderRadius: '8px',
-          border: '1px solid #e9ebec',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-          padding: '1.15rem 1.35rem',
-        }}
-      >
+      <div className="glass-card" style={{ padding: '1.15rem 1.35rem' }}>
         {/* Sub-Tabs Navigation */}
-        <div
-          style={{
-            display: 'inline-flex',
-            background: '#f3f6f9',
-            padding: '3px',
-            borderRadius: '6px',
-            border: '1px solid #e9ebec',
-            marginBottom: '1rem',
-          }}
-        >
+        <div className="nav-tabs" style={{ display: 'inline-flex', marginBottom: '1rem' }}>
           <button
             type="button"
+            className={`nav-tab-btn${activeSubTab === 'list' ? ' active' : ''}`}
             onClick={() => setActiveSubTab('list')}
-            style={{
-              padding: '0.4rem 0.95rem',
-              fontSize: '0.8rem',
-              fontWeight: activeSubTab === 'list' ? 700 : 500,
-              color: activeSubTab === 'list' ? '#405189' : '#878a99',
-              background: activeSubTab === 'list' ? '#ffffff' : 'transparent',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              boxShadow: activeSubTab === 'list' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
-              transition: 'all 0.15s',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-            }}
           >
-            <Mail size={14} style={{ color: activeSubTab === 'list' ? '#405189' : '#878a99' }} />
+            <Mail size={14} />
             <span>Daftar Kode Pos Indonesia</span>
-            <span
-              style={{
-                background: activeSubTab === 'list' ? '#eef0f7' : '#e9ebec',
-                color: activeSubTab === 'list' ? '#405189' : '#878a99',
-                padding: '0.05rem 0.35rem',
-                borderRadius: '10px',
-                fontSize: '0.68rem',
-                fontWeight: 600,
-              }}
-            >
-              {filteredList.length.toLocaleString('id-ID')}
-            </span>
+            <span className="nav-tab-badge">{filteredList.length.toLocaleString('id-ID')}</span>
           </button>
 
           <button
             type="button"
+            className={`nav-tab-btn${activeSubTab === 'lookup' ? ' active' : ''}`}
             onClick={() => setActiveSubTab('lookup')}
-            style={{
-              padding: '0.4rem 0.95rem',
-              fontSize: '0.8rem',
-              fontWeight: activeSubTab === 'lookup' ? 700 : 500,
-              color: activeSubTab === 'lookup' ? '#405189' : '#878a99',
-              background: activeSubTab === 'lookup' ? '#ffffff' : 'transparent',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              boxShadow: activeSubTab === 'lookup' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
-              transition: 'all 0.15s',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-            }}
           >
-            <Search size={14} style={{ color: activeSubTab === 'lookup' ? '#405189' : '#878a99' }} />
+            <Search size={14} />
             <span>Pencarian Cepat & Verifikasi Kode Pos</span>
           </button>
         </div>
@@ -1097,36 +855,17 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
         {activeSubTab === 'list' && (
           <>
             {/* Filter Toolbar */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '0.75rem',
-                marginBottom: '1rem',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: '260px', flexWrap: 'wrap' }}>
+            <div className="filter-toolbar" style={{ marginBottom: '1rem' }}>
+              <div className="filter-group" style={{ flex: 1, minWidth: '260px' }}>
                 {/* Search Bar */}
-                <div style={{ position: 'relative', flex: 1, minWidth: '220px', maxWidth: '340px' }}>
-                  <Search
-                    size={15}
-                    style={{ position: 'absolute', left: '0.65rem', top: '50%', transform: 'translateY(-50%)', color: '#878a99' }}
-                  />
+                <div className="search-input-wrapper">
+                  <Search size={14} className="search-icon-pos" />
                   <input
                     type="text"
+                    className="search-input"
                     placeholder="Cari Kode Pos, Kelurahan, Kota, Provinsi..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '0.45rem 0.75rem 0.45rem 2.1rem',
-                      fontSize: '0.8rem',
-                      borderRadius: '5px',
-                      border: '1px solid #ced4da',
-                      background: '#ffffff',
-                    }}
                   />
                   {searchTerm && (
                     <button
@@ -1135,13 +874,13 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                       style={{
                         position: 'absolute',
                         right: '8px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
                         background: 'none',
                         border: 'none',
                         color: '#878a99',
                         cursor: 'pointer',
                         padding: 0,
+                        display: 'inline-flex',
+                        alignItems: 'center',
                       }}
                     >
                       <X size={13} />
@@ -1151,19 +890,11 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
 
                 {/* Filter Provinsi Dropdown */}
                 <select
+                  className="filter-select"
                   value={selectedProvinsi}
                   onChange={(e) => {
                     setSelectedProvinsi(e.target.value);
                     setSelectedKota('ALL');
-                  }}
-                  style={{
-                    padding: '0.45rem 0.75rem',
-                    fontSize: '0.8rem',
-                    borderRadius: '5px',
-                    border: '1px solid #ced4da',
-                    background: '#ffffff',
-                    color: '#495057',
-                    cursor: 'pointer',
                   }}
                 >
                   <option value="ALL">Semua Provinsi ({provinsiOptions.length})</option>
@@ -1176,17 +907,9 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
 
                 {/* Filter Kota Dropdown */}
                 <select
+                  className="filter-select"
                   value={selectedKota}
                   onChange={(e) => setSelectedKota(e.target.value)}
-                  style={{
-                    padding: '0.45rem 0.75rem',
-                    fontSize: '0.8rem',
-                    borderRadius: '5px',
-                    border: '1px solid #ced4da',
-                    background: '#ffffff',
-                    color: '#495057',
-                    cursor: 'pointer',
-                  }}
                 >
                   <option value="ALL">Semua Kota/Kab ({kotaOptions.length})</option>
                   {kotaOptions.map((k) => (
@@ -1198,17 +921,9 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
 
                 {/* Filter Status */}
                 <select
+                  className="filter-select"
                   value={selectedStatus}
                   onChange={(e) => setSelectedStatus(e.target.value)}
-                  style={{
-                    padding: '0.45rem 0.75rem',
-                    fontSize: '0.8rem',
-                    borderRadius: '5px',
-                    border: '1px solid #ced4da',
-                    background: '#ffffff',
-                    color: '#495057',
-                    cursor: 'pointer',
-                  }}
                 >
                   <option value="ALL">Semua Status</option>
                   <option value="AKTIF">Status AKTIF</option>
@@ -1217,23 +932,15 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               </div>
 
               {/* Page Size Selector */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <label style={{ fontSize: '0.78rem', color: '#878a99' }}>Tampilkan:</label>
+              <div className="filter-group">
+                <label style={{ fontSize: '0.75rem', color: '#878a99' }}>Tampilkan:</label>
                 <select
+                  className="filter-select"
                   value={pageSize}
                   onChange={(e) => {
                     const val = e.target.value === 'ALL' ? 'ALL' : Number(e.target.value);
                     setPageSize(val);
                     setPage(1);
-                  }}
-                  style={{
-                    padding: '0.35rem 0.65rem',
-                    fontSize: '0.78rem',
-                    borderRadius: '4px',
-                    border: '1px solid #ced4da',
-                    background: '#ffffff',
-                    color: '#495057',
-                    cursor: 'pointer',
                   }}
                 >
                   <option value={10}>10 Baris</option>
@@ -1494,24 +1201,21 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
             {/* Pagination Footer */}
             {pageSize !== 'ALL' && totalPages > 1 && (
               <div
+                className="pagination-row"
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
                   flexWrap: 'wrap',
                   gap: '0.75rem',
                   marginTop: '1rem',
-                  paddingTop: '0.75rem',
                   borderTop: '1px solid #e9ebec',
                 }}
               >
-                <span style={{ fontSize: '0.78rem', color: '#878a99' }}>
+                <span>
                   Menampilkan <strong>{((page - 1) * (pageSize as number)) + 1}</strong> -{' '}
                   <strong>{Math.min(page * (pageSize as number), filteredList.length)}</strong> dari{' '}
                   <strong>{filteredList.length.toLocaleString('id-ID')}</strong> entri
                 </span>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                <div className="pagination-controls">
                   <button
                     type="button"
                     className="btn btn-outline btn-sm"
@@ -1730,166 +1434,100 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
 
       {/* 5. Modal: Create / Edit Form */}
       {(modalMode === 'create' || modalMode === 'edit') && (
-        <div className="modal-backdrop" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div
-            className="modal-container"
-            style={{
-              maxWidth: '520px',
-              width: '92%',
-              background: '#ffffff',
-              borderRadius: '8px',
-              boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
-              border: '1px solid #e9ebec',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                padding: '0.85rem 1.25rem',
-                borderBottom: '1px solid #e9ebec',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                background: '#f8f9fa',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className="modal-backdrop">
+          <div className="modal-container" style={{ maxWidth: '520px' }}>
+            <div className="modal-header">
+              <h4 className="modal-title">
                 <Mail size={16} color="#405189" />
-                <h4 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 700, color: '#212529' }}>
-                  {modalMode === 'create' ? 'Tambah Data Kode Pos' : 'Edit Data Kode Pos'}
-                </h4>
-              </div>
+                {modalMode === 'create' ? 'Tambah Data Kode Pos' : 'Edit Data Kode Pos'}
+              </h4>
               <button
                 type="button"
+                className="modal-close"
                 onClick={() => setModalMode(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#878a99' }}
               >
                 <X size={16} />
               </button>
             </div>
 
-            <form onSubmit={handleFormSubmit}>
-              <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                <div>
-                  <label style={{ fontSize: '0.76rem', fontWeight: 600, color: '#495057', display: 'block', marginBottom: '0.25rem' }}>
-                    Kode Pos (5 Digit) <span style={{ color: '#f06548' }}>*</span>
+            <form onSubmit={handleFormSubmit} style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <div className="modal-body">
+                <div className="form-field">
+                  <label className="form-label">
+                    Kode Pos (5 Digit) <span className="req">*</span>
                   </label>
                   <input
                     type="text"
                     required
                     maxLength={5}
                     placeholder="Contoh: 10110"
+                    className="form-control"
+                    style={{ fontFamily: 'monospace', fontWeight: 700 }}
                     value={formData.kodePos}
                     onChange={(e) => setFormData({ ...formData, kodePos: e.target.value.replace(/\D/g, '') })}
-                    style={{
-                      width: '100%',
-                      padding: '0.45rem 0.75rem',
-                      fontSize: '0.82rem',
-                      fontFamily: 'monospace',
-                      fontWeight: 700,
-                      borderRadius: '5px',
-                      border: '1px solid #ced4da',
-                    }}
                   />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                  <div>
-                    <label style={{ fontSize: '0.76rem', fontWeight: 600, color: '#495057', display: 'block', marginBottom: '0.25rem' }}>
-                      Kelurahan / Desa <span style={{ color: '#f06548' }}>*</span>
+                <div className="form-grid-2">
+                  <div className="form-field">
+                    <label className="form-label">
+                      Kelurahan / Desa <span className="req">*</span>
                     </label>
                     <input
                       type="text"
                       required
                       placeholder="Contoh: Gambir"
+                      className="form-control"
                       value={formData.kelurahan}
                       onChange={(e) => setFormData({ ...formData, kelurahan: e.target.value })}
-                      style={{
-                        width: '100%',
-                        padding: '0.45rem 0.75rem',
-                        fontSize: '0.8rem',
-                        borderRadius: '5px',
-                        border: '1px solid #ced4da',
-                      }}
                     />
                   </div>
 
-                  <div>
-                    <label style={{ fontSize: '0.76rem', fontWeight: 600, color: '#495057', display: 'block', marginBottom: '0.25rem' }}>
-                      Kecamatan <span style={{ color: '#f06548' }}>*</span>
+                  <div className="form-field">
+                    <label className="form-label">
+                      Kecamatan <span className="req">*</span>
                     </label>
                     <input
                       type="text"
                       required
                       placeholder="Contoh: Gambir"
+                      className="form-control"
                       value={formData.kecamatan}
                       onChange={(e) => setFormData({ ...formData, kecamatan: e.target.value })}
-                      style={{
-                        width: '100%',
-                        padding: '0.45rem 0.75rem',
-                        fontSize: '0.8rem',
-                        borderRadius: '5px',
-                        border: '1px solid #ced4da',
-                      }}
                     />
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                  <div>
-                    <label style={{ fontSize: '0.76rem', fontWeight: 600, color: '#495057', display: 'block', marginBottom: '0.25rem' }}>
-                      Kota / Kabupaten
-                    </label>
+                <div className="form-grid-2">
+                  <div className="form-field">
+                    <label className="form-label">Kota / Kabupaten</label>
                     <input
                       type="text"
                       placeholder="Contoh: Kota Jakarta Pusat"
+                      className="form-control"
                       value={formData.kabupatenKota}
                       onChange={(e) => setFormData({ ...formData, kabupatenKota: e.target.value })}
-                      style={{
-                        width: '100%',
-                        padding: '0.45rem 0.75rem',
-                        fontSize: '0.8rem',
-                        borderRadius: '5px',
-                        border: '1px solid #ced4da',
-                      }}
                     />
                   </div>
 
-                  <div>
-                    <label style={{ fontSize: '0.76rem', fontWeight: 600, color: '#495057', display: 'block', marginBottom: '0.25rem' }}>
-                      Provinsi
-                    </label>
+                  <div className="form-field">
+                    <label className="form-label">Provinsi</label>
                     <input
                       type="text"
                       placeholder="Contoh: DKI Jakarta"
+                      className="form-control"
                       value={formData.provinsi}
                       onChange={(e) => setFormData({ ...formData, provinsi: e.target.value })}
-                      style={{
-                        width: '100%',
-                        padding: '0.45rem 0.75rem',
-                        fontSize: '0.8rem',
-                        borderRadius: '5px',
-                        border: '1px solid #ced4da',
-                      }}
                     />
                   </div>
                 </div>
 
-                <div>
-                  <label style={{ fontSize: '0.76rem', fontWeight: 600, color: '#495057', display: 'block', marginBottom: '0.25rem' }}>
-                    Status Data
-                  </label>
+                <div className="form-field">
+                  <label className="form-label">Status Data</label>
                   <select
+                    className="form-control"
                     value={formData.status || 'AKTIF'}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value as 'AKTIF' | 'NON-AKTIF' })}
-                    style={{
-                      width: '100%',
-                      padding: '0.45rem 0.75rem',
-                      fontSize: '0.8rem',
-                      borderRadius: '5px',
-                      border: '1px solid #ced4da',
-                      background: '#ffffff',
-                    }}
                   >
                     <option value="AKTIF">AKTIF (Digunakan)</option>
                     <option value="NON-AKTIF">NON-AKTIF (Diabaikan)</option>
@@ -1897,17 +1535,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                 </div>
               </div>
 
-              <div
-                style={{
-                  padding: '0.75rem 1.25rem',
-                  borderTop: '1px solid #e9ebec',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'flex-end',
-                  gap: '0.5rem',
-                  background: '#f8f9fa',
-                }}
-              >
+              <div className="modal-footer">
                 <button
                   type="button"
                   className="btn btn-outline btn-sm"
@@ -1926,45 +1554,23 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
 
       {/* 6. Modal: Detail View */}
       {modalMode === 'detail' && detailItem && (
-        <div className="modal-backdrop" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div
-            className="modal-container"
-            style={{
-              maxWidth: '480px',
-              width: '92%',
-              background: '#ffffff',
-              borderRadius: '8px',
-              boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
-              border: '1px solid #e9ebec',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                padding: '0.85rem 1.25rem',
-                borderBottom: '1px solid #e9ebec',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                background: '#f8f9fa',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className="modal-backdrop">
+          <div className="modal-container" style={{ maxWidth: '480px' }}>
+            <div className="modal-header">
+              <h4 className="modal-title">
                 <Eye size={16} color="#405189" />
-                <h4 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 700, color: '#212529' }}>
-                  Detail Referensi Kode Pos
-                </h4>
-              </div>
+                Detail Referensi Kode Pos
+              </h4>
               <button
                 type="button"
+                className="modal-close"
                 onClick={() => setModalMode(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#878a99' }}
               >
                 <X size={16} />
               </button>
             </div>
 
-            <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div className="modal-body">
               <div
                 style={{
                   textAlign: 'center',
@@ -2016,16 +1622,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               </div>
             </div>
 
-            <div
-              style={{
-                padding: '0.75rem 1.25rem',
-                borderTop: '1px solid #e9ebec',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'flex-end',
-                background: '#f8f9fa',
-              }}
-            >
+            <div className="modal-footer">
               <button
                 type="button"
                 className="btn btn-outline btn-sm"
@@ -2040,44 +1637,45 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
 
       {/* 7. Modal: Delete Confirmation */}
       {deleteTargetIndex !== null && (
-        <div className="modal-backdrop" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div
-            className="modal-container"
-            style={{
-              maxWidth: '420px',
-              width: '92%',
-              background: '#ffffff',
-              borderRadius: '8px',
-              boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
-              border: '1px solid #e9ebec',
-              overflow: 'hidden',
-              textAlign: 'center',
-              padding: '1.5rem',
-            }}
-          >
-            <div
-              style={{
-                width: '48px',
-                height: '48px',
-                borderRadius: '50%',
-                background: 'rgba(240, 101, 72, 0.1)',
-                color: '#f06548',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 1rem',
-              }}
-            >
-              <Trash2 size={24} />
+        <div className="modal-backdrop">
+          <div className="modal-container" style={{ maxWidth: '420px' }}>
+            <div className="modal-header">
+              <h4 className="modal-title">
+                <Trash2 size={16} color="#f06548" />
+                Hapus Data Kode Pos?
+              </h4>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setDeleteTargetIndex(null)}
+              >
+                <X size={16} />
+              </button>
             </div>
-            <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#212529', margin: '0 0 0.5rem' }}>
-              Hapus Data Kode Pos?
-            </h4>
-            <p style={{ fontSize: '0.82rem', color: '#878a99', margin: '0 0 1.25rem', lineHeight: 1.5 }}>
-              Data Kode Pos <strong>{kodePosList[deleteTargetIndex]?.kodePos}</strong> (
-              {kodePosList[deleteTargetIndex]?.kelurahan}) akan dihapus dari daftar referensi.
-            </p>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+
+            <div className="modal-body" style={{ alignItems: 'center', textAlign: 'center' }}>
+              <div
+                style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: '50%',
+                  background: 'rgba(240, 101, 72, 0.1)',
+                  color: '#f06548',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <Trash2 size={24} />
+              </div>
+              <p style={{ fontSize: '0.82rem', color: '#878a99', margin: 0, lineHeight: 1.5 }}>
+                Data Kode Pos <strong>{kodePosList[deleteTargetIndex]?.kodePos}</strong> (
+                {kodePosList[deleteTargetIndex]?.kelurahan}) akan dihapus dari daftar referensi.
+              </p>
+            </div>
+
+            <div className="modal-footer" style={{ justifyContent: 'center' }}>
               <button
                 type="button"
                 className="btn btn-outline btn-sm"
@@ -2087,9 +1685,8 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               </button>
               <button
                 type="button"
-                className="btn btn-outline btn-sm"
+                className="btn btn-danger btn-sm"
                 onClick={handleConfirmDelete}
-                style={{ background: '#f06548', borderColor: '#f06548', color: '#ffffff' }}
               >
                 Ya, Hapus Data
               </button>
@@ -2100,44 +1697,45 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
 
       {/* 8. Modal: Reset Confirmation */}
       {showResetConfirm && (
-        <div className="modal-backdrop" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div
-            className="modal-container"
-            style={{
-              maxWidth: '440px',
-              width: '92%',
-              background: '#ffffff',
-              borderRadius: '8px',
-              boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
-              border: '1px solid #e9ebec',
-              overflow: 'hidden',
-              textAlign: 'center',
-              padding: '1.5rem',
-            }}
-          >
-            <div
-              style={{
-                width: '48px',
-                height: '48px',
-                borderRadius: '50%',
-                background: 'rgba(240, 101, 72, 0.1)',
-                color: '#f06548',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 1rem',
-              }}
-            >
-              <RefreshCw size={24} />
+        <div className="modal-backdrop">
+          <div className="modal-container" style={{ maxWidth: '440px' }}>
+            <div className="modal-header">
+              <h4 className="modal-title">
+                <RefreshCw size={16} color="#f06548" />
+                Kembalikan ke Data Bawaan?
+              </h4>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setShowResetConfirm(false)}
+              >
+                <X size={16} />
+              </button>
             </div>
-            <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#212529', margin: '0 0 0.5rem' }}>
-              Kembalikan ke Data Bawaan?
-            </h4>
-            <p style={{ fontSize: '0.82rem', color: '#878a99', margin: '0 0 1.25rem', lineHeight: 1.5 }}>
-              Semua data tambahan / modifikasi kode pos saat ini akan digantikan kembali dengan daftar standar{' '}
-              <strong>{DEFAULT_KODEPOS_DATA.length} Kode Pos</strong> bawaan sistem.
-            </p>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+
+            <div className="modal-body" style={{ alignItems: 'center', textAlign: 'center' }}>
+              <div
+                style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: '50%',
+                  background: 'rgba(240, 101, 72, 0.1)',
+                  color: '#f06548',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <RefreshCw size={24} />
+              </div>
+              <p style={{ fontSize: '0.82rem', color: '#878a99', margin: 0, lineHeight: 1.5 }}>
+                Semua data tambahan / modifikasi kode pos saat ini akan digantikan kembali dengan daftar standar{' '}
+                <strong>{DEFAULT_KODEPOS_DATA.length} Kode Pos</strong> bawaan sistem.
+              </p>
+            </div>
+
+            <div className="modal-footer" style={{ justifyContent: 'center' }}>
               <button
                 type="button"
                 className="btn btn-outline btn-sm"
@@ -2147,9 +1745,8 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               </button>
               <button
                 type="button"
-                className="btn btn-outline btn-sm"
+                className="btn btn-danger btn-sm"
                 onClick={handleConfirmReset}
-                style={{ background: '#f06548', borderColor: '#f06548', color: '#ffffff' }}
               >
                 Ya, Reset Standar
               </button>

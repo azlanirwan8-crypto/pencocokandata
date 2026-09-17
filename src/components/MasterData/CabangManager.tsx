@@ -318,29 +318,23 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '2rem' }}>
       {/* Top Header Card matching Wilayah & PTEN */}
       <div
+        className="glass-card"
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           gap: '0.85rem',
-          background: '#ffffff',
-          padding: '1.15rem 1.4rem',
-          borderRadius: '8px',
-          border: '1px solid #e9ebec',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
           <div
+            className="metric-icon-bubble"
             style={{
               width: '42px',
               height: '42px',
               borderRadius: '8px',
               background: 'linear-gradient(135deg, rgba(64, 81, 137, 0.15) 0%, rgba(10, 179, 156, 0.15) 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
               color: '#405189',
               border: '1px solid rgba(64, 81, 137, 0.2)',
             }}
@@ -348,10 +342,8 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
             <Store size={22} />
           </div>
           <div>
-            <h3 style={{ fontSize: '1.08rem', fontWeight: 700, color: '#212529', margin: 0 }}>
-              Master Data Cabang & Outlet
-            </h3>
-            <p style={{ fontSize: '0.78rem', color: '#878a99', margin: '0.2rem 0 0' }}>
+            <h3 className="section-title">Master Data Cabang & Outlet</h3>
+            <p className="section-subtitle">
               Kelola daftar referensi resmi cabang, sandi cabang, kode cabang, status, alamat, dan kode pos untuk proses pencocokan data.
             </p>
           </div>
@@ -368,66 +360,23 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
           />
 
           {masterRows.length > 0 && (
-            <div
-              style={{
-                display: 'inline-flex',
-                background: '#f3f6f9',
-                padding: '3px',
-                borderRadius: '6px',
-                border: '1px solid #e9ebec',
-                marginRight: '0.35rem',
-              }}
-            >
+            <div className="nav-tabs" style={{ marginRight: '0.35rem' }}>
               <button
                 type="button"
+                className={activeSubTab === 'list' ? 'nav-tab-btn active' : 'nav-tab-btn'}
                 onClick={() => setActiveSubTab('list')}
-                style={{
-                  padding: '0.35rem 0.85rem',
-                  fontSize: '0.78rem',
-                  fontWeight: activeSubTab === 'list' ? 700 : 500,
-                  color: activeSubTab === 'list' ? '#405189' : '#878a99',
-                  background: activeSubTab === 'list' ? '#ffffff' : 'transparent',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  boxShadow: activeSubTab === 'list' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
-                }}
               >
                 Daftar Cabang
               </button>
               <button
                 type="button"
+                className={activeSubTab === 'health' ? 'nav-tab-btn active' : 'nav-tab-btn'}
                 onClick={() => setActiveSubTab('health')}
-                style={{
-                  padding: '0.35rem 0.85rem',
-                  fontSize: '0.78rem',
-                  fontWeight: activeSubTab === 'health' ? 700 : 500,
-                  color: activeSubTab === 'health' ? '#405189' : '#878a99',
-                  background: activeSubTab === 'health' ? '#ffffff' : 'transparent',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  boxShadow: activeSubTab === 'health' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.3rem',
-                }}
               >
                 <ShieldAlert size={13} />
                 <span>Audit & Multi-Outlet</span>
                 {masterHealth.multiOutletCount > 0 && (
-                  <span
-                    style={{
-                      background: '#f06548',
-                      color: '#ffffff',
-                      padding: '0.05rem 0.35rem',
-                      borderRadius: '10px',
-                      fontSize: '0.65rem',
-                      fontWeight: 700,
-                    }}
-                  >
-                    {masterHealth.multiOutletCount}
-                  </span>
+                  <span className="nav-tab-badge">{masterHealth.multiOutletCount}</span>
                 )}
               </button>
             </div>
@@ -438,7 +387,6 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
             className="btn btn-outline btn-sm"
             onClick={() => fileInputRef.current?.click()}
             title="Import berkas Excel data master cabang"
-            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
           >
             <Upload size={13} />
             <span>Impor Excel</span>
@@ -450,7 +398,6 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
               className="btn btn-outline btn-sm"
               onClick={handleExportExcel}
               title="Export data master cabang ke Excel"
-              style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
             >
               <Download size={13} />
               <span>Ekspor Excel</span>
@@ -462,7 +409,6 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
             className="btn btn-outline btn-sm"
             onClick={() => downloadMasterTemplate(false)}
             title="Unduh template Excel master cabang"
-            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
           >
             <FileSpreadsheet size={13} />
             <span>Template Excel</span>
@@ -474,7 +420,7 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
               className="btn btn-outline btn-sm"
               onClick={() => setShowResetConfirm(true)}
               title="Kosongkan seluruh data master cabang"
-              style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#f06548', borderColor: 'rgba(240, 101, 72, 0.3)' }}
+              style={{ color: '#f06548', borderColor: 'rgba(240, 101, 72, 0.3)' }}
             >
               <RefreshCw size={13} />
               <span>Reset Cabang</span>
@@ -485,7 +431,6 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
             type="button"
             className="btn btn-primary btn-sm"
             onClick={handleOpenCreate}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
           >
             <Plus size={14} />
             <span>Tambah Cabang</span>
@@ -494,120 +439,60 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
       </div>
 
       {/* KPI Stats Cards matching Wilayah & PTEN */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-          gap: '0.85rem',
-        }}
-      >
-        <div className="glass-card" style={{ padding: '0.9rem 1.15rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-          <div
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '8px',
-              background: 'rgba(64, 81, 137, 0.1)',
-              color: '#405189',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Building2 size={20} />
-          </div>
-          <div>
-            <div style={{ fontSize: '0.72rem', color: '#878a99', fontWeight: 600, textTransform: 'uppercase' }}>
-              Total Cabang & Outlet
-            </div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#212529' }}>
-              {masterRows.length.toLocaleString('id-ID')} <span style={{ fontSize: '0.75rem', fontWeight: 400, color: '#878a99' }}>Cabang</span>
+      <div className="metrics-grid">
+        <div className="metric-card blue">
+          <div className="metric-header">
+            <span className="metric-title">Total Cabang & Outlet</span>
+            <div className="metric-icon-bubble">
+              <Building2 size={14} />
             </div>
           </div>
+          <div className="metric-value">{masterRows.length.toLocaleString('id-ID')}</div>
+          <div className="metric-footer">Cabang terdaftar dalam sesi</div>
         </div>
 
-        <div className="glass-card" style={{ padding: '0.9rem 1.15rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-          <div
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '8px',
-              background: 'rgba(10, 179, 156, 0.1)',
-              color: '#0ab39c',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Layers size={20} />
-          </div>
-          <div>
-            <div style={{ fontSize: '0.72rem', color: '#878a99', fontWeight: 600, textTransform: 'uppercase' }}>
-              Cakupan Wilayah
-            </div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#212529' }}>
-              {wilayahList.length} <span style={{ fontSize: '0.75rem', fontWeight: 400, color: '#878a99' }}>Kanwil</span>
+        <div className="metric-card emerald">
+          <div className="metric-header">
+            <span className="metric-title">Cakupan Wilayah</span>
+            <div className="metric-icon-bubble">
+              <Layers size={14} />
             </div>
           </div>
+          <div className="metric-value">{wilayahList.length}</div>
+          <div className="metric-footer">Kanwil</div>
         </div>
 
-        <div className="glass-card" style={{ padding: '0.9rem 1.15rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-          <div
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '8px',
-              background: 'rgba(41, 156, 219, 0.1)',
-              color: '#299cdb',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <MapPin size={20} />
-          </div>
-          <div>
-            <div style={{ fontSize: '0.72rem', color: '#878a99', fontWeight: 600, textTransform: 'uppercase' }}>
-              Cakupan Kota / Dati II
-            </div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#212529' }}>
-              {dati2List.length} <span style={{ fontSize: '0.75rem', fontWeight: 400, color: '#878a99' }}>Kota/Kab</span>
+        <div className="metric-card cyan">
+          <div className="metric-header">
+            <span className="metric-title">Cakupan Kota / Dati II</span>
+            <div className="metric-icon-bubble">
+              <MapPin size={14} />
             </div>
           </div>
+          <div className="metric-value">{dati2List.length}</div>
+          <div className="metric-footer">Kota/Kab</div>
         </div>
 
-        <div className="glass-card" style={{ padding: '0.9rem 1.15rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-          <div
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '8px',
-              background: completenessStats.isAllComplete ? 'rgba(10, 179, 156, 0.12)' : 'rgba(240, 101, 72, 0.12)',
-              color: completenessStats.isAllComplete ? '#0ab39c' : '#f06548',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            {completenessStats.isAllComplete ? <Sparkles size={20} /> : <AlertCircle size={20} />}
-          </div>
-          <div>
-            <div style={{ fontSize: '0.72rem', color: '#878a99', fontWeight: 600, textTransform: 'uppercase' }}>
-              Status Kelengkapan Data
+        <div className={completenessStats.isAllComplete ? 'metric-card emerald' : 'metric-card rose'}>
+          <div className="metric-header">
+            <span className="metric-title">Status Kelengkapan Data</span>
+            <div className="metric-icon-bubble">
+              {completenessStats.isAllComplete ? <Sparkles size={14} /> : <AlertCircle size={14} />}
             </div>
-            {completenessStats.isAllComplete ? (
-              <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#0ab39c', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                <CheckCircle2 size={14} />
-                <span>Lengkap (100%)</span>
-              </div>
-            ) : (
-              <div>
-                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f06548', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                  <AlertCircle size={14} />
-                  <span>{completenessStats.incomplete.toLocaleString('id-ID')} Data Belum Lengkap ({completenessStats.percentage}%)</span>
-                </div>
-              </div>
-            )}
+          </div>
+          {completenessStats.isAllComplete ? (
+            <div className="metric-value" style={{ fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <CheckCircle2 size={14} />
+              <span>Lengkap (100%)</span>
+            </div>
+          ) : (
+            <div className="metric-value" style={{ fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <AlertCircle size={14} />
+              <span>{completenessStats.incomplete.toLocaleString('id-ID')} Data Belum Lengkap ({completenessStats.percentage}%)</span>
+            </div>
+          )}
+          <div className="metric-footer">
+            {completenessStats.complete.toLocaleString('id-ID')} dari {completenessStats.total.toLocaleString('id-ID')} data lengkap
           </div>
         </div>
       </div>
@@ -661,9 +546,7 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
           style={{
             padding: '3.5rem 2rem',
             textAlign: 'center',
-            borderRadius: '8px',
             border: '1px dashed #ced4da',
-            background: '#ffffff',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -671,24 +554,22 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
           }}
         >
           <div
+            className="metric-icon-bubble"
             style={{
               width: '56px',
               height: '56px',
               borderRadius: '50%',
               background: 'rgba(64, 81, 137, 0.08)',
               color: '#405189',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
             }}
           >
             <Store size={28} />
           </div>
           <div>
-            <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#212529', margin: '0 0 0.4rem' }}>
+            <h4 className="section-title" style={{ fontSize: '1.05rem', margin: '0 0 0.4rem' }}>
               Belum Ada Data Master Cabang
             </h4>
-            <p style={{ fontSize: '0.82rem', color: '#878a99', maxWidth: '440px', margin: 0, lineHeight: 1.5 }}>
+            <p className="section-subtitle" style={{ maxWidth: '440px', margin: 0, lineHeight: 1.5 }}>
               Silakan impor berkas Excel data cabang atau tambah data baru untuk memulai pencocokan data otomatis.
             </p>
           </div>
@@ -697,7 +578,6 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
               type="button"
               className="btn btn-primary"
               onClick={() => fileInputRef.current?.click()}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 1.25rem' }}
             >
               <Upload size={16} />
               <span>Pilih Berkas Master Excel</span>
@@ -707,7 +587,6 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
               type="button"
               className="btn btn-outline"
               onClick={() => downloadMasterTemplate(false)}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 1.25rem' }}
             >
               <FileSpreadsheet size={16} />
               <span>Download Template Excel</span>
@@ -716,19 +595,10 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
         </div>
       ) : (
         /* Table View */
-        <div className="glass-card" style={{ padding: '1.15rem 1.35rem' }}>
+        <div className="glass-card">
           {/* Filter & Search Bar */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '0.75rem',
-              marginBottom: '1rem',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flex: 1, minWidth: '320px', maxWidth: '750px', flexWrap: 'wrap' }}>
+          <div className="filter-toolbar" style={{ marginBottom: '1rem' }}>
+            <div className="filter-group" style={{ flex: 1, minWidth: '320px', maxWidth: '750px' }}>
               {/* Search by column */}
               <div className="unified-select-box" style={{ width: '150px' }}>
                 <select
@@ -749,34 +619,18 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
               </div>
 
               {/* Search text */}
-              <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
-                <Search
-                  size={15}
-                  style={{
-                    position: 'absolute',
-                    left: '10px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: '#878a99',
-                  }}
-                />
+              <div className="search-input-wrapper" style={{ flex: 1, minWidth: '200px' }}>
+                <Search size={15} className="search-icon-pos" />
                 <input
                   type="text"
+                  className="search-input"
                   placeholder="Cari data cabang, alamat, kode pos..."
                   value={searchTerm}
                   onChange={(e) => {
                     setSearchTerm(e.target.value);
                     setPage(1);
                   }}
-                  style={{
-                    width: '100%',
-                    padding: '0.45rem 0.65rem 0.45rem 2.1rem',
-                    fontSize: '0.8rem',
-                    borderRadius: '5px',
-                    border: '1px solid #ced4da',
-                    outline: 'none',
-                    background: '#ffffff',
-                  }}
+                  style={{ width: '100%' }}
                 />
                 {searchTerm && (
                   <button
@@ -785,13 +639,13 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
                     style={{
                       position: 'absolute',
                       right: '8px',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
                       background: 'none',
                       border: 'none',
                       cursor: 'pointer',
                       color: '#878a99',
                       padding: '2px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
                     }}
                   >
                     <X size={13} />
@@ -801,20 +655,11 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
 
               {/* Filter Wilayah */}
               <select
+                className="filter-select"
                 value={selectedWilayah}
                 onChange={(e) => {
                   setSelectedWilayah(e.target.value);
                   setPage(1);
-                }}
-                style={{
-                  padding: '0.45rem 0.65rem',
-                  fontSize: '0.8rem',
-                  borderRadius: '5px',
-                  border: '1px solid #ced4da',
-                  outline: 'none',
-                  background: '#ffffff',
-                  color: '#495057',
-                  cursor: 'pointer',
                 }}
               >
                 <option value="ALL">Semua Wilayah ({wilayahList.length})</option>
@@ -826,41 +671,30 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
               </select>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.78rem', color: '#878a99' }}>
-                <span>Tampilkan:</span>
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    const val = e.target.value === 'ALL' ? 'ALL' : Number(e.target.value);
-                    setPageSize(val);
-                    setPage(1);
-                  }}
-                  style={{
-                    padding: '0.3rem 0.5rem',
-                    fontSize: '0.78rem',
-                    borderRadius: '4px',
-                    border: '1px solid #ced4da',
-                    outline: 'none',
-                    background: '#ffffff',
-                    color: '#495057',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <option value={10}>10 Baris</option>
-                  <option value={25}>25 Baris</option>
-                  <option value={50}>50 Baris</option>
-                  <option value={100}>100 Baris</option>
-                  <option value="ALL">Lihat Semua ({filteredRows.length})</option>
-                </select>
-              </div>
+            <div className="filter-group">
+              <span style={{ fontSize: '0.78rem', color: '#878a99' }}>Tampilkan:</span>
+              <select
+                className="filter-select"
+                value={pageSize}
+                onChange={(e) => {
+                  const val = e.target.value === 'ALL' ? 'ALL' : Number(e.target.value);
+                  setPageSize(val);
+                  setPage(1);
+                }}
+              >
+                <option value={10}>10 Baris</option>
+                <option value={25}>25 Baris</option>
+                <option value={50}>50 Baris</option>
+                <option value={100}>100 Baris</option>
+                <option value="ALL">Lihat Semua ({filteredRows.length})</option>
+              </select>
             </div>
           </div>
 
           {/* Table Master Cabang */}
-          <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', overflowX: 'auto', maxHeight: '580px' }}>
-            <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
-              <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
+          <div className="table-container" style={{ maxHeight: '580px' }}>
+            <table className="modern-table">
+              <thead>
                 <tr>
                   <th style={{ width: '40px', textAlign: 'center' }}>No</th>
                   <th style={{ width: '65px', textAlign: 'center' }}>Wilayah</th>
@@ -1001,30 +835,26 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
           {/* Master Pagination Footer */}
           {pageSize !== 'ALL' && totalPages > 1 && (
             <div
+              className="pagination-row"
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
                 flexWrap: 'wrap',
                 gap: '0.75rem',
                 marginTop: '1rem',
-                paddingTop: '0.75rem',
                 borderTop: '1px solid #e9ebec',
               }}
             >
-              <div style={{ fontSize: '0.78rem', color: '#878a99' }}>
+              <div>
                 Halaman <strong style={{ color: '#212529' }}>{page}</strong> dari{' '}
                 <strong style={{ color: '#212529' }}>{totalPages}</strong>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <div className="pagination-controls">
                 <button
                   type="button"
                   className="btn btn-outline btn-sm"
                   onClick={() => setPage(1)}
                   disabled={page === 1}
                   title="Halaman Pertama"
-                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.74rem' }}
                 >
                   <ChevronsLeft size={13} />
                 </button>
@@ -1035,7 +865,6 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
                   title="Halaman Sebelumnya"
-                  style={{ padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}
                 >
                   <ChevronLeft size={13} />
                 </button>
@@ -1111,7 +940,6 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
                   title="Halaman Berikutnya"
-                  style={{ padding: '0.25rem 0.55rem', fontSize: '0.74rem' }}
                 >
                   <ChevronRight size={13} />
                 </button>
@@ -1122,7 +950,6 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
                   onClick={() => setPage(totalPages)}
                   disabled={page === totalPages}
                   title="Halaman Terakhir"
-                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.74rem' }}
                 >
                   <ChevronsRight size={13} />
                 </button>
@@ -1134,54 +961,19 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
 
       {/* Create / Edit / Detail Modal */}
       {modalMode && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 1050,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-          }}
-        >
-          <div
-            style={{
-              background: '#ffffff',
-              borderRadius: '8px',
-              width: '100%',
-              maxWidth: '620px',
-              maxHeight: '90vh',
-              boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
-              border: '1px solid #e9ebec',
-              overflow: 'hidden',
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
-            <div
-              style={{
-                padding: '1.1rem 1.4rem',
-                borderBottom: '1px solid #e9ebec',
-                background: '#fafbfe',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className="modal-backdrop">
+          <div className="modal-container" style={{ maxWidth: '620px' }}>
+            <div className="modal-header">
+              <h4 className="modal-title">
                 <Store size={18} color="#405189" />
-                <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: '#212529' }}>
-                  {modalMode === 'create' && 'Tambah Data Master Cabang'}
-                  {modalMode === 'edit' && 'Edit Data Master Cabang'}
-                  {modalMode === 'detail' && 'Detail Data Master Cabang'}
-                </h4>
-              </div>
+                {modalMode === 'create' && 'Tambah Data Master Cabang'}
+                {modalMode === 'edit' && 'Edit Data Master Cabang'}
+                {modalMode === 'detail' && 'Detail Data Master Cabang'}
+              </h4>
               <button
                 type="button"
+                className="modal-close"
                 onClick={() => setModalMode(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#878a99' }}
               >
                 <X size={18} />
               </button>
@@ -1189,183 +981,155 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
 
             <form
               onSubmit={handleSubmitForm}
-              style={{
-                padding: '1.35rem',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.85rem',
-                overflowY: 'auto',
-              }}
+              style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
             >
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#495057', marginBottom: '0.35rem' }}>
-                    Wilayah <span style={{ color: '#f06548' }}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
+              <div className="modal-body">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
+                  <div className="form-field">
+                    <label className="form-label">
+                      Wilayah <span className="req">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      required
+                      disabled={modalMode === 'detail'}
+                      placeholder="Contoh: W1"
+                      value={formData.Wilayah || ''}
+                      onChange={(e) => setFormData({ ...formData, Wilayah: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label className="form-label">Sandi Cabang</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      disabled={modalMode === 'detail'}
+                      placeholder="Contoh: 601"
+                      value={formData['Sandi Cabang'] || formData.Sandi || ''}
+                      onChange={(e) => setFormData({ ...formData, 'Sandi Cabang': e.target.value, Sandi: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label className="form-label">Branch Code</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      disabled={modalMode === 'detail'}
+                      placeholder="Contoh: 601601"
+                      value={formData['Branch Code'] || ''}
+                      onChange={(e) => setFormData({ ...formData, 'Branch Code': e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.75rem' }}>
+                  <div className="form-field">
+                    <label className="form-label">
+                      Nama Outlet / Lokasi <span className="req">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      required
+                      disabled={modalMode === 'detail'}
+                      placeholder="Nama Cabang / KCP / KK"
+                      value={formData['Nama Outlet'] || ''}
+                      onChange={(e) => setFormData({ ...formData, 'Nama Outlet': e.target.value })}
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label className="form-label">Kode Cabang</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      disabled={modalMode === 'detail'}
+                      placeholder="Contoh: WMD"
+                      value={formData['Kode Cabang'] || ''}
+                      onChange={(e) => setFormData({ ...formData, 'Kode Cabang': e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-field">
+                  <label className="form-label">ALAMAT Lengkap</label>
+                  <textarea
+                    rows={2}
+                    className="form-control"
+                    style={{ resize: 'vertical' }}
                     disabled={modalMode === 'detail'}
-                    placeholder="Contoh: W1"
-                    value={formData.Wilayah || ''}
-                    onChange={(e) => setFormData({ ...formData, Wilayah: e.target.value })}
-                    style={{ width: '100%', padding: '0.42rem 0.6rem', fontSize: '0.8rem', borderRadius: '4px', border: '1px solid #ced4da' }}
+                    placeholder="Alamat jalan, gedung, nomor..."
+                    value={formData.ALAMAT || ''}
+                    onChange={(e) => setFormData({ ...formData, ALAMAT: e.target.value })}
                   />
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#495057', marginBottom: '0.35rem' }}>
-                    Sandi Cabang
-                  </label>
-                  <input
-                    type="text"
-                    disabled={modalMode === 'detail'}
-                    placeholder="Contoh: 601"
-                    value={formData['Sandi Cabang'] || formData.Sandi || ''}
-                    onChange={(e) => setFormData({ ...formData, 'Sandi Cabang': e.target.value, Sandi: e.target.value })}
-                    style={{ width: '100%', padding: '0.42rem 0.6rem', fontSize: '0.8rem', borderRadius: '4px', border: '1px solid #ced4da' }}
-                  />
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
+                  <div className="form-field">
+                    <label className="form-label">
+                      KODE POS <span className="req">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      required
+                      disabled={modalMode === 'detail'}
+                      placeholder="Contoh: 20151"
+                      value={formData['KODE POS'] || ''}
+                      onChange={(e) => setFormData({ ...formData, 'KODE POS': e.target.value })}
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label className="form-label">Kelurahan</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      disabled={modalMode === 'detail'}
+                      placeholder="Kelurahan"
+                      value={formData.Kelurahan || ''}
+                      onChange={(e) => setFormData({ ...formData, Kelurahan: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label className="form-label">Kecamatan</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      disabled={modalMode === 'detail'}
+                      placeholder="Kecamatan"
+                      value={formData.Kecamatan || ''}
+                      onChange={(e) => setFormData({ ...formData, Kecamatan: e.target.value })}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#495057', marginBottom: '0.35rem' }}>
-                    Branch Code
-                  </label>
-                  <input
-                    type="text"
-                    disabled={modalMode === 'detail'}
-                    placeholder="Contoh: 601601"
-                    value={formData['Branch Code'] || ''}
-                    onChange={(e) => setFormData({ ...formData, 'Branch Code': e.target.value })}
-                    style={{ width: '100%', padding: '0.42rem 0.6rem', fontSize: '0.8rem', borderRadius: '4px', border: '1px solid #ced4da' }}
-                  />
+
+                <div className="form-grid-2">
+                  <div className="form-field">
+                    <label className="form-label">Dati II (Kota / Kabupaten)</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      disabled={modalMode === 'detail'}
+                      placeholder="Contoh: Kota Medan"
+                      value={formData['Dati II'] || ''}
+                      onChange={(e) => setFormData({ ...formData, 'Dati II': e.target.value })}
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label className="form-label">Provinsi</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      disabled={modalMode === 'detail'}
+                      placeholder="Contoh: Sumatera Utara"
+                      value={formData.Provinsi || ''}
+                      onChange={(e) => setFormData({ ...formData, Provinsi: e.target.value })}
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.75rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#495057', marginBottom: '0.35rem' }}>
-                    Nama Outlet / Lokasi <span style={{ color: '#f06548' }}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    disabled={modalMode === 'detail'}
-                    placeholder="Nama Cabang / KCP / KK"
-                    value={formData['Nama Outlet'] || ''}
-                    onChange={(e) => setFormData({ ...formData, 'Nama Outlet': e.target.value })}
-                    style={{ width: '100%', padding: '0.42rem 0.6rem', fontSize: '0.8rem', borderRadius: '4px', border: '1px solid #ced4da' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#495057', marginBottom: '0.35rem' }}>
-                    Kode Cabang
-                  </label>
-                  <input
-                    type="text"
-                    disabled={modalMode === 'detail'}
-                    placeholder="Contoh: WMD"
-                    value={formData['Kode Cabang'] || ''}
-                    onChange={(e) => setFormData({ ...formData, 'Kode Cabang': e.target.value })}
-                    style={{ width: '100%', padding: '0.42rem 0.6rem', fontSize: '0.8rem', borderRadius: '4px', border: '1px solid #ced4da' }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#495057', marginBottom: '0.35rem' }}>
-                  ALAMAT Lengkap
-                </label>
-                <textarea
-                  rows={2}
-                  disabled={modalMode === 'detail'}
-                  placeholder="Alamat jalan, gedung, nomor..."
-                  value={formData.ALAMAT || ''}
-                  onChange={(e) => setFormData({ ...formData, ALAMAT: e.target.value })}
-                  style={{ width: '100%', padding: '0.42rem 0.6rem', fontSize: '0.8rem', borderRadius: '4px', border: '1px solid #ced4da', resize: 'vertical' }}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#495057', marginBottom: '0.35rem' }}>
-                    KODE POS <span style={{ color: '#f06548' }}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    disabled={modalMode === 'detail'}
-                    placeholder="Contoh: 20151"
-                    value={formData['KODE POS'] || ''}
-                    onChange={(e) => setFormData({ ...formData, 'KODE POS': e.target.value })}
-                    style={{ width: '100%', padding: '0.42rem 0.6rem', fontSize: '0.8rem', borderRadius: '4px', border: '1px solid #ced4da' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#495057', marginBottom: '0.35rem' }}>
-                    Kelurahan
-                  </label>
-                  <input
-                    type="text"
-                    disabled={modalMode === 'detail'}
-                    placeholder="Kelurahan"
-                    value={formData.Kelurahan || ''}
-                    onChange={(e) => setFormData({ ...formData, Kelurahan: e.target.value })}
-                    style={{ width: '100%', padding: '0.42rem 0.6rem', fontSize: '0.8rem', borderRadius: '4px', border: '1px solid #ced4da' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#495057', marginBottom: '0.35rem' }}>
-                    Kecamatan
-                  </label>
-                  <input
-                    type="text"
-                    disabled={modalMode === 'detail'}
-                    placeholder="Kecamatan"
-                    value={formData.Kecamatan || ''}
-                    onChange={(e) => setFormData({ ...formData, Kecamatan: e.target.value })}
-                    style={{ width: '100%', padding: '0.42rem 0.6rem', fontSize: '0.8rem', borderRadius: '4px', border: '1px solid #ced4da' }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#495057', marginBottom: '0.35rem' }}>
-                    Dati II (Kota / Kabupaten)
-                  </label>
-                  <input
-                    type="text"
-                    disabled={modalMode === 'detail'}
-                    placeholder="Contoh: Kota Medan"
-                    value={formData['Dati II'] || ''}
-                    onChange={(e) => setFormData({ ...formData, 'Dati II': e.target.value })}
-                    style={{ width: '100%', padding: '0.42rem 0.6rem', fontSize: '0.8rem', borderRadius: '4px', border: '1px solid #ced4da' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#495057', marginBottom: '0.35rem' }}>
-                    Provinsi
-                  </label>
-                  <input
-                    type="text"
-                    disabled={modalMode === 'detail'}
-                    placeholder="Contoh: Sumatera Utara"
-                    value={formData.Provinsi || ''}
-                    onChange={(e) => setFormData({ ...formData, Provinsi: e.target.value })}
-                    style={{ width: '100%', padding: '0.42rem 0.6rem', fontSize: '0.8rem', borderRadius: '4px', border: '1px solid #ced4da' }}
-                  />
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'flex-end',
-                  gap: '0.5rem',
-                  paddingTop: '0.75rem',
-                  borderTop: '1px solid #e9ebec',
-                }}
-              >
+              <div className="modal-footer">
                 <button
                   type="button"
                   className="btn btn-outline btn-sm"
@@ -1386,38 +1150,28 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
 
       {/* Delete Confirmation Modal */}
       {deleteTargetIndex !== null && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 1050,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-          }}
-        >
-          <div
-            style={{
-              background: '#ffffff',
-              borderRadius: '8px',
-              width: '100%',
-              maxWidth: '420px',
-              padding: '1.5rem',
-              boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
-              textAlign: 'center',
-            }}
-          >
-            <AlertCircle size={40} color="#f06548" style={{ margin: '0 auto 0.75rem' }} />
-            <h4 style={{ margin: '0 0 0.5rem', fontSize: '1rem', fontWeight: 700, color: '#212529' }}>
-              Hapus Data Master Cabang?
-            </h4>
-            <p style={{ fontSize: '0.8rem', color: '#878a99', margin: '0 0 1.25rem' }}>
-              Apakah Anda yakin ingin menghapus data cabang{' '}
-              <strong>{masterRows[deleteTargetIndex]?.['Nama Outlet'] || masterRows[deleteTargetIndex]?.Cabang}</strong>?
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem' }}>
+        <div className="modal-backdrop">
+          <div className="modal-container" style={{ maxWidth: '420px' }}>
+            <div className="modal-header">
+              <h4 className="modal-title">
+                <AlertCircle size={18} color="#f06548" />
+                Hapus Data Master Cabang?
+              </h4>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setDeleteTargetIndex(null)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body" style={{ alignItems: 'center', textAlign: 'center' }}>
+              <p style={{ fontSize: '0.8rem', color: '#878a99', margin: 0 }}>
+                Apakah Anda yakin ingin menghapus data cabang{' '}
+                <strong>{masterRows[deleteTargetIndex]?.['Nama Outlet'] || masterRows[deleteTargetIndex]?.Cabang}</strong>?
+              </p>
+            </div>
+            <div className="modal-footer" style={{ justifyContent: 'center' }}>
               <button
                 type="button"
                 className="btn btn-outline btn-sm"
@@ -1427,9 +1181,8 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
               </button>
               <button
                 type="button"
-                className="btn btn-sm"
+                className="btn btn-danger btn-sm"
                 onClick={handleConfirmDelete}
-                style={{ background: '#f06548', color: '#ffffff', border: 'none' }}
               >
                 Ya, Hapus
               </button>
@@ -1440,37 +1193,27 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
 
       {/* Reset Confirmation Modal */}
       {showResetConfirm && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 1050,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-          }}
-        >
-          <div
-            style={{
-              background: '#ffffff',
-              borderRadius: '8px',
-              width: '100%',
-              maxWidth: '440px',
-              padding: '1.5rem',
-              boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
-              textAlign: 'center',
-            }}
-          >
-            <RefreshCw size={36} color="#f06548" style={{ margin: '0 auto 0.75rem' }} />
-            <h4 style={{ margin: '0 0 0.5rem', fontSize: '1rem', fontWeight: 700, color: '#212529' }}>
-              Kosongkan Seluruh Data Cabang?
-            </h4>
-            <p style={{ fontSize: '0.8rem', color: '#878a99', margin: '0 0 1.25rem' }}>
-              Seluruh {masterRows.length.toLocaleString('id-ID')} data master cabang akan dihapus dari sesi ini.
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem' }}>
+        <div className="modal-backdrop">
+          <div className="modal-container" style={{ maxWidth: '440px' }}>
+            <div className="modal-header">
+              <h4 className="modal-title">
+                <RefreshCw size={18} color="#f06548" />
+                Kosongkan Seluruh Data Cabang?
+              </h4>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setShowResetConfirm(false)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body" style={{ alignItems: 'center', textAlign: 'center' }}>
+              <p style={{ fontSize: '0.8rem', color: '#878a99', margin: 0 }}>
+                Seluruh {masterRows.length.toLocaleString('id-ID')} data master cabang akan dihapus dari sesi ini.
+              </p>
+            </div>
+            <div className="modal-footer" style={{ justifyContent: 'center' }}>
               <button
                 type="button"
                 className="btn btn-outline btn-sm"
@@ -1480,12 +1223,11 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
               </button>
               <button
                 type="button"
-                className="btn btn-sm"
+                className="btn btn-danger btn-sm"
                 onClick={() => {
                   setShowResetConfirm(false);
                   onResetMaster();
                 }}
-                style={{ background: '#f06548', color: '#ffffff', border: 'none' }}
               >
                 Ya, Kosongkan
               </button>

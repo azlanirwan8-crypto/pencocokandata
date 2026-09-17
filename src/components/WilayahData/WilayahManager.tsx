@@ -458,17 +458,13 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '2rem' }}>
       {/* Top Header Card */}
       <div
+        className="glass-card"
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           gap: '0.85rem',
-          background: '#ffffff',
-          padding: '1.15rem 1.4rem',
-          borderRadius: '8px',
-          border: '1px solid #e9ebec',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
@@ -488,10 +484,10 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
             <Map size={22} />
           </div>
           <div>
-            <h3 style={{ fontSize: '1.08rem', fontWeight: 700, color: '#212529', margin: 0 }}>
+            <h3 className="section-title">
               Master Setting Wilayah & Kanwil
             </h3>
-            <p style={{ fontSize: '0.78rem', color: '#878a99', margin: '0.2rem 0 0' }}>
+            <p className="section-subtitle">
               Kelola daftar lengkap 17 Kantor Wilayah, alamat, kode pos, dati II, dan pemetaan kode branch untuk sistem pencocokan data.
             </p>
           </div>
@@ -582,123 +578,61 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
       </div>
 
       {/* KPI Stats Cards */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-          gap: '0.85rem',
-        }}
-      >
-        <div className="glass-card" style={{ padding: '0.9rem 1.15rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-          <div
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '8px',
-              background: 'rgba(64, 81, 137, 0.1)',
-              color: '#405189',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Building2 size={20} />
+      <div className="metrics-grid">
+        <div className="metric-card blue">
+          <div className="metric-header">
+            <span className="metric-title">Total Kantor Wilayah</span>
+            <span className="metric-icon-bubble">
+              <Building2 size={18} />
+            </span>
           </div>
-          <div>
-            <div style={{ fontSize: '0.72rem', color: '#878a99', fontWeight: 600, textTransform: 'uppercase' }}>
-              Total Kantor Wilayah
-            </div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#212529' }}>
-              {settings.length} <span style={{ fontSize: '0.75rem', fontWeight: 400, color: '#878a99' }}>Kanwil</span>
-            </div>
+          <div className="metric-value">{settings.length}</div>
+          <div className="metric-footer">Kanwil terdaftar</div>
+        </div>
+
+        <div className="metric-card emerald">
+          <div className="metric-header">
+            <span className="metric-title">Cakupan Provinsi</span>
+            <span className="metric-icon-bubble">
+              <MapPin size={18} />
+            </span>
+          </div>
+          <div className="metric-value">{provinsiList.length}</div>
+          <div className="metric-footer">Provinsi terpetakan</div>
+        </div>
+
+        <div className="metric-card cyan">
+          <div className="metric-header">
+            <span className="metric-title">Rentang Sandi Cabang</span>
+            <span className="metric-icon-bubble">
+              <Layers size={18} />
+            </span>
+          </div>
+          <div className="metric-value" style={{ fontFamily: 'var(--font-mono)', fontSize: '1.05rem' }}>
+            {settings.length > 0
+              ? `${settings[0].sandiCabang || '601'} - ${settings[settings.length - 1].sandiCabang || '618'}`
+              : '-'}
           </div>
         </div>
 
-        <div className="glass-card" style={{ padding: '0.9rem 1.15rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-          <div
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '8px',
-              background: 'rgba(10, 179, 156, 0.1)',
-              color: '#0ab39c',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <MapPin size={20} />
+        <div className={`metric-card ${completenessStats.isAllComplete ? 'emerald' : 'rose'}`}>
+          <div className="metric-header">
+            <span className="metric-title">Status Data</span>
+            <span className="metric-icon-bubble">
+              {completenessStats.isAllComplete ? <Sparkles size={18} /> : <AlertCircle size={18} />}
+            </span>
           </div>
-          <div>
-            <div style={{ fontSize: '0.72rem', color: '#878a99', fontWeight: 600, textTransform: 'uppercase' }}>
-              Cakupan Provinsi
+          {completenessStats.isAllComplete ? (
+            <div className="metric-value" style={{ fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <CheckCircle2 size={15} />
+              <span>Lengkap (100%)</span>
             </div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#212529' }}>
-              {provinsiList.length} <span style={{ fontSize: '0.75rem', fontWeight: 400, color: '#878a99' }}>Provinsi</span>
+          ) : (
+            <div className="metric-value" style={{ fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <AlertCircle size={15} />
+              <span>{completenessStats.incompleteCount} Data Belum Lengkap ({completenessStats.percentage}%)</span>
             </div>
-          </div>
-        </div>
-
-        <div className="glass-card" style={{ padding: '0.9rem 1.15rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-          <div
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '8px',
-              background: 'rgba(41, 156, 219, 0.1)',
-              color: '#299cdb',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Layers size={20} />
-          </div>
-          <div>
-            <div style={{ fontSize: '0.72rem', color: '#878a99', fontWeight: 600, textTransform: 'uppercase' }}>
-              Rentang Sandi Cabang
-            </div>
-            <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#212529', fontFamily: 'var(--font-mono)' }}>
-              {settings.length > 0
-                ? `${settings[0].sandiCabang || '601'} - ${settings[settings.length - 1].sandiCabang || '618'}`
-                : '-'}
-            </div>
-          </div>
-        </div>
-
-        <div className="glass-card" style={{ padding: '0.9rem 1.15rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-          <div
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '8px',
-              background: completenessStats.isAllComplete ? 'rgba(10, 179, 156, 0.12)' : 'rgba(240, 101, 72, 0.12)',
-              color: completenessStats.isAllComplete ? '#0ab39c' : '#f06548',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            {completenessStats.isAllComplete ? <Sparkles size={20} /> : <AlertCircle size={20} />}
-          </div>
-          <div>
-            <div style={{ fontSize: '0.72rem', color: '#878a99', fontWeight: 600, textTransform: 'uppercase' }}>
-              Status Data
-            </div>
-            {completenessStats.isAllComplete ? (
-              <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#0ab39c', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                <CheckCircle2 size={14} />
-                <span>Lengkap (100%)</span>
-              </div>
-            ) : (
-              <div>
-                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f06548', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                  <AlertCircle size={14} />
-                  <span>{completenessStats.incompleteCount} Data Belum Lengkap ({completenessStats.percentage}%)</span>
-                </div>
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </div>
 
@@ -744,19 +678,10 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
       {/* Main Table Card */}
       <div className="glass-card" style={{ padding: '1.15rem 1.35rem' }}>
         {/* Table Search & Filter Bar */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '0.75rem',
-            marginBottom: '1rem',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flex: 1, minWidth: '280px', maxWidth: '600px' }}>
+        <div className="filter-toolbar" style={{ marginBottom: '1rem' }}>
+          <div className="filter-group">
             {/* Search Input */}
-            <div style={{ position: 'relative', flex: 1 }}>
+            <div className="search-input-wrapper">
               <Search
                 size={15}
                 style={{
@@ -765,22 +690,15 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
                   top: '50%',
                   transform: 'translateY(-50%)',
                   color: '#878a99',
+                  pointerEvents: 'none',
                 }}
               />
               <input
                 type="text"
+                className="search-input"
                 placeholder="Cari wilayah, nama outlet, alamat, kota, provinsi, kode pos..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.45rem 0.65rem 0.45rem 2.1rem',
-                  fontSize: '0.8rem',
-                  borderRadius: '5px',
-                  border: '1px solid #ced4da',
-                  outline: 'none',
-                  background: '#ffffff',
-                }}
               />
               {searchTerm && (
                 <button
@@ -796,6 +714,8 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
                     cursor: 'pointer',
                     color: '#878a99',
                     padding: '2px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
                   }}
                 >
                   <X size={13} />
@@ -805,20 +725,11 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
 
             {/* Filter Provinsi */}
             <select
+              className="filter-select"
               value={selectedProvinsi}
               onChange={(e) => {
                 setSelectedProvinsi(e.target.value);
                 setCurrentPage(1);
-              }}
-              style={{
-                padding: '0.45rem 0.65rem',
-                fontSize: '0.8rem',
-                borderRadius: '5px',
-                border: '1px solid #ced4da',
-                outline: 'none',
-                background: '#ffffff',
-                color: '#495057',
-                cursor: 'pointer',
               }}
             >
               <option value="ALL">Semua Provinsi ({provinsiList.length})</option>
@@ -830,34 +741,23 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
             </select>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.78rem', color: '#878a99' }}>
-              <span>Tampilkan:</span>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  const val = e.target.value === 'ALL' ? 'ALL' : Number(e.target.value);
-                  setPageSize(val);
-                  setCurrentPage(1);
-                }}
-                style={{
-                  padding: '0.3rem 0.5rem',
-                  fontSize: '0.78rem',
-                  borderRadius: '4px',
-                  border: '1px solid #ced4da',
-                  outline: 'none',
-                  background: '#ffffff',
-                  color: '#495057',
-                  cursor: 'pointer',
-                }}
-              >
-                <option value={10}>10 Baris</option>
-                <option value={25}>25 Baris</option>
-                <option value={50}>50 Baris</option>
-                <option value={100}>100 Baris</option>
-                <option value="ALL">Lihat Semua ({filteredSettings.length})</option>
-              </select>
-            </div>
+          <div className="filter-group">
+            <span style={{ fontSize: '0.78rem', color: '#878a99' }}>Tampilkan:</span>
+            <select
+              className="filter-select"
+              value={pageSize}
+              onChange={(e) => {
+                const val = e.target.value === 'ALL' ? 'ALL' : Number(e.target.value);
+                setPageSize(val);
+                setCurrentPage(1);
+              }}
+            >
+              <option value={10}>10 Baris</option>
+              <option value={25}>25 Baris</option>
+              <option value={50}>50 Baris</option>
+              <option value={100}>100 Baris</option>
+              <option value="ALL">Lihat Semua ({filteredSettings.length})</option>
+            </select>
           </div>
         </div>
 
@@ -1100,14 +1000,11 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
         {/* Pagination Navigation Footer */}
         {pageSize !== 'ALL' && totalPages > 1 && (
           <div
+            className="pagination-row"
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
               flexWrap: 'wrap',
               gap: '0.75rem',
               marginTop: '1rem',
-              paddingTop: '0.75rem',
               borderTop: '1px solid #e9ebec',
             }}
           >
@@ -1116,7 +1013,7 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
               <strong style={{ color: '#212529' }}>{totalPages}</strong>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <div className="pagination-controls">
               <button
                 type="button"
                 className="btn btn-outline btn-sm"
@@ -1306,357 +1203,204 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
 
       {/* MODAL: Tambah / Edit Wilayah */}
       {(modalMode === 'create' || modalMode === 'edit') && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 1050,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-          }}
-        >
-          <div
-            style={{
-              background: '#ffffff',
-              borderRadius: '8px',
-              width: '100%',
-              maxWidth: '680px',
-              maxHeight: '90vh',
-              overflowY: 'auto',
-              boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
-              border: '1px solid #e9ebec',
-            }}
-          >
+        <div className="modal-backdrop">
+          <div className="modal-container" style={{ maxWidth: '680px' }}>
             {/* Modal Header */}
-            <div
-              style={{
-                padding: '1rem 1.25rem',
-                borderBottom: '1px solid #e9ebec',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Map size={18} style={{ color: '#405189' }} />
-                <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#212529' }}>
-                  {modalMode === 'create' ? 'Tambah Data Wilayah Baru' : `Edit Data Wilayah (${formData.namaOutlet})`}
-                </h4>
-              </div>
+            <div className="modal-header">
+              <h4 className="modal-title">
+                <Map size={18} color="#405189" />
+                {modalMode === 'create' ? 'Tambah Data Wilayah Baru' : `Edit Data Wilayah (${formData.namaOutlet})`}
+              </h4>
               <button
                 type="button"
+                className="modal-close"
                 onClick={() => setModalMode(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#878a99' }}
               >
                 <X size={18} />
               </button>
             </div>
 
             {/* Modal Body / Form */}
-            <form onSubmit={handleSubmitForm} style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.85rem' }}>
-                {/* Wilayah */}
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
-                    Nomor Wilayah <span style={{ color: '#f06548' }}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.wilayah}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      const d2 = val.padStart(2, '0');
-                      setFormData((prev) => ({
-                        ...prev,
-                        wilayah: val,
-                        kodeWilayah: d2,
-                        sandiCabang: prev.sandiCabang || `6${d2}`,
-                        branchCode: prev.branchCode || `6${d2}6${d2}`,
-                      }));
-                    }}
-                    placeholder="Misal: 1, 2, 14"
-                    style={{
-                      width: '100%',
-                      padding: '0.45rem 0.65rem',
-                      fontSize: '0.8rem',
-                      borderRadius: '4px',
-                      border: '1px solid #ced4da',
-                      outline: 'none',
-                    }}
-                  />
-                </div>
+            <form onSubmit={handleSubmitForm} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+              <div className="modal-body">
+                <div className="form-grid-2">
+                  {/* Wilayah */}
+                  <div className="form-field">
+                    <label className="form-label">
+                      Nomor Wilayah <span className="req">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      required
+                      value={formData.wilayah}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const d2 = val.padStart(2, '0');
+                        setFormData((prev) => ({
+                          ...prev,
+                          wilayah: val,
+                          kodeWilayah: d2,
+                          sandiCabang: prev.sandiCabang || `6${d2}`,
+                          branchCode: prev.branchCode || `6${d2}6${d2}`,
+                        }));
+                      }}
+                      placeholder="Misal: 1, 2, 14"
+                    />
+                  </div>
 
-                {/* Sandi Cabang */}
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
-                    Sandi Cabang
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.sandiCabang}
-                    onChange={(e) => setFormData({ ...formData, sandiCabang: e.target.value })}
-                    placeholder="Misal: 601"
-                    style={{
-                      width: '100%',
-                      padding: '0.45rem 0.65rem',
-                      fontSize: '0.8rem',
-                      borderRadius: '4px',
-                      border: '1px solid #ced4da',
-                      outline: 'none',
-                    }}
-                  />
-                </div>
+                  {/* Sandi Cabang */}
+                  <div className="form-field">
+                    <label className="form-label">Sandi Cabang</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={formData.sandiCabang}
+                      onChange={(e) => setFormData({ ...formData, sandiCabang: e.target.value })}
+                      placeholder="Misal: 601"
+                    />
+                  </div>
 
-                {/* Branch Code */}
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
-                    Branch Code (6 Digit)
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.branchCode}
-                    onChange={(e) => setFormData({ ...formData, branchCode: e.target.value })}
-                    placeholder="Misal: 601601"
-                    style={{
-                      width: '100%',
-                      padding: '0.45rem 0.65rem',
-                      fontSize: '0.8rem',
-                      borderRadius: '4px',
-                      border: '1px solid #ced4da',
-                      outline: 'none',
-                    }}
-                  />
-                </div>
+                  {/* Branch Code */}
+                  <div className="form-field">
+                    <label className="form-label">Branch Code (6 Digit)</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={formData.branchCode}
+                      onChange={(e) => setFormData({ ...formData, branchCode: e.target.value })}
+                      placeholder="Misal: 601601"
+                    />
+                  </div>
 
-                {/* Kode Cabang */}
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
-                    Kode Cabang
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.kodeCabang}
-                    onChange={(e) => setFormData({ ...formData, kodeCabang: e.target.value.toUpperCase() })}
-                    placeholder="Misal: WMD, WPD"
-                    style={{
-                      width: '100%',
-                      padding: '0.45rem 0.65rem',
-                      fontSize: '0.8rem',
-                      borderRadius: '4px',
-                      border: '1px solid #ced4da',
-                      outline: 'none',
-                    }}
-                  />
-                </div>
+                  {/* Kode Cabang */}
+                  <div className="form-field">
+                    <label className="form-label">Kode Cabang</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={formData.kodeCabang}
+                      onChange={(e) => setFormData({ ...formData, kodeCabang: e.target.value.toUpperCase() })}
+                      placeholder="Misal: WMD, WPD"
+                    />
+                  </div>
 
-                {/* Nama Outlet */}
-                <div style={{ gridColumn: 'span 2' }}>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
-                    Nama Outlet / Kanwil <span style={{ color: '#f06548' }}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.namaOutlet}
-                    onChange={(e) => setFormData({ ...formData, namaOutlet: e.target.value, keterangan: e.target.value })}
-                    placeholder="Misal: WILAYAH 01 - MEDAN"
-                    style={{
-                      width: '100%',
-                      padding: '0.45rem 0.65rem',
-                      fontSize: '0.8rem',
-                      borderRadius: '4px',
-                      border: '1px solid #ced4da',
-                      outline: 'none',
-                    }}
-                  />
-                </div>
+                  {/* Nama Outlet */}
+                  <div className="form-field" style={{ gridColumn: 'span 2' }}>
+                    <label className="form-label">
+                      Nama Outlet / Kanwil <span className="req">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      required
+                      value={formData.namaOutlet}
+                      onChange={(e) => setFormData({ ...formData, namaOutlet: e.target.value, keterangan: e.target.value })}
+                      placeholder="Misal: WILAYAH 01 - MEDAN"
+                    />
+                  </div>
 
-                {/* Status Outlet */}
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
-                    Status Outlet
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.statusOutlet}
-                    onChange={(e) => setFormData({ ...formData, statusOutlet: e.target.value.toUpperCase() })}
-                    placeholder="KANWIL"
-                    style={{
-                      width: '100%',
-                      padding: '0.45rem 0.65rem',
-                      fontSize: '0.8rem',
-                      borderRadius: '4px',
-                      border: '1px solid #ced4da',
-                      outline: 'none',
-                    }}
-                  />
-                </div>
+                  {/* Status Outlet */}
+                  <div className="form-field">
+                    <label className="form-label">Status Outlet</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={formData.statusOutlet}
+                      onChange={(e) => setFormData({ ...formData, statusOutlet: e.target.value.toUpperCase() })}
+                      placeholder="KANWIL"
+                    />
+                  </div>
 
-                {/* Kode Pos */}
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
-                    Kode Pos
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.kodePos}
-                    onChange={(e) => setFormData({ ...formData, kodePos: e.target.value })}
-                    placeholder="Misal: 20151"
-                    style={{
-                      width: '100%',
-                      padding: '0.45rem 0.65rem',
-                      fontSize: '0.8rem',
-                      borderRadius: '4px',
-                      border: '1px solid #ced4da',
-                      outline: 'none',
-                    }}
-                  />
-                </div>
+                  {/* Kode Pos */}
+                  <div className="form-field">
+                    <label className="form-label">Kode Pos</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={formData.kodePos}
+                      onChange={(e) => setFormData({ ...formData, kodePos: e.target.value })}
+                      placeholder="Misal: 20151"
+                    />
+                  </div>
 
-                {/* Alamat */}
-                <div style={{ gridColumn: 'span 2' }}>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
-                    Alamat Lengkap
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={formData.alamat}
-                    onChange={(e) => setFormData({ ...formData, alamat: e.target.value })}
-                    placeholder="Misal: JL. PEMUDA NO. 12, LANTAI IV MEDAN"
-                    style={{
-                      width: '100%',
-                      padding: '0.45rem 0.65rem',
-                      fontSize: '0.8rem',
-                      borderRadius: '4px',
-                      border: '1px solid #ced4da',
-                      outline: 'none',
-                      resize: 'vertical',
-                    }}
-                  />
-                </div>
+                  {/* Alamat */}
+                  <div className="form-field" style={{ gridColumn: 'span 2' }}>
+                    <label className="form-label">Alamat Lengkap</label>
+                    <textarea
+                      rows={2}
+                      className="form-control"
+                      style={{ resize: 'vertical' }}
+                      value={formData.alamat}
+                      onChange={(e) => setFormData({ ...formData, alamat: e.target.value })}
+                      placeholder="Misal: JL. PEMUDA NO. 12, LANTAI IV MEDAN"
+                    />
+                  </div>
 
-                {/* Kelurahan */}
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
-                    Kelurahan
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.kelurahan}
-                    onChange={(e) => setFormData({ ...formData, kelurahan: e.target.value })}
-                    placeholder="Misal: Aur"
-                    style={{
-                      width: '100%',
-                      padding: '0.45rem 0.65rem',
-                      fontSize: '0.8rem',
-                      borderRadius: '4px',
-                      border: '1px solid #ced4da',
-                      outline: 'none',
-                    }}
-                  />
-                </div>
+                  {/* Kelurahan */}
+                  <div className="form-field">
+                    <label className="form-label">Kelurahan</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={formData.kelurahan}
+                      onChange={(e) => setFormData({ ...formData, kelurahan: e.target.value })}
+                      placeholder="Misal: Aur"
+                    />
+                  </div>
 
-                {/* Kecamatan */}
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
-                    Kecamatan
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.kecamatan}
-                    onChange={(e) => setFormData({ ...formData, kecamatan: e.target.value })}
-                    placeholder="Misal: Medan Maimun"
-                    style={{
-                      width: '100%',
-                      padding: '0.45rem 0.65rem',
-                      fontSize: '0.8rem',
-                      borderRadius: '4px',
-                      border: '1px solid #ced4da',
-                      outline: 'none',
-                    }}
-                  />
-                </div>
+                  {/* Kecamatan */}
+                  <div className="form-field">
+                    <label className="form-label">Kecamatan</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={formData.kecamatan}
+                      onChange={(e) => setFormData({ ...formData, kecamatan: e.target.value })}
+                      placeholder="Misal: Medan Maimun"
+                    />
+                  </div>
 
-                {/* Dati II */}
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
-                    Dati II (Kota / Kabupaten)
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.dati2}
-                    onChange={(e) => setFormData({ ...formData, dati2: e.target.value })}
-                    placeholder="Misal: Kota Medan"
-                    style={{
-                      width: '100%',
-                      padding: '0.45rem 0.65rem',
-                      fontSize: '0.8rem',
-                      borderRadius: '4px',
-                      border: '1px solid #ced4da',
-                      outline: 'none',
-                    }}
-                  />
-                </div>
+                  {/* Dati II */}
+                  <div className="form-field">
+                    <label className="form-label">Dati II (Kota / Kabupaten)</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={formData.dati2}
+                      onChange={(e) => setFormData({ ...formData, dati2: e.target.value })}
+                      placeholder="Misal: Kota Medan"
+                    />
+                  </div>
 
-                {/* Provinsi */}
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
-                    Provinsi
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.provinsi}
-                    onChange={(e) => setFormData({ ...formData, provinsi: e.target.value })}
-                    placeholder="Misal: Sumatera Utara"
-                    style={{
-                      width: '100%',
-                      padding: '0.45rem 0.65rem',
-                      fontSize: '0.8rem',
-                      borderRadius: '4px',
-                      border: '1px solid #ced4da',
-                      outline: 'none',
-                    }}
-                  />
-                </div>
+                  {/* Provinsi */}
+                  <div className="form-field">
+                    <label className="form-label">Provinsi</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={formData.provinsi}
+                      onChange={(e) => setFormData({ ...formData, provinsi: e.target.value })}
+                      placeholder="Misal: Sumatera Utara"
+                    />
+                  </div>
 
-                {/* Telp */}
-                <div style={{ gridColumn: 'span 2' }}>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#495057', marginBottom: '0.3rem' }}>
-                    Nomor Telepon
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.telp}
-                    onChange={(e) => setFormData({ ...formData, telp: e.target.value })}
-                    placeholder="Misal: 061-4538166"
-                    style={{
-                      width: '100%',
-                      padding: '0.45rem 0.65rem',
-                      fontSize: '0.8rem',
-                      borderRadius: '4px',
-                      border: '1px solid #ced4da',
-                      outline: 'none',
-                    }}
-                  />
+                  {/* Telp */}
+                  <div className="form-field" style={{ gridColumn: 'span 2' }}>
+                    <label className="form-label">Nomor Telepon</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={formData.telp}
+                      onChange={(e) => setFormData({ ...formData, telp: e.target.value })}
+                      placeholder="Misal: 061-4538166"
+                    />
+                  </div>
                 </div>
               </div>
 
               {/* Modal Footer */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'flex-end',
-                  gap: '0.5rem',
-                  marginTop: '0.5rem',
-                  paddingTop: '0.75rem',
-                  borderTop: '1px solid #e9ebec',
-                }}
-              >
+              <div className="modal-footer">
                 <button
                   type="button"
                   className="btn btn-outline btn-sm"
@@ -1675,55 +1419,23 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
 
       {/* MODAL: Detail View */}
       {modalMode === 'detail' && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 1050,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-          }}
-        >
-          <div
-            style={{
-              background: '#ffffff',
-              borderRadius: '8px',
-              width: '100%',
-              maxWidth: '560px',
-              boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
-              border: '1px solid #e9ebec',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                padding: '1rem 1.25rem',
-                borderBottom: '1px solid #e9ebec',
-                background: '#fafbfe',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Building2 size={18} style={{ color: '#405189' }} />
-                <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#212529' }}>
-                  {formData.namaOutlet}
-                </h4>
-              </div>
+        <div className="modal-backdrop">
+          <div className="modal-container" style={{ maxWidth: '560px' }}>
+            <div className="modal-header">
+              <h4 className="modal-title">
+                <Building2 size={18} color="#405189" />
+                {formData.namaOutlet}
+              </h4>
               <button
                 type="button"
+                className="modal-close"
                 onClick={() => setModalMode(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#878a99' }}
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.8rem' }}>
+            <div className="modal-body" style={{ fontSize: '0.8rem' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
                 <div>
                   <span style={{ color: '#878a99', display: 'block', fontSize: '0.72rem' }}>Wilayah</span>
@@ -1775,15 +1487,7 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
               </div>
             </div>
 
-            <div
-              style={{
-                padding: '0.75rem 1.25rem',
-                borderTop: '1px solid #e9ebec',
-                background: '#fafbfe',
-                display: 'flex',
-                justifyContent: 'flex-end',
-              }}
-            >
+            <div className="modal-footer">
               <button
                 type="button"
                 className="btn btn-outline btn-sm"
@@ -1798,51 +1502,44 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
 
       {/* MODAL: Konfirmasi Hapus */}
       {deleteTargetIndex !== null && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 1060,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-          }}
-        >
-          <div
-            style={{
-              background: '#ffffff',
-              borderRadius: '8px',
-              width: '100%',
-              maxWidth: '420px',
-              padding: '1.25rem',
-              boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
-              textAlign: 'center',
-            }}
-          >
-            <div
-              style={{
-                width: '45px',
-                height: '45px',
-                borderRadius: '50%',
-                background: 'rgba(240, 101, 72, 0.1)',
-                color: '#f06548',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 0.75rem',
-              }}
-            >
-              <Trash2 size={22} />
+        <div className="modal-backdrop">
+          <div className="modal-container" style={{ maxWidth: '420px' }}>
+            <div className="modal-header">
+              <h4 className="modal-title">
+                <Trash2 size={18} color="#f06548" />
+                Hapus Data Wilayah Ini?
+              </h4>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setDeleteTargetIndex(null)}
+              >
+                <X size={18} />
+              </button>
             </div>
-            <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#212529', margin: '0 0 0.4rem' }}>
-              Hapus Data Wilayah Ini?
-            </h4>
-            <p style={{ fontSize: '0.78rem', color: '#878a99', margin: '0 0 1.25rem' }}>
-              Data <strong style={{ color: '#212529' }}>{settings[deleteTargetIndex]?.namaOutlet}</strong> akan dihapus dari konfigurasi wilayah dan database.
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
+
+            <div className="modal-body" style={{ textAlign: 'center' }}>
+              <div
+                style={{
+                  width: '45px',
+                  height: '45px',
+                  borderRadius: '50%',
+                  background: 'rgba(240, 101, 72, 0.1)',
+                  color: '#f06548',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto',
+                }}
+              >
+                <Trash2 size={22} />
+              </div>
+              <p style={{ fontSize: '0.8rem', color: '#878a99', margin: 0 }}>
+                Data <strong style={{ color: '#212529' }}>{settings[deleteTargetIndex]?.namaOutlet}</strong> akan dihapus dari konfigurasi wilayah dan database.
+              </p>
+            </div>
+
+            <div className="modal-footer" style={{ justifyContent: 'center' }}>
               <button
                 type="button"
                 className="btn btn-outline btn-sm"
@@ -1854,7 +1551,6 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
                 type="button"
                 className="btn btn-danger btn-sm"
                 onClick={handleConfirmDelete}
-                style={{ background: '#f06548', borderColor: '#f06548', color: '#ffffff' }}
               >
                 Ya, Hapus
               </button>
@@ -1865,51 +1561,44 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
 
       {/* MODAL: Konfirmasi Reset Standar */}
       {showResetConfirm && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 1060,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-          }}
-        >
-          <div
-            style={{
-              background: '#ffffff',
-              borderRadius: '8px',
-              width: '100%',
-              maxWidth: '440px',
-              padding: '1.25rem',
-              boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
-              textAlign: 'center',
-            }}
-          >
-            <div
-              style={{
-                width: '45px',
-                height: '45px',
-                borderRadius: '50%',
-                background: 'rgba(247, 184, 75, 0.15)',
-                color: '#d68b0c',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 0.75rem',
-              }}
-            >
-              <RefreshCw size={22} />
+        <div className="modal-backdrop">
+          <div className="modal-container" style={{ maxWidth: '440px' }}>
+            <div className="modal-header">
+              <h4 className="modal-title">
+                <RefreshCw size={18} color="#d68b0c" />
+                Reset ke 17 Wilayah Standar?
+              </h4>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setShowResetConfirm(false)}
+              >
+                <X size={18} />
+              </button>
             </div>
-            <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#212529', margin: '0 0 0.4rem' }}>
-              Reset ke 17 Wilayah Standar?
-            </h4>
-            <p style={{ fontSize: '0.78rem', color: '#878a99', margin: '0 0 1.25rem' }}>
-              Tindakan ini akan memulihkan konfigurasi lengkap 17 Kantor Wilayah (Wilayah 01 s/d Wilayah 18) sesuai master data resmi dan memperbarui database.
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
+
+            <div className="modal-body" style={{ textAlign: 'center' }}>
+              <div
+                style={{
+                  width: '45px',
+                  height: '45px',
+                  borderRadius: '50%',
+                  background: 'rgba(247, 184, 75, 0.15)',
+                  color: '#d68b0c',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto',
+                }}
+              >
+                <RefreshCw size={22} />
+              </div>
+              <p style={{ fontSize: '0.8rem', color: '#878a99', margin: 0 }}>
+                Tindakan ini akan memulihkan konfigurasi lengkap 17 Kantor Wilayah (Wilayah 01 s/d Wilayah 18) sesuai master data resmi dan memperbarui database.
+              </p>
+            </div>
+
+            <div className="modal-footer" style={{ justifyContent: 'center' }}>
               <button
                 type="button"
                 className="btn btn-outline btn-sm"
@@ -1919,7 +1608,7 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
               </button>
               <button
                 type="button"
-                className="btn btn-primary btn-sm"
+                className="btn btn-danger btn-sm"
                 onClick={handleResetToDefault}
               >
                 Ya, Reset Standar
