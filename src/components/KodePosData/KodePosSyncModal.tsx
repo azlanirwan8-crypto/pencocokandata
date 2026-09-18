@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshCw, X, CloudUpload, CheckCircle2, AlertCircle, ShieldCheck, Download } from 'lucide-react';
+import { RefreshCw, X, CloudUpload, CheckCircle2, AlertCircle, ShieldCheck, Download, Globe } from 'lucide-react';
 import {
   runKodePosSync,
   runKodePosSourceAudit,
   runKodePosBaselineAudit,
   pullKodePosBaseline,
+  crawlKodePosId,
   type KodePosSyncPlan,
   type SyncProgress,
 } from '../../utils/kodePosSync';
@@ -146,6 +147,23 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
     }
   };
 
+  // Kumpul patokan dari kodepos.id (diproses per provinsi oleh server).
+  const handleCrawlKodePosId = async () => {
+    setPhase('pulling');
+    setErrorMsg(null);
+    setImportMsg(null);
+    setPct(0);
+    try {
+      const res = await crawlKodePosId(onProgress);
+      const msg = `Patokan dari ${res.sumber} tersimpan: ${fmt(res.rows)} baris dari ${res.provinces} provinsi (tarikan ke-${res.version}).`;
+      setImportMsg(msg);
+      await startCheck(msg);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Crawl kodepos.id gagal.');
+      setPhase('ready');
+    }
+  };
+
   if (!open) return null;
 
   return (
@@ -214,12 +232,17 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                 Perintah
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-                <button type="button" className="btn btn-primary btn-sm" onClick={() => void handlePullBaseline()}>
+                <button type="button" className="btn btn-primary btn-sm" onClick={() => void handleCrawlKodePosId()}>
                   <Download size={13} style={{ marginRight: '0.3rem' }} />
-                  Tarik data terbaru
+                  Ambil data dari kodepos.id
+                </button>
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => void handlePullBaseline()}>
+                  <Globe size={13} style={{ marginRight: '0.3rem' }} />
+                  Tarik dari data pemerintah
                 </button>
                 <span style={{ fontSize: '0.74rem', color: '#878a99' }}>
-                  Isi ulang patokan dari data pemerintah (Satu Data Indonesia / Bappenas).
+                  Isi ulang patokan di tabel kodepos_baseline. Pakai kodepos.id ±5-10 menit sekali jalan;
+                  sumber yang terpakai dicatat di baris sumber.
                 </span>
               </div>
             </div>

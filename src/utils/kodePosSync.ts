@@ -388,3 +388,41 @@ export async function pullKodePosBaseline(
   }
   throw new Error('Penarikan baseline berhenti setelah 40 tahap; jalankan ulang untuk melanjutkan.');
 }
+
+/**
+ * Kumpul patokan dari kodepos.id. Situs ini tidak punya API maupun berkas
+ * unduhan, jadi server menelusuri halaman provinsinya yang berpaginasi
+ * (±4.700 halaman). Dipanggil per provinsi supaya tiap fungsi selesai < 60 detik.
+ */
+export async function crawlKodePosId(
+  onProgress?: SyncProgress
+): Promise<{ version: number; rows: number; provinces: number; sumber: string }> {
+  onProgress?.('Membaca daftar provinsi dari kodepos.id...', 2);
+  const list = await fetchJson('/api/kodepos-id?view=provinces');
+  const provinces: string[] = list.provinces || [];
+  if (provinces.length === 0) throw new Error('Tidak ada provinsi terbaca dari kodepos.id.');
+
+  let versi: number | undefined;
+  let rows = 0;
+  for (let i = 0; i < provinces.length; i++) {
+    const provinsi = provinces[i];
+    let fromPage = 1;
+    for (let guard = 0; guard < 200; guard++) {
+      const json = await fetchJson('/api/kodepos-id?view=crawl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provinsi, fromPage, versi }),
+      });
+      versi = json.versi;
+      rows += json.upserted || 0;
+      onProgress?.(
+        `Mengambil ${provinsi} (halaman ${json.next - 1}) — total ${rows.toLocaleString('id-ID')} baris...`,
+        Math.min(97, Math.round(((i + 1) / provinces.length) * 100))
+      );
+      if (json.done || json.next <= fromPage) break;
+      fromPage = json.next;
+    }
+  }
+  onProgress?.('Patokan tersimpan', 100);
+  return { version: versi ?? 0, rows, provinces: provinces.length, sumber: list.source || 'kodepos.id' };
+}
