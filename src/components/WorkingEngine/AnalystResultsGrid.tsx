@@ -337,7 +337,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
           <div className="metric-value">{stats.unanalysed.toLocaleString('id-ID')}</div>
           <div className="metric-footer">
             {coverage
-              ? `${coverage.unmappedCities.length.toLocaleString('id-ID')} kota di luar data PTEN — klik untuk analisa manual`
+              ? `${coverage.unmappedCities.length.toLocaleString('id-ID')} kota belum terpetakan — klik untuk analisa manual`
               : 'Klik untuk analisa manual'}
           </div>
         </div>
@@ -907,7 +907,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                           <td>{r.kecamatan}</td>
                           <td>{r.provinsi}</td>
                           <td style={{ fontWeight: 700, color: r.kotaPten ? '#212529' : '#f0ad4e', borderLeft: '2px solid #b7ebe4' }}>
-                            {r.kotaPten || `${r.groupKota} (belum ada di PTEN)`}
+                            {r.kotaPten || `${r.groupKota} (belum terpetakan ke PTEN)`}
                           </td>
                           <td className="code-cell" style={{ textAlign: 'center', color: '#0ab39c', fontWeight: 700 }}>
                             {r.kodePosPten}
