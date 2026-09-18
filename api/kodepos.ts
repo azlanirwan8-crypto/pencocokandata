@@ -1,4 +1,5 @@
 import { neon } from '@neondatabase/serverless';
+import { oncePerInstance } from './_db';
 
 /**
  * /api/kodepos — Neon Postgres CRUD for Master Data Kode Pos Indonesia
@@ -18,6 +19,12 @@ import { neon } from '@neondatabase/serverless';
 export const maxDuration = 60;
 
 const PAGE_SIZE_CAP = 500;
+
+/** Kunci identitas satu baris kode pos — HARUS sama dengan kodePosRowKey() di klien. */
+const ROW_KEY_SQL = `upper(btrim(kode_pos))||'|'||upper(btrim(COALESCE(kelurahan,'')))||'|'||upper(btrim(COALESCE(kecamatan,'')))||'|'||upper(btrim(COALESCE(kabupaten_kota,'')))||'|'||upper(btrim(COALESCE(provinsi,'')))`;
+const PROV_SQL = `COALESCE(NULLIF(upper(btrim(provinsi)),''),'(TANPA PROVINSI)')`;
+const SYNC_DIFF_CAP = 500;
+const SYNC_KEYS_CAP = 20000;
 
 function mapRow(r: any) {
   return {
@@ -98,23 +105,34 @@ export default async function handler(req: any, res: any) {
   try {
     const sql = neon(connectionString);
 
-    // Auto-migrate: buat tabel kodepos_data dengan index
-    await sql`
-      CREATE TABLE IF NOT EXISTS kodepos_data (
-        id             SERIAL PRIMARY KEY,
-        kode_pos       VARCHAR(10)  NOT NULL,
-        kelurahan      TEXT,
-        kecamatan      TEXT,
-        kabupaten_kota TEXT,
-        provinsi       TEXT,
-        status         VARCHAR(20)  DEFAULT 'AKTIF',
-        created_at     TIMESTAMPTZ  DEFAULT NOW(),
-        updated_at     TIMESTAMPTZ  DEFAULT NOW()
-      );
-    `;
-    await sql`CREATE INDEX IF NOT EXISTS idx_kodepos_kode       ON kodepos_data(kode_pos);`;
-    await sql`CREATE INDEX IF NOT EXISTS idx_kodepos_provinsi   ON kodepos_data(provinsi);`;
-    await sql`CREATE INDEX IF NOT EXISTS idx_kodepos_kabupaten  ON kodepos_data(kabupaten_kota);`;
+    // Auto-migrate: sekali per warm instance, bukan tiap request
+    await oncePerInstance('kodepos_data', async () => {
+      await sql`
+        CREATE TABLE IF NOT EXISTS kodepos_data (
+          id             SERIAL PRIMARY KEY,
+          kode_pos       VARCHAR(10)  NOT NULL,
+          kelurahan      TEXT,
+          kecamatan      TEXT,
+          kabupaten_kota TEXT,
+          provinsi       TEXT,
+          status         VARCHAR(20)  DEFAULT 'AKTIF',
+          created_at     TIMESTAMPTZ  DEFAULT NOW(),
+          updated_at     TIMESTAMPTZ  DEFAULT NOW()
+        );
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS idx_kodepos_kode       ON kodepos_data(kode_pos);`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_kodepos_provinsi   ON kodepos_data(provinsi);`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_kodepos_kabupaten  ON kodepos_data(kabupaten_kota);`;
+      // Indeks unik: membuat import ulang baris yang sama menjadi idempoten (ON CONFLICT DO NOTHING).
+      // Gagal bila masih ada duplikat lama — bukan masalah fatal, hanya kehilangan proteksi dedup.
+      await sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_kodepos_row
+        ON kodepos_data (
+          upper(btrim(kode_pos)), upper(btrim(COALESCE(kelurahan,''))), upper(btrim(COALESCE(kecamatan,''))),
+          upper(btrim(COALESCE(kabupaten_kota,''))), upper(btrim(COALESCE(provinsi,'')))
+        );
+      `.catch(() => undefined);
+    });
 
     const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
 
@@ -197,6 +215,34 @@ export default async function handler(req: any, res: any) {
           .json({ ok: true, configured: true, count: (rows || []).length, data: (rows || []).map(mapRow) });
       }
 
+      // sync-meta: sidik jari per provinsi untuk membandingkan DB lokal vs cloud
+      // tanpa mengirim puluhan ribu baris. sha256 atas kunci baris yang diurutkan
+      // dengan COLLATE "C" (urutan byte) supaya sama dengan sort di JavaScript.
+      if (view === 'sync-meta') {
+        const meta = await sql.query(
+          `WITH k AS (
+             SELECT ${PROV_SQL} AS provinsi, ${ROW_KEY_SQL} AS k FROM kodepos_data
+           )
+           SELECT provinsi,
+                  COUNT(*)::int AS total,
+                  encode(sha256(convert_to(string_agg(k, E'\n' ORDER BY k COLLATE "C"), 'UTF8')), 'hex') AS fingerprint
+           FROM k GROUP BY provinsi ORDER BY provinsi COLLATE "C";`
+        );
+        const lastUpdated = await sql.query(`SELECT MAX(updated_at) AS updated_at FROM kodepos_data;`);
+        const provinces = (meta || []).map((m: any) => ({
+          provinsi: m.provinsi,
+          total: m.total,
+          fingerprint: m.fingerprint,
+        }));
+        return res.status(200).json({
+          ok: true,
+          configured: true,
+          cloudTotal: provinces.reduce((sum: number, p: any) => sum + p.total, 0),
+          lastUpdated: lastUpdated?.[0]?.updated_at || null,
+          provinces,
+        });
+      }
+
       // default: page — satu halaman data + total untuk pagination
       const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1);
       const rawSize = parseInt(url.searchParams.get('pageSize') || '25', 10) || 25;
@@ -255,6 +301,54 @@ export default async function handler(req: any, res: any) {
     // ─────────────── POST (bulk import / reset / create) ───────────────
     if (req.method === 'POST') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+
+      // sync-diff: adu himpunan kunci baris milik klien dengan milik cloud.
+      // Kunci dikirim sebagai satu string ber-pemisah chr(31) agar tidak bergantung
+      // pada serialisasi array driver Neon.
+      if (url.searchParams.get('view') === 'sync-diff') {
+        const keys: string[] = Array.isArray(body?.keys) ? body.keys.slice(0, SYNC_KEYS_CAP) : [];
+        if (keys.length === 0) {
+          return res.status(400).json({ ok: false, error: 'body.keys harus array tidak kosong.' });
+        }
+        const cap = Math.min(SYNC_DIFF_CAP, Math.max(1, Number(body?.cap) || SYNC_DIFF_CAP));
+        const keysParam = keys.join(String.fromCharCode(31));
+
+        // Kunci milik klien yang belum ada di cloud (kandidat import) — daftar penuh,
+        // karena klien butuh seluruhnya untuk tombol "pilih semua".
+        const notInCloud = await sql.query(
+          `WITH loc AS (SELECT DISTINCT unnest(string_to_array($1, chr(31))) AS k),
+                  cloud AS (SELECT ${ROW_KEY_SQL} AS k FROM kodepos_data)
+           SELECT loc.k FROM loc LEFT JOIN cloud ON cloud.k = loc.k WHERE cloud.k IS NULL
+           LIMIT ${SYNC_KEYS_CAP};`,
+          [keysParam]
+        );
+
+        // Kunci milik cloud yang tidak dikirim klien (informasi: DB lokal ketinggalan).
+        // Dibatasi ke provinsi yang sama dengan kunci yang dikirim, karena klien
+        // mengirim kunci hanya untuk provinsi yang berbeda.
+        const notInLocal = await sql.query(
+          `WITH loc AS (SELECT DISTINCT unnest(string_to_array($1, chr(31))) AS k),
+                  cloud AS (
+                    SELECT ${ROW_KEY_SQL} AS k, id, kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, status
+                    FROM kodepos_data
+                    WHERE ${PROV_SQL} IN (SELECT DISTINCT split_part(k, '|', 5) FROM loc)
+                  )
+           SELECT cloud.id, cloud.kode_pos, cloud.kelurahan, cloud.kecamatan, cloud.kabupaten_kota, cloud.provinsi, cloud.status
+           FROM cloud LEFT JOIN loc ON loc.k = cloud.k WHERE loc.k IS NULL
+           LIMIT $2;`,
+          [keysParam, cap]
+        );
+
+        return res.status(200).json({
+          ok: true,
+          configured: true,
+          keysReceived: keys.length,
+          missingInCloud: (notInCloud || []).map((r: any) => r.k),
+          missingInLocal: (notInLocal || []).map(mapRow),
+          cap,
+        });
+      }
+
       const { rows, mode = 'replace' } = body;
 
       if (!Array.isArray(rows) || rows.length === 0) {

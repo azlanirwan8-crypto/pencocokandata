@@ -38,6 +38,7 @@ import {
   type KodePosRow,
   type KodePosStats,
 } from '../../utils/neonSync';
+import { KodePosSyncModal } from './KodePosSyncModal';
 
 interface KodePosManagerProps {
   onKodePosCountChange?: (count: number) => void;
@@ -83,6 +84,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<KodePosRow | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
+  const [showSyncModal, setShowSyncModal] = useState<boolean>(false);
   const [detailItem, setDetailItem] = useState<KodePosRow | null>(null);
 
   const [formData, setFormData] = useState<KodePosRow>({
@@ -546,6 +548,17 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
           >
             <Download size={14} />
             <span>Ekspor Excel</span>
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => setShowSyncModal(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+            title="Periksa kelengkapan & kevalidan kode pos terhadap database Neon"
+          >
+            <RefreshCw size={13} />
+            <span>Sync Data</span>
           </button>
 
           <button
@@ -1460,6 +1473,16 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
           </div>
         </div>
       )}
+
+      {/* Modal: Sync Data (bandingkan master lokal vs Neon, import terpilih ke cloud) */}
+      <KodePosSyncModal
+        open={showSyncModal}
+        onClose={() => setShowSyncModal(false)}
+        onImported={() => {
+          setReloadKey((k) => k + 1);
+          refreshStats();
+        }}
+      />
 
       {/* 8. Modal: Reset Confirmation */}
       {showResetConfirm && (
