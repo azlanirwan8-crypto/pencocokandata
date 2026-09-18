@@ -81,6 +81,7 @@ const THESAURUS_MAP: Record<string, string> = {
   'KK': 'KANTOR KAS',
   'BO': 'BRANCH OFFICE',
   'SBO': 'SUB BRANCH OFFICE',
+  'KEP': 'KEPULAUAN',
   'DKI': 'DKI JAKARTA',
   'DIY': 'DAERAH ISTIMEWA YOGYAKARTA',
   'JABAR': 'JAWA BARAT',
@@ -104,6 +105,17 @@ export function cleanAndStandardizeText(str: string): string {
   const words = cleaned.split(' ');
   const replaced = words.map((w) => THESAURUS_MAP[w] || w);
   return replaced.join(' ');
+}
+
+// Kunci pencocokan KOTA/KABUPATEN: buang kata administratif (KOTA, KABUPATEN,
+// ADMINISTRASI, DAERAH KHUSUS, dst) supaya "JAKARTA PUSAT" == "KOTA ADMINISTRASI
+// JAKARTA PUSAT" dan "SLEMAN" == "KABUPATEN SLEMAN".
+const CITY_NOISE_TOKENS = new Set(['KOTA', 'KABUPATEN', 'ADMINISTRASI', 'ADM', 'KOTAMADYA', 'DAERAH', 'KHUSUS', 'I']);
+export function cityMatchKey(raw: string): string {
+  return cleanAndStandardizeText(raw)
+    .split(' ')
+    .filter((w) => w && !CITY_NOISE_TOKENS.has(w))
+    .join(' ');
 }
 
 // 2. 🔄 TOKEN SET & JACCARD INTERSECTION (Anti-Kata Terbalik)
@@ -275,9 +287,11 @@ export async function executeAnalystPipeline(
   const startTime = performance.now();
 
   // 1. Persiapkan Index Master untuk O(1) Quick Lookup
+  // Kota di-key dengan cityMatchKey → "JAKARTA PUSAT" dan "KOTA ADMINISTRASI JAKARTA
+  // PUSAT" dianggap kota yang sama (grouping berdasarkan kota/kabupaten PTEN)
   const ptenCityMap = new Map<string, PTENRecord[]>();
   ptenList.forEach((p) => {
-    const k = cleanAndStandardizeText(p.kotaPten);
+    const k = cityMatchKey(p.kotaPten);
     if (!k) return;
     if (!ptenCityMap.has(k)) ptenCityMap.set(k, []);
     ptenCityMap.get(k)!.push(p);
@@ -285,7 +299,7 @@ export async function executeAnalystPipeline(
 
   const kodePosByCity = new Map<string, KodePosRow[]>();
   kodePosList.forEach((kp) => {
-    const c = cleanAndStandardizeText(kp.kabupatenKota);
+    const c = cityMatchKey(kp.kabupatenKota);
     if (!c) return;
     if (!kodePosByCity.has(c)) kodePosByCity.set(c, []);
     kodePosByCity.get(c)!.push(kp);
@@ -299,7 +313,7 @@ export async function executeAnalystPipeline(
   if (ptenCityMap.size > 0) {
     const masterByCity = new Map<string, MasterRow[]>();
     masterCabangRows.forEach((m) => {
-      const k = cleanAndStandardizeText(String(m['Dati II'] || m.Kota || m.Kelurahan || ''));
+      const k = cityMatchKey(String(m['Dati II'] || m.Kota || m.Kelurahan || ''));
       if (!k) return;
       if (!masterByCity.has(k)) masterByCity.set(k, []);
       masterByCity.get(k)!.push(m);
@@ -324,7 +338,12 @@ export async function executeAnalystPipeline(
       return best;
     };
 
-    itemsToProcess = Array.from(ptenCityMap.entries()).map(([cityKey, ptenRecs], idx) => {
+    // Urutkan grup kota berdasarkan nama Kota/Kabupaten PTEN (A→Z)
+    itemsToProcess = Array.from(ptenCityMap.entries())
+      .sort((a, b) =>
+        (a[1][0]?.kotaPten || a[0]).localeCompare(b[1][0]?.kotaPten || b[0], 'id', { sensitivity: 'base' })
+      )
+      .map(([cityKey, ptenRecs], idx) => {
       const masters = findMasterByCity(cityKey);
       if (masters.length > 0) return masters[0];
 
@@ -426,7 +445,7 @@ export async function executeAnalystPipeline(
     if (i % 20 === 0) await tick();
 
     const cityRaw = String(raw['Dati II'] || raw.Kota || raw.Kelurahan || '').trim();
-    const cityClean = cleanAndStandardizeText(cityRaw);
+    const cityClean = cityMatchKey(cityRaw);
     const kpRaw = String(raw['KODE POS'] || '').trim();
 
     // ── Cari PTEN Match ──
@@ -452,7 +471,7 @@ export async function executeAnalystPipeline(
     const finalKodePosPten = matchedPtenRecord?.kodePosPten || kpRaw || '10110';
 
     // ── Cari SEMUA Kelurahan & Kecamatan dari Data Kode Pos untuk Kota PTEN ini ──
-    const ptenCleanCity = cleanAndStandardizeText(finalKotaPten);
+    const ptenCleanCity = cityMatchKey(finalKotaPten);
     let matchedKodePosEntries: KodePosRow[];
     const cachedKodePos = kodePosCityCache.get(ptenCleanCity);
     if (cachedKodePos) {
