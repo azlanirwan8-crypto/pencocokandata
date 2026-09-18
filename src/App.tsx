@@ -14,7 +14,7 @@ import { RoleMappingManager } from './components/RoleMapping/RoleMappingManager'
 import { KodePosManager } from './components/KodePosData/KodePosManager';
 import { AnalystCanvas } from './components/WorkingEngine/AnalystCanvas';
 import { AnalystResultsGrid } from './components/WorkingEngine/AnalystResultsGrid';
-import { executeAnalystPipeline, type AnalystRow } from './utils/analystPipeline';
+import { executeAnalystPipeline, type AnalystRow, type AnalystCoverage } from './utils/analystPipeline';
 import type { ActiveTab } from './components/Sidebar';
 
 import type { MasterRow, TargetRow, MatchingStats, WilayahStat, WilayahSetting } from './types';
@@ -87,6 +87,7 @@ export const App: React.FC = () => {
 
   // New Data Analyst 3-Phase Engine State (100% Data Master Driven)
   const [analystRows, setAnalystRows] = useState<AnalystRow[]>([]);
+  const [analystCoverage, setAnalystCoverage] = useState<AnalystCoverage | null>(null);
   // Full Master Kode Pos list (loaded once from Neon, cached in memory for pipeline runs)
   const kodePosListRef = useRef<KodePosRow[] | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
@@ -463,7 +464,7 @@ export const App: React.FC = () => {
       }
 
       let lastPhase: 1 | 2 | 3 = 1;
-      const results = await executeAnalystPipeline(
+      const { rows: results, coverage } = await executeAnalystPipeline(
         masterRows,
         ptenList,
         kodePosForPipeline,
@@ -503,6 +504,7 @@ export const App: React.FC = () => {
       );
 
       setAnalystRows(results);
+      setAnalystCoverage(coverage);
       setIsAnalyzing(false);
       setAnalystProgress(100);
       setAnalystMessage('Analisa 3 Fase Berhasil Selesai!');
@@ -520,6 +522,7 @@ export const App: React.FC = () => {
 
   const handleResetAnalyst = async () => {
     setAnalystRows([]);
+    setAnalystCoverage(null);
     setAnalystProgress(0);
     setAnalystMessage('');
     await setItem('analyst_results_data', []);
@@ -903,6 +906,7 @@ export const App: React.FC = () => {
                   onReRunAnomaliesOnly={() => handleStartAnalystPipeline(true)}
                   isProcessing={isAnalyzing}
                   wilayahSettings={wilayahSettings}
+                  coverage={analystCoverage}
                 />
               )}
             </div>

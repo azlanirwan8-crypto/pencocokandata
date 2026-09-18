@@ -482,6 +482,23 @@ export interface PipelineProgressCallback {
   (phase: 1 | 2 | 3, percent: number, processed: number, total: number, message: string): void;
 }
 
+export interface CoverageCity {
+  city: string;
+  rows: number;
+  status: 'VERIFIED' | 'REVIEW' | 'FALLBACK';
+  sampleKodePos: string;
+  provinsi: string;
+}
+export interface AnalystCoverage {
+  kodePosTotal: number;
+  kodePosMapped: number;
+  verifiedRows: number;
+  reviewRows: number;
+  resultRows: number;
+  unmappedCities: CoverageCity[];
+  includedCities: CoverageCity[];
+}
+
 /**
  * Menjalankan Pipeline Analisis 3 Fase langsung dari 5 Data Master
  */
@@ -494,7 +511,7 @@ export async function executeAnalystPipeline(
   onProgress?: PipelineProgressCallback,
   reRunOnlyAnomalies = false,
   previousRows?: AnalystRow[]
-): Promise<AnalystRow[]> {
+): Promise<{ rows: AnalystRow[]; coverage: AnalystCoverage }> {
   const startTime = performance.now();
 
   // 1. Persiapkan Index Master untuk O(1) Quick Lookup
@@ -618,6 +635,8 @@ export async function executeAnalystPipeline(
     usedFallback?: boolean;
     placementStatus: 'VERIFIED' | 'REVIEW' | 'FALLBACK';
     placementMethod: string;
+    cityKey: string;
+    cityRawName: string;
     resolvedWilayah: ReturnType<typeof extractWilayahFromBranchCode>;
     sandiCabang: string;
     namaOutlet: string;
@@ -916,6 +935,7 @@ export async function executeAnalystPipeline(
       finalKotaPten, finalKodePosPten, statusPten,
       matchedKodePosEntries, matchedProvinsi, usedFallback,
       placementStatus, placementMethod,
+      cityKey: ptenCleanCity, cityRawName: finalKotaPten,
       resolvedWilayah, sandiCabang, namaOutlet, statusOutlet, alamat,
       matchedRole, highestRoleScore, chosenAlgorithm,
       organisasiTujuan, tipeUnit, roleCabsal, roleCabapv1, roleCabapv2,
@@ -933,6 +953,8 @@ export async function executeAnalystPipeline(
   // Baris kodepos yang kotanya terbukti lewat join nama + verifikasi geocode
   let verifiedKodePosRows = 0;
   let reviewRow = 0;
+  // Peta cakupan per kota (dipakai untuk laporan "kenapa jumlah ≠ 83.762")
+  const includedCityMap = new Map<string, CoverageCity>();
   kodePosByCity.forEach((entries, ck) => {
     if (geoVerifiedCityKeys.has(ck)) verifiedKodePosRows += entries.length;
   });
@@ -947,6 +969,16 @@ export async function executeAnalystPipeline(
     else {
       for (const kp of meta.matchedKodePosEntries) usedKodePosRows.add(kp);
       if (meta.placementStatus === 'REVIEW') { reviewCityCount++; reviewRow += meta.matchedKodePosEntries.length; }
+    }
+    if (!includedCityMap.has(meta.cityKey)) {
+      const first = meta.matchedKodePosEntries[0];
+      includedCityMap.set(meta.cityKey, {
+        city: meta.cityRawName,
+        rows: meta.usedFallback ? 0 : meta.matchedKodePosEntries.length,
+        status: meta.placementStatus,
+        sampleKodePos: first?.kodePos || '',
+        provinsi: first?.provinsi || meta.matchedProvinsi || '',
+      });
     }
 
     // Progress for Fase 2 (global 35% → 66%)
@@ -1037,15 +1069,37 @@ export async function executeAnalystPipeline(
   const mappedKodePos = usedKodePosRows.size;
   const unmappedKodePos = Math.max(0, kodePosList.length - mappedKodePos);
   const verifiedRows = Math.max(0, verifiedKodePosRows - reviewRow);
+  // Kota di master kodepos yang tidak ikut ke Fase 1 = penyebab jumlah < 83.762
+  const unmappedCities: CoverageCity[] = [];
+  kodePosByCity.forEach((entries, ck) => {
+    if (entries.length === 0 || includedCityMap.has(ck)) return;
+    unmappedCities.push({
+      city: entries[0]?.kabupatenKota || ck,
+      rows: entries.length,
+      status: 'REVIEW',
+      sampleKodePos: entries[0]?.kodePos || '',
+      provinsi: entries[0]?.provinsi || '',
+    });
+  });
+  unmappedCities.sort((a, b) => b.rows - a.rows);
+  const coverage: AnalystCoverage = {
+    kodePosTotal: kodePosList.length,
+    kodePosMapped: mappedKodePos,
+    verifiedRows,
+    reviewRows: reviewRow,
+    resultRows: results.length,
+    unmappedCities,
+    includedCities: Array.from(includedCityMap.values()).sort((a, b) => b.rows - a.rows),
+  };
   const fmt = (n: number) => n.toLocaleString('id-ID');
   if (onProgress) {
     onProgress(3, 100, total, total, `Analisa 3 Fase selesai dalam ${elapsed}ms. ${fmt(results.length)} baris dihasilkan. ` +
       `KodePos terpetakan ${fmt(mappedKodePos)}/${fmt(kodePosList.length)} — terbukti geocode ${fmt(verifiedRows)}` +
       `${reviewRow > 0 ? `, perlu review ${fmt(reviewRow)}` : ''}` +
-      `${unmappedKodePos > 0 ? `, belum masuk ${fmt(unmappedKodePos)} (kotanya tidak ada di PTEN)` : ''}` +
+      `${unmappedKodePos > 0 ? `, belum masuk ${fmt(unmappedKodePos)} di ${unmappedCities.length} kota (kotanya tidak ada di PTEN)` : ''}` +
       `${reviewCityCount > 0 ? `. Kota perlu review manual: ${reviewCityCount}` : ''}` +
       `${fallbackCityCount > 0 ? `. Kota tanpa data kodepos (baris fallback): ${fallbackCityCount}` : ''}.`);
   }
 
-  return results;
+  return { rows: results, coverage };
 }

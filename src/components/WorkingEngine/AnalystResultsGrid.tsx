@@ -19,7 +19,7 @@ import {
   Lock,
 } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
-import type { AnalystRow } from '../../utils/analystPipeline';
+import type { AnalystRow, AnalystCoverage } from '../../utils/analystPipeline';
 import type { WilayahSetting } from '../../types';
 import { AnalystRowEditModal } from './AnalystRowEditModal';
 import { formatWilayahName } from '../../utils/normalizer';
@@ -36,6 +36,7 @@ interface AnalystResultsGridProps {
   onReRunAnomaliesOnly: () => void;
   isProcessing: boolean;
   wilayahSettings: WilayahSetting[];
+  coverage?: AnalystCoverage | null;
 }
 
 export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
@@ -48,6 +49,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   onReRunAnomaliesOnly,
   isProcessing,
   wilayahSettings,
+  coverage,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'all' | 'fase1' | 'fase2' | 'fase3'>('fase1');
   const [selectedWilayah, setSelectedWilayah] = useState<string>('ALL');
@@ -294,7 +296,11 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
             </div>
           </div>
           <div className="metric-value">{stats.total.toLocaleString('id-ID')}</div>
-          <div className="metric-footer">{wilayahList.length} Wilayah / Kanwil Terpetakan</div>
+          <div className="metric-footer">
+            {coverage
+              ? `KodePos masuk ${coverage.kodePosMapped.toLocaleString('id-ID')}/${coverage.kodePosTotal.toLocaleString('id-ID')} · ${wilayahList.length} Wilayah`
+              : `${wilayahList.length} Wilayah / Kanwil Terpetakan`}
+          </div>
         </div>
 
         {/* Akurasi Engine */}
@@ -336,7 +342,48 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
         </div>
       </div>
 
-      {/* Toast Notification */}
+      {/* ────────────────────────────────────────────────────────────────────────── */}
+      {/* 1b. LAPORAN CAKUPAN KODEPOS → FASE 1 (kenapa jumlah bisa ≠ master)        */}
+      {/* ────────────────────────────────────────────────────────────────────────── */}
+      {coverage && coverage.unmappedCities.length > 0 && (
+        <details
+          style={{ background: '#fff8ec', border: '1px solid #f2d9a8', borderRadius: '6px', padding: '0.75rem 1rem' }}
+          open
+        >
+          <summary style={{ cursor: 'pointer', fontWeight: 700, color: '#8a5a00', fontSize: '0.86rem' }}>
+            Cakupan KodePos → Fase 1: {coverage.resultRows.toLocaleString('id-ID')} dari{' '}
+            {coverage.kodePosTotal.toLocaleString('id-ID')} baris masuk ({coverage.unmappedCities.length} kota,{' '}
+            {(coverage.kodePosTotal - coverage.kodePosMapped).toLocaleString('id-ID')} baris tidak masuk)
+          </summary>
+          <p style={{ fontSize: '0.78rem', color: '#6b5836', margin: '0.5rem 0' }}>
+            Baris kodepos hanya masuk bila kotanya ada di data PTEN. Kota di daftar ini ada di master KodePos
+            tetapi tidak ditemukan di PTEN, jadi belum ikut dianalisa.
+          </p>
+          <div style={{ maxHeight: '240px', overflowY: 'auto', border: '1px solid #f0e2c2', borderRadius: '4px' }}>
+            <table className="modern-table" style={{ width: '100%', fontSize: '0.75rem' }}>
+              <thead style={{ position: 'sticky', top: 0, background: '#fdf3e0' }}>
+                <tr>
+                  <th style={{ textAlign: 'left' }}>Kota / Kabupaten (di master KodePos)</th>
+                  <th style={{ textAlign: 'center', width: '90px' }}>Kode Pos</th>
+                  <th style={{ textAlign: 'left', width: '160px' }}>Provinsi</th>
+                  <th style={{ textAlign: 'right', width: '90px' }}>Baris</th>
+                </tr>
+              </thead>
+              <tbody>
+                {coverage.unmappedCities.map((c) => (
+                  <tr key={c.city}>
+                    <td style={{ fontWeight: 600 }}>{c.city}</td>
+                    <td style={{ textAlign: 'center' }}>{c.sampleKodePos}</td>
+                    <td>{c.provinsi}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 700 }}>{c.rows.toLocaleString('id-ID')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
+
       {notification && (
         <div
           style={{
