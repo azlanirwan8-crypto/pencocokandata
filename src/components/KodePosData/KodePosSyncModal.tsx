@@ -219,9 +219,6 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                   Tidak ada selisih: seluruh kode pos dari {plan.compareLabel.toLowerCase()} sudah tersimpan di Neon.
                   {plan.lastUpdated ? ` Diperbarui: ${new Date(plan.lastUpdated).toLocaleString('id-ID')}.` : ''}
                 </div>
-                {plan.note && (
-                  <div style={{ fontSize: '0.74rem', color: '#878a99', marginTop: '0.5rem' }}>{plan.note}</div>
-                )}
               </div>
             </div>
           )}
@@ -231,7 +228,6 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
               <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#495057' }}>
                 Daftar {fmt(rows.length)} baris ber-kode pos yang belum ada di Neon
               </div>
-              {plan.note && <div style={{ fontSize: '0.74rem', color: '#878a99' }}>{plan.note}</div>}
 
               <div ref={scrollRef} className="table-container" style={{ maxHeight: '360px', overflow: 'auto', border: '1px solid #e9ebec', borderRadius: '6px' }}>
                 <table className="modern-table" style={{ fontSize: '0.76rem' }}>
