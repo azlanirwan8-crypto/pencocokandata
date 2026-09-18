@@ -450,12 +450,10 @@ export const App: React.FC = () => {
   };
 
   const handleResetAnalyst = async () => {
-    if (window.confirm('Reset seluruh hasil analisa data master?')) {
-      setAnalystRows([]);
-      setAnalystProgress(0);
-      setAnalystMessage('');
-      await setItem('analyst_results_data', []);
-    }
+    setAnalystRows([]);
+    setAnalystProgress(0);
+    setAnalystMessage('');
+    await setItem('analyst_results_data', []);
   };
 
   const handleUpdateAnalystRow = (updated: AnalystRow) => {
