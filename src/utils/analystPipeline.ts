@@ -331,12 +331,25 @@ export async function executeAnalystPipeline(
   const total = itemsToProcess.length;
   const results: AnalystRow[] = [];
 
+  // Progress: Fase 1 starting
+  if (onProgress) {
+    onProgress(1, 15, 0, total, 'Fase 1: Mencocokkan PTEN & Master Kode Pos...');
+  }
+
   // ───────────────────────────────────────────────────────────────────────────
   // LOOP UTAMA: EKSEKUSI FASE 1, FASE 2, FASE 3
   // ───────────────────────────────────────────────────────────────────────────
   for (let i = 0; i < itemsToProcess.length; i++) {
     const raw = itemsToProcess[i];
     const prevRow = previousRows?.[i];
+
+    // Progress update every 100 rows for smoother animation
+    if (i % 100 === 0 && onProgress) {
+      const pct = Math.round(15 + ((i + 1) / total) * 70);
+      const currentPhase = i < total * 0.33 ? 1 : i < total * 0.66 ? 2 : 3;
+      const phaseMsg = currentPhase === 1 ? 'Mencocokkan PTEN & Kode Pos' : currentPhase === 2 ? 'Validasi Wilayah & Cabang' : 'Mapping Role & Wondr';
+      onProgress(currentPhase, pct, i + 1, total, `Fase ${currentPhase}: ${phaseMsg} (baris ${i + 1}/${total})...`);
+    }
 
     // Jika mode "Ulangi yang Salah Saja", lewati baris yang sudah valid & disetujui
     if (reRunOnlyAnomalies && prevRow && prevRow.isFinalApproved && prevRow.statusAnalisa === 'EXACT_MATCH') {
@@ -521,11 +534,6 @@ export async function executeAnalystPipeline(
       statusAnalisa,
       isFinalApproved: statusAnalisa === 'EXACT_MATCH',
     });
-
-    if (i % 200 === 0 && onProgress) {
-      const pct = Math.round(((i + 1) / total) * 100);
-      onProgress(3, pct, i + 1, total, `Menganalisa baris ${i + 1} dari ${total}...`);
-    }
   }
 
   const elapsed = Math.round(performance.now() - startTime);
