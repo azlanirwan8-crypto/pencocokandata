@@ -57,6 +57,8 @@ export interface KodePosSyncPlan {
   diffProvinces: string[];
   /** Diisi saat mode sumber eksternal. */
   sourceLabel?: string;
+  /** Satuan angka pembanding: 'kode pos' atau 'baris'. */
+  compareUnit?: string;
   note?: string;
   /** Jumlah baris/kode pos yang tersimpan di Neon. */
   dbTotal: number;
@@ -163,7 +165,9 @@ export async function runKodePosSync(onProgress?: SyncProgress): Promise<KodePos
       diffProvinces,
       dbTotal: neonTotal,
       compareTotal: local.length,
-      compareLabel: 'Master perangkat ini',
+      compareLabel: 'Berkas perangkat ini',
+      sourceLabel: 'Berkas kode pos di perangkat ini',
+      compareUnit: 'baris',
       sourceDetail,
       provincesAffected: diffProvinces,
       importable: true,
@@ -173,6 +177,9 @@ export async function runKodePosSync(onProgress?: SyncProgress): Promise<KodePos
 
   const missingInCloud: KodePosRow[] = [];
   const missingInLocal: KodePosRow[] = [];
+  // Patokan validasi = KODE POS. Baris yang nama wilayahnya beda tapi kode posnya sudah
+  // tersimpan di Neon tidak boleh diusulkan import.
+  const cloudCodes = new Set<string>();
 
   for (let i = 0; i < diffProvinces.length; i++) {
     const name = diffProvinces[i];
@@ -189,6 +196,8 @@ export async function runKodePosSync(onProgress?: SyncProgress): Promise<KodePos
       body: JSON.stringify({ keys, cap: 500 }),
     });
 
+    ((res.cloudCodes || []) as string[]).forEach((c) => cloudCodes.add(String(c).trim().toUpperCase()));
+
     const found = new Set<string>((res.missingInCloud || []) as string[]);
     if (found.size > 0) {
       rows.forEach((r) => {
@@ -198,21 +207,28 @@ export async function runKodePosSync(onProgress?: SyncProgress): Promise<KodePos
     (res.missingInLocal || []).forEach((r: KodePosRow) => missingInLocal.push(r));
   }
 
+  const baru = missingInCloud.filter(
+    (r) => !cloudCodes.has(String(r.kodePos || '').trim().toUpperCase())
+  );
+  const provincesAffected = Array.from(new Set(baru.map(kodePosProvinceOf))).sort();
+
   onProgress?.('Selesai', 100);
   return {
-    status: 'DIFF',
+    status: baru.length > 0 ? 'DIFF' : 'SYNCED',
     localTotal: local.length,
     cloudTotal: neonTotal,
     lastUpdated: meta.lastUpdated ?? null,
-    missingInCloud,
+    missingInCloud: baru,
     missingInLocal,
     cloudOnlyProvinces,
     diffProvinces,
     dbTotal: neonTotal,
     compareTotal: local.length,
-    compareLabel: 'Master perangkat ini',
+    compareLabel: 'Berkas perangkat ini',
+    sourceLabel: 'Berkas kode pos di perangkat ini',
+    compareUnit: 'baris',
     sourceDetail,
-    provincesAffected: diffProvinces,
+    provincesAffected,
     importable: true,
     missingCodes: [],
   };
@@ -245,7 +261,8 @@ export async function runKodePosSourceAudit(
       missingInLocal: [],
       cloudOnlyProvinces: [],
       diffProvinces: [],
-      sourceLabel: json.source?.label,
+      sourceLabel: 'Sumber resmi: Kepmendagri + Pos Indonesia',
+      compareUnit: 'kode pos',
       dbTotal: dbCodes,
       compareTotal: srcCodes,
       compareLabel: 'Sumber resmi',
@@ -272,7 +289,8 @@ export async function runKodePosSourceAudit(
     missingInLocal: [],
     cloudOnlyProvinces: [],
     diffProvinces: [],
-    sourceLabel: json.source?.label,
+    sourceLabel: 'Dataset GitHub komunitas (teguh02)',
+    compareUnit: 'kode pos',
     dbTotal: dbCodes,
     compareTotal: srcCodes,
     compareLabel: 'Sumber komunitas',
@@ -298,7 +316,7 @@ export async function runKodePosBaselineAudit(onProgress?: SyncProgress): Promis
   onProgress?.('Selesai', 100);
 
   if (!json.ready) {
-    throw new Error('Baseline belum tersimpan di database. Klik "Tarik baseline dari sumber pemerintah" sekali terlebih dahulu.');
+    throw new Error('Patokan belum tersimpan di database. Klik tombol "Tarik data terbaru" sekali terlebih dahulu.');
   }
 
   const rows: KodePosRow[] = json.missingInDb || [];
@@ -313,9 +331,10 @@ export async function runKodePosBaselineAudit(onProgress?: SyncProgress): Promis
     cloudOnlyProvinces: [],
     diffProvinces: [],
     sourceLabel: json.source,
+    compareUnit: 'kode pos',
     dbTotal: json.dbCodes ?? 0,
     compareTotal: json.baselineCodes ?? 0,
-    compareLabel: 'Baseline tersimpan',
+    compareLabel: 'patokan di database kita',
     sourceDetail:
       `Tarikan ke-${json.version ?? '?'} pada tabel \`kodepos_baseline\` ` +
       `(${(json.baselineRows ?? 0).toLocaleString('id-ID')} baris, ${(json.baselineCodes ?? 0).toLocaleString('id-ID')} kode pos unik) ` +

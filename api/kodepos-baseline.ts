@@ -118,8 +118,8 @@ interface BaselineSource {
 }
 
 const SOURCES: BaselineSource[] = [
-  { id: 'pemda', label: 'Satu Data Indonesia - Kode Pos Desa/Kelurahan (Bappenas)', load: loadPemdaPage },
-  { id: 'cadangan', label: 'Mirror GitHub wilayah + kode pos (asal komunitas, cadangan)', load: loadCsvPage },
+  { id: 'pemda', label: 'Satu Data Indonesia (Bappenas)', load: loadPemdaPage },
+  { id: 'cadangan', label: 'Mirror GitHub (komunitas)', load: loadCsvPage },
 ];
 
 function sourceById(id: string | null | undefined): BaselineSource {

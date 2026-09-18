@@ -340,12 +340,22 @@ export default async function handler(req: any, res: any) {
           [keysParam, cap]
         );
 
+        // Daftar kode pos yang sudah ada di cloud untuk provinsi yang diadu. Validasi
+        // import ada di LEVEL KODE POS: kode pos yang sudah tersimpan tidak diusulkan lagi.
+        const cloudCodes = await sql.query(
+          `WITH loc AS (SELECT DISTINCT unnest(string_to_array($1, chr(31))) AS k)
+           SELECT DISTINCT upper(btrim(kode_pos)) AS kode_pos FROM kodepos_data
+           WHERE ${PROV_SQL} IN (SELECT DISTINCT split_part(k, '|', 5) FROM loc);`,
+          [keysParam]
+        );
+
         return res.status(200).json({
           ok: true,
           configured: true,
           keysReceived: keys.length,
           missingInCloud: (notInCloud || []).map((r: any) => r.k),
           missingInLocal: (notInLocal || []).map(mapRow),
+          cloudCodes: (cloudCodes || []).map((r: any) => String(r.kode_pos)),
           cap,
         });
       }

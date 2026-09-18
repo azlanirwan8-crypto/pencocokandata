@@ -162,57 +162,66 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
         </div>
 
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
-          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'nowrap', overflowX: 'auto' }}>
-            {([
-              { key: 'baseline', label: 'Baseline DB kita (patokan)' },
-              { key: 'db', label: 'Perangkat vs Neon' },
-              { key: 'resmi', label: 'Sumber resmi' },
-              { key: 'komunitas', label: 'Sumber komunitas' },
-            ] as const).map((s) => {
-              const active = sourceMode === s.key;
-              return (
-                <button
-                  key={s.key}
-                  type="button"
-                  onClick={() => setSourceMode(s.key)}
-                  disabled={busy || phase === 'importing'}
-                  title={
-                    s.key === 'baseline'
-                      ? 'Bandingkan Neon dengan tabel kodepos_baseline milik kita sendiri'
-                      : s.key === 'db'
-                        ? 'Bandingkan master kode pos di perangkat ini dengan Neon'
-                        : s.key === 'resmi'
-                          ? 'Kepmendagri + daftar kode pos Pos Indonesia (tanpa nama wilayah, tidak bisa diimpor)'
-                          : 'Dataset GitHub lengkap bernama (asal komunitas, bukan resmi)'
-                  }
-                  style={{
-                    background: active ? '#405189' : '#ffffff',
-                    color: active ? '#ffffff' : '#495057',
-                    border: `1px solid ${active ? '#405189' : '#d5dde3'}`,
-                    borderRadius: '6px',
-                    padding: '0.3rem 0.65rem',
-                    fontSize: '0.73rem',
-                    fontWeight: 700,
-                    cursor: active ? 'default' : 'pointer',
-                    whiteSpace: 'nowrap',
-                    flexShrink: 0,
-                  }}
-                >
-                  {s.label}
-                </button>
-              );
-            })}
+          <div>
+            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '0.35rem' }}>
+              Adukan data Neon dengan
+            </div>
+            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'nowrap', overflowX: 'auto' }}>
+              {([
+                { key: 'baseline', label: 'Patokan di DB kita' },
+                { key: 'db', label: 'Berkas di perangkat ini' },
+                { key: 'resmi', label: 'Sumber resmi' },
+                { key: 'komunitas', label: 'Sumber komunitas' },
+              ] as const).map((s) => {
+                const active = sourceMode === s.key;
+                return (
+                  <button
+                    key={s.key}
+                    type="button"
+                    onClick={() => setSourceMode(s.key)}
+                    disabled={busy || phase === 'importing'}
+                    title={
+                      s.key === 'baseline'
+                        ? 'Tabel kodepos_baseline di database kita sendiri — isinya salinan data pemerintah yang pernah ditarik'
+                        : s.key === 'db'
+                          ? 'Berkas master kode pos yang tersimpan di browser/laptop ini (bukan internet)'
+                          : s.key === 'resmi'
+                            ? 'Kepmendagri + daftar kode pos Pos Indonesia (tanpa nama wilayah, tidak bisa diimpor)'
+                            : 'Dataset GitHub lengkap bernama (asal komunitas, bukan resmi)'
+                    }
+                    style={{
+                      background: active ? '#405189' : '#ffffff',
+                      color: active ? '#ffffff' : '#495057',
+                      border: `1px solid ${active ? '#405189' : '#d5dde3'}`,
+                      borderRadius: '6px',
+                      padding: '0.3rem 0.65rem',
+                      fontSize: '0.73rem',
+                      fontWeight: 700,
+                      cursor: active ? 'default' : 'pointer',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {s.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
           {sourceMode === 'baseline' && !busy && phase !== 'importing' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-              <button type="button" className="btn btn-outline btn-sm" onClick={() => void handlePullBaseline()}>
-                <Download size={13} style={{ marginRight: '0.3rem' }} />
-                Tarik baseline dari sumber pemerintah
-              </button>
-              <span style={{ fontSize: '0.74rem', color: '#878a99' }}>
-                Sumbernya milik pemerintah (Satu Data Indonesia / Bappenas), jadi versi terbaru dipegang database kita
-                sendiri — GitHub orang lain tidak lagi jadi patokan.
-              </span>
+            <div>
+              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '0.35rem' }}>
+                Perintah
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                <button type="button" className="btn btn-primary btn-sm" onClick={() => void handlePullBaseline()}>
+                  <Download size={13} style={{ marginRight: '0.3rem' }} />
+                  Tarik data terbaru
+                </button>
+                <span style={{ fontSize: '0.74rem', color: '#878a99' }}>
+                  Isi ulang patokan dari data pemerintah (Satu Data Indonesia / Bappenas).
+                </span>
+              </div>
             </div>
           )}
           {busy && (
@@ -279,8 +288,17 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                   color="#d68b0c"
                 />
               </div>
-              <div style={{ fontSize: '0.74rem', color: '#878a99', lineHeight: 1.6 }}>
-                <strong style={{ color: '#495057' }}>Sumber data kartu 2:</strong> {plan.sourceDetail}
+              <div
+                title={plan.sourceDetail}
+                style={{ fontSize: '0.76rem', color: '#878a99', lineHeight: 1.6 }}
+              >
+                <strong style={{ color: '#495057' }}>Sumber data kartu 2:</strong>{' '}
+                {plan.sourceLabel || plan.compareLabel}
+                {' · '}
+                {fmt(plan.compareTotal)} {plan.compareUnit || 'kode pos'}
+                {plan.lastUpdated
+                  ? ` · diperbarui ${new Date(plan.lastUpdated).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}`
+                  : ''}
               </div>
               {importMsg && (
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.8rem', color: '#0ab39c' }}>
@@ -330,7 +348,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
               <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#495057' }}>
                 {plan.importable === false
                   ? `Daftar ${fmt(codes.length)} kode pos resmi yang belum ada di Neon`
-                  : `Daftar ${fmt(rows.length)} baris yang bisa dikirim ke Neon`}
+                  : `Daftar ${fmt(rows.length)} baris ber-kode pos yang belum ada di Neon`}
               </div>
               {plan.note && (
                 <div style={{ fontSize: '0.74rem', color: '#878a99' }}>{plan.note}</div>
