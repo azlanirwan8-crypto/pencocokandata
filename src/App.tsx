@@ -37,6 +37,8 @@ import {
   saveTargetToNeon,
   loadWilayahFromNeon,
   saveWilayahToNeon,
+  fetchKodePosExport,
+  type KodePosRow,
 } from './utils/neonSync';
 import { NeonDatabaseModal } from './components/NeonDatabaseModal';
 import { SnapshotModal, type WorkspaceSnapshot } from './components/SnapshotModal';
@@ -85,6 +87,8 @@ export const App: React.FC = () => {
 
   // New Data Analyst 3-Phase Engine State (100% Data Master Driven)
   const [analystRows, setAnalystRows] = useState<AnalystRow[]>([]);
+  // Full Master Kode Pos list (loaded once from Neon, cached in memory for pipeline runs)
+  const kodePosListRef = useRef<KodePosRow[] | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [analystProgress, setAnalystProgress] = useState<number>(0);
   const [analystMessage, setAnalystMessage] = useState<string>('');
@@ -432,11 +436,30 @@ export const App: React.FC = () => {
     setCompletedPhases(new Set());
 
     try {
+      // ── Pastikan pipeline memakai SELURUH Master Kode Pos (puluhan ribu baris),
+      //    bukan DEFAULT_KODEPOS_DATA yang cuma ~140 baris ──
+      let kodePosForPipeline = kodePosListRef.current;
+      if (!kodePosForPipeline) {
+        setAnalystMessage('Mengunduh seluruh Master Data Kode Pos dari cloud (83 ribu+ baris)...');
+        const cloudKodePos = await fetchKodePosExport({});
+        if (cloudKodePos && cloudKodePos.length > 0) {
+          kodePosForPipeline = cloudKodePos;
+          setKodePosCount(cloudKodePos.length);
+        } else {
+          const savedKodePos = await getItem<KodePosRow[]>('kodepos_master_data');
+          kodePosForPipeline =
+            savedKodePos && savedKodePos.length > DEFAULT_KODEPOS_DATA.length
+              ? savedKodePos
+              : (DEFAULT_KODEPOS_DATA as unknown as KodePosRow[]);
+        }
+        kodePosListRef.current = kodePosForPipeline;
+      }
+
       let lastPhase: 1 | 2 | 3 = 1;
       const results = await executeAnalystPipeline(
         masterRows,
         ptenList,
-        DEFAULT_KODEPOS_DATA as any,
+        kodePosForPipeline,
         wilayahSettings,
         roleMappingList,
         (phase, pct, _processed, _total, msg) => {
@@ -908,7 +931,10 @@ export const App: React.FC = () => {
           {/* MENU MASTER: KODE POS */}
           {activeTab === 'kodepos' && (
             <KodePosManager
-              onKodePosCountChange={(count) => setKodePosCount(count)}
+              onKodePosCountChange={(count) => {
+                setKodePosCount(count);
+                kodePosListRef.current = null; // invalidasi cache pipeline bila master kodepos berubah
+              }}
             />
           )}
         </main>
