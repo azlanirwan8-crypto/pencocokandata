@@ -14,8 +14,8 @@ type Phase = 'checking' | 'ready' | 'importing';
 
 const fmt = (n: number) => n.toLocaleString('id-ID');
 
-const StatCard: React.FC<{ label: string; value: string; sub: string; color: string }> = ({ label, value, sub, color }) => (
-  <div style={{ border: '1px solid #e9ebec', borderLeft: `4px solid ${color}`, borderRadius: '6px', padding: '0.75rem 0.9rem' }}>
+const StatCard: React.FC<{ label: string; value: string; sub: string; color: string; title?: string }> = ({ label, value, sub, color, title }) => (
+  <div title={title} style={{ border: '1px solid #e9ebec', borderLeft: `4px solid ${color}`, borderRadius: '6px', padding: '0.75rem 0.9rem' }}>
     <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
       {label}
     </div>
@@ -178,15 +178,16 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
             <>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.75rem' }}>
                 <StatCard
-                  label="1. Kode pos unik di Neon"
-                  value={fmt(plan.dbTotal)}
-                  sub={`dari ${fmt(plan.dbRows || 0)} baris wilayah — 1 kode pos dipakai banyak kelurahan`}
+                  label="1. Total Kode Pos"
+                  value={fmt(plan.dbRows || 0)}
+                  sub="baris wilayah tersimpan di Neon"
+                  title={`${fmt(plan.dbTotal)} kode pos unik dipakai ${fmt(plan.dbRows || 0)} baris wilayah`}
                   color="#405189"
                 />
                 <StatCard
-                  label="2. Baris belum ada di Neon"
+                  label="2. Kode Pos belum ada"
                   value={fmt(rows.length)}
-                  sub={`dibandingkan ${plan.compareLabel.toLowerCase()}`}
+                  sub="baris patokan yang belum tersimpan di Neon"
                   color={rows.length > 0 ? '#f06548' : '#0ab39c'}
                 />
                 <StatCard
