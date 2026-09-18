@@ -58,6 +58,15 @@ export interface KodePosSyncPlan {
   /** Diisi saat mode sumber eksternal. */
   sourceLabel?: string;
   note?: string;
+  /** Jumlah baris/kode pos yang tersimpan di Neon. */
+  dbTotal: number;
+  /** Jumlah baris/kode pos di pembanding (master perangkat ini atau sumber internet). */
+  compareTotal: number;
+  compareLabel: string;
+  /** Asal angka pada kartu "belum ada di Neon". */
+  sourceDetail: string;
+  /** Provinsi yang terdapat selisih. */
+  provincesAffected: string[];
 }
 
 export type SyncProgress = (step: string, pct: number) => void;
@@ -132,17 +141,27 @@ export async function runKodePosSync(onProgress?: SyncProgress): Promise<KodePos
     if (fp !== cloud?.fingerprint) diffProvinces.push(name);
   }
 
+  const neonTotal = meta.cloudTotal ?? cloudProvinces.reduce((s, p) => s + p.total, 0);
+  const sourceDetail =
+    `Master perangkat ini (IndexedDB \`kodepos_master_data\`, ${local.length.toLocaleString('id-ID')} baris) ` +
+    `dibandingkan dengan tabel \`kodepos_data\` di Neon (${neonTotal.toLocaleString('id-ID')} baris).`;
+
   if (diffProvinces.length === 0) {
     onProgress?.('Selesai', 100);
     return {
       status: 'SYNCED',
       localTotal: local.length,
-      cloudTotal: meta.cloudTotal ?? cloudProvinces.reduce((s, p) => s + p.total, 0),
+      cloudTotal: neonTotal,
       lastUpdated: meta.lastUpdated ?? null,
       missingInCloud: [],
       missingInLocal: [],
       cloudOnlyProvinces,
       diffProvinces,
+      dbTotal: neonTotal,
+      compareTotal: local.length,
+      compareLabel: 'Master perangkat ini',
+      sourceDetail,
+      provincesAffected: diffProvinces,
     };
   }
 
@@ -177,12 +196,17 @@ export async function runKodePosSync(onProgress?: SyncProgress): Promise<KodePos
   return {
     status: 'DIFF',
     localTotal: local.length,
-    cloudTotal: meta.cloudTotal ?? cloudProvinces.reduce((s, p) => s + p.total, 0),
+    cloudTotal: neonTotal,
     lastUpdated: meta.lastUpdated ?? null,
     missingInCloud,
     missingInLocal,
     cloudOnlyProvinces,
     diffProvinces,
+    dbTotal: neonTotal,
+    compareTotal: local.length,
+    compareLabel: 'Master perangkat ini',
+    sourceDetail,
+    provincesAffected: diffProvinces,
   };
 }
 
@@ -197,19 +221,29 @@ export async function runKodePosSourceAudit(onProgress?: SyncProgress): Promise<
 
   const rows: KodePosRow[] = json.onlyInSource || [];
   const newCodes: string[] = json.newCodes || [];
+  const dbCodes = json.db?.distinctCodes ?? 0;
+  const srcCodes = json.source?.distinctCodes ?? 0;
+  const provinces = Array.from(new Set(rows.map((r) => kodePosProvinceOf(r)))).sort();
+
   return {
     status: rows.length > 0 ? 'DIFF' : 'SYNCED',
-    localTotal: json.db?.distinctCodes ?? 0,
-    cloudTotal: json.source?.distinctCodes ?? 0,
+    localTotal: dbCodes,
+    cloudTotal: srcCodes,
     lastUpdated: json.source?.cachedAt ?? null,
     missingInCloud: rows,
     missingInLocal: [],
     cloudOnlyProvinces: [],
     diffProvinces: [],
     sourceLabel: json.source?.label,
+    dbTotal: dbCodes,
+    compareTotal: srcCodes,
+    compareLabel: 'Sumber internet',
+    sourceDetail:
+      `${json.source?.label} - ${json.source?.total} baris / ${srcCodes} kode pos unik, diunduh server saat audit. ` +
+      `${json.codesOnlyInDb?.total} kode pos hanya ada di Neon (tidak dihapus).`,
+    provincesAffected: provinces,
     note:
-      `${newCodes.length} kode pos dikenal sumber tetapi belum ada di database (${json.source?.total} baris sumber, ` +
-      `${json.codesOnlyInDb?.total} kode pos hanya ada di database kita). Sumber: ${json.source?.label}. ` +
-      'Perbandingan di level kode pos, karena dataset ini memakai penamaan wilayah yang berbeda di level kelurahan.',
+      `${newCodes.length} kode pos dikenal sumber tetapi belum ada di database. ` +
+      'Perbandingan di level kode pos, karena dataset ini memakai penamaan wilayah berbeda di level kelurahan.',
   };
 }

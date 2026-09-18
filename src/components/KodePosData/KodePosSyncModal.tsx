@@ -14,6 +14,16 @@ type Phase = 'checking' | 'ready' | 'importing';
 
 const fmt = (n: number) => n.toLocaleString('id-ID');
 
+const StatCard: React.FC<{ label: string; value: string; sub: string; color: string }> = ({ label, value, sub, color }) => (
+  <div style={{ border: '1px solid #e9ebec', borderLeft: `4px solid ${color}`, borderRadius: '6px', padding: '0.75rem 0.9rem' }}>
+    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+      {label}
+    </div>
+    <div style={{ fontSize: '1.5rem', fontWeight: 700, color, lineHeight: 1.2 }}>{value}</div>
+    <div style={{ fontSize: '0.72rem', color: '#878a99' }}>{sub}</div>
+  </div>
+);
+
 export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClose, onImported }) => {
   const [phase, setPhase] = useState<Phase>('checking');
   const [step, setStep] = useState('Menyiapkan pemeriksaan...');
@@ -180,6 +190,34 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
             </div>
           )}
 
+          {phase !== 'checking' && !errorMsg && plan && (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.75rem' }}>
+                <StatCard
+                  label="1. Kode pos di Neon"
+                  value={fmt(plan.dbTotal)}
+                  sub={sourceMode === 'internet' ? 'kode pos unik tersimpan di cloud' : 'baris tersimpan di cloud'}
+                  color="#405189"
+                />
+                <StatCard
+                  label="2. Belum ada di Neon"
+                  value={fmt(plan.missingInCloud.length)}
+                  sub={`baris dari ${plan.compareLabel.toLowerCase()}`}
+                  color={plan.missingInCloud.length > 0 ? '#f06548' : '#0ab39c'}
+                />
+                <StatCard
+                  label="3. Provinsi terdampak"
+                  value={fmt(plan.provincesAffected.length)}
+                  sub="provinsi yang punya selisih data"
+                  color="#d68b0c"
+                />
+              </div>
+              <div style={{ fontSize: '0.74rem', color: '#878a99', lineHeight: 1.6 }}>
+                <strong style={{ color: '#495057' }}>Sumber data kartu 2:</strong> {plan.sourceDetail}
+              </div>
+            </>
+          )}
+
           {phase !== 'checking' && !errorMsg && plan && plan.status === 'SYNCED' && (
             <div
               style={{
@@ -198,9 +236,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                   Database kita sudah versi terbaru dan valid.
                 </div>
                 <div style={{ fontSize: '0.79rem', color: '#495057', marginTop: '0.3rem', lineHeight: 1.6 }}>
-                  {sourceMode === 'internet'
-                    ? `Database Neon (${fmt(plan.localTotal)} kode pos) sudah memuat seluruh ${fmt(plan.cloudTotal)} kode pos dari sumber eksternal.`
-                    : `${fmt(plan.localTotal)} baris lokal sama persis dengan ${fmt(plan.cloudTotal)} baris di Neon (${plan.diffProvinces.length} provinsi berbeda).`}
+                  Tidak ada selisih: seluruh data dari {plan.compareLabel.toLowerCase()} sudah tersimpan di Neon.
                   {plan.lastUpdated ? ` Diperbarui: ${new Date(plan.lastUpdated).toLocaleString('id-ID')}.` : ''}
                 </div>
                 {plan.note && (
@@ -218,16 +254,8 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
 
           {phase !== 'checking' && !errorMsg && plan && plan.status === 'DIFF' && (
             <>
-              <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
-                <span className="badge badge-level2">
-                  {fmt(plan.missingInCloud.length)} baris {sourceMode === 'internet' ? 'dari sumber internet' : 'lokal'} belum ada di Neon
-                </span>
-                <span className="badge badge-level1">
-                  {sourceMode === 'internet' ? (plan.sourceLabel || 'sumber eksternal') : `${plan.diffProvinces.length} provinsi berbeda`}
-                </span>
-                <span className="badge badge-match">
-                  {sourceMode === 'internet' ? 'Neon' : 'Lokal'} {fmt(plan.localTotal)} / Sumber {fmt(plan.cloudTotal)} kode pos
-                </span>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#495057' }}>
+                Daftar {fmt(plan.missingInCloud.length)} baris yang bisa dikirim ke Neon
               </div>
               {plan.note && (
                 <div style={{ fontSize: '0.74rem', color: '#878a99' }}>{plan.note}</div>
