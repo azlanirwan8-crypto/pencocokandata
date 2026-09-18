@@ -67,6 +67,10 @@ export interface KodePosSyncPlan {
   sourceDetail: string;
   /** Provinsi yang terdapat selisih. */
   provincesAffected: string[];
+  /** false = sumber tidak memuat nama wilayah, hanya untuk pemeriksaan. */
+  importable: boolean;
+  /** Isi saat sumber resmi: kode wilayah + kode pos yang belum ada di Neon. */
+  missingCodes: { kode: string; kodePos: string }[];
 }
 
 export type SyncProgress = (step: string, pct: number) => void;
@@ -162,6 +166,8 @@ export async function runKodePosSync(onProgress?: SyncProgress): Promise<KodePos
       compareLabel: 'Master perangkat ini',
       sourceDetail,
       provincesAffected: diffProvinces,
+      importable: true,
+      missingCodes: [],
     };
   }
 
@@ -207,6 +213,8 @@ export async function runKodePosSync(onProgress?: SyncProgress): Promise<KodePos
     compareLabel: 'Master perangkat ini',
     sourceDetail,
     provincesAffected: diffProvinces,
+    importable: true,
+    missingCodes: [],
   };
 }
 
@@ -214,15 +222,45 @@ export async function runKodePosSync(onProgress?: SyncProgress): Promise<KodePos
  * Audit terhadap sumber eksternal (dataset kode pos di GitHub). Server yang
  * mengunduh dan membandingkan, jadi tidak ada puluhan ribu baris lewat browser.
  */
-export async function runKodePosSourceAudit(onProgress?: SyncProgress): Promise<KodePosSyncPlan> {
+export async function runKodePosSourceAudit(
+  source: 'resmi' | 'komunitas' = 'resmi',
+  onProgress?: SyncProgress
+): Promise<KodePosSyncPlan> {
   onProgress?.('Mengunduh dataset kode pos eksternal dan membandingkannya...', 30);
-  const json = await fetchJson('/api/kodepos-source?view=audit');
+  const json = await fetchJson(`/api/kodepos-source?view=audit&source=${source}`);
   onProgress?.('Selesai', 100);
+
+  const dbCodes: number = json.db?.distinctCodes ?? 0;
+  const srcCodes: number = json.source?.distinctCodes ?? 0;
+  const onlyInDb = json.codesOnlyInDb ?? 0;
+
+  if (source === 'resmi') {
+    const missingCodes: { kode: string; kodePos: string }[] = json.missingCodes || [];
+    return {
+      status: missingCodes.length > 0 ? 'DIFF' : 'SYNCED',
+      localTotal: dbCodes,
+      cloudTotal: srcCodes,
+      lastUpdated: json.source?.cachedAt ?? null,
+      missingInCloud: [],
+      missingInLocal: [],
+      cloudOnlyProvinces: [],
+      diffProvinces: [],
+      sourceLabel: json.source?.label,
+      dbTotal: dbCodes,
+      compareTotal: srcCodes,
+      compareLabel: 'Sumber resmi',
+      sourceDetail:
+        `${json.source?.label} - ${json.source?.total} desa/kelurahan, ${srcCodes} kode pos unik. ` +
+        `${missingCodes.length} kode pos resmi belum ada di Neon, ${onlyInDb} kode pos di Neon tidak dikenal sumber.`,
+      provincesAffected: json.provincesAffected || [],
+      importable: false,
+      missingCodes,
+      note: json.note,
+    };
+  }
 
   const rows: KodePosRow[] = json.onlyInSource || [];
   const newCodes: string[] = json.newCodes || [];
-  const dbCodes = json.db?.distinctCodes ?? 0;
-  const srcCodes = json.source?.distinctCodes ?? 0;
   const provinces = Array.from(new Set(rows.map((r) => kodePosProvinceOf(r)))).sort();
 
   return {
@@ -237,13 +275,15 @@ export async function runKodePosSourceAudit(onProgress?: SyncProgress): Promise<
     sourceLabel: json.source?.label,
     dbTotal: dbCodes,
     compareTotal: srcCodes,
-    compareLabel: 'Sumber internet',
+    compareLabel: 'Sumber komunitas',
     sourceDetail:
-      `${json.source?.label} - ${json.source?.total} baris / ${srcCodes} kode pos unik, diunduh server saat audit. ` +
-      `${json.codesOnlyInDb?.total} kode pos hanya ada di Neon (tidak dihapus).`,
+      `${json.source?.label} - ${json.source?.total} baris / ${srcCodes} kode pos unik. ` +
+      `${newCodes.length} kode pos dikenal sumber tetapi belum ada di Neon, ${onlyInDb} kode pos hanya ada di Neon.`,
     provincesAffected: provinces,
+    importable: true,
+    missingCodes: [],
     note:
-      `${newCodes.length} kode pos dikenal sumber tetapi belum ada di database. ` +
-      'Perbandingan di level kode pos, karena dataset ini memakai penamaan wilayah berbeda di level kelurahan.',
+      'Perbandingan di level kode pos, karena dataset komunitas ini memakai penamaan wilayah berbeda ' +
+      'di level kelurahan.',
   };
 }

@@ -32,14 +32,18 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [importMsg, setImportMsg] = useState<string | null>(null);
-  // 'db' = bandingkan master perangkat ini dengan Neon; 'internet' = bandingkan Neon
-  // dengan dataset kode pos eksternal
-  const [sourceMode, setSourceMode] = useState<'db' | 'internet'>('db');
+  // 'db' = bandingkan master perangkat ini dengan Neon; 'resmi'/'komunitas' =
+  // bandingkan Neon dengan sumber eksternal
+  const [sourceMode, setSourceMode] = useState<'db' | 'resmi' | 'komunitas'>('db');
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const rows = plan?.missingInCloud || [];
+  const codes = plan?.missingCodes || [];
+  const missingCount = plan?.importable === false ? codes.length : rows.length;
   const win = useVirtualWindow({ containerRef: scrollRef, itemCount: rows.length, minRowsToWindow: 60 });
   const renderedRows = win.active ? rows.slice(win.start, win.end) : rows;
+  const codeWin = useVirtualWindow({ containerRef: scrollRef, itemCount: codes.length, minRowsToWindow: 60 });
+  const renderedCodes = codeWin.active ? codes.slice(codeWin.start, codeWin.end) : codes;
 
   const onProgress: SyncProgress = (message, percent) => {
     setStep(message);
@@ -54,10 +58,12 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
     setSelected(new Set());
     try {
       const result =
-        sourceMode === 'internet' ? await runKodePosSourceAudit(onProgress) : await runKodePosSync(onProgress);
+        sourceMode === 'db' ? await runKodePosSync(onProgress) : await runKodePosSourceAudit(sourceMode, onProgress);
       setPlan(result);
       // Default: semua baris yang belum ada di cloud terpilih
-      setSelected(new Set(result.missingInCloud.map((r) => `${r.kodePos}|${r.kelurahan}|${r.kecamatan}`)));
+      setSelected(
+        new Set(result.missingInCloud.map((r) => `${r.kodePos}|${r.kelurahan}|${r.kecamatan}`))
+      );
       setPhase('ready');
     } catch (err: any) {
       setErrorMsg(err?.message || 'Pemeriksaan sinkronisasi gagal.');
@@ -128,7 +134,8 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             {([
               { key: 'db', label: 'Master perangkat ini vs Neon' },
-              { key: 'internet', label: 'Neon vs sumber internet (dataset kode pos)' },
+              { key: 'resmi', label: 'Sumber resmi (Kepmendagri + kode pos Pos Indonesia)' },
+              { key: 'komunitas', label: 'Sumber komunitas (dataset lengkap bernama)' },
             ] as const).map((s) => {
               const active = sourceMode === s.key;
               return (
@@ -164,8 +171,9 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                 <div style={{ width: `${pct}%`, height: '100%', background: '#299cdb', transition: 'width .2s' }} />
               </div>
               <p style={{ fontSize: '0.76rem', color: '#878a99', marginTop: '0.7rem' }}>
-                Membandingkan master lokal dengan tabel <code>kodepos_data</code> di Neon memakai sidik jari
-                per provinsi, lalu menghitung selisih baris hanya pada provinsi yang berbeda.
+                {sourceMode === 'db'
+                  ? 'Membandingkan master lokal dengan tabel kodepos_data di Neon memakai sidik jari per provinsi, lalu menghitung selisih hanya pada provinsi yang berbeda.'
+                  : 'Server mengunduh dataset eksternal lalu membandingkan daftar kode posnya dengan DISTINCT kode_pos di tabel kodepos_data Neon. Hasilnya di-cache 10 menit.'}
               </p>
             </div>
           )}
@@ -196,14 +204,14 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                 <StatCard
                   label="1. Kode pos di Neon"
                   value={fmt(plan.dbTotal)}
-                  sub={sourceMode === 'internet' ? 'kode pos unik tersimpan di cloud' : 'baris tersimpan di cloud'}
+                  sub={sourceMode === 'db' ? 'baris tersimpan di cloud' : 'kode pos unik tersimpan di cloud'}
                   color="#405189"
                 />
                 <StatCard
                   label="2. Belum ada di Neon"
-                  value={fmt(plan.missingInCloud.length)}
-                  sub={`baris dari ${plan.compareLabel.toLowerCase()}`}
-                  color={plan.missingInCloud.length > 0 ? '#f06548' : '#0ab39c'}
+                  value={fmt(missingCount)}
+                  sub={`dibandingkan ${plan.compareLabel.toLowerCase()}`}
+                  color={missingCount > 0 ? '#f06548' : '#0ab39c'}
                 />
                 <StatCard
                   label="3. Provinsi terdampak"
@@ -255,7 +263,9 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
           {phase !== 'checking' && !errorMsg && plan && plan.status === 'DIFF' && (
             <>
               <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#495057' }}>
-                Daftar {fmt(plan.missingInCloud.length)} baris yang bisa dikirim ke Neon
+                {plan.importable === false
+                  ? `Daftar ${fmt(codes.length)} kode pos resmi yang belum ada di Neon`
+                  : `Daftar ${fmt(rows.length)} baris yang bisa dikirim ke Neon`}
               </div>
               {plan.note && (
                 <div style={{ fontSize: '0.74rem', color: '#878a99' }}>{plan.note}</div>
@@ -267,6 +277,41 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                   {importMsg}
                 </div>
               )}
+
+              {plan.importable === false ? (
+                <div ref={scrollRef} className="table-container" style={{ maxHeight: '360px', overflow: 'auto', border: '1px solid #e9ebec', borderRadius: '6px' }}>
+                  <table className="modern-table" style={{ fontSize: '0.76rem' }}>
+                    <thead style={{ position: 'sticky', top: 0, zIndex: 5, background: '#f3f6f9' }}>
+                      <tr>
+                        <th style={{ width: '160px' }}>Kode wilayah (Kepmendagri)</th>
+                        <th style={{ width: '110px', textAlign: 'center' }}>Kode pos</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {codes.length === 0 ? (
+                        <tr>
+                          <td colSpan={2} style={{ textAlign: 'center', padding: '2rem', color: '#878a99' }}>
+                            Semua kode pos sumber resmi sudah tersimpan di Neon.
+                          </td>
+                        </tr>
+                      ) : (
+                        <>
+                          {codeWin.active && codeWin.padTop > 0 && <tr aria-hidden="true" style={{ height: `${codeWin.padTop}px` }} />}
+                          {renderedCodes.map((c, i) => (
+                            <tr key={`${c.kode}-${i}`} data-vrow={i === 0 ? 'true' : undefined}>
+                              <td className="code-cell">{c.kode}</td>
+                              <td className="code-cell" style={{ textAlign: 'center', fontWeight: 700, color: '#0ab39c' }}>
+                                {c.kodePos}
+                              </td>
+                            </tr>
+                          ))}
+                          {codeWin.active && codeWin.padBottom > 0 && <tr aria-hidden="true" style={{ height: `${codeWin.padBottom}px` }} />}
+                        </>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
 
               <div ref={scrollRef} className="table-container" style={{ maxHeight: '360px', overflow: 'auto', border: '1px solid #e9ebec', borderRadius: '6px' }}>
                 <table className="modern-table" style={{ fontSize: '0.76rem' }}>
@@ -314,6 +359,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                   </tbody>
                 </table>
               </div>
+              )}
 
               {plan.missingInLocal.length > 0 && (
                 <div style={{ fontSize: '0.75rem', color: '#878a99' }}>
@@ -337,13 +383,16 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
             type="button"
             className="btn btn-primary btn-sm"
             onClick={() => void handleImport()}
-            disabled={phase !== 'ready' || selectedRows.length === 0}
+            disabled={phase !== 'ready' || plan?.importable === false || selectedRows.length === 0}
+            title={plan?.importable === false ? 'Sumber resmi tidak memuat nama wilayah, jadi tidak bisa diimpor langsung' : undefined}
             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
           >
             <CloudUpload size={13} />
             {phase === 'importing'
               ? 'Menyimpan...'
-              : `Simpan/Import Data Terpilih ke Neon (${fmt(selectedRows.length)})`}
+              : plan?.importable === false
+                ? 'Tidak bisa diimpor dari sumber resmi'
+                : `Simpan/Import Data Terpilih ke Neon (${fmt(selectedRows.length)})`}
           </button>
         </div>
       </div>
