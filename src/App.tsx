@@ -525,6 +525,19 @@ export const App: React.FC = () => {
     }
   };
 
+  // Kartu fase mengikuti status review: persen = bagian baris yang sudah di-approve fase itu.
+  const phaseApproval = useMemo(() => {
+    const total = analystRows.length;
+    const share = (count: number) => (total ? Math.round((count / total) * 100) : 0);
+    let a = 0, b = 0, c = 0;
+    for (const r of analystRows) {
+      if (r.fase1Approved) a++;
+      if (r.fase2Approved) b++;
+      if (r.fase3Approved) c++;
+    }
+    return { 1: share(a), 2: share(b), 3: share(c) } as { 1: number; 2: number; 3: number };
+  }, [analystRows]);
+
   const handleResetAnalyst = async () => {
     cancelPendingWrite('analyst_results_data');
     setAnalystRows([]);
@@ -900,6 +913,7 @@ export const App: React.FC = () => {
                 phaseProgress={phaseProgress}
                 currentActivePhase={currentActivePhase}
                 completedPhases={completedPhases}
+                phaseApproval={phaseApproval}
               />
 
               {analystRows.length > 0 && (

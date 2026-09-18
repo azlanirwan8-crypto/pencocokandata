@@ -28,6 +28,8 @@ interface AnalystCanvasProps {
   phaseProgress?: { 1: number; 2: number; 3: number };
   currentActivePhase?: 0 | 1 | 2 | 3;
   completedPhases?: Set<number>;
+  /** Bagian baris yang sudah di-approve per fase (0-100) — dipakai saat tidak sedang jalan. */
+  phaseApproval?: { 1: number; 2: number; 3: number };
 }
 
 export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
@@ -41,6 +43,7 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
   phaseProgress = { 1: 0, 2: 0, 3: 0 },
   currentActivePhase = 0,
   completedPhases = new Set(),
+  phaseApproval = { 1: 0, 2: 0, 3: 0 },
 }) => {
   const [showTheories, setShowTheories] = useState<boolean>(true);
 
@@ -140,9 +143,12 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
               {(() => {
                 const phase = 1;
                 const isActive = currentActivePhase === phase;
-                const isDone = completedPhases.has(phase);
-                const pct = phaseProgress[1];
-                const showBar = isAnalyzing || isDone;
+                // Saat jalan: bar mengikuti eksekusi. Setelah jalan: bar mengikuti review.
+                const approved = phaseApproval[1];
+                const prevOk = true;
+                const isDone = isAnalyzing ? completedPhases.has(phase) : approved >= 100 && prevOk;
+                const pct = isAnalyzing ? phaseProgress[1] : approved;
+                const showBar = isAnalyzing || hasExistingResults;
                 return (
                   <div
                     style={{
@@ -177,7 +183,15 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
                             style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '68%' }}
                             title={isActive ? stepText('Memproses...') : undefined}
                           >
-                            {isDone ? 'Berhasil diselesaikan' : isActive ? stepText('Memproses...') : 'Menunggu...'}
+                            {isDone
+                              ? 'Berhasil diselesaikan'
+                              : isActive
+                                ? stepText('Memproses...')
+                                : isAnalyzing
+                                  ? 'Menunggu...'
+                                  : prevOk
+                                    ? 'Menunggu review'
+                                    : `Menunggu review Fase ${phase - 1}`}
                           </span>
                           <span>{pct}%</span>
                         </div>
@@ -205,9 +219,12 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
               {(() => {
                 const phase = 2;
                 const isActive = currentActivePhase === phase;
-                const isDone = completedPhases.has(phase);
-                const pct = phaseProgress[2];
-                const showBar = isAnalyzing || isDone;
+                // Saat jalan: bar mengikuti eksekusi. Setelah jalan: bar mengikuti review.
+                const approved = phaseApproval[2];
+                const prevOk = phaseApproval[1] >= 100;
+                const isDone = isAnalyzing ? completedPhases.has(phase) : approved >= 100 && prevOk;
+                const pct = isAnalyzing ? phaseProgress[2] : approved;
+                const showBar = isAnalyzing || hasExistingResults;
                 return (
                   <div
                     style={{
@@ -242,7 +259,15 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
                             style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '68%' }}
                             title={isActive ? stepText('Memproses...') : undefined}
                           >
-                            {isDone ? 'Berhasil diselesaikan' : isActive ? stepText('Memproses...') : 'Menunggu...'}
+                            {isDone
+                              ? 'Berhasil diselesaikan'
+                              : isActive
+                                ? stepText('Memproses...')
+                                : isAnalyzing
+                                  ? 'Menunggu...'
+                                  : prevOk
+                                    ? 'Menunggu review'
+                                    : `Menunggu review Fase ${phase - 1}`}
                           </span>
                           <span>{pct}%</span>
                         </div>
@@ -270,9 +295,12 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
               {(() => {
                 const phase = 3;
                 const isActive = currentActivePhase === phase;
-                const isDone = completedPhases.has(phase);
-                const pct = phaseProgress[3];
-                const showBar = isAnalyzing || isDone;
+                // Saat jalan: bar mengikuti eksekusi. Setelah jalan: bar mengikuti review.
+                const approved = phaseApproval[3];
+                const prevOk = phaseApproval[2] >= 100;
+                const isDone = isAnalyzing ? completedPhases.has(phase) : approved >= 100 && prevOk;
+                const pct = isAnalyzing ? phaseProgress[3] : approved;
+                const showBar = isAnalyzing || hasExistingResults;
                 return (
                   <div
                     style={{
@@ -307,7 +335,15 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
                             style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '68%' }}
                             title={isActive ? stepText('Memproses...') : undefined}
                           >
-                            {isDone ? 'Berhasil diselesaikan' : isActive ? stepText('Memproses...') : 'Menunggu...'}
+                            {isDone
+                              ? 'Berhasil diselesaikan'
+                              : isActive
+                                ? stepText('Memproses...')
+                                : isAnalyzing
+                                  ? 'Menunggu...'
+                                  : prevOk
+                                    ? 'Menunggu review'
+                                    : `Menunggu review Fase ${phase - 1}`}
                           </span>
                           <span>{pct}%</span>
                         </div>
