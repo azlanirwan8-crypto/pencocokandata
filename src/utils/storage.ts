@@ -61,7 +61,7 @@ export async function getItem<T>(key: string): Promise<T | null> {
 export async function deleteKey(key: string): Promise<void> {
   try {
     const db = await getDB();
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
       const req = store.delete(key);
