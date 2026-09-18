@@ -127,8 +127,19 @@ export function expertNormalize(raw: string): string {
     .filter((w) => w && !ADMIN_NOISE_TOKENS.has(w))
     .join(' ');
 }
+// Singkatan arah/bagian yang hanya dipakai pada KUNCI KOTA (kolom MAX 15 DIGIT PTEN
+// memotong nama: BENGKULU SELATAN -> BENGKULU SEL, SERAM BAGIAN TIMUR -> SERAM BAG TIMUR).
+// Sengaja tidak masuk THESAURUS_MAP global supaya normalisasi alamat/role tidak berubah.
+const CITY_ABBREV_MAP: Record<string, string> = {
+  SEL: 'SELATAN', UTA: 'UTARA', UT: 'UTARA', TEN: 'TENGAH', TENG: 'TENGAH',
+  TIM: 'TIMUR', BAR: 'BARAT', BA: 'BARAT', TI: 'TIMUR', BD: 'BARAT DAYA',
+  BAG: 'BAGIAN', PEG: 'PEGUNUNGAN',
+};
 export function cityMatchKey(raw: string): string {
-  return expertNormalize(raw);
+  return expertNormalize(raw)
+    .split(' ')
+    .map((w) => CITY_ABBREV_MAP[w] || w)
+    .join(' ');
 }
 
 // 2. 🔄 TOKEN SET & JACCARD INTERSECTION (Anti-Kata Terbalik)
@@ -465,22 +476,12 @@ export function calculateCityMatchScore(textA: string, textB: string): { score: 
     return { score: 0.96, algorithm: 'City Phonetic Match' };
   }
   // 📏 MASTER PTEN memakai kolom "KOTA/KABUPATEN MAX 15 DIGIT" → nama panjang
-  // dipotong mentah (MANDAILING NATAL -> MANDAILING NATA) atau dipotong per kata
-  // (SERAM BAGIAN TIMUR -> SERAM BAG TIMUR). Keduanya kecocokan deterministik,
-  // bukan fuzzy: prefix harus persis dan hanya memotong di batas 15 karakter.
-  const tokA = normA.split(' ').filter(Boolean);
-  const tokB = normB.split(' ').filter(Boolean);
+  // dipotong mentah di 15 karakter (MANDAILING NATAL -> MANDAILING NATA).
+  // Kecocokan deterministik: prefix harus persis. Singkatan per kata
+  // (BENGKULU SEL, SERAM BAG TIMUR) sudah diurai di cityMatchKey, bukan di sini.
   const [normS, normL] = normA.length <= normB.length ? [normA, normB] : [normB, normA];
-  const [tokS, tokL] = normA.length <= normB.length ? [tokA, tokB] : [tokB, tokA];
   if (normS.length >= 15 && normL.length > normS.length && normL.startsWith(normS)) {
     return { score: 0.97, algorithm: 'City PTEN 15-Char Truncation' };
-  }
-  if (
-    tokS.length >= 2 && tokS.length === tokL.length && normL.length >= 12 &&
-    tokS.every((t, i) => tokL[i].startsWith(t) && t.length >= 3) &&
-    tokS.some((t, i) => t !== tokL[i])
-  ) {
-    return { score: 0.95, algorithm: 'City PTEN Word-Cut Match' };
   }
   const jaccard = calculateTokenSetJaccard(normA, normB);
   const jaro = jaroWinklerDistance(normA, normB);
