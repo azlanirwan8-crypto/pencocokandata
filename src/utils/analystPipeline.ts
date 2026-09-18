@@ -110,12 +110,20 @@ export function cleanAndStandardizeText(str: string): string {
 // Kunci pencocokan KOTA/KABUPATEN: buang kata administratif (KOTA, KABUPATEN,
 // ADMINISTRASI, DAERAH KHUSUS, dst) supaya "JAKARTA PUSAT" == "KOTA ADMINISTRASI
 // JAKARTA PUSAT" dan "SLEMAN" == "KABUPATEN SLEMAN".
-const CITY_NOISE_TOKENS = new Set(['KOTA', 'KABUPATEN', 'ADMINISTRASI', 'ADM', 'KOTAMADYA', 'DAERAH', 'KHUSUS', 'I']);
-export function cityMatchKey(raw: string): string {
+const ADMIN_NOISE_TOKENS = new Set([
+  'KOTA', 'KABUPATEN', 'KAB', 'KODYA', 'KOTAMADYA', 'ADMINISTRASI', 'ADM', 'DAERAH', 'KHUSUS', 'I',
+  'KECAMATAN', 'KEC', 'KELURAHAN', 'KEL', 'DESA', 'DUSUN', 'DUKUH',
+]);
+// Normalisasi pakar: canonical + buang token administratif. Dipakai SEMUA mesin
+// similarity (kota, kabupaten, kecamatan, kelurahan, provinsi, alamat, organisasi).
+export function expertNormalize(raw: string): string {
   return cleanAndStandardizeText(raw)
     .split(' ')
-    .filter((w) => w && !CITY_NOISE_TOKENS.has(w))
+    .filter((w) => w && !ADMIN_NOISE_TOKENS.has(w))
     .join(' ');
+}
+export function cityMatchKey(raw: string): string {
+  return expertNormalize(raw);
 }
 
 // 2. 🔄 TOKEN SET & JACCARD INTERSECTION (Anti-Kata Terbalik)
@@ -235,32 +243,204 @@ export function triGramCosineSimilarity(strA: string, strB: string): number {
   return dotProduct / (Math.sqrt(magA) * Math.sqrt(magB));
 }
 
-// Multi-Engine Unified Matcher Score (Menggabungkan 5 Teori)
+// 6. ✏️ DAMERAU-LEVENSHTEIN (Optimal String Alignment) — typo & huruf tertukar
+function damerauOSA(a: string, b: string): number {
+  const la = a.length;
+  const lb = b.length;
+  if (!la) return lb;
+  if (!lb) return la;
+  const d: number[][] = Array.from({ length: la + 1 }, (_, i) => {
+    const row = new Array<number>(lb + 1).fill(0);
+    row[0] = i;
+    return row;
+  });
+  for (let j = 0; j <= lb; j++) d[0][j] = j;
+  for (let i = 1; i <= la; i++) {
+    for (let j = 1; j <= lb; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + cost);
+      }
+    }
+  }
+  return d[la][lb];
+}
+export function damerauLevenshteinSimilarity(strA: string, strB: string): number {
+  const a = expertNormalize(strA);
+  const b = expertNormalize(strB);
+  if (!a && !b) return 1;
+  const max = Math.max(a.length, b.length);
+  if (!max) return 0;
+  return 1 - damerauOSA(a, b) / max;
+}
+
+// 7. 🧬 LONGEST COMMON SUBSEQUENCE ratio — ketahanan pada sisipan kata alamat
+function lcsLength(a: string, b: string): number {
+  let prev = new Array<number>(b.length + 1).fill(0);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = new Array<number>(b.length + 1).fill(0);
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = a[i - 1] === b[j - 1] ? prev[j - 1] + 1 : Math.max(prev[j], cur[j - 1]);
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+export function lcsRatio(strA: string, strB: string): number {
+  const a = expertNormalize(strA);
+  const b = expertNormalize(strB);
+  if (!a.length || !b.length) return 0;
+  return (2 * lcsLength(a, b)) / (a.length + b.length);
+}
+
+// 8. 🎨 RATCLIFF-OBERSHELP (Gestalt Pattern Matching) — kemiripan "sebagaimana dinilai manusia"
+function gestaltMatchCount(a: string, b: string): number {
+  if (!a || !b) return 0;
+  let best = 0;
+  let aiEnd = 0;
+  let biEnd = 0;
+  let prev = new Array<number>(b.length + 1).fill(0);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = new Array<number>(b.length + 1).fill(0);
+    for (let j = 1; j <= b.length; j++) {
+      if (a[i - 1] === b[j - 1]) {
+        cur[j] = prev[j - 1] + 1;
+        if (cur[j] > best) {
+          best = cur[j];
+          aiEnd = i;
+          biEnd = j;
+        }
+      }
+    }
+    prev = cur;
+  }
+  if (!best) return 0;
+  return (
+    2 * best +
+    gestaltMatchCount(a.slice(0, aiEnd - best), b.slice(0, biEnd - best)) +
+    gestaltMatchCount(a.slice(aiEnd), b.slice(biEnd))
+  );
+}
+export function ratcliffObershelpSimilarity(strA: string, strB: string): number {
+  const a = expertNormalize(strA);
+  const b = expertNormalize(strB);
+  const denom = a.length + b.length;
+  if (!denom) return 0;
+  return gestaltMatchCount(a, b) / denom;
+}
+
+// 9. 🔊 PHONETIC INDONESIAN KEY — ejaan lama/baru & variasi transkripsi
+// (DJ→J, TJ→C, SJ→S, KH/CH→K, SH→S, OE→U, AE→A, huruf ganda dilipatgandakan jadi satu)
+export function indoPhoneticKey(raw: string): string {
+  let s = expertNormalize(raw).replace(/[^A-Z ]/g, '');
+  s = s
+    .replace(/DJ/g, 'J')
+    .replace(/TJ/g, 'C')
+    .replace(/SJ/g, 'S')
+    .replace(/CH/g, 'K')
+    .replace(/SH/g, 'S')
+    .replace(/KH/g, 'K')
+    .replace(/TH/g, 'T')
+    .replace(/OE/g, 'U')
+    .replace(/AE/g, 'A')
+    .replace(/IE/g, 'I')
+    .replace(/Q/g, 'K')
+    .replace(/X/g, 'S')
+    .replace(/Z/g, 'S');
+  // lipat huruf kembar: "SMM" -> "SM"
+  s = s.replace(/(.)\1+/g, '$1');
+  return s.replace(/\s+/g, ' ').trim();
+}
+
+// 10. 🧱 TOKEN CONTAINMENT — hierarki nama wilayah (yang pendek ⊆ yang panjang)
+export function tokenContainmentScore(strA: string, strB: string): number {
+  const ta = expertNormalize(strA).split(' ').filter(Boolean);
+  const tb = expertNormalize(strB).split(' ').filter(Boolean);
+  if (!ta.length || !tb.length) return 0;
+  const small = ta.length <= tb.length ? ta : tb;
+  const big = new Set(ta.length <= tb.length ? tb : ta);
+  const longestSmall = Math.max(...small.map((t) => t.length));
+  if (longestSmall < 4) return 0; // terlalu pendek — bukan bukti containment
+  if (small.every((t) => big.has(t))) {
+    return 0.85 + 0.1 * (small.length / (ta.length + tb.length - small.length));
+  }
+  return 0;
+}
+
+// 11. 🔠 INITIALISM MATCH — "JP" vs "JAKARTA PUSAT", "KCP" vs "KANTOR CABANG PEMBANTU"
+export function initialismMatchScore(strA: string, strB: string): number {
+  const tokensA = expertNormalize(strA).split(' ').filter(Boolean);
+  const tokensB = expertNormalize(strB).split(' ').filter(Boolean);
+  const check = (short: string[], long: string[]): number => {
+    if (short.length !== 1 || long.length < 2) return 0;
+    const abbr = short[0];
+    if (abbr.length < 2 || abbr.length !== long.length) return 0;
+    const initials = long.map((t) => t[0]).join('');
+    return initials === abbr ? 0.85 : 0;
+  };
+  return Math.max(check(tokensA, tokensB), check(tokensB, tokensA));
+}
+
+// 🧠 MULTI-ENGINE EXPERT ENSEMBLE (11 sinyal: cascade pakar + consensus voting)
+// Panggilan bisa jutaan pasangan (outlet × role), jadi sinyal mahal (DP O(n·m))
+// hanya dijalankan bila sinyal murah menunjukkan pasangan ini "berpeluang".
 export function calculateUnifiedPrecisionScore(textA: string, textB: string): { score: number; algorithm: string } {
-  const normA = cleanAndStandardizeText(textA);
-  const normB = cleanAndStandardizeText(textB);
+  const normA = expertNormalize(textA);
+  const normB = expertNormalize(textB);
 
   if (normA === normB && normA.length > 0) {
-    return { score: 1.0, algorithm: 'Exact Canonical Token Match' };
+    return { score: 1.0, algorithm: 'Exact Canonical Match' };
   }
 
+  // ── Sinyal murah: dihitung selalu ──
   const tokenJaccard = calculateTokenSetJaccard(normA, normB);
-  if (tokenJaccard >= 0.9) {
-    return { score: tokenJaccard, algorithm: 'Token Set & Jaccard (Anti-Inversion)' };
-  }
-
   const jaro = jaroWinklerDistance(normA, normB);
-  if (jaro >= 0.88) {
-    return { score: jaro, algorithm: 'Jaro-Winkler Prefix Weighted' };
+  const containment = tokenContainmentScore(normA, normB);
+  const initials = initialismMatchScore(normA, normB);
+  const keyA = indoPhoneticKey(normA);
+  const keyB = indoPhoneticKey(normB);
+  const phoneticHit = keyA.length >= 4 && keyA === keyB;
+
+  // ── Cascade pakar (sinyal paling meyakinkan menang) ──
+  if (phoneticHit) {
+    return { score: Math.max(0.95, jaro), algorithm: 'Phonetic Indonesian Transcription Match' };
+  }
+  if (containment >= 0.85) {
+    return { score: containment, algorithm: 'Token Containment (Hierarchical Region)' };
+  }
+  if (initials >= 0.85) {
+    return { score: initials, algorithm: 'Initialism / Acronym Expansion Match' };
   }
 
+  // ── Fast-reject gate: pasangan jelas berbeda tidak layak dibayar DP mahal ──
+  const cheapBest = Math.max(tokenJaccard, jaro);
+  if (cheapBest < 0.55) {
+    return { score: 0.55 * tokenJaccard + 0.45 * jaro, algorithm: 'Fast Reject Gate (cheap signals only)' };
+  }
+
+  // ── Sinyal mahal: baru dihitung saat ada peluang ──
   const triGram = triGramCosineSimilarity(normA, normB);
-  if (triGram >= 0.8) {
-    return { score: triGram, algorithm: 'Tri-Gram Cosine Vector Similarity' };
+  const damerau = damerauLevenshteinSimilarity(normA, normB);
+  const lcs = lcsRatio(normA, normB);
+  const gestalt = ratcliffObershelpSimilarity(normA, normB);
+
+  const signals = [tokenJaccard, jaro, triGram, damerau, lcs, gestalt];
+  const strongVotes = signals.filter((s) => s >= 0.85).length;
+  const best = Math.max(...signals);
+
+  // Consensus: ≥3 dari 6 mesin pakar sepakat mirip → nilai terbaik + bonus kesepakatan
+  if (strongVotes >= 3) {
+    return { score: Math.min(1, best + 0.04), algorithm: `Expert Ensemble Consensus (${strongVotes}/6 signals agree)` };
+  }
+  if (strongVotes === 2 && best >= 0.9) {
+    return { score: best, algorithm: 'Expert Ensemble Dual Agreement' };
   }
 
-  const hybrid = 0.4 * tokenJaccard + 0.35 * jaro + 0.25 * triGram;
-  return { score: hybrid, algorithm: 'Multi-Engine Hybrid Scoring' };
+  // Hybrid berbobot 6 sinyal (fallback terukur)
+  const hybrid =
+    0.2 * tokenJaccard + 0.2 * jaro + 0.15 * triGram + 0.2 * damerau + 0.1 * lcs + 0.15 * gestalt;
+  return { score: hybrid, algorithm: 'Multi-Engine Weighted Hybrid (6-Signal)' };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
