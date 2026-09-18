@@ -369,6 +369,14 @@ export async function executeAnalystPipeline(
   }
   const rowMetaCache: RowMetaCache[] = [];
 
+  // Non-blocking helpers: yield to browser event loop so progress bar can render
+  const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+  // Memo caches — fuzzy matching is O(n*m) and expensive; identical inputs repeat heavily
+  const ptenFuzzyCache = new Map<string, PTENRecord | null>();
+  const kodePosCityCache = new Map<string, KodePosRow[]>();
+  const roleMatchCache = new Map<string, { role: RoleMappingRecord | null; score: number; algorithm: string }>();
+  const preCleanedRoles = roleMappingList.map((r) => ({ record: r, orgClean: cleanAndStandardizeText(r.organisasiTujuan) }));
+
   for (let i = 0; i < itemsToProcess.length; i++) {
     const raw = itemsToProcess[i];
 
@@ -377,6 +385,8 @@ export async function executeAnalystPipeline(
       const pct = Math.round(5 + (i / total) * 28);
       onProgress(1, pct, i + 1, total, `Fase 1: Mencocokkan PTEN & Kode Pos (${i + 1}/${total})...`);
     }
+    // Yield every 20 rows so the browser can repaint the progress bar
+    if (i % 20 === 0) await tick();
 
     const cityRaw = String(raw['Dati II'] || raw.Kota || raw.Kelurahan || '').trim();
     const cityClean = cleanAndStandardizeText(cityRaw);
@@ -387,6 +397,8 @@ export async function executeAnalystPipeline(
     if (ptenCityMap.has(cityClean)) {
       const candidates = ptenCityMap.get(cityClean)!;
       matchedPtenRecord = candidates.find((c) => c.kodePosPten === kpRaw) || candidates[0];
+    } else if (ptenFuzzyCache.has(cityClean)) {
+      matchedPtenRecord = ptenFuzzyCache.get(cityClean)!;
     } else {
       let bestScore = 0;
       for (const [ptenCityKey, candidates] of ptenCityMap.entries()) {
@@ -396,6 +408,7 @@ export async function executeAnalystPipeline(
           matchedPtenRecord = candidates[0];
         }
       }
+      ptenFuzzyCache.set(cityClean, matchedPtenRecord);
     }
 
     const finalKotaPten = matchedPtenRecord?.kotaPten || (cityRaw ? cityRaw.toUpperCase() : 'KOTA JAKARTA PUSAT');
@@ -403,16 +416,22 @@ export async function executeAnalystPipeline(
 
     // ── Cari SEMUA Kelurahan & Kecamatan dari Data Kode Pos untuk Kota PTEN ini ──
     const ptenCleanCity = cleanAndStandardizeText(finalKotaPten);
-    let matchedKodePosEntries = kodePosByCity.get(ptenCleanCity) || [];
-
-    if (matchedKodePosEntries.length === 0) {
-      for (const [cityKey, entries] of kodePosByCity.entries()) {
-        const { score } = calculateUnifiedPrecisionScore(ptenCleanCity, cityKey);
-        if (score >= 0.7) {
-          matchedKodePosEntries = entries;
-          break;
+    let matchedKodePosEntries: KodePosRow[];
+    const cachedKodePos = kodePosCityCache.get(ptenCleanCity);
+    if (cachedKodePos) {
+      matchedKodePosEntries = cachedKodePos;
+    } else {
+      matchedKodePosEntries = kodePosByCity.get(ptenCleanCity) || [];
+      if (matchedKodePosEntries.length === 0) {
+        for (const [cityKey, entries] of kodePosByCity.entries()) {
+          const { score } = calculateUnifiedPrecisionScore(ptenCleanCity, cityKey);
+          if (score >= 0.7) {
+            matchedKodePosEntries = entries;
+            break;
+          }
         }
       }
+      kodePosCityCache.set(ptenCleanCity, matchedKodePosEntries);
     }
 
     // Jika tidak ada di Kode Pos, buat 1 entry fallback dari data Master
@@ -454,26 +473,29 @@ export async function executeAnalystPipeline(
     let highestRoleScore = 0;
     let chosenAlgorithm = 'Direct Master Join';
     const outletNameToMatch = cleanAndStandardizeText(namaOutlet);
-    for (let r = 0; r < roleMappingList.length; r++) {
-      const roleItem = roleMappingList[r];
-      const orgName = cleanAndStandardizeText(roleItem.organisasiTujuan);
-      const { score, algorithm } = calculateUnifiedPrecisionScore(outletNameToMatch, orgName);
-      if (score > highestRoleScore && score >= 0.75) {
-        highestRoleScore = score;
-        matchedRole = roleItem;
-        chosenAlgorithm = algorithm;
+    const cachedRoleMatch = roleMatchCache.get(outletNameToMatch);
+    if (cachedRoleMatch) {
+      matchedRole = cachedRoleMatch.role;
+      highestRoleScore = cachedRoleMatch.score;
+      chosenAlgorithm = cachedRoleMatch.algorithm;
+    } else {
+      for (const { record: roleItem, orgClean } of preCleanedRoles) {
+        const { score, algorithm } = calculateUnifiedPrecisionScore(outletNameToMatch, orgClean);
+        if (score > highestRoleScore && score >= 0.75) {
+          highestRoleScore = score;
+          matchedRole = roleItem;
+          chosenAlgorithm = algorithm;
+        }
       }
-    }
-    if (!matchedRole && roleMappingList.length > 0) {
-      const cityKeywords = ptenCleanCity.split(/\s+/).filter(w => w.length > 2);
-      for (const keyword of cityKeywords) {
-        const found = roleMappingList.find((r) => {
-          const orgClean = cleanAndStandardizeText(r.organisasiTujuan);
-          return orgClean.includes(keyword.toUpperCase()) || orgClean.includes(keyword);
-        });
-        if (found) { matchedRole = found; highestRoleScore = 0.85; chosenAlgorithm = 'Geographic City Keyword Match'; break; }
+      if (!matchedRole && roleMappingList.length > 0) {
+        const cityKeywords = ptenCleanCity.split(/\s+/).filter(w => w.length > 2);
+        for (const keyword of cityKeywords) {
+          const found = preCleanedRoles.find(({ orgClean }) => orgClean.includes(keyword.toUpperCase()) || orgClean.includes(keyword));
+          if (found) { matchedRole = found.record; highestRoleScore = 0.85; chosenAlgorithm = 'Geographic City Keyword Match'; break; }
+        }
+        if (!matchedRole) { matchedRole = roleMappingList[0]; highestRoleScore = 0.70; chosenAlgorithm = 'Default Fallback (First Available)'; }
       }
-      if (!matchedRole) { matchedRole = roleMappingList[0]; highestRoleScore = 0.70; chosenAlgorithm = 'Default Fallback (First Available)'; }
+      roleMatchCache.set(outletNameToMatch, { role: matchedRole, score: highestRoleScore, algorithm: chosenAlgorithm });
     }
 
     const organisasiTujuan = matchedRole?.organisasiTujuan || `${namaOutlet.toUpperCase()} BRANCH OFFICE`;
@@ -516,6 +538,7 @@ export async function executeAnalystPipeline(
       const pct = Math.round(35 + (i / total) * 31);
       onProgress(2, pct, i + 1, total, `Fase 2: Validasi Wilayah & Cabang (${i + 1}/${total})...`);
     }
+    if (i % 50 === 0) await tick();
 
     // Jika mode "Ulangi yang Salah Saja", lewati baris yang sudah valid & disetujui
     if (reRunOnlyAnomalies && prevRow && prevRow.isFinalApproved && prevRow.statusAnalisa === 'EXACT_MATCH') {

@@ -666,19 +666,28 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                 </tr>
               )}
 
-              {/* TAB 2: FASE 1 PTEN & KODE POS */}
+              {/* TAB 2: FASE 1 PTEN & KODE POS (grup header: Data Pos vs Data PTEN) */}
               {viewTab === 'fase1' && (
-                <tr>
-                  <th style={{ width: '40px', textAlign: 'center' }}>No</th>
-                  <th style={{ minWidth: '140px' }}>Kota PTEN</th>
-                  <th style={{ width: '100px', textAlign: 'center' }}>Kode Pos PTEN</th>
-                  <th>Kelurahan Acuan</th>
-                  <th>Kecamatan Acuan</th>
-                  <th>Provinsi</th>
-                  <th style={{ width: '110px', textAlign: 'center' }}>Status PTEN</th>
-                  <th style={{ minWidth: '160px' }}>Group Kota PTEN</th>
-                  <th style={{ width: '95px', textAlign: 'center' }}>Aksi Review</th>
-                </tr>
+                <>
+                  <tr>
+                    <th rowSpan={2} style={{ width: '40px', textAlign: 'center', verticalAlign: 'middle' }}>No</th>
+                    <th colSpan={3} style={{ textAlign: 'center', background: '#eff6fb', color: '#299cdb', borderLeft: '2px solid #d5e7f2' }}>
+                      📮 DATA POS (Kelurahan &amp; Wilayah Administrasi)
+                    </th>
+                    <th colSpan={3} style={{ textAlign: 'center', background: '#eefaf6', color: '#0ab39c', borderLeft: '2px solid #b7ebe4' }}>
+                      🛡️ DATA PTEN (Kota / Provinsi / Kode Pos)
+                    </th>
+                    <th rowSpan={2} style={{ width: '120px', textAlign: 'center', verticalAlign: 'middle' }}>Aksi Review</th>
+                  </tr>
+                  <tr>
+                    <th style={{ minWidth: '140px', borderLeft: '2px solid #d5e7f2' }}>Kelurahan</th>
+                    <th style={{ minWidth: '140px' }}>Kecamatan</th>
+                    <th style={{ minWidth: '130px' }}>Provinsi</th>
+                    <th style={{ minWidth: '150px', borderLeft: '2px solid #b7ebe4' }}>Kota / Kabupaten</th>
+                    <th style={{ width: '100px', textAlign: 'center' }}>Kode Pos</th>
+                    <th style={{ width: '100px', textAlign: 'center' }}>Status PTEN</th>
+                  </tr>
+                </>
               )}
 
               {/* TAB 3: FASE 2 WILAYAH & CABANG */}
@@ -762,24 +771,19 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                         </>
                       )}
 
-                      {/* TAB 2: FASE 1 PTEN & KODE POS */}
+                      {/* TAB 2: FASE 1 PTEN & KODE POS — Data Pos | Data PTEN */}
                       {viewTab === 'fase1' && (
                         <>
-                          <td style={{ textAlign: 'center', color: '#878a99' }}>{displayIdx}</td>
-                          <td style={{ fontWeight: 700, color: '#212529' }}>{r.kotaPten}</td>
+                          <td style={{ textAlign: 'center', color: '#878a99' }}>{r.kelurahanSeq ?? displayIdx}</td>
+                          <td style={{ fontWeight: 700, color: '#212529', borderLeft: '2px solid #d5e7f2' }}>{r.kelurahan}</td>
+                          <td>{r.kecamatan}</td>
+                          <td>{r.provinsi}</td>
+                          <td style={{ fontWeight: 700, color: '#212529', borderLeft: '2px solid #b7ebe4' }}>{r.kotaPten}</td>
                           <td className="code-cell" style={{ textAlign: 'center', color: '#0ab39c', fontWeight: 700 }}>
                             {r.kodePosPten}
                           </td>
-                          <td>{r.kelurahan}</td>
-                          <td>{r.kecamatan}</td>
-                          <td>{r.provinsi}</td>
                           <td style={{ textAlign: 'center' }}>
-                            <span className="badge badge-match">{r.statusPten}</span>
-                          </td>
-                          <td>
-                            <span className="badge badge-level1" style={{ fontSize: '0.72rem' }}>
-                              Grup: {r.groupKota}
-                            </span>
+                            <span className={`badge ${r.statusPten === 'DIFFERENT' || r.statusPten === 'UNCHECKED' ? 'badge-level2' : 'badge-match'}`}>{r.statusPten}</span>
                           </td>
                         </>
                       )}
@@ -853,38 +857,48 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                   border: '1px solid rgba(10, 179, 156, 0.3)',
                                   color: rowPhaseApproved ? '#ffffff' : '#0ab39c',
                                   borderRadius: '4px',
-                                  padding: '0.22rem 0.4rem',
+                                  padding: viewTab === 'fase1' ? '0.22rem 0.55rem' : '0.22rem 0.4rem',
                                   cursor: 'pointer',
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
+                                  gap: '0.25rem',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
                                 }}
                               >
                                 <Check size={12} />
+                                {viewTab === 'fase1' && <span>Setujui</span>}
                               </button>
                             );
                           })()}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingRow(r);
-                              setIsEditModalOpen(true);
-                            }}
-                            title="Edit / Koreksi Manual Baris Ini"
-                            style={{
-                              background: 'rgba(64, 81, 137, 0.1)',
-                              border: '1px solid rgba(64, 81, 137, 0.3)',
-                              color: '#405189',
-                              borderRadius: '4px',
-                              padding: '0.22rem 0.4rem',
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                          >
-                            <Edit size={12} />
-                          </button>
+                          {viewTab === 'fase1' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingRow(r);
+                                setIsEditModalOpen(true);
+                              }}
+                              title="Edit / Revisi Manual Baris Fase 1 Ini"
+                              style={{
+                                background: 'rgba(64, 81, 137, 0.1)',
+                                border: '1px solid rgba(64, 81, 137, 0.3)',
+                                color: '#405189',
+                                borderRadius: '4px',
+                                padding: '0.22rem 0.55rem',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '0.25rem',
+                                fontSize: '0.72rem',
+                                fontWeight: 700,
+                              }}
+                            >
+                              <Edit size={12} />
+                              <span>Revisi</span>
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
