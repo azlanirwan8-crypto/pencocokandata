@@ -8,26 +8,24 @@ import { IndonesiaBranchMap } from './components/Dashboard/IndonesiaBranchMap';
 import { DashboardMatchTable } from './components/Dashboard/DashboardMatchTable';
 import { CabangManager } from './components/MasterData/CabangManager';
 import { TargetUploadModal } from './components/WorkingEngine/TargetUploadModal';
-import { ProgressBar } from './components/WorkingEngine/ProgressBar';
-import { TargetDataGrid } from './components/WorkingEngine/TargetDataGrid';
-import { ExportAction } from './components/WorkingEngine/ExportAction';
 import { WilayahManager } from './components/WilayahData/WilayahManager';
 import { PTENManager } from './components/PTENData/PTENManager';
 import { RoleMappingManager } from './components/RoleMapping/RoleMappingManager';
 import { KodePosManager } from './components/KodePosData/KodePosManager';
+import { AnalystCanvas } from './components/WorkingEngine/AnalystCanvas';
+import { AnalystResultsGrid } from './components/WorkingEngine/AnalystResultsGrid';
+import { executeAnalystPipeline, type AnalystRow } from './utils/analystPipeline';
 import type { ActiveTab } from './components/Sidebar';
 
 import type { MasterRow, TargetRow, MatchingStats, WilayahStat, WilayahSetting } from './types';
-import type { RecommendationResult } from './utils/recommender';
-import { buildMasterIndex, analyzeMasterHealth, executeChunkMatching } from './utils/matcher';
-import { formatWilayahName, extractWilayahFromBranchCode } from './utils/normalizer';
+import { buildMasterIndex, analyzeMasterHealth } from './utils/matcher';
+import { formatWilayahName } from './utils/normalizer';
 import type { RoleMappingRecord } from './components/RoleMapping/RoleMappingManager';
-import { DEFAULT_ROLE_MAPPING_DATA, getUnitCategory, getWondrRecommendation } from './components/RoleMapping/RoleMappingManager';
+import { DEFAULT_ROLE_MAPPING_DATA } from './components/RoleMapping/RoleMappingManager';
 import type { PTENRecord } from './components/PTENData/PTENManager';
 import { DEFAULT_PTEN_DATA } from './components/PTENData/defaultPtenData';
 import { DEFAULT_KODEPOS_DATA } from './components/KodePosData/defaultKodePosData';
 import { buildPtenIndex, validatePtenForTarget } from './utils/ptenMatcher';
-import { resolveRoleMappingForBranch } from './utils/roleMatcher';
 
 import { getItem, setItem } from './utils/storage';
 import {
@@ -37,14 +35,13 @@ import {
   clearMasterFromNeon,
   loadTargetFromNeon,
   saveTargetToNeon,
-  clearTargetFromNeon,
   loadWilayahFromNeon,
   saveWilayahToNeon,
 } from './utils/neonSync';
 import { NeonDatabaseModal } from './components/NeonDatabaseModal';
 import { SnapshotModal, type WorkspaceSnapshot } from './components/SnapshotModal';
 import { DEFAULT_WILAYAH_DATA, normalizeWilayahItem } from './utils/defaultWilayah';
-import { Filter, UploadCloud, RotateCcw, Layers } from 'lucide-react';
+import { Filter } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
@@ -86,17 +83,16 @@ export const App: React.FC = () => {
   const [roleMappingCount, setRoleMappingCount] = useState<number>(DEFAULT_ROLE_MAPPING_DATA.length);
   const [kodePosCount, setKodePosCount] = useState<number>(DEFAULT_KODEPOS_DATA.length);
 
-  // Matching Execution State
-  const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [progress, setProgress] = useState<number>(0);
-  const [processedCount, setProcessedCount] = useState<number>(0);
-  const [durationMs, setDurationMs] = useState<number>(0);
+  // New Data Analyst 3-Phase Engine State (100% Data Master Driven)
+  const [analystRows, setAnalystRows] = useState<AnalystRow[]>([]);
+  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
+  const [analystProgress, setAnalystProgress] = useState<number>(0);
+  const [analystMessage, setAnalystMessage] = useState<string>('');
+
   const [matchedDone, setMatchedDone] = useState<boolean>(false);
 
   // Filters State
-  const [selectedWilayah, setSelectedWilayah] = useState<string>('ALL');
   const [dashboardWilayahFilter, setDashboardWilayahFilter] = useState<string>('ALL');
-  const [searchTerm, setSearchTerm] = useState<string>('');
 
   // Build In-Memory Hash Map O(1)
   const masterIndex = useMemo(() => {
@@ -174,6 +170,11 @@ export const App: React.FC = () => {
         } else {
           setKodePosCount(DEFAULT_KODEPOS_DATA.length);
           setItem('kodepos_master_data', DEFAULT_KODEPOS_DATA);
+        }
+
+        const savedAnalyst = await getItem<AnalystRow[]>('analyst_results_data');
+        if (savedAnalyst && Array.isArray(savedAnalyst) && savedAnalyst.length > 0) {
+          setAnalystRows(savedAnalyst);
         }
       } catch (err) {
         console.warn('Local cache restore skipped:', err);
@@ -324,36 +325,6 @@ export const App: React.FC = () => {
     return map;
   }, [targetRows]);
 
-  // Filtered Target Rows (Optimized with early return for millions of records)
-  const filteredTargetRows = useMemo(() => {
-    if (selectedWilayah === 'ALL' && !searchTerm.trim()) {
-      return targetRows;
-    }
-    const q = searchTerm.trim().toLowerCase();
-    return targetRows.filter((r) => {
-      // Wilayah filter
-      if (selectedWilayah !== 'ALL' && r.Wilayah !== selectedWilayah) {
-        return false;
-      }
-
-      // Search term
-      if (q) {
-        const matchesSearch =
-          String(r.No).includes(q) ||
-          (r.Wilayah && r.Wilayah.toLowerCase().includes(q)) ||
-          (r.Sandi && r.Sandi.toLowerCase().includes(q)) ||
-          (r.Cabang && r.Cabang.toLowerCase().includes(q)) ||
-          (r['Nama Outlet'] && r['Nama Outlet'].toLowerCase().includes(q)) ||
-          (r.ALAMAT && r.ALAMAT.toLowerCase().includes(q)) ||
-          (r['KODE POS'] && r['KODE POS'].toLowerCase().includes(q)) ||
-          (r.Kecamatan && r.Kecamatan.toLowerCase().includes(q)) ||
-          (r.Kelurahan && r.Kelurahan.toLowerCase().includes(q));
-        if (!matchesSearch) return false;
-      }
-
-      return true;
-    });
-  }, [targetRows, selectedWilayah, searchTerm]);
 
   // Dashboard Filtered Rows by Wilayah
   const dashboardFilteredRows = useMemo(() => {
@@ -446,48 +417,81 @@ export const App: React.FC = () => {
       });
   }, [dashboardFilteredRows, dashboardWilayahFilter]);
 
-  // Execution Trigger
-  const handleExecuteMatching = async () => {
-    if (targetRows.length === 0) return;
-
-    setIsProcessing(true);
-    setProgress(0);
-    setProcessedCount(0);
-    const startTime = performance.now();
+  // Execution Trigger for New Data Analyst Engine (3-Phase Pipeline)
+  const handleStartAnalystPipeline = async (reRunAnomaliesOnly = false) => {
+    setIsAnalyzing(true);
+    setAnalystProgress(10);
+    setAnalystMessage('Menyiapkan 5 Data Master & indeks memori O(1)...');
 
     try {
-      const matchedData = await executeChunkMatching(
-        targetRows,
-        masterIndex,
-        (pct, processed, _total) => {
-          setProgress(pct);
-          setProcessedCount(processed);
-          setDurationMs(Math.round(performance.now() - startTime));
-        },
-        1200, // Chunk size
+      const results = await executeAnalystPipeline(
+        masterRows,
+        ptenList,
+        DEFAULT_KODEPOS_DATA as any,
         wilayahSettings,
         roleMappingList,
-        ptenIndex
+        (phase, pct, _processed, _total, msg) => {
+          setAnalystProgress(pct);
+          setAnalystMessage(`[Fase ${phase}] ${msg}`);
+        },
+        reRunAnomaliesOnly,
+        analystRows
       );
 
-      const endTime = performance.now();
-      const totalElapsed = Math.round(endTime - startTime);
-
-      setTargetRows(matchedData);
-      setMatchedDone(true);
-      setDurationMs(totalElapsed);
-      setIsProcessing(false);
-
-      persistTargetData({
-        rows: matchedData,
-        fileName: targetFileName,
-        initialCount: initialTargetCount,
-        matchedDone: true,
-      });
-    } catch (err) {
-      setIsProcessing(false);
-      alert('Terjadi kesalahan saat memproses data: ' + err);
+      setAnalystRows(results);
+      setIsAnalyzing(false);
+      setAnalystProgress(100);
+      setAnalystMessage('Analisa 3 Fase Berhasil Selesai!');
+      setItem('analyst_results_data', results).catch(() => {});
+    } catch (err: any) {
+      setIsAnalyzing(false);
+      alert('Terjadi kesalahan saat menjalankan analisa: ' + err?.message);
     }
+  };
+
+  const handleResetAnalyst = async () => {
+    if (window.confirm('Reset seluruh hasil analisa data master?')) {
+      setAnalystRows([]);
+      setAnalystProgress(0);
+      setAnalystMessage('');
+      await setItem('analyst_results_data', []);
+    }
+  };
+
+  const handleUpdateAnalystRow = (updated: AnalystRow) => {
+    setAnalystRows((prev) => {
+      const next = prev.map((r) => (r.id === updated.id ? updated : r));
+      setItem('analyst_results_data', next).catch(() => {});
+      return next;
+    });
+  };
+
+  const handleApproveSingleAnalystRow = (rowId: string) => {
+    setAnalystRows((prev) => {
+      const next = prev.map((r) => (r.id === rowId ? { ...r, isFinalApproved: true } : r));
+      setItem('analyst_results_data', next).catch(() => {});
+      return next;
+    });
+  };
+
+  const handleApproveAllAnalystFinal = () => {
+    setAnalystRows((prev) => {
+      const next = prev.map((r) => ({ ...r, isFinalApproved: true }));
+      setItem('analyst_results_data', next).catch(() => {});
+      return next;
+    });
+  };
+
+  const handleApproveAnalystFase = (fase: 1 | 2 | 3) => {
+    setAnalystRows((prev) => {
+      const next = prev.map((r) => {
+        if (fase === 1) return { ...r, fase1Approved: true };
+        if (fase === 2) return { ...r, fase2Approved: true };
+        return { ...r, fase3Approved: true };
+      });
+      setItem('analyst_results_data', next).catch(() => {});
+      return next;
+    });
   };
 
   // Master Actions (Appends new rows to existing master data with strict deduplication)
@@ -603,7 +607,6 @@ export const App: React.FC = () => {
       setTargetFileName(finalFileName);
       setInitialTargetCount(finalRows.length);
       setMatchedDone(false);
-      setProgress(0);
 
       persistTargetData({
         rows: finalRows,
@@ -613,275 +616,6 @@ export const App: React.FC = () => {
       });
 
       return finalRows;
-    });
-  };
-
-  const handleResetTarget = async () => {
-    try {
-      setTargetRows([]);
-      setInitialTargetCount(0);
-      setTargetFileName('');
-      setMatchedDone(false);
-      setProgress(0);
-      await setItem('target_data', { rows: [], fileName: '', initialCount: 0, matchedDone: false });
-      clearTargetFromNeon().catch((e) => console.warn('Neon target clear warning:', e));
-    } catch (e) {
-      console.warn('Reset target error:', e);
-    }
-  };
-
-  // Reset Hasil Pencocokan: Mengembalikan status data target ke kondisi awal upload tanpa menghapus berkas
-  const handleResetMatchingResults = () => {
-    if (
-      window.confirm(
-        'Kembalikan data target ke status awal upload (sebelum dicocokkan)?\nHasil pencocokan akan di-reset sehingga Anda dapat meninjau rekomendasi kembali atau mencocokkan ulang. Berkas dan data yang Anda isi di Excel tetap aman.'
-      )
-    ) {
-      setTargetRows((prev) => {
-        const restored = prev.map((r) => ({
-          ...r,
-          _isMatched: false,
-          _matchLevel: 'none' as const,
-          _matchedAt: undefined,
-          _matchedBy: undefined,
-          // Pulihkan data awal yang diisi user di file Excel jika ada
-          Sandi: r._originalFilledSandi || '',
-          Cabang: r._originalFilledCabang || '',
-          'Sandi Cabang': r._originalFilledSandiCabang || '',
-          'Nama Outlet': r._originalFilledNamaOutlet || '',
-        }));
-
-        setMatchedDone(false);
-        setProgress(0);
-        setProcessedCount(0);
-
-        persistTargetData({
-          rows: restored,
-          fileName: targetFileName,
-          initialCount: initialTargetCount,
-          matchedDone: false,
-        });
-
-        return restored;
-      });
-    }
-  };
-
-  // Setujui Semua Rekomendasi: Mengisi atribut master ke baris target yang cocok, diperkaya PTEN & Mapping Role (High-performance non-blocking)
-  const handleApproveAllRecommendations = (recs: RecommendationResult[]) => {
-    if (recs.length === 0) return;
-    const recMap = new Map<string, MasterRow>();
-    for (let i = 0; i < recs.length; i++) {
-      const r = recs[i];
-      if (r?.targetRow?.No !== undefined && r.recommendedMaster) {
-        recMap.set(String(r.targetRow.No).trim(), r.recommendedMaster);
-      }
-    }
-
-    React.startTransition(() => {
-      setTargetRows((prev) => {
-        const updated = [...prev];
-        const nowStr = new Date().toISOString();
-
-        for (let i = 0; i < prev.length; i++) {
-          const row = prev[i];
-          const rowNoKey = String(row.No).trim();
-          const recItem = recMap.get(rowNoKey);
-          if (!recItem) {
-            updated[i] = row;
-            continue;
-          }
-
-          const matchedMaster = recItem.recommendedMaster;
-          const branchCode = matchedMaster['Branch Code'] || matchedMaster['Kode Cabang'] || '';
-          const resolved = extractWilayahFromBranchCode(
-            branchCode,
-            wilayahSettings,
-            matchedMaster.Wilayah || row.Wilayah || '-'
-          );
-
-          // PENTING: Untuk kecepatan instan 8.000+ baris, gunakan data master & PTEN langsung dari rekomendasi
-          const ptenRes = validatePtenForTarget(row['KODE POS'], row['Dati II'] || row.Kota || '', ptenIndex);
-
-          // Tentukan role mapping dari chosenRole rekomendasi
-          const finalRoleRecord = recItem.chosenRole;
-          const isKc = finalRoleRecord ? getUnitCategory(finalRoleRecord.organisasiTujuan) === 'KC' : false;
-          const wondr = finalRoleRecord ? getWondrRecommendation(finalRoleRecord) : null;
-
-          updated[i] = {
-            ...row,
-            _isMatched: true,
-            _matchLevel: 'recommendation' as const,
-            'Sandi Cabang':
-              matchedMaster['Sandi Cabang'] ||
-              [matchedMaster.Sandi, matchedMaster.Cabang].filter(Boolean).join(' - ') ||
-              matchedMaster.Cabang ||
-              '',
-            Sandi: matchedMaster.Sandi || matchedMaster['Sandi Cabang'] || '',
-            Cabang: matchedMaster.Cabang || matchedMaster['Sandi Cabang'] || '',
-            'Branch Code': branchCode,
-            'Kode Cabang': matchedMaster['Kode Cabang'] || '',
-            'Nama Outlet': matchedMaster['Nama Outlet'] || '',
-            'Status Outlet': matchedMaster['Status Outlet'] || 'Aktif',
-            ALAMAT: matchedMaster.ALAMAT || '',
-            Wilayah: resolved.wilayahName !== '-' ? resolved.wilayahName : (row.Wilayah || '-'),
-            'KOTA PTEN': ptenRes.kotaPten,
-            'KODE POS PTEN': ptenRes.kodePosPten,
-            'CEK KODE POS + PTEN': ptenRes.statusPten,
-            organisasiRole: finalRoleRecord ? finalRoleRecord.organisasiTujuan : '',
-            tipeUnitRole: finalRoleRecord ? (isKc ? 'Cabang Utama (KC)' : 'Outlet (KCP)') : undefined,
-            alurWondr: wondr?.tier || '',
-            flowDescription: wondr?.desc || '',
-            roleCabsal: finalRoleRecord?.qrsCabsal,
-            roleCabapv1: finalRoleRecord?.qrsCabapv1,
-            roleCabapv2: finalRoleRecord?.qrsCabapv2,
-            roleGrandTotal: finalRoleRecord?.grandTotal,
-            _matchedAt: nowStr,
-            _matchedBy: 'Operator (Approval)',
-          };
-        }
-
-        persistTargetData({
-          rows: updated,
-          fileName: targetFileName,
-          initialCount: initialTargetCount,
-          matchedDone: true,
-        }, true);
-
-        return updated;
-      });
-    });
-  };
-
-  // Setujui Satu Rekomendasi Per Baris
-  const handleApproveSingleRecommendation = (rowNo: number | string, matchedMaster: MasterRow, chosenRole?: RoleMappingRecord) => {
-    const targetNoStr = String(rowNo).trim();
-    setTargetRows((prev) => {
-      const updated = prev.map((row) => {
-        if (String(row.No).trim() !== targetNoStr) return row;
-
-        const branchCode = matchedMaster['Branch Code'] || matchedMaster['Kode Cabang'] || '';
-        const resolved = extractWilayahFromBranchCode(
-          branchCode,
-          wilayahSettings,
-          matchedMaster.Wilayah || row.Wilayah || '-'
-        );
-
-        // Validasi PTEN & Role Mapping
-        const ptenRes = validatePtenForTarget(row['KODE POS'], row['Dati II'] || row.Kota || '', ptenIndex);
-
-        let finalRoleRecord = chosenRole;
-        if (!finalRoleRecord && roleMappingList.length > 0) {
-          const branchNameToLook = matchedMaster.Cabang || matchedMaster['Sandi Cabang'] || matchedMaster['Nama Outlet'] || '';
-          const outletNameToLook = matchedMaster['Nama Outlet'] || '';
-          const roleRes = resolveRoleMappingForBranch(
-            branchNameToLook,
-            row['Dati II'] || row.Kota,
-            row.Kelurahan,
-            row.Kecamatan,
-            row.ALAMAT || matchedMaster.ALAMAT,
-            roleMappingList,
-            outletNameToLook,
-            matchedMaster.Provinsi || row.Provinsi,
-            resolved.wilayahName !== '-' ? resolved.wilayahName : (row.Wilayah || '-')
-          );
-          if (roleRes) {
-            finalRoleRecord = {
-              organisasiTujuan: roleRes.organisasiRole,
-              qrsCabsal: roleRes.qrsCabsal,
-              qrsCabapv1: roleRes.qrsCabapv1,
-              qrsCabapv2: roleRes.qrsCabapv2,
-              grandTotal: roleRes.grandTotal,
-            };
-          }
-        }
-
-        const isKc = finalRoleRecord ? getUnitCategory(finalRoleRecord.organisasiTujuan) === 'KC' : false;
-        const wondr = finalRoleRecord ? getWondrRecommendation(finalRoleRecord) : null;
-
-        return {
-          ...row,
-          _isMatched: true,
-          _matchLevel: 'recommendation' as const,
-          'Sandi Cabang':
-            matchedMaster['Sandi Cabang'] ||
-            [matchedMaster.Sandi, matchedMaster.Cabang].filter(Boolean).join(' - ') ||
-            matchedMaster.Cabang ||
-            '',
-          Sandi: matchedMaster.Sandi || matchedMaster['Sandi Cabang'] || '',
-          Cabang: matchedMaster.Cabang || matchedMaster['Sandi Cabang'] || '',
-          'Branch Code': branchCode,
-          'Kode Cabang': matchedMaster['Kode Cabang'] || '',
-          'Nama Outlet': matchedMaster['Nama Outlet'] || '',
-          'Status Outlet': matchedMaster['Status Outlet'] || 'Aktif',
-          ALAMAT: matchedMaster.ALAMAT || '',
-          Wilayah: resolved.wilayahName !== '-' ? resolved.wilayahName : (row.Wilayah || '-'),
-          'KOTA PTEN': ptenRes.kotaPten,
-          'KODE POS PTEN': ptenRes.kodePosPten,
-          'CEK KODE POS + PTEN': ptenRes.statusPten,
-          organisasiRole: finalRoleRecord ? finalRoleRecord.organisasiTujuan : '',
-          tipeUnitRole: finalRoleRecord ? (isKc ? 'Cabang Utama (KC)' : 'Outlet (KCP)') : undefined,
-          alurWondr: wondr?.tier || '',
-          flowDescription: wondr?.desc || '',
-          roleCabsal: finalRoleRecord?.qrsCabsal,
-          roleCabapv1: finalRoleRecord?.qrsCabapv1,
-          roleCabapv2: finalRoleRecord?.qrsCabapv2,
-          roleGrandTotal: finalRoleRecord?.grandTotal,
-          _matchedAt: new Date().toISOString(),
-          _matchedBy: 'Operator (Approval)',
-        };
-      });
-
-      persistTargetData({
-        rows: updated,
-        fileName: targetFileName,
-        initialCount: initialTargetCount,
-        matchedDone: true,
-      }, true);
-
-      return updated;
-    });
-  };
-
-  // Batalkan Persetujuan Rekomendasi (Revert) - Mengembalikan baris ke status belum cocok (unmatched)
-  const handleRevertRecommendation = (rowNo: number | string) => {
-    const targetNoStr = String(rowNo).trim();
-    setTargetRows((prev) => {
-      const updated = prev.map((row) => {
-        if (String(row.No).trim() !== targetNoStr) return row;
-
-        return {
-          ...row,
-          _isMatched: false,
-          _matchLevel: 'none' as const,
-          'Sandi Cabang': '',
-          Sandi: '',
-          Cabang: '',
-          'Branch Code': '',
-          'Kode Cabang': '',
-          'Nama Outlet': '',
-          'Status Outlet': '',
-          organisasiRole: '',
-          tipeUnitRole: undefined,
-          alurWondr: '',
-          flowDescription: '',
-          roleCabsal: undefined,
-          roleCabapv1: undefined,
-          roleCabapv2: undefined,
-          roleGrandTotal: undefined,
-          _matchedAt: undefined,
-          _matchedBy: undefined,
-        };
-      });
-
-      persistTargetData({
-        rows: updated,
-        fileName: targetFileName,
-        initialCount: initialTargetCount,
-        matchedDone: true,
-      });
-
-      return updated;
     });
   };
 
@@ -1028,9 +762,8 @@ export const App: React.FC = () => {
                 targetRows={targetRows}
                 selectedWilayah={dashboardWilayahFilter}
                 onNavigateToMaster={() => setActiveTab('master')}
-                onNavigateToEngine={(searchFilter) => {
+                onNavigateToEngine={() => {
                   setActiveTab('working');
-                  if (searchFilter) setSearchTerm(searchFilter);
                 }}
               />
 
@@ -1070,179 +803,37 @@ export const App: React.FC = () => {
             />
           )}
 
-          {/* MENU 3: DATA YANG AKAN DICOCOKAN (WORKING & EXECUTION ENGINE) */}
+          {/* MENU 3: DATA ANALYST (DATA ANALYST ENGINE - 100% DATA MASTER DRIVEN) */}
           {activeTab === 'working' && (
             <div>
-              {/* Top Action Card: Upload Button & Template & Reset */}
-              <div
-                className="glass-card"
-                style={{
-                  padding: '0.55rem 1.1rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: '0.65rem',
-                  marginBottom: '0',
+              <AnalystCanvas
+                isAnalyzing={isAnalyzing}
+                progressPercent={analystProgress}
+                progressMessage={analystMessage}
+                onStartAnalysis={() => handleStartAnalystPipeline(false)}
+                onResetAnalysis={handleResetAnalyst}
+                hasExistingResults={analystRows.length > 0}
+                masterCounts={{
+                  pten: ptenList.length,
+                  kodepos: kodePosCount,
+                  wilayah: wilayahSettings.length,
+                  cabang: masterRows.length,
+                  role: roleMappingList.length,
                 }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                  <div
-                    style={{
-                      width: '30px',
-                      height: '30px',
-                      borderRadius: '5px',
-                      background: 'rgba(53, 119, 241, 0.1)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#3577f1',
-                    }}
-                  >
-                    <Layers size={15} />
-                  </div>
-                  <div>
-                    <h3 style={{ fontSize: '0.92rem', fontWeight: 600, color: '#212529', margin: 0 }}>
-                      Data Analisa Pencocokan
-                    </h3>
-                  </div>
-                </div>
+              />
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    onClick={() => setIsTargetUploadModalOpen(true)}
-                    id="btn-open-upload-target"
-                    style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.3rem 0.75rem' }}
-                  >
-                    <UploadCloud size={13} />
-                    <span>Upload Data Excel</span>
-                  </button>
-
-                  {/* Reset Hasil Match: Hanya muncul jika proses pencocokan sudah selesai */}
-                  {matchedDone && targetRows.length > 0 && (
-                    <button
-                      type="button"
-                      className="btn btn-outline btn-sm"
-                      onClick={handleResetMatchingResults}
-                      title="Kembalikan status data target ke kondisi awal upload untuk mencocokkan ulang tanpa menghapus berkas"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.3rem',
-                        color: '#405189',
-                        borderColor: 'rgba(64, 81, 137, 0.3)',
-                        padding: '0.3rem 0.7rem',
-                      }}
-                    >
-                      <RotateCcw size={12} />
-                      <span>Reset Hasil Match</span>
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm"
-                    onClick={() => {
-                      if (window.confirm('Kosongkan seluruh data Target Cek dari sesi ini?')) {
-                        handleResetTarget();
-                      }
-                    }}
-                    style={{ color: '#f06548', borderColor: 'rgba(240, 101, 72, 0.3)', padding: '0.3rem 0.75rem' }}
-                    title="Kosongkan seluruh data target"
-                  >
-                    <RotateCcw size={13} />
-                    <span>Reset Data</span>
-                  </button>
-                </div>
-              </div>
-
-              {targetRows.length === 0 ? (
-                <div
-                  className="glass-card"
-                  style={{
-                    padding: '3.5rem 2rem',
-                    textAlign: 'center',
-                    borderRadius: '8px',
-                    border: '1px dashed #ced4da',
-                    background: '#ffffff',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '1rem',
-                  }}
-                >
-                  <div
-                    style={{
-                      width: '56px',
-                      height: '56px',
-                      borderRadius: '50%',
-                      background: 'rgba(53, 119, 241, 0.08)',
-                      color: '#3577f1',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Layers size={28} />
-                  </div>
-                  <div>
-                    <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#212529', margin: '0 0 0.4rem' }}>
-                      Belum Ada Data yang Diunggah untuk Dicocokan
-                    </h4>
-                    <p style={{ fontSize: '0.82rem', color: '#878a99', maxWidth: '420px', margin: 0, lineHeight: 1.5 }}>
-                      Silakan unggah berkas Excel data target (transaksi/merchant/EDC) untuk memulai proses pencocokan otomatis.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => setIsTargetUploadModalOpen(true)}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 1.25rem' }}
-                  >
-                    <UploadCloud size={16} />
-                    <span>Pilih Berkas Target Excel</span>
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <ProgressBar
-                    isProcessing={isProcessing}
-                    progress={progress}
-                    processedCount={processedCount}
-                    totalCount={initialTargetCount}
-                    durationMs={durationMs}
-                  />
-
-                  <TargetDataGrid
-                    rows={targetRows}
-                    totalInputRows={initialTargetCount}
-                    masterRows={masterRows}
-                    wilayahList={wilayahList}
-                    selectedWilayah={selectedWilayah}
-                    onWilayahChange={setSelectedWilayah}
-                    searchTerm={searchTerm}
-                    onSearchChange={setSearchTerm}
-                    onExecuteMatching={handleExecuteMatching}
-                    onApproveAllRecommendations={handleApproveAllRecommendations}
-                    onApproveRecommendation={handleApproveSingleRecommendation}
-                    isProcessing={isProcessing}
-                    canExecute={targetRows.length > 0 && masterRows.length > 0}
-                    matchedDone={matchedDone}
-                    onRevertRecommendation={handleRevertRecommendation}
-                    wilayahSettings={wilayahSettings}
-                    roleMappingList={roleMappingList}
-                    ptenList={ptenList}
-                  />
-
-                  <ExportAction
-                    allTargetRows={targetRows}
-                    filteredRows={filteredTargetRows}
-                    selectedWilayah={selectedWilayah}
-                    totalInputRows={initialTargetCount}
-                  />
-                </>
+              {analystRows.length > 0 && (
+                <AnalystResultsGrid
+                  rows={analystRows}
+                  onUpdateRow={handleUpdateAnalystRow}
+                  onApproveSingleRow={handleApproveSingleAnalystRow}
+                  onApproveAllFinal={handleApproveAllAnalystFinal}
+                  onApproveFase={handleApproveAnalystFase}
+                  onReRunAll={() => handleStartAnalystPipeline(false)}
+                  onReRunAnomaliesOnly={() => handleStartAnalystPipeline(true)}
+                  isProcessing={isAnalyzing}
+                  wilayahSettings={wilayahSettings}
+                />
               )}
             </div>
           )}
