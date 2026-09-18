@@ -725,7 +725,7 @@ export const App: React.FC = () => {
         setActiveTab={setActiveTab}
         isCollapsed={isSidebarCollapsed}
         masterCount={masterRows.length}
-        targetCount={targetRows.length}
+        targetCount={analystRows.length}
         wilayahCount={wilayahSettings.length}
         ptenCount={ptenCount}
         roleMappingCount={roleMappingCount}
