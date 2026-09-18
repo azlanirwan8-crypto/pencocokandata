@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, X, CloudUpload, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react';
 import { runKodePosLiveSync, type KodePosSyncPlan, type SyncProgress } from '../../utils/kodePosSync';
 import { saveKodePosToNeon, type KodePosRow } from '../../utils/neonSync';
@@ -33,10 +33,20 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [importMsg, setImportMsg] = useState<string | null>(null);
 
+  const [search, setSearch] = useState('');
+  const deferredSearch = useDeferredValue(search);
+
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const rows = plan?.missingInCloud || [];
-  const win = useVirtualWindow({ containerRef: scrollRef, itemCount: rows.length, minRowsToWindow: 60 });
-  const renderedRows = win.active ? rows.slice(win.start, win.end) : rows;
+  const shownRows = useMemo(() => {
+    const q = deferredSearch.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((r) =>
+      `${r.kodePos} ${r.kelurahan} ${r.kecamatan} ${r.kabupatenKota} ${r.provinsi}`.toLowerCase().includes(q)
+    );
+  }, [rows, deferredSearch]);
+  const win = useVirtualWindow({ containerRef: scrollRef, itemCount: shownRows.length, minRowsToWindow: 60 });
+  const renderedRows = win.active ? shownRows.slice(win.start, win.end) : shownRows;
 
   const onProgress: SyncProgress = (message, percent) => {
     setStep(message);
@@ -49,6 +59,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
     setImportMsg(keepMsg ?? null);
     setPlan(null);
     setSelected(new Set());
+    setSearch('');
     try {
       const result = await runKodePosLiveSync(onProgress);
       setPlan(result);
@@ -65,11 +76,11 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const allChecked = rows.length > 0 && selected.size === rows.length;
+  const allChecked = shownRows.length > 0 && shownRows.every((r) => selected.has(rowKey(r)));
   const checking = phase === 'checking';
 
   const toggleAll = () => {
-    setSelected(allChecked ? new Set() : new Set(rows.map(rowKey)));
+    setSelected(allChecked ? new Set() : new Set(shownRows.map(rowKey)));
   };
 
   const toggleOne = (key: string) => {
@@ -115,6 +126,11 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
             <RefreshCw size={16} color="#405189" />
             Sinkronisasi Kode Pos Seluruh Indonesia
           </h4>
+          {plan?.lastUpdated && !checking && (
+            <span style={{ marginLeft: 'auto', marginRight: '0.75rem', fontSize: '0.68rem', color: '#878a99', whiteSpace: 'nowrap' }}>
+              diperbarui {new Date(plan.lastUpdated).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+            </span>
+          )}
           <button type="button" className="modal-close" onClick={onClose}>
             <X size={16} />
           </button>
@@ -180,15 +196,6 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                   color="#d68b0c"
                 />
               </div>
-              <div title={plan.sourceDetail} style={{ fontSize: '0.76rem', color: '#878a99', lineHeight: 1.6 }}>
-                <strong style={{ color: '#495057' }}>Sumber data kartu 2:</strong>{' '}
-                {plan.sourceLabel || plan.compareLabel}
-                {' · '}
-                {fmt(plan.compareTotal)} {plan.compareUnit || 'kode pos'}
-                {plan.lastUpdated
-                  ? ` · diperbarui ${new Date(plan.lastUpdated).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}`
-                  : ''}
-              </div>
               {importMsg && (
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.8rem', color: '#0ab39c' }}>
                   <CheckCircle2 size={15} />
@@ -225,8 +232,18 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
 
           {!checking && !errorMsg && plan && plan.status === 'DIFF' && (
             <>
-              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#495057' }}>
-                Daftar {fmt(rows.length)} baris ber-kode pos yang belum ada di Neon
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <input
+                  type="search"
+                  className="form-control"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Cari kode pos / kelurahan / kecamatan / kota / provinsi..."
+                  style={{ maxWidth: '420px', fontSize: '0.78rem' }}
+                />
+                <span style={{ fontSize: '0.74rem', color: '#878a99', whiteSpace: 'nowrap' }}>
+                  {fmt(shownRows.length)} dari {fmt(rows.length)} baris
+                </span>
               </div>
 
               <div ref={scrollRef} className="table-container" style={{ maxHeight: '360px', overflow: 'auto', border: '1px solid #e9ebec', borderRadius: '6px' }}>
@@ -244,10 +261,10 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.length === 0 ? (
+                    {shownRows.length === 0 ? (
                       <tr>
                         <td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: '#878a99' }}>
-                          Tidak ada baris yang perlu dikirim ke Neon.
+                          {rows.length === 0 ? 'Tidak ada baris yang perlu dikirim ke Neon.' : 'Tidak ada yang cocok dengan pencarian.'}
                         </td>
                       </tr>
                     ) : (
