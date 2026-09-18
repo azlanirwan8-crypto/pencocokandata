@@ -58,6 +58,36 @@ export async function getItem<T>(key: string): Promise<T | null> {
   }
 }
 
+// Penulisan array puluhan ribu baris (mis. hasil Analisa 83 ribu) jangan dilakukan
+// per klik — gabungkan penulisan terdekat supaya structured-clone hanya sekali.
+const pendingWrites = new Map<string, { value: unknown; timer: ReturnType<typeof setTimeout> }>();
+
+export function setItemDebounced<T>(key: string, value: T, delayMs = 600): void {
+  const prev = pendingWrites.get(key);
+  if (prev) clearTimeout(prev.timer);
+  const timer = setTimeout(() => {
+    pendingWrites.delete(key);
+    void setItem(key, value);
+  }, delayMs);
+  pendingWrites.set(key, { value, timer });
+}
+
+export function cancelPendingWrite(key: string): void {
+  const pending = pendingWrites.get(key);
+  if (!pending) return;
+  clearTimeout(pending.timer);
+  pendingWrites.delete(key);
+}
+
+export async function flushPendingWrites(): Promise<void> {
+  const jobs = Array.from(pendingWrites.entries());
+  jobs.forEach(([key, job]) => {
+    clearTimeout(job.timer);
+    pendingWrites.delete(key);
+  });
+  await Promise.all(jobs.map(([key, job]) => setItem(key, job.value)));
+}
+
 export async function deleteKey(key: string): Promise<void> {
   try {
     const db = await getDB();
@@ -75,6 +105,8 @@ export async function deleteKey(key: string): Promise<void> {
 }
 
 export async function clearAllStorage(): Promise<void> {
+  pendingWrites.forEach((job) => clearTimeout(job.timer));
+  pendingWrites.clear();
   try {
     const db = await getDB();
     return new Promise((resolve, reject) => {
@@ -87,4 +119,10 @@ export async function clearAllStorage(): Promise<void> {
   } catch (err) {
     console.warn('Gagal membersihkan IndexedDB:', err);
   }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => {
+    void flushPendingWrites();
+  });
 }

@@ -1,4 +1,5 @@
 import { neon } from '@neondatabase/serverless';
+import { ensureAppStore } from './_db';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -29,14 +30,7 @@ export default async function handler(req: any, res: any) {
 
   try {
     const sql = neon(connectionString);
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS app_store (
-        key VARCHAR(100) PRIMARY KEY,
-        data JSONB NOT NULL,
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
-    `;
+    await ensureAppStore(sql);
 
     if (req.method === 'GET') {
       const result = await sql`

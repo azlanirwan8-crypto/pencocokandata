@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useDeferredValue } from 'react';
 import {
   CheckCircle2,
   RotateCcw,
@@ -25,6 +25,7 @@ import { AnalystRowEditModal } from './AnalystRowEditModal';
 import { formatWilayahName } from '../../utils/normalizer';
 import { formatWilayahCode } from '../../utils/excel';
 import { exportAnalystExecutivePdf } from '../../utils/pdfExport';
+import { useVirtualWindow } from '../../utils/useVirtualWindow';
 
 interface AnalystResultsGridProps {
   rows: AnalystRow[];
@@ -54,6 +55,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<'all' | 'fase1' | 'fase2' | 'fase3'>('fase1');
   const [selectedWilayah, setSelectedWilayah] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  // Pencarian 83 ribu baris: biarkan input langsung, saring di nilai tertunda
+  const deferredSearch = useDeferredValue(searchTerm);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ANOMALI' | 'EXACT_MATCH' | 'HIGH_CONFIDENCE' | 'PENEMPATAN_REVIEW'>('ALL');
   // Inner tab pada Fase 1: data yang teranalisa vs yang perlu analisa manual
   const [fase1Inner, setFase1Inner] = useState<'DIANALISA' | 'TIDAK_ANALISA'>('DIANALISA');
@@ -159,7 +162,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
 
   // Filtered rows
   const filteredRows = useMemo(() => {
-    const q = searchTerm.trim().toLowerCase();
+    const q = deferredSearch.trim().toLowerCase();
     return rows.filter((r) => {
       // Baris yang belum teranalisa hanya tampil di inner tab "Analisa Manual" (Fase 1)
       if (viewTab !== 'fase1') {
@@ -192,7 +195,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       }
       return true;
     });
-  }, [rows, selectedWilayah, statusFilter, searchTerm, viewTab, fase1Inner]);
+  }, [rows, selectedWilayah, statusFilter, deferredSearch, viewTab, fase1Inner]);
 
   // Pagination calculation
   const totalPages = pageSize === 'ALL' ? 1 : Math.max(1, Math.ceil(filteredRows.length / pageSize));
@@ -201,6 +204,17 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     const start = (page - 1) * pageSize;
     return filteredRows.slice(start, start + pageSize);
   }, [filteredRows, page, pageSize]);
+
+  // Windowing: "Semua" pada puluhan ribu baris hanya boleh memasukkan baris
+  // yang terlihat ke DOM, sisanya diwakili dua <tr> spacer.
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
+  const win = useVirtualWindow({ containerRef: tableScrollRef, itemCount: paginatedRows.length });
+  const renderedRows = win.active ? paginatedRows.slice(win.start, win.end) : paginatedRows;
+  const rowOffset = win.active ? win.start : 0;
+
+  useEffect(() => {
+    tableScrollRef.current?.scrollTo({ top: 0 });
+  }, [page, pageSize, selectedWilayah, statusFilter, viewTab, fase1Inner, deferredSearch]);
 
   // Export Multi-Sheet per Wilayah (W01 - W17)
   const handleExportExcel = () => {
@@ -769,7 +783,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
           </div>
         )}
 
-        <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', maxHeight: '600px', overflowX: 'auto' }}>
+        <div ref={tableScrollRef} className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', maxHeight: '600px', overflow: 'auto' }}>
           <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
               {/* TAB 1: ALL COLUMNS */}
@@ -857,11 +871,18 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                   </td>
                 </tr>
               ) : (
-                paginatedRows.map((r, idx) => {
-                  const displayIdx = pageSize === 'ALL' ? idx + 1 : (page - 1) * (pageSize as number) + idx + 1;
+                <>
+                  {win.active && win.padTop > 0 && <tr aria-hidden="true" style={{ height: `${win.padTop}px` }} />}
+                  {renderedRows.map((r, i) => {
+                    const idx = rowOffset + i;
+                    const displayIdx = pageSize === 'ALL' ? idx + 1 : (page - 1) * (pageSize as number) + idx + 1;
 
-                  return (
-                    <tr key={r.id || idx} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
+                    return (
+                    <tr
+                      key={r.id || idx}
+                      data-vrow={i === 0 ? 'true' : undefined}
+                      style={{ background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd' }}
+                    >
                       {/* TAB 1: ALL COLUMNS */}
                       {viewTab === 'all' && (
                         <>
@@ -1040,8 +1061,10 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                         </div>
                       </td>
                     </tr>
-                  );
-                })
+                    );
+                  })}
+                  {win.active && win.padBottom > 0 && <tr aria-hidden="true" style={{ height: `${win.padBottom}px` }} />}
+                </>
               )}
             </tbody>
           </table>

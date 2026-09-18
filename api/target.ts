@@ -1,5 +1,81 @@
 import { neon } from '@neondatabase/serverless';
 
+/**
+ * /api/target — Neon Postgres CRUD Data Target & Match
+ *
+ * GET    ?limit=N&offset=M   → halaman saja + total (tanpa param = semua baris, kompatibel lama)
+ * POST   body { rows, fileName, mode:'replace'|'append' }
+ * DELETE → kosongkan tabel
+ *
+ * Tabel: target_records (+ target_meta, app_store fallback) dengan index.
+ */
+
+// Impor puluhan ribu baris bisa lama — samakan batas dengan /api/kodepos.
+export const maxDuration = 60;
+
+const PAGE_SIZE_CAP = 500;
+
+/** DDL idempoten: sekali per warm instance, bukan tiap request. */
+let readyPromise: Promise<void> | null = null;
+function ensureSchema(sql: any): Promise<void> {
+  if (!readyPromise) {
+    readyPromise = (async () => {
+      await sql`
+        CREATE TABLE IF NOT EXISTS target_records (
+          id SERIAL PRIMARY KEY,
+          no_urut INT,
+          wilayah TEXT,
+          branch_code TEXT,
+          kode_cabang TEXT,
+          nama_outlet TEXT,
+          sandi_cabang TEXT,
+          sandi TEXT,
+          cabang TEXT,
+          status_outlet TEXT,
+          alamat TEXT,
+          kode_pos TEXT,
+          kelurahan TEXT,
+          kecamatan TEXT,
+          dati_ii TEXT,
+          kode_dati_ii TEXT,
+          provinsi TEXT,
+          sumber_data TEXT,
+          is_matched BOOLEAN DEFAULT false,
+          match_level TEXT,
+          matched_at TEXT,
+          matched_by TEXT,
+          raw_data JSONB,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS idx_target_no_urut   ON target_records(no_urut, id);`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_target_wilayah   ON target_records(wilayah);`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_target_is_matched ON target_records(is_matched);`;
+      await sql`
+        CREATE TABLE IF NOT EXISTS target_meta (
+          key VARCHAR(50) PRIMARY KEY,
+          file_name TEXT,
+          initial_count INT,
+          matched_done BOOLEAN DEFAULT false,
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+      `;
+      await sql`
+        CREATE TABLE IF NOT EXISTS app_store (
+          key VARCHAR(100) PRIMARY KEY,
+          data JSONB NOT NULL,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `;
+    })().catch((err) => {
+      readyPromise = null;
+      throw err;
+    });
+  }
+  return readyPromise;
+}
+
 export default async function handler(req: any, res: any) {
   // Setup CORS headers
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -30,61 +106,19 @@ export default async function handler(req: any, res: any) {
 
   try {
     const sql = neon(connectionString);
-
-    // Auto-migrate: Dedicated target records table, metadata table, and fallback store
-    await sql`
-      CREATE TABLE IF NOT EXISTS target_records (
-        id SERIAL PRIMARY KEY,
-        no_urut INT,
-        wilayah TEXT,
-        branch_code TEXT,
-        kode_cabang TEXT,
-        nama_outlet TEXT,
-        sandi_cabang TEXT,
-        sandi TEXT,
-        cabang TEXT,
-        status_outlet TEXT,
-        alamat TEXT,
-        kode_pos TEXT,
-        kelurahan TEXT,
-        kecamatan TEXT,
-        dati_ii TEXT,
-        kode_dati_ii TEXT,
-        provinsi TEXT,
-        sumber_data TEXT,
-        is_matched BOOLEAN DEFAULT false,
-        match_level TEXT,
-        matched_at TEXT,
-        matched_by TEXT,
-        raw_data JSONB,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `;
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS target_meta (
-        key VARCHAR(50) PRIMARY KEY,
-        file_name TEXT,
-        initial_count INT,
-        matched_done BOOLEAN DEFAULT false,
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `;
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS app_store (
-        key VARCHAR(100) PRIMARY KEY,
-        data JSONB NOT NULL,
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
-    `;
+    await ensureSchema(sql);
 
     // 1. GET: Fetch target & match data (first from dedicated target_records table, fallback to app_store)
     if (req.method === 'GET') {
-      const records = await sql`
-        SELECT * FROM target_records ORDER BY no_urut ASC, id ASC;
-      `;
+      const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
+      const limitRaw = url.searchParams.get('limit');
+      const limit =
+        limitRaw === null ? null : Math.min(PAGE_SIZE_CAP, Math.max(1, Number(limitRaw) || 1));
+      const offset = Math.max(0, Number(url.searchParams.get('offset')) || 0);
+
+      const records = limit
+        ? await sql`SELECT * FROM target_records ORDER BY no_urut ASC, id ASC LIMIT ${limit} OFFSET ${offset};`
+        : await sql`SELECT * FROM target_records ORDER BY no_urut ASC, id ASC;`;
 
       if (records && records.length > 0) {
         const meta = await sql`
@@ -119,11 +153,18 @@ export default async function handler(req: any, res: any) {
           ...(r.raw_data || {}),
         }));
 
+        // Saat dipaging, total = jumlah seluruh baris (untuk kalkulasi halaman klien)
+        const total = limit
+          ? (await sql`SELECT COUNT(*)::int as count FROM target_records;`)[0]?.count ?? mappedRows.length
+          : mappedRows.length;
+
         return res.status(200).json({
           ok: true,
           configured: true,
           table: 'target_records',
-          total: mappedRows.length,
+          total,
+          returned: mappedRows.length,
+          offset,
           data: {
             rows: mappedRows,
             fileName,

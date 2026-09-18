@@ -24,41 +24,23 @@ export default async function handler(req: any, res: any) {
 
   try {
     const sql = neon(connectionString);
-    const timeRes = await sql`SELECT NOW() as current_time;`;
 
-    let masterCount = 0;
-    let targetCount = 0;
-    let kodeposCount = 0;
-
-    try {
-      const m = await sql`SELECT COUNT(*)::int as count FROM master_records;`;
-      masterCount = m[0]?.count || 0;
-    } catch {
-      // table might not have been created yet
-    }
-
-    try {
-      const t = await sql`SELECT COUNT(*)::int as count FROM target_records;`;
-      targetCount = t[0]?.count || 0;
-    } catch {
-      // table might not have been created yet
-    }
-
-    try {
-      const k = await sql`SELECT COUNT(*)::int as count FROM kodepos_data;`;
-      kodeposCount = k[0]?.count || 0;
-    } catch {
-      // table might not have been created yet
-    }
+    // Semua query paralel: 4 round-trip berurutan membuat boot aplikasi lambat
+    const [timeRes, masterRes, targetRes, kodeposRes] = await Promise.all([
+      sql`SELECT NOW() as current_time;`,
+      sql`SELECT COUNT(*)::int as count FROM master_records;`.catch(() => [{ count: 0 }]),
+      sql`SELECT COUNT(*)::int as count FROM target_records;`.catch(() => [{ count: 0 }]),
+      sql`SELECT COUNT(*)::int as count FROM kodepos_data;`.catch(() => [{ count: 0 }]),
+    ]);
 
     return res.status(200).json({
       connected: true,
       provider: 'Neon Postgres (Vercel)',
       serverTime: timeRes[0]?.current_time,
       tables: {
-        masterRecords: masterCount,
-        targetRecords: targetCount,
-        kodeposRecords: kodeposCount,
+        masterRecords: masterRes[0]?.count || 0,
+        targetRecords: targetRes[0]?.count || 0,
+        kodeposRecords: kodeposRes[0]?.count || 0,
       },
     });
   } catch (error: any) {

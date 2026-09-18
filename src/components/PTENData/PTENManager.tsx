@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useDeferredValue } from 'react';
 import {
   ShieldCheck,
   Search,
@@ -23,6 +23,7 @@ import * as XLSX from 'xlsx';
 import type { TargetRow, MasterRow } from '../../types';
 import { getItem, setItem } from '../../utils/storage';
 import { loadPtenFromNeon, savePtenToNeon } from '../../utils/neonSync';
+import { useVirtualWindow } from '../../utils/useVirtualWindow';
 
 import { DEFAULT_PTEN_DATA } from './defaultPtenData';
 
@@ -46,6 +47,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
 }) => {
   const [ptenList, setPtenList] = useState<PTENRecord[]>(DEFAULT_PTEN_DATA);
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const deferredSearch = useDeferredValue(searchTerm);
   const [selectedKota, setSelectedKota] = useState<string>('ALL');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -150,7 +152,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
 
   // Filtered PTEN Master (Optimized O(N) single-pass with pre-lowercased query)
   const filteredPten = useMemo(() => {
-    const q = searchTerm.trim().toLowerCase();
+    const q = deferredSearch.trim().toLowerCase();
     const hasSearch = q.length > 0;
     const hasKotaFilter = selectedKota !== 'ALL';
 
@@ -165,7 +167,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
         p.kotaPtenMax15?.toLowerCase().includes(q)
       );
     });
-  }, [ptenList, selectedKota, searchTerm]);
+  }, [ptenList, selectedKota, deferredSearch]);
 
   // PTEN Master Pagination
   const totalMasterPages = masterPageSize === 'ALL' ? 1 : Math.max(1, Math.ceil(filteredPten.length / masterPageSize));
@@ -178,6 +180,23 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
     const start = (masterPage - 1) * masterPageSize;
     return filteredPten.slice(start, start + masterPageSize);
   }, [filteredPten, masterPage, masterPageSize]);
+
+  // Windowing "Lihat Semua" + indeks O(1) pengganti ptenList.indexOf() per baris
+  const ptenScrollRef = useRef<HTMLDivElement | null>(null);
+  const win = useVirtualWindow({ containerRef: ptenScrollRef, itemCount: paginatedPten.length });
+  const renderedPten = win.active ? paginatedPten.slice(win.start, win.end) : paginatedPten;
+  const rowOffset = win.active ? win.start : 0;
+  const ptenIndexById = useMemo(() => {
+    const map = new Map<PTENRecord, number>();
+    ptenList.forEach((item, i) => {
+      if (!map.has(item)) map.set(item, i);
+    });
+    return map;
+  }, [ptenList]);
+
+  useEffect(() => {
+    ptenScrollRef.current?.scrollTo({ top: 0 });
+  }, [masterPage, masterPageSize, selectedKota, deferredSearch]);
 
   // Helper for compact sliding pagination
   const getPaginationRange = (curr: number, total: number): (number | string)[] => {
@@ -738,7 +757,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
               </div>
 
               {/* Table Master PTEN (Exact Columns: No, Kodepos, Kota, Kota Max 15, Status, Aksi) */}
-              <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', overflowX: 'auto', maxHeight: '580px' }}>
+              <div ref={ptenScrollRef} className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', overflow: 'auto', maxHeight: '580px' }}>
                 <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
                   <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
                     <tr>
@@ -757,15 +776,18 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
                         </td>
                       </tr>
                     ) : (
-                      paginatedPten.map((item, idx) => {
-                        const originalIdx = ptenList.indexOf(item);
+                      <>
+                        {win.active && win.padTop > 0 && <tr aria-hidden="true" style={{ height: `${win.padTop}px` }} />}
+                        {renderedPten.map((item, i) => {
+                        const idx = rowOffset + i;
+                        const originalIdx = ptenIndexById.get(item) ?? -1;
                         const displayRowNo =
                           masterPageSize === 'ALL'
                             ? idx + 1
                             : (masterPage - 1) * (masterPageSize as number) + idx + 1;
 
                         return (
-                          <tr key={idx} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
+                          <tr key={`${item.id || idx}`} data-vrow={i === 0 ? 'true' : undefined} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
                             <td style={{ textAlign: 'center', color: '#878a99' }}>{displayRowNo}</td>
                             <td style={{ textAlign: 'center' }}>
                               <span className="code-cell" style={{ background: '#fff9e6', color: '#d68b0c', fontWeight: 700 }}>
@@ -836,7 +858,9 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
                             </td>
                           </tr>
                         );
-                      })
+                      })}
+                        {win.active && win.padBottom > 0 && <tr aria-hidden="true" style={{ height: `${win.padBottom}px` }} />}
+                      </>
                     )}
                   </tbody>
                 </table>

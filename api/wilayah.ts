@@ -1,4 +1,5 @@
 import { neon } from '@neondatabase/serverless';
+import { ensureAppStore } from './_db';
 
 export default async function handler(req: any, res: any) {
   // Setup CORS headers
@@ -30,15 +31,7 @@ export default async function handler(req: any, res: any) {
 
   try {
     const sql = neon(connectionString);
-
-    // Auto-migrate: create table if not exists
-    await sql`
-      CREATE TABLE IF NOT EXISTS app_store (
-        key VARCHAR(100) PRIMARY KEY,
-        data JSONB NOT NULL,
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
-    `;
+    await ensureAppStore(sql);
 
     // 1. GET: Fetch wilayah data
     if (req.method === 'GET') {

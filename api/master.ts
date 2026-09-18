@@ -1,5 +1,78 @@
 import { neon } from '@neondatabase/serverless';
 
+/**
+ * /api/master — Neon Postgres CRUD Master Data Cabang
+ *
+ * GET    ?limit=N&offset=M   → halaman saja + total (tanpa param = semua baris, kompatibel lama)
+ * POST   body { rows, fileName, mode:'replace'|'append' }
+ * DELETE → kosongkan tabel
+ *
+ * Tabel: master_records (+ master_meta, app_store fallback) dengan index.
+ */
+
+// Impor/ekspor puluhan ribu baris bisa lama — samakan batas dengan /api/kodepos.
+export const maxDuration = 60;
+
+const PAGE_SIZE_CAP = 500;
+
+/**
+ * DDL idempoten: cukup sekali per warm instance, bukan tiap request
+ * (tiap CREATE TABLE/INDEX IF NOT EXISTS = 1 round-trip ke Postgres).
+ */
+let readyPromise: Promise<void> | null = null;
+function ensureSchema(sql: any): Promise<void> {
+  if (!readyPromise) {
+    readyPromise = (async () => {
+      await sql`
+        CREATE TABLE IF NOT EXISTS master_records (
+          id SERIAL PRIMARY KEY,
+          branch_code TEXT,
+          kode_cabang TEXT,
+          nama_outlet TEXT,
+          sandi_cabang TEXT,
+          sandi TEXT,
+          cabang TEXT,
+          wilayah TEXT,
+          status_outlet TEXT,
+          alamat TEXT,
+          kode_pos TEXT,
+          kelurahan TEXT,
+          kecamatan TEXT,
+          dati_ii TEXT,
+          kode_dati_ii TEXT,
+          provinsi TEXT,
+          telp TEXT,
+          raw_data JSONB,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS idx_master_wilayah     ON master_records(wilayah);`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_master_branch_code ON master_records(branch_code);`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_master_kode_pos    ON master_records(kode_pos);`;
+      await sql`
+        CREATE TABLE IF NOT EXISTS master_meta (
+          key VARCHAR(50) PRIMARY KEY,
+          file_name TEXT,
+          total_count INT,
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+      `;
+      await sql`
+        CREATE TABLE IF NOT EXISTS app_store (
+          key VARCHAR(100) PRIMARY KEY,
+          data JSONB NOT NULL,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `;
+    })().catch((err) => {
+      readyPromise = null;
+      throw err;
+    });
+  }
+  return readyPromise;
+}
+
 export default async function handler(req: any, res: any) {
   // Setup CORS headers
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -30,55 +103,19 @@ export default async function handler(req: any, res: any) {
 
   try {
     const sql = neon(connectionString);
-
-    // Auto-migrate: Dedicated master table, metadata table, and fallback store
-    await sql`
-      CREATE TABLE IF NOT EXISTS master_records (
-        id SERIAL PRIMARY KEY,
-        branch_code TEXT,
-        kode_cabang TEXT,
-        nama_outlet TEXT,
-        sandi_cabang TEXT,
-        sandi TEXT,
-        cabang TEXT,
-        wilayah TEXT,
-        status_outlet TEXT,
-        alamat TEXT,
-        kode_pos TEXT,
-        kelurahan TEXT,
-        kecamatan TEXT,
-        dati_ii TEXT,
-        kode_dati_ii TEXT,
-        provinsi TEXT,
-        telp TEXT,
-        raw_data JSONB,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `;
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS master_meta (
-        key VARCHAR(50) PRIMARY KEY,
-        file_name TEXT,
-        total_count INT,
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `;
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS app_store (
-        key VARCHAR(100) PRIMARY KEY,
-        data JSONB NOT NULL,
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
-    `;
+    await ensureSchema(sql);
 
     // 1. GET: Fetch master data (first from dedicated master_records table, fallback to app_store)
     if (req.method === 'GET') {
-      const records = await sql`
-        SELECT * FROM master_records ORDER BY id ASC;
-      `;
+      const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
+      const limitRaw = url.searchParams.get('limit');
+      const limit =
+        limitRaw === null ? null : Math.min(PAGE_SIZE_CAP, Math.max(1, Number(limitRaw) || 1));
+      const offset = Math.max(0, Number(url.searchParams.get('offset')) || 0);
+
+      const records = limit
+        ? await sql`SELECT * FROM master_records ORDER BY id ASC LIMIT ${limit} OFFSET ${offset};`
+        : await sql`SELECT * FROM master_records ORDER BY id ASC;`;
 
       if (records && records.length > 0) {
         const meta = await sql`
@@ -106,11 +143,18 @@ export default async function handler(req: any, res: any) {
           ...(r.raw_data || {}),
         }));
 
+        // Saat dipaging, total = jumlah seluruh baris (untuk kalkulasi halaman klien)
+        const total = limit
+          ? (await sql`SELECT COUNT(*)::int as count FROM master_records;`)[0]?.count ?? mappedRows.length
+          : mappedRows.length;
+
         return res.status(200).json({
           ok: true,
           configured: true,
           table: 'master_records',
-          total: mappedRows.length,
+          total,
+          returned: mappedRows.length,
+          offset,
           data: {
             rows: mappedRows,
             fileName,

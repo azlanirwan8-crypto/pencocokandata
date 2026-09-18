@@ -27,7 +27,7 @@ import { DEFAULT_PTEN_DATA } from './components/PTENData/defaultPtenData';
 import { DEFAULT_KODEPOS_DATA } from './components/KodePosData/defaultKodePosData';
 import { buildPtenIndex, validatePtenForTarget } from './utils/ptenMatcher';
 
-import { getItem, setItem, deleteKey } from './utils/storage';
+import { getItem, setItem, setItemDebounced, cancelPendingWrite, deleteKey } from './utils/storage';
 import {
   checkNeonStatus,
   loadMasterFromNeon,
@@ -176,6 +176,11 @@ export const App: React.FC = () => {
         const savedKodePos = await getItem<any[]>('kodepos_master_data');
         if (savedKodePos && Array.isArray(savedKodePos) && savedKodePos.length > 0) {
           setKodePosCount(savedKodePos.length);
+          // Simpan di cache pipeline hanya bila ini master penuh (bukan seed bawaan ~140 baris),
+          // supaya Analisa tidak mengunduh ulang 83 ribu baris dari cloud.
+          if (savedKodePos.length > DEFAULT_KODEPOS_DATA.length) {
+            kodePosListRef.current = savedKodePos as KodePosRow[];
+          }
         } else {
           setKodePosCount(DEFAULT_KODEPOS_DATA.length);
           setItem('kodepos_master_data', DEFAULT_KODEPOS_DATA);
@@ -521,6 +526,7 @@ export const App: React.FC = () => {
   };
 
   const handleResetAnalyst = async () => {
+    cancelPendingWrite('analyst_results_data');
     setAnalystRows([]);
     setAnalystCoverage(null);
     setAnalystProgress(0);
@@ -531,7 +537,7 @@ export const App: React.FC = () => {
   const handleUpdateAnalystRow = (updated: AnalystRow) => {
     setAnalystRows((prev) => {
       const next = prev.map((r) => (r.id === updated.id ? updated : r));
-      setItem('analyst_results_data', next).catch(() => {});
+      setItemDebounced('analyst_results_data', next);
       return next;
     });
   };
@@ -539,7 +545,7 @@ export const App: React.FC = () => {
   const handleApproveSingleAnalystRow = (rowId: string) => {
     setAnalystRows((prev) => {
       const next = prev.map((r) => (r.id === rowId ? { ...r, isFinalApproved: true } : r));
-      setItem('analyst_results_data', next).catch(() => {});
+      setItemDebounced('analyst_results_data', next);
       return next;
     });
   };
@@ -547,7 +553,7 @@ export const App: React.FC = () => {
   const handleApproveAllAnalystFinal = () => {
     setAnalystRows((prev) => {
       const next = prev.map((r) => ({ ...r, isFinalApproved: true }));
-      setItem('analyst_results_data', next).catch(() => {});
+      setItemDebounced('analyst_results_data', next);
       return next;
     });
   };
@@ -560,7 +566,7 @@ export const App: React.FC = () => {
         if (fase === 2) return { ...r, fase2Approved: true };
         return { ...r, fase3Approved: true };
       });
-      setItem('analyst_results_data', next).catch(() => {});
+      setItemDebounced('analyst_results_data', next);
       return next;
     });
   };

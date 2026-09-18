@@ -1,7 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useDeferredValue } from 'react';
 import { ShieldAlert, Search, Building2, ChevronRight, X, Layers, Info } from 'lucide-react';
 import type { MasterHealth, MasterRow } from '../../types';
 import { formatWilayahName } from '../../utils/normalizer';
+
+const TABLE_PAGE = 100;
+const NESTED_BRANCH_CAP = 8;
 
 interface MasterDuplicateChartProps {
   masterHealth: MasterHealth;
@@ -17,6 +20,7 @@ export const MasterDuplicateChart: React.FC<MasterDuplicateChartProps> = ({
   onNavigateToMaster,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const deferredSearch = useDeferredValue(searchTerm);
   const [activeTab, setActiveTab] = useState<'chart' | 'table'>('chart');
 
   // Filter multi-outlet items based on selectedWilayah
@@ -33,8 +37,8 @@ export const MasterDuplicateChart: React.FC<MasterDuplicateChartProps> = ({
     }
 
     // Filter by Search Query
-    if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase();
+    if (deferredSearch.trim()) {
+      const q = deferredSearch.toLowerCase();
       items = items.filter((item) => {
         const matchKp = String(item.kodePos || '').toLowerCase().includes(q);
         const matchKec = String(item.kecamatan || '').toLowerCase().includes(q);
@@ -52,7 +56,12 @@ export const MasterDuplicateChart: React.FC<MasterDuplicateChartProps> = ({
 
     // Sort by count descending (most branches first)
     return [...items].sort((a, b) => b.count - a.count);
-  }, [masterHealth.multiOutletItems, selectedWilayah, searchTerm]);
+  }, [masterHealth.multiOutletItems, selectedWilayah, deferredSearch]);
+
+  // Baris tabelnya berkontribusi tinggi bervariasi (daftar cabang di dalam sel),
+  // jadi dirender bertahap — bukan seluruhnya sekaligus ke DOM.
+  const [tableLimit, setTableLimit] = useState(TABLE_PAGE);
+  const tableItems = useMemo(() => filteredItems.slice(0, tableLimit), [filteredItems, tableLimit]);
 
   // All multi-outlet items available for the visual chart (with 5 visible + scrollable)
   const chartItems = useMemo(() => {
@@ -456,9 +465,10 @@ export const MasterDuplicateChart: React.FC<MasterDuplicateChartProps> = ({
               </tr>
             </thead>
             <tbody>
-              {filteredItems.map((item, idx) => {
+              {tableItems.map((item, idx) => {
                 const datiName = item.matchingMasterRows?.[0]?.['Dati II'] || '-';
                 const wilName = item.matchingMasterRows?.[0]?.Wilayah || '-';
+                const branchRows = item.matchingMasterRows || [];
 
                 return (
                   <tr key={`table-kp-${item.kodePos}-${idx}`}>
@@ -499,7 +509,7 @@ export const MasterDuplicateChart: React.FC<MasterDuplicateChartProps> = ({
                     </td>
                     <td>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                        {(item.matchingMasterRows || []).map((r, rIdx) => (
+                        {branchRows.slice(0, NESTED_BRANCH_CAP).map((r, rIdx) => (
                           <div
                             key={`tbl-sub-${rIdx}`}
                             style={{
@@ -521,11 +531,39 @@ export const MasterDuplicateChart: React.FC<MasterDuplicateChartProps> = ({
                             )}
                           </div>
                         ))}
+                        {branchRows.length > NESTED_BRANCH_CAP && (
+                          <span style={{ fontSize: '0.68rem', color: '#878a99' }}>
+                            +{branchRows.length - NESTED_BRANCH_CAP} cabang lainnya
+                          </span>
+                        )}
                       </div>
                     </td>
                   </tr>
                 );
               })}
+              {tableItems.length < filteredItems.length && (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '0.6rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => setTableLimit((n) => n + TABLE_PAGE)}
+                      style={{
+                        border: '1px solid #d5dde3',
+                        background: '#ffffff',
+                        color: '#405189',
+                        borderRadius: '4px',
+                        padding: '0.3rem 0.8rem',
+                        fontSize: '0.74rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Muat {Math.min(TABLE_PAGE, filteredItems.length - tableItems.length)} baris lagi (
+                      {tableItems.length} / {filteredItems.length})
+                    </button>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

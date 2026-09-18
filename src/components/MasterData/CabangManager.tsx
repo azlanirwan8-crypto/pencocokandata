@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useDeferredValue, useEffect } from 'react';
 import {
   Store,
   Search,
@@ -27,6 +27,7 @@ import * as XLSX from 'xlsx';
 import type { MasterRow, MasterHealth, WilayahSetting } from '../../types';
 import { parseExcelFile, validateMasterHeaders, downloadMasterTemplate } from '../../utils/excel';
 import { MasterHealthCard } from './MasterHealthCard';
+import { useVirtualWindow } from '../../utils/useVirtualWindow';
 
 interface CabangManagerProps {
   masterRows: MasterRow[];
@@ -44,6 +45,7 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'list' | 'health'>('list');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const deferredSearch = useDeferredValue(searchTerm);
   const [searchBy, setSearchBy] = useState<string>('all');
   const [selectedWilayah, setSelectedWilayah] = useState<string>('ALL');
 
@@ -106,8 +108,8 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
       if (selectedWilayah !== 'ALL' && String(r.Wilayah || '').trim() !== selectedWilayah) {
         return false;
       }
-      if (!searchTerm.trim()) return true;
-      const q = searchTerm.toLowerCase();
+      if (!deferredSearch.trim()) return true;
+      const q = deferredSearch.toLowerCase();
 
       switch (searchBy) {
         case 'nama':
@@ -153,7 +155,7 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
           );
       }
     });
-  }, [masterRows, searchTerm, searchBy, selectedWilayah]);
+  }, [masterRows, deferredSearch, searchBy, selectedWilayah]);
 
   // Completeness stats for Master Data
   const completenessStats = useMemo(() => {
@@ -185,6 +187,23 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
     const start = (page - 1) * pageSize;
     return filteredRows.slice(start, start + pageSize);
   }, [filteredRows, page, pageSize]);
+
+  // Windowing "Lihat Semua" + indeks O(1) pengganti masterRows.indexOf() per baris
+  const cabangScrollRef = useRef<HTMLDivElement | null>(null);
+  const win = useVirtualWindow({ containerRef: cabangScrollRef, itemCount: paginatedRows.length });
+  const renderedRows = win.active ? paginatedRows.slice(win.start, win.end) : paginatedRows;
+  const rowOffset = win.active ? win.start : 0;
+  const masterIndexByRow = useMemo(() => {
+    const map = new Map<MasterRow, number>();
+    masterRows.forEach((row, i) => {
+      if (!map.has(row)) map.set(row, i);
+    });
+    return map;
+  }, [masterRows]);
+
+  useEffect(() => {
+    cabangScrollRef.current?.scrollTo({ top: 0 });
+  }, [page, pageSize, selectedWilayah, searchBy, deferredSearch]);
 
   // Import Excel handler
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -692,7 +711,7 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
           </div>
 
           {/* Table Master Cabang */}
-          <div className="table-container" style={{ maxHeight: '580px' }}>
+          <div ref={cabangScrollRef} className="table-container" style={{ maxHeight: '580px', overflow: 'auto' }}>
             <table className="modern-table">
               <thead>
                 <tr>
@@ -726,12 +745,15 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
                     </td>
                   </tr>
                 ) : (
-                  paginatedRows.map((r, idx) => {
-                    const originalIdx = masterRows.indexOf(r);
-                    const globalIdx = pageSize === 'ALL' ? idx + 1 : (page - 1) * (pageSize as number) + idx + 1;
+                  <>
+                    {win.active && win.padTop > 0 && <tr aria-hidden="true" style={{ height: `${win.padTop}px` }} />}
+                    {renderedRows.map((r, i) => {
+                      const idx = rowOffset + i;
+                      const originalIdx = masterIndexByRow.get(r) ?? -1;
+                      const globalIdx = pageSize === 'ALL' ? idx + 1 : (page - 1) * (pageSize as number) + idx + 1;
 
-                    return (
-                      <tr key={idx} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
+                      return (
+                      <tr key={idx} data-vrow={i === 0 ? 'true' : undefined} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
                         <td style={{ textAlign: 'center', color: '#878a99' }}>{globalIdx}</td>
                         <td style={{ textAlign: 'center' }}>
                           <span className="badge badge-level1">{r.Wilayah || '-'}</span>
@@ -826,7 +848,9 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
                         </td>
                       </tr>
                     );
-                  })
+                  })}
+                    {win.active && win.padBottom > 0 && <tr aria-hidden="true" style={{ height: `${win.padBottom}px` }} />}
+                  </>
                 )}
               </tbody>
             </table>

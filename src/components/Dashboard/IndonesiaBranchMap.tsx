@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import type { MasterRow, TargetRow } from '../../types';
 import { formatWilayahName } from '../../utils/normalizer';
+import { useVirtualWindow } from '../../utils/useVirtualWindow';
 import { DEFAULT_PTEN_DATA } from '../PTENData/defaultPtenData';
 import {
   clusterMasterRowsForMap,
@@ -752,6 +753,12 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         String(r['KODE POS'] || '').includes(q)
     );
   }, [selectedMatchedRows, modalSearchTerm]);
+
+  // Modal bisa memuat seluruh baris satu pin (puluhan ribu) — jendela render-nya
+  const modalScrollRef = useRef<HTMLDivElement | null>(null);
+  const modalWin = useVirtualWindow({ containerRef: modalScrollRef, itemCount: filteredModalRows.length });
+  const renderedModalRows = modalWin.active ? filteredModalRows.slice(modalWin.start, modalWin.end) : filteredModalRows;
+  const modalRowOffset = modalWin.active ? modalWin.start : 0;
 
   // 5. Strict geographical bounds for Indonesia (Sabang / Aceh to Merauke / Papua)
   const indonesiaBounds = useMemo(() => {
@@ -2853,7 +2860,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
             </div>
 
             {/* Modal Table Body */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem 1.25rem', maxHeight: '460px' }}>
+            <div ref={modalScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '0.5rem 1.25rem', maxHeight: '460px' }}>
               <table className="modern-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.73rem' }}>
                 <thead>
                   <tr>
@@ -2880,7 +2887,10 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                       </td>
                     </tr>
                   ) : (
-                    filteredModalRows.map((row, idx) => {
+                    <>
+                      {modalWin.active && modalWin.padTop > 0 && <tr aria-hidden="true" style={{ height: `${modalWin.padTop}px` }} />}
+                      {renderedModalRows.map((row, i) => {
+                      const idx = modalRowOffset + i;
                       const targetKp = String(row['KODE POS'] || '').replace(/\D/g, '').trim();
                       const rawStatus = String(row['CEK KODE POS + PTEN'] || '').toUpperCase().trim();
                       const isPtenMatch =
@@ -2997,7 +3007,9 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                           </td>
                         </tr>
                       );
-                    })
+                    })}
+                      {modalWin.active && modalWin.padBottom > 0 && <tr aria-hidden="true" style={{ height: `${modalWin.padBottom}px` }} />}
+                    </>
                   )}
                 </tbody>
               </table>
