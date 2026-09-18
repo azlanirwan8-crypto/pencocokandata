@@ -61,12 +61,20 @@ export type SyncProgress = (step: string, pct: number) => void;
 
 async function fetchJson(url: string, init?: RequestInit): Promise<any> {
   const res = await fetch(url, init);
-  const json = await res.json().catch(() => null);
+  const text = await res.text();
+  let json: any = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    // respons bukan JSON (mis. fungsi API gagal dimuat) — simpan cuplikannya
+  }
   if (!res.ok || !json?.ok) {
     if (res.status === 404) {
       throw new Error('Endpoint /api/kodepos?view=sync-meta tidak ditemukan. Jalankan dari aplikasi yang sudah ter-deploy (Vercel), karena fungsi API tidak tersedia di dev server lokal.');
     }
-    throw new Error(json?.error || json?.message || `Neon menolak ${url} (HTTP ${res.status}).`);
+    const detail =
+      json?.error || json?.message || (text ? text.slice(0, 200).replace(/\s+/g, ' ') : `HTTP ${res.status}`);
+    throw new Error(`Neon menolak ${url} (HTTP ${res.status}): ${detail}`);
   }
   return json;
 }

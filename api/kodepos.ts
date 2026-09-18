@@ -1,5 +1,4 @@
 import { neon } from '@neondatabase/serverless';
-import { oncePerInstance } from './_db';
 
 /**
  * /api/kodepos — Neon Postgres CRUD for Master Data Kode Pos Indonesia
@@ -25,6 +24,9 @@ const ROW_KEY_SQL = `upper(btrim(kode_pos))||'|'||upper(btrim(COALESCE(kelurahan
 const PROV_SQL = `COALESCE(NULLIF(upper(btrim(provinsi)),''),'(TANPA PROVINSI)')`;
 const SYNC_DIFF_CAP = 500;
 const SYNC_KEYS_CAP = 20000;
+
+/** DDL hanya sekali per warm instance. */
+let schemaReady: Promise<void> | null = null;
 
 function mapRow(r: any) {
   return {
@@ -105,34 +107,33 @@ export default async function handler(req: any, res: any) {
   try {
     const sql = neon(connectionString);
 
-    // Auto-migrate: sekali per warm instance, bukan tiap request
-    await oncePerInstance('kodepos_data', async () => {
-      await sql`
-        CREATE TABLE IF NOT EXISTS kodepos_data (
-          id             SERIAL PRIMARY KEY,
-          kode_pos       VARCHAR(10)  NOT NULL,
-          kelurahan      TEXT,
-          kecamatan      TEXT,
-          kabupaten_kota TEXT,
-          provinsi       TEXT,
-          status         VARCHAR(20)  DEFAULT 'AKTIF',
-          created_at     TIMESTAMPTZ  DEFAULT NOW(),
-          updated_at     TIMESTAMPTZ  DEFAULT NOW()
-        );
-      `;
-      await sql`CREATE INDEX IF NOT EXISTS idx_kodepos_kode       ON kodepos_data(kode_pos);`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_kodepos_provinsi   ON kodepos_data(provinsi);`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_kodepos_kabupaten  ON kodepos_data(kabupaten_kota);`;
-      // Indeks unik: membuat import ulang baris yang sama menjadi idempoten (ON CONFLICT DO NOTHING).
-      // Gagal bila masih ada duplikat lama — bukan masalah fatal, hanya kehilangan proteksi dedup.
-      await sql`
-        CREATE UNIQUE INDEX IF NOT EXISTS uq_kodepos_row
-        ON kodepos_data (
-          upper(btrim(kode_pos)), upper(btrim(COALESCE(kelurahan,''))), upper(btrim(COALESCE(kecamatan,''))),
-          upper(btrim(COALESCE(kabupaten_kota,''))), upper(btrim(COALESCE(provinsi,'')))
-        );
-      `.catch(() => undefined);
-    });
+    // Auto-migrate sekali per warm instance. Kegagalan DDL sengaja tidak dilempar ke
+    // pemanggil: tabel sudah ada di deployment aktif, jadi baca tetap jalan terus.
+    if (!schemaReady) {
+      schemaReady = (async () => {
+        try {
+          await sql`
+            CREATE TABLE IF NOT EXISTS kodepos_data (
+              id             SERIAL PRIMARY KEY,
+              kode_pos       VARCHAR(10)  NOT NULL,
+              kelurahan      TEXT,
+              kecamatan      TEXT,
+              kabupaten_kota TEXT,
+              provinsi       TEXT,
+              status         VARCHAR(20)  DEFAULT 'AKTIF',
+              created_at     TIMESTAMPTZ  DEFAULT NOW(),
+              updated_at     TIMESTAMPTZ  DEFAULT NOW()
+            );
+          `;
+          await sql`CREATE INDEX IF NOT EXISTS idx_kodepos_kode       ON kodepos_data(kode_pos);`;
+          await sql`CREATE INDEX IF NOT EXISTS idx_kodepos_provinsi   ON kodepos_data(provinsi);`;
+          await sql`CREATE INDEX IF NOT EXISTS idx_kodepos_kabupaten  ON kodepos_data(kabupaten_kota);`;
+        } catch (err) {
+          console.warn('Migrasi skema kodepos dilewati:', err);
+        }
+      })();
+    }
+    await schemaReady;
 
     const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
 

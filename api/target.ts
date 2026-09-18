@@ -106,7 +106,11 @@ export default async function handler(req: any, res: any) {
 
   try {
     const sql = neon(connectionString);
-    await ensureSchema(sql);
+    try {
+      await ensureSchema(sql);
+    } catch (err) {
+      console.warn('Migrasi skema target dilewati:', err);
+    }
 
     // 1. GET: Fetch target & match data (first from dedicated target_records table, fallback to app_store)
     if (req.method === 'GET') {

@@ -103,7 +103,11 @@ export default async function handler(req: any, res: any) {
 
   try {
     const sql = neon(connectionString);
-    await ensureSchema(sql);
+    try {
+      await ensureSchema(sql);
+    } catch (err) {
+      console.warn('Migrasi skema master dilewati:', err);
+    }
 
     // 1. GET: Fetch master data (first from dedicated master_records table, fallback to app_store)
     if (req.method === 'GET') {

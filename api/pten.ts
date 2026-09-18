@@ -1,5 +1,25 @@
 import { neon } from '@neondatabase/serverless';
-import { ensureAppStore } from './_db';
+
+/** DDL app_store cukup sekali per warm instance; kegagalan tidak memblokir baca. */
+let appStoreReady: Promise<void> | null = null;
+async function ensureAppStore(sql: any) {
+  if (!appStoreReady) {
+    appStoreReady = (async () => {
+      try {
+        await sql`
+          CREATE TABLE IF NOT EXISTS app_store (
+            key VARCHAR(100) PRIMARY KEY,
+            data JSONB NOT NULL,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          );
+        `;
+      } catch (err) {
+        console.warn('Migrasi app_store dilewati:', err);
+      }
+    })();
+  }
+  await appStoreReady;
+}
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
