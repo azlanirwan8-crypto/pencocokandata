@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, X, CloudUpload, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react';
-import { runKodePosSync, type KodePosSyncPlan, type SyncProgress } from '../../utils/kodePosSync';
+import { runKodePosSync, runKodePosSourceAudit, type KodePosSyncPlan, type SyncProgress } from '../../utils/kodePosSync';
 import { saveKodePosToNeon, type KodePosRow } from '../../utils/neonSync';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
 
@@ -22,6 +22,9 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [importMsg, setImportMsg] = useState<string | null>(null);
+  // 'db' = bandingkan master perangkat ini dengan Neon; 'internet' = bandingkan Neon
+  // dengan dataset kode pos eksternal
+  const [sourceMode, setSourceMode] = useState<'db' | 'internet'>('db');
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const rows = plan?.missingInCloud || [];
@@ -40,7 +43,8 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
     setPlan(null);
     setSelected(new Set());
     try {
-      const result = await runKodePosSync(onProgress);
+      const result =
+        sourceMode === 'internet' ? await runKodePosSourceAudit(onProgress) : await runKodePosSync(onProgress);
       setPlan(result);
       // Default: semua baris yang belum ada di cloud terpilih
       setSelected(new Set(result.missingInCloud.map((r) => `${r.kodePos}|${r.kelurahan}|${r.kecamatan}`)));
@@ -54,7 +58,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
   useEffect(() => {
     if (open) void startCheck();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, sourceMode]);
 
   const rowKey = (r: KodePosRow) => `${r.kodePos}|${r.kelurahan}|${r.kecamatan}`;
   const allChecked = rows.length > 0 && selected.size === rows.length;
@@ -111,6 +115,34 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
         </div>
 
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {([
+              { key: 'db', label: 'Master perangkat ini vs Neon' },
+              { key: 'internet', label: 'Neon vs sumber internet (dataset kode pos)' },
+            ] as const).map((s) => {
+              const active = sourceMode === s.key;
+              return (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => setSourceMode(s.key)}
+                  disabled={phase === 'checking' || phase === 'importing'}
+                  style={{
+                    background: active ? '#405189' : '#ffffff',
+                    color: active ? '#ffffff' : '#495057',
+                    border: `1px solid ${active ? '#405189' : '#d5dde3'}`,
+                    borderRadius: '6px',
+                    padding: '0.35rem 0.8rem',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    cursor: active ? 'default' : 'pointer',
+                  }}
+                >
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
           {phase === 'checking' && (
             <div style={{ padding: '1.5rem 0.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.7rem' }}>
@@ -166,10 +198,14 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                   Database kita sudah versi terbaru dan valid.
                 </div>
                 <div style={{ fontSize: '0.79rem', color: '#495057', marginTop: '0.3rem', lineHeight: 1.6 }}>
-                  {fmt(plan.localTotal)} baris lokal sama persis dengan {fmt(plan.cloudTotal)} baris di Neon
-                  {' '}({plan.diffProvinces.length} provinsi berbeda).
-                  {plan.lastUpdated ? ` Pembaruan cloud terakhir: ${new Date(plan.lastUpdated).toLocaleString('id-ID')}.` : ''}
+                  {sourceMode === 'internet'
+                    ? `Database Neon (${fmt(plan.localTotal)} kode pos) sudah memuat seluruh ${fmt(plan.cloudTotal)} kode pos dari sumber eksternal.`
+                    : `${fmt(plan.localTotal)} baris lokal sama persis dengan ${fmt(plan.cloudTotal)} baris di Neon (${plan.diffProvinces.length} provinsi berbeda).`}
+                  {plan.lastUpdated ? ` Diperbarui: ${new Date(plan.lastUpdated).toLocaleString('id-ID')}.` : ''}
                 </div>
+                {plan.note && (
+                  <div style={{ fontSize: '0.74rem', color: '#878a99', marginTop: '0.5rem' }}>{plan.note}</div>
+                )}
                 {plan.cloudOnlyProvinces.length > 0 && (
                   <div style={{ fontSize: '0.76rem', color: '#d68b0c', marginTop: '0.5rem' }}>
                     Catatan: {plan.cloudOnlyProvinces.length} provinsi hanya ada di cloud
@@ -184,11 +220,18 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
             <>
               <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
                 <span className="badge badge-level2">
-                  {fmt(plan.missingInCloud.length)} baris lokal belum ada di Neon
+                  {fmt(plan.missingInCloud.length)} baris {sourceMode === 'internet' ? 'dari sumber internet' : 'lokal'} belum ada di Neon
                 </span>
-                <span className="badge badge-level1">{plan.diffProvinces.length} provinsi berbeda</span>
-                <span className="badge badge-match">Lokal {fmt(plan.localTotal)} / Cloud {fmt(plan.cloudTotal)}</span>
+                <span className="badge badge-level1">
+                  {sourceMode === 'internet' ? (plan.sourceLabel || 'sumber eksternal') : `${plan.diffProvinces.length} provinsi berbeda`}
+                </span>
+                <span className="badge badge-match">
+                  {sourceMode === 'internet' ? 'Neon' : 'Lokal'} {fmt(plan.localTotal)} / Sumber {fmt(plan.cloudTotal)} kode pos
+                </span>
               </div>
+              {plan.note && (
+                <div style={{ fontSize: '0.74rem', color: '#878a99' }}>{plan.note}</div>
+              )}
 
               {importMsg && (
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.8rem', color: '#0ab39c' }}>

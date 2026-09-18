@@ -55,6 +55,9 @@ export interface KodePosSyncPlan {
   missingInLocal: KodePosRow[];
   cloudOnlyProvinces: { provinsi: string; total: number }[];
   diffProvinces: string[];
+  /** Diisi saat mode sumber eksternal. */
+  sourceLabel?: string;
+  note?: string;
 }
 
 export type SyncProgress = (step: string, pct: number) => void;
@@ -180,5 +183,33 @@ export async function runKodePosSync(onProgress?: SyncProgress): Promise<KodePos
     missingInLocal,
     cloudOnlyProvinces,
     diffProvinces,
+  };
+}
+
+/**
+ * Audit terhadap sumber eksternal (dataset kode pos di GitHub). Server yang
+ * mengunduh dan membandingkan, jadi tidak ada puluhan ribu baris lewat browser.
+ */
+export async function runKodePosSourceAudit(onProgress?: SyncProgress): Promise<KodePosSyncPlan> {
+  onProgress?.('Mengunduh dataset kode pos eksternal dan membandingkannya...', 30);
+  const json = await fetchJson('/api/kodepos-source?view=audit');
+  onProgress?.('Selesai', 100);
+
+  const rows: KodePosRow[] = json.onlyInSource || [];
+  const newCodes: string[] = json.newCodes || [];
+  return {
+    status: rows.length > 0 ? 'DIFF' : 'SYNCED',
+    localTotal: json.db?.distinctCodes ?? 0,
+    cloudTotal: json.source?.distinctCodes ?? 0,
+    lastUpdated: json.source?.cachedAt ?? null,
+    missingInCloud: rows,
+    missingInLocal: [],
+    cloudOnlyProvinces: [],
+    diffProvinces: [],
+    sourceLabel: json.source?.label,
+    note:
+      `${newCodes.length} kode pos dikenal sumber tetapi belum ada di database (${json.source?.total} baris sumber, ` +
+      `${json.codesOnlyInDb?.total} kode pos hanya ada di database kita). Sumber: ${json.source?.label}. ` +
+      'Perbandingan di level kode pos, karena dataset ini memakai penamaan wilayah yang berbeda di level kelurahan.',
   };
 }
