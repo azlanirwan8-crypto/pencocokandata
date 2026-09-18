@@ -49,7 +49,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   isProcessing,
   wilayahSettings,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'all' | 'fase1' | 'fase2' | 'fase3'>('all');
+  const [activeSubTab, setActiveSubTab] = useState<'all' | 'fase1' | 'fase2' | 'fase3'>('fase1');
   const [selectedWilayah, setSelectedWilayah] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ANOMALI' | 'EXACT_MATCH' | 'HIGH_CONFIDENCE'>('ALL');
@@ -115,6 +115,32 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       isAllApproved,
     };
   }, [rows]);
+
+  // ── Sequential Phase Flow: Fase 1 → unlock Fase 2 → unlock Fase 3 → Data Final ──
+  const phaseState = useMemo(() => {
+    const total = rows.length;
+    const f1 = total > 0 && rows.every((r) => r.fase1Approved);
+    const f2 = total > 0 && rows.every((r) => r.fase2Approved);
+    const f3 = total > 0 && rows.every((r) => r.fase3Approved);
+    const step: 1 | 2 | 3 | 4 = !f1 ? 1 : !f2 ? 2 : !f3 ? 3 : 4;
+    return {
+      fase1Done: f1,
+      fase2Done: f2,
+      fase3Done: f3,
+      step,
+      locked: {
+        all: step < 4,
+        fase1: false,
+        fase2: step < 2,
+        fase3: step < 3,
+      } as Record<'all' | 'fase1' | 'fase2' | 'fase3', boolean>,
+    };
+  }, [rows]);
+
+  // Keep the visible tab in sync with the current step when previous tabs get locked
+  const viewTab = phaseState.locked[activeSubTab]
+    ? (['fase1', 'fase2', 'fase3', 'all'][phaseState.step - 1] as 'all' | 'fase1' | 'fase2' | 'fase3')
+    : activeSubTab;
 
   // Filtered rows
   const filteredRows = useMemo(() => {
@@ -384,35 +410,35 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
             <button
               type="button"
               className="btn btn-outline btn-sm"
-              onClick={() => { onApproveFase(1); showToast('Fase 1 (PTEN & Kode Pos) disetujui seluruhnya!'); }}
-              disabled={isProcessing}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.65rem', fontSize: '0.74rem', color: '#299cdb', borderColor: 'rgba(41, 156, 219, 0.3)' }}
-              title="Setujui seluruh hasil analisa Fase 1: PTEN & Kode Pos"
+              onClick={() => { onApproveFase(1); setActiveSubTab('fase2'); showToast('Fase 1 disetujui — Fase 2 (Wilayah & Cabang) kini terbuka untuk direview!'); }}
+              disabled={isProcessing || phaseState.fase1Done}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.65rem', fontSize: '0.74rem', color: phaseState.fase1Done ? '#0ab39c' : '#299cdb', borderColor: phaseState.fase1Done ? 'rgba(10, 179, 156, 0.35)' : 'rgba(41, 156, 219, 0.3)' }}
+              title={phaseState.fase1Done ? 'Fase 1 sudah disetujui' : 'Setujui seluruh hasil analisa Fase 1 dan buka Fase 2'}
             >
-              <MapPin size={12} />
-              <span>Setujui Fase 1</span>
+              {phaseState.fase1Done ? <Check size={12} /> : <MapPin size={12} />}
+              <span>{phaseState.fase1Done ? 'Fase 1 Disetujui' : 'Setujui Fase 1'}</span>
             </button>
             <button
               type="button"
               className="btn btn-outline btn-sm"
-              onClick={() => { onApproveFase(2); showToast('Fase 2 (Wilayah & Cabang) disetujui seluruhnya!'); }}
-              disabled={isProcessing}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.65rem', fontSize: '0.74rem', color: '#405189', borderColor: 'rgba(64, 81, 137, 0.3)' }}
-              title="Setujui seluruh hasil analisa Fase 2: Wilayah & Master Cabang"
+              onClick={() => { onApproveFase(2); setActiveSubTab('fase3'); showToast('Fase 2 disetujui — Fase 3 (Mapping Role & Wondr) kini terbuka untuk direview!'); }}
+              disabled={isProcessing || !phaseState.fase1Done || phaseState.fase2Done}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.65rem', fontSize: '0.74rem', color: phaseState.fase2Done ? '#0ab39c' : !phaseState.fase1Done ? '#a2a7b0' : '#405189', borderColor: phaseState.fase2Done ? 'rgba(10, 179, 156, 0.35)' : 'rgba(64, 81, 137, 0.3)' }}
+              title={phaseState.fase2Done ? 'Fase 2 sudah disetujui' : !phaseState.fase1Done ? 'Terkunci — setujui Fase 1 terlebih dahulu' : 'Setujui seluruh hasil analisa Fase 2 dan buka Fase 3'}
             >
-              <Building2 size={12} />
-              <span>Setujui Fase 2</span>
+              {phaseState.fase2Done ? <Check size={12} /> : !phaseState.fase1Done ? <Lock size={12} /> : <Building2 size={12} />}
+              <span>{phaseState.fase2Done ? 'Fase 2 Disetujui' : 'Setujui Fase 2'}</span>
             </button>
             <button
               type="button"
               className="btn btn-outline btn-sm"
-              onClick={() => { onApproveFase(3); showToast('Fase 3 (Mapping Role & Wondr) disetujui seluruhnya!'); }}
-              disabled={isProcessing}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.65rem', fontSize: '0.74rem', color: '#0ab39c', borderColor: 'rgba(10, 179, 156, 0.3)' }}
-              title="Setujui seluruh hasil analisa Fase 3: Mapping Role & Wondr"
+              onClick={() => { onApproveFase(3); setActiveSubTab('all'); showToast('Fase 3 disetujui — Data Final kini terbuka!'); }}
+              disabled={isProcessing || !phaseState.fase2Done || phaseState.fase3Done}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.65rem', fontSize: '0.74rem', color: phaseState.fase3Done ? '#0ab39c' : !phaseState.fase2Done ? '#a2a7b0' : '#0ab39c', borderColor: 'rgba(10, 179, 156, 0.3)' }}
+              title={phaseState.fase3Done ? 'Fase 3 sudah disetujui' : !phaseState.fase2Done ? 'Terkunci — setujui Fase 2 terlebih dahulu' : 'Setujui seluruh hasil analisa Fase 3 dan buka Data Final'}
             >
-              <Users size={12} />
-              <span>Setujui Fase 3</span>
+              {phaseState.fase3Done ? <Check size={12} /> : !phaseState.fase2Done ? <Lock size={12} /> : <Users size={12} />}
+              <span>{phaseState.fase3Done ? 'Fase 3 Disetujui' : 'Setujui Fase 3'}</span>
             </button>
           </div>
 
@@ -420,7 +446,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
             type="button"
             className="btn btn-success btn-sm"
             onClick={onApproveAllFinal}
-            disabled={isProcessing || stats.isAllApproved}
+            disabled={isProcessing || !phaseState.fase3Done || stats.isAllApproved}
+            title={!phaseState.fase3Done ? 'Terkunci — setujui Fase 3 terlebih dahulu' : 'Setujui seluruh baris sebagai Final Analisa'}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -428,7 +455,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
               padding: '0.45rem 1.1rem',
               fontWeight: 700,
               fontSize: '0.8rem',
-              background: stats.isAllApproved ? '#34c38f' : '#0ab39c',
+              background: stats.isAllApproved ? '#34c38f' : !phaseState.fase3Done ? '#e9ebec' : '#0ab39c',
               borderColor: '#0ab39c',
             }}
           >
@@ -439,7 +466,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
               </>
             ) : (
               <>
-                <Check size={14} />
+                {!phaseState.fase3Done ? <Lock size={14} /> : <Check size={14} />}
                 <span>Saya Setuju (Masuk ke Final Analisa)</span>
               </>
             )}
@@ -473,37 +500,58 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       {/* 3. SUB-TAB BAR & FILTERS                                                  */}
       {/* ────────────────────────────────────────────────────────────────────────── */}
       <div className="glass-card" style={{ padding: '1rem 1.25rem' }}>
+        {/* Sequential Review Step Banner */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '0.55rem 0.9rem',
+            marginBottom: '0.75rem',
+            borderRadius: '6px',
+            fontSize: '0.78rem',
+            fontWeight: 600,
+            background: phaseState.step === 4 ? '#e8f7f5' : '#eff2f7',
+            color: phaseState.step === 4 ? '#0ab39c' : '#405189',
+            border: `1px solid ${phaseState.step === 4 ? '#b7ebe4' : '#dce4f5'}`,
+          }}
+        >
+          {phaseState.step === 4 ? <CheckCircle2 size={15} /> : <Lock size={14} />}
+          <span>
+            {phaseState.step === 1 && 'Langkah 1 dari 4 — Sedang mereview Fase 1 (PTEN & Kode Pos). Klik "Setujui Fase 1" untuk membuka Fase 2.'}
+            {phaseState.step === 2 && 'Langkah 2 dari 4 — Sedang mereview Fase 2 (Wilayah & Cabang). Klik "Setujui Fase 2" untuk membuka Fase 3.'}
+            {phaseState.step === 3 && 'Langkah 3 dari 4 — Sedang mereview Fase 3 (Mapping Role & Wondr). Klik "Setujui Fase 3" untuk membuka Data Final.'}
+            {phaseState.step === 4 && 'Seluruh fase telah disetujui — Data Final terbuka untuk review akhir, persetujuan final, dan ekspor.'}
+          </span>
+        </div>
+
         {/* Navigation Sub-Tabs */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem', borderBottom: '1px solid #e9ebec', paddingBottom: '0.65rem' }}>
           <div className="nav-tabs">
-            <button
-              type="button"
-              className={`nav-tab-btn ${activeSubTab === 'all' ? 'active' : ''}`}
-              onClick={() => setActiveSubTab('all')}
-            >
-              📑 1. Ringkasan Final (Semua Atribut)
-            </button>
-            <button
-              type="button"
-              className={`nav-tab-btn ${activeSubTab === 'fase1' ? 'active' : ''}`}
-              onClick={() => setActiveSubTab('fase1')}
-            >
-              📍 2. Detail Fase 1 (PTEN & Kode Pos)
-            </button>
-            <button
-              type="button"
-              className={`nav-tab-btn ${activeSubTab === 'fase2' ? 'active' : ''}`}
-              onClick={() => setActiveSubTab('fase2')}
-            >
-              🏢 3. Detail Fase 2 (Kanwil & Master Cabang)
-            </button>
-            <button
-              type="button"
-              className={`nav-tab-btn ${activeSubTab === 'fase3' ? 'active' : ''}`}
-              onClick={() => setActiveSubTab('fase3')}
-            >
-              👥 4. Detail Fase 3 (Mapping Role & Wondr)
-            </button>
+            {([
+              { key: 'fase1', label: '📍 1. Review Fase 1 (PTEN & Kode Pos)', done: phaseState.fase1Done },
+              { key: 'fase2', label: '🏢 2. Review Fase 2 (Kanwil & Master Cabang)', done: phaseState.fase2Done },
+              { key: 'fase3', label: '👥 3. Review Fase 3 (Mapping Role & Wondr)', done: phaseState.fase3Done },
+              { key: 'all', label: '📑 4. Data Final (Semua Atribut)', done: stats.isAllApproved },
+            ] as const).map((tab) => {
+              const locked = phaseState.locked[tab.key];
+              const active = viewTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  className={`nav-tab-btn ${active ? 'active' : ''}`}
+                  onClick={() => !locked && setActiveSubTab(tab.key)}
+                  disabled={locked}
+                  title={locked ? 'Terkunci — setujui fase sebelumnya terlebih dahulu' : tab.label}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', opacity: locked ? 0.55 : 1, cursor: locked ? 'not-allowed' : 'pointer' }}
+                >
+                  {tab.done && <Check size={13} color="#0ab39c" />}
+                  {locked && <Lock size={12} />}
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
           </div>
 
           <div style={{ fontSize: '0.78rem', color: '#878a99' }}>
@@ -600,7 +648,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
           <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
               {/* TAB 1: ALL COLUMNS */}
-              {activeSubTab === 'all' && (
+              {viewTab === 'all' && (
                 <tr>
                   <th style={{ width: '40px', textAlign: 'center' }}>No</th>
                   <th style={{ width: '70px', textAlign: 'center' }}>Wilayah</th>
@@ -619,7 +667,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
               )}
 
               {/* TAB 2: FASE 1 PTEN & KODE POS */}
-              {activeSubTab === 'fase1' && (
+              {viewTab === 'fase1' && (
                 <tr>
                   <th style={{ width: '40px', textAlign: 'center' }}>No</th>
                   <th style={{ minWidth: '140px' }}>Kota PTEN</th>
@@ -634,7 +682,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
               )}
 
               {/* TAB 3: FASE 2 WILAYAH & CABANG */}
-              {activeSubTab === 'fase2' && (
+              {viewTab === 'fase2' && (
                 <tr>
                   <th style={{ width: '40px', textAlign: 'center' }}>No</th>
                   <th style={{ width: '85px', textAlign: 'center' }}>Kanwil</th>
@@ -649,7 +697,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
               )}
 
               {/* TAB 4: FASE 3 MAPPING ROLE & WONDR */}
-              {activeSubTab === 'fase3' && (
+              {viewTab === 'fase3' && (
                 <tr>
                   <th style={{ width: '40px', textAlign: 'center' }}>No</th>
                   <th style={{ minWidth: '180px' }}>Nama Outlet</th>
@@ -678,7 +726,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                   return (
                     <tr key={r.id || idx} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
                       {/* TAB 1: ALL COLUMNS */}
-                      {activeSubTab === 'all' && (
+                      {viewTab === 'all' && (
                         <>
                           <td style={{ textAlign: 'center', color: '#878a99' }}>{displayIdx}</td>
                           <td style={{ textAlign: 'center' }}>
@@ -715,7 +763,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                       )}
 
                       {/* TAB 2: FASE 1 PTEN & KODE POS */}
-                      {activeSubTab === 'fase1' && (
+                      {viewTab === 'fase1' && (
                         <>
                           <td style={{ textAlign: 'center', color: '#878a99' }}>{displayIdx}</td>
                           <td style={{ fontWeight: 700, color: '#212529' }}>{r.kotaPten}</td>
@@ -737,7 +785,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                       )}
 
                       {/* TAB 3: FASE 2 WILAYAH & CABANG */}
-                      {activeSubTab === 'fase2' && (
+                      {viewTab === 'fase2' && (
                         <>
                           <td style={{ textAlign: 'center', color: '#878a99' }}>{displayIdx}</td>
                           <td style={{ textAlign: 'center' }}>
@@ -755,7 +803,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                       )}
 
                       {/* TAB 4: FASE 3 MAPPING ROLE & WONDR */}
-                      {activeSubTab === 'fase3' && (
+                      {viewTab === 'fase3' && (
                         <>
                           <td style={{ textAlign: 'center', color: '#878a99' }}>{displayIdx}</td>
                           <td style={{ fontWeight: 600, color: '#405189' }}>{r.namaOutlet}</td>
@@ -784,27 +832,38 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                       {/* ACTION REVIEW BUTTONS (Appears on ALL tabs) */}
                       <td style={{ textAlign: 'center' }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onApproveSingleRow(r.id);
-                              showToast(`Baris #${r.no} (${r.namaOutlet}) disetujui!`);
-                            }}
-                            title="Setujui Hasil Baris Ini (OK)"
-                            style={{
-                              background: r.isFinalApproved ? '#0ab39c' : 'rgba(10, 179, 156, 0.1)',
-                              border: '1px solid rgba(10, 179, 156, 0.3)',
-                              color: r.isFinalApproved ? '#ffffff' : '#0ab39c',
-                              borderRadius: '4px',
-                              padding: '0.22rem 0.4rem',
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                          >
-                            <Check size={12} />
-                          </button>
+                          {(() => {
+                            const rowPhaseApproved =
+                              viewTab === 'fase1' ? r.fase1Approved :
+                              viewTab === 'fase2' ? r.fase2Approved :
+                              viewTab === 'fase3' ? r.fase3Approved :
+                              r.isFinalApproved;
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (viewTab === 'fase1') { onUpdateRow({ ...r, fase1Approved: true }); showToast(`Fase 1 baris #${r.no} disetujui!`); }
+                                  else if (viewTab === 'fase2') { onUpdateRow({ ...r, fase2Approved: true }); showToast(`Fase 2 baris #${r.no} disetujui!`); }
+                                  else if (viewTab === 'fase3') { onUpdateRow({ ...r, fase3Approved: true }); showToast(`Fase 3 baris #${r.no} disetujui!`); }
+                                  else { onApproveSingleRow(r.id); showToast(`Baris #${r.no} (${r.namaOutlet}) disetujui!`); }
+                                }}
+                                title={rowPhaseApproved ? 'Sudah disetujui' : 'Setujui Hasil Baris Ini (OK)'}
+                                style={{
+                                  background: rowPhaseApproved ? '#0ab39c' : 'rgba(10, 179, 156, 0.1)',
+                                  border: '1px solid rgba(10, 179, 156, 0.3)',
+                                  color: rowPhaseApproved ? '#ffffff' : '#0ab39c',
+                                  borderRadius: '4px',
+                                  padding: '0.22rem 0.4rem',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                <Check size={12} />
+                              </button>
+                            );
+                          })()}
                           <button
                             type="button"
                             onClick={() => {

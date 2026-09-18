@@ -547,6 +547,11 @@ body {
   100% { transform: scale(0.95); opacity: 0.8; }
 }
 
+@keyframes progress-shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
 /* Main Content Area */
 .main-wrapper {
   flex: 1;

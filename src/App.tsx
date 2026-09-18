@@ -88,6 +88,10 @@ export const App: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [analystProgress, setAnalystProgress] = useState<number>(0);
   const [analystMessage, setAnalystMessage] = useState<string>('');
+  // Per-phase progress tracking
+  const [phaseProgress, setPhaseProgress] = useState<{ 1: number; 2: number; 3: number }>({ 1: 0, 2: 0, 3: 0 });
+  const [currentActivePhase, setCurrentActivePhase] = useState<0 | 1 | 2 | 3>(0);
+  const [completedPhases, setCompletedPhases] = useState<Set<number>>(new Set());
 
   const [matchedDone, setMatchedDone] = useState<boolean>(false);
 
@@ -422,8 +426,13 @@ export const App: React.FC = () => {
     setIsAnalyzing(true);
     setAnalystProgress(10);
     setAnalystMessage('Menyiapkan 5 Data Master & indeks memori O(1)...');
+    // Reset per-phase progress
+    setPhaseProgress({ 1: 0, 2: 0, 3: 0 });
+    setCurrentActivePhase(1);
+    setCompletedPhases(new Set());
 
     try {
+      let lastPhase: 1 | 2 | 3 = 1;
       const results = await executeAnalystPipeline(
         masterRows,
         ptenList,
@@ -433,6 +442,31 @@ export const App: React.FC = () => {
         (phase, pct, _processed, _total, msg) => {
           setAnalystProgress(pct);
           setAnalystMessage(`[Fase ${phase}] ${msg}`);
+          setCurrentActivePhase(phase);
+          // Calculate per-phase local percent (0-100)
+          // Phase 1: global 0-33%, Phase 2: 33-66%, Phase 3: 66-100%
+          const phaseRanges: Record<1 | 2 | 3, [number, number]> = {
+            1: [0, 33],
+            2: [33, 66],
+            3: [66, 100],
+          };
+          const [min, max] = phaseRanges[phase];
+          const localPct = max > min ? Math.min(100, Math.round(((pct - min) / (max - min)) * 100)) : 0;
+          setPhaseProgress((prev) => ({ ...prev, [phase]: localPct }));
+          // Mark previous phases completed when phase changes
+          if (phase > lastPhase) {
+            setCompletedPhases((prev) => {
+              const next = new Set(prev);
+              for (let p = 1; p < phase; p++) next.add(p);
+              return next;
+            });
+            setPhaseProgress((prev) => {
+              const next = { ...prev };
+              for (let p = 1 as 1 | 2 | 3; p < phase; p = (p + 1) as 1 | 2 | 3) next[p] = 100;
+              return next;
+            });
+          }
+          lastPhase = phase;
         },
         reRunAnomaliesOnly,
         analystRows
@@ -442,9 +476,14 @@ export const App: React.FC = () => {
       setIsAnalyzing(false);
       setAnalystProgress(100);
       setAnalystMessage('Analisa 3 Fase Berhasil Selesai!');
+      // Mark all phases complete
+      setPhaseProgress({ 1: 100, 2: 100, 3: 100 });
+      setCompletedPhases(new Set([1, 2, 3]));
+      setCurrentActivePhase(0);
       setItem('analyst_results_data', results).catch(() => {});
     } catch (err: any) {
       setIsAnalyzing(false);
+      setCurrentActivePhase(0);
       alert('Terjadi kesalahan saat menjalankan analisa: ' + err?.message);
     }
   };
@@ -818,6 +857,9 @@ export const App: React.FC = () => {
                   cabang: masterRows.length,
                   role: roleMappingList.length,
                 }}
+                phaseProgress={phaseProgress}
+                currentActivePhase={currentActivePhase}
+                completedPhases={completedPhases}
               />
 
               {analystRows.length > 0 && (

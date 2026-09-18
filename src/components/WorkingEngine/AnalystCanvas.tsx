@@ -25,6 +25,9 @@ interface AnalystCanvasProps {
     cabang: number;
     role: number;
   };
+  phaseProgress?: { 1: number; 2: number; 3: number };
+  currentActivePhase?: 0 | 1 | 2 | 3;
+  completedPhases?: Set<number>;
 }
 
 export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
@@ -35,6 +38,9 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
   onResetAnalysis,
   hasExistingResults,
   masterCounts,
+  phaseProgress = { 1: 0, 2: 0, 3: 0 },
+  currentActivePhase = 0,
+  completedPhases = new Set(),
 }) => {
   const [showTheories, setShowTheories] = useState<boolean>(true);
 
@@ -125,73 +131,184 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.75rem' }}>
               {/* Card Fase 1 */}
-              <div
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '8px',
-                  padding: '0.75rem 0.9rem',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-                  borderLeft: '4px solid #299cdb',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
-                  <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#299cdb' }}>FASE 1</span>
-                  <MapPin size={15} color="#299cdb" />
-                </div>
-                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#212529', marginBottom: '0.2rem' }}>
-                  PTEN & Master Kode Pos
-                </div>
-                <div style={{ fontSize: '0.72rem', color: '#878a99', lineHeight: 1.35 }}>
-                  Cocokkan Kota PTEN ke Kode Pos, ekstrak Kelurahan & Kecamatan, serta grouping per Kota PTEN.
-                </div>
-              </div>
+              {(() => {
+                const phase = 1;
+                const isActive = currentActivePhase === phase;
+                const isDone = completedPhases.has(phase);
+                const pct = phaseProgress[1];
+                const showBar = isAnalyzing || isDone;
+                return (
+                  <div
+                    style={{
+                      background: '#ffffff',
+                      border: `1px solid ${isActive ? '#299cdb' : isDone ? '#d1fae5' : '#e2e8f0'}`,
+                      borderRadius: '8px',
+                      padding: '0.75rem 0.9rem',
+                      boxShadow: isActive ? '0 0 0 3px rgba(41,156,219,0.15)' : '0 1px 3px rgba(0,0,0,0.03)',
+                      borderLeft: `4px solid ${isDone ? '#0ab39c' : '#299cdb'}`,
+                      transition: 'border-color 0.3s, box-shadow 0.3s',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                      <span style={{ fontSize: '0.74rem', fontWeight: 800, color: isDone ? '#0ab39c' : '#299cdb' }}>FASE 1</span>
+                      {isDone ? (
+                        <span style={{ fontSize: '0.78rem', color: '#0ab39c', fontWeight: 700 }}>✓ Selesai</span>
+                      ) : (
+                        <MapPin size={15} color="#299cdb" />
+                      )}
+                    </div>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#212529', marginBottom: '0.2rem' }}>
+                      PTEN &amp; Master Kode Pos
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: '#878a99', lineHeight: 1.35, marginBottom: showBar ? '0.6rem' : 0 }}>
+                      Cocokkan Kota PTEN ke Kode Pos, ekstrak Kelurahan &amp; Kecamatan, serta grouping per Kota PTEN.
+                    </div>
+                    {showBar && (
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', fontWeight: 600, color: isDone ? '#0ab39c' : '#299cdb', marginBottom: '0.25rem' }}>
+                          <span>{isDone ? 'Berhasil diselesaikan' : isActive ? 'Memproses...' : 'Menunggu...'}</span>
+                          <span>{pct}%</span>
+                        </div>
+                        <div style={{ height: '5px', background: '#e9ebec', borderRadius: '4px', overflow: 'hidden' }}>
+                          <div
+                            style={{
+                              height: '100%',
+                              width: `${pct}%`,
+                              background: isDone
+                                ? 'linear-gradient(90deg, #0ab39c, #43c6ac)'
+                                : 'linear-gradient(90deg, #299cdb, #5bbfee)',
+                              transition: 'width 0.3s ease',
+                              borderRadius: '4px',
+                              animation: isActive && pct < 100 ? 'progress-shimmer 1.5s infinite' : 'none',
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Card Fase 2 */}
-              <div
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '8px',
-                  padding: '0.75rem 0.9rem',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-                  borderLeft: '4px solid #405189',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
-                  <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#405189' }}>FASE 2</span>
-                  <Building2 size={15} color="#405189" />
-                </div>
-                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#212529', marginBottom: '0.2rem' }}>
-                  Wilayah & Master Cabang
-                </div>
-                <div style={{ fontSize: '0.72rem', color: '#878a99', lineHeight: 1.35 }}>
-                  Validasi Kanwil (W01-W17) & tarik identitas resmi: Sandi, Nama Outlet, Branch Code, Kode Cabang.
-                </div>
-              </div>
+              {(() => {
+                const phase = 2;
+                const isActive = currentActivePhase === phase;
+                const isDone = completedPhases.has(phase);
+                const pct = phaseProgress[2];
+                const showBar = isAnalyzing || isDone;
+                return (
+                  <div
+                    style={{
+                      background: '#ffffff',
+                      border: `1px solid ${isActive ? '#405189' : isDone ? '#d1fae5' : '#e2e8f0'}`,
+                      borderRadius: '8px',
+                      padding: '0.75rem 0.9rem',
+                      boxShadow: isActive ? '0 0 0 3px rgba(64,81,137,0.15)' : '0 1px 3px rgba(0,0,0,0.03)',
+                      borderLeft: `4px solid ${isDone ? '#0ab39c' : '#405189'}`,
+                      transition: 'border-color 0.3s, box-shadow 0.3s',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                      <span style={{ fontSize: '0.74rem', fontWeight: 800, color: isDone ? '#0ab39c' : '#405189' }}>FASE 2</span>
+                      {isDone ? (
+                        <span style={{ fontSize: '0.78rem', color: '#0ab39c', fontWeight: 700 }}>✓ Selesai</span>
+                      ) : (
+                        <Building2 size={15} color="#405189" />
+                      )}
+                    </div>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#212529', marginBottom: '0.2rem' }}>
+                      Wilayah &amp; Master Cabang
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: '#878a99', lineHeight: 1.35, marginBottom: showBar ? '0.6rem' : 0 }}>
+                      Validasi Kanwil (W01-W17) &amp; tarik identitas resmi: Sandi, Nama Outlet, Branch Code, Kode Cabang.
+                    </div>
+                    {showBar && (
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', fontWeight: 600, color: isDone ? '#0ab39c' : '#405189', marginBottom: '0.25rem' }}>
+                          <span>{isDone ? 'Berhasil diselesaikan' : isActive ? 'Memproses...' : 'Menunggu...'}</span>
+                          <span>{pct}%</span>
+                        </div>
+                        <div style={{ height: '5px', background: '#e9ebec', borderRadius: '4px', overflow: 'hidden' }}>
+                          <div
+                            style={{
+                              height: '100%',
+                              width: `${pct}%`,
+                              background: isDone
+                                ? 'linear-gradient(90deg, #0ab39c, #43c6ac)'
+                                : 'linear-gradient(90deg, #405189, #3577f1)',
+                              transition: 'width 0.3s ease',
+                              borderRadius: '4px',
+                              animation: isActive && pct < 100 ? 'progress-shimmer 1.5s infinite' : 'none',
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Card Fase 3 */}
-              <div
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '8px',
-                  padding: '0.75rem 0.9rem',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-                  borderLeft: '4px solid #0ab39c',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
-                  <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#0ab39c' }}>FASE 3</span>
-                  <Users size={15} color="#0ab39c" />
-                </div>
-                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#212529', marginBottom: '0.2rem' }}>
-                  Mapping Role 3 Role
-                </div>
-                <div style={{ fontSize: '0.72rem', color: '#878a99', lineHeight: 1.35 }}>
-                  Tentukan Organisasi Tujuan, Tipe Unit (KC/KCP), verifikasi 3 role lengkap, dan alur Wondr.
-                </div>
-              </div>
+              {(() => {
+                const phase = 3;
+                const isActive = currentActivePhase === phase;
+                const isDone = completedPhases.has(phase);
+                const pct = phaseProgress[3];
+                const showBar = isAnalyzing || isDone;
+                return (
+                  <div
+                    style={{
+                      background: '#ffffff',
+                      border: `1px solid ${isActive ? '#0ab39c' : isDone ? '#d1fae5' : '#e2e8f0'}`,
+                      borderRadius: '8px',
+                      padding: '0.75rem 0.9rem',
+                      boxShadow: isActive ? '0 0 0 3px rgba(10,179,156,0.15)' : '0 1px 3px rgba(0,0,0,0.03)',
+                      borderLeft: `4px solid #0ab39c`,
+                      transition: 'border-color 0.3s, box-shadow 0.3s',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                      <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#0ab39c' }}>FASE 3</span>
+                      {isDone ? (
+                        <span style={{ fontSize: '0.78rem', color: '#0ab39c', fontWeight: 700 }}>✓ Selesai</span>
+                      ) : (
+                        <Users size={15} color="#0ab39c" />
+                      )}
+                    </div>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#212529', marginBottom: '0.2rem' }}>
+                      Mapping Role 3 Role
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: '#878a99', lineHeight: 1.35, marginBottom: showBar ? '0.6rem' : 0 }}>
+                      Tentukan Organisasi Tujuan, Tipe Unit (KC/KCP), verifikasi 3 role lengkap, dan alur Wondr.
+                    </div>
+                    {showBar && (
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', fontWeight: 600, color: '#0ab39c', marginBottom: '0.25rem' }}>
+                          <span>{isDone ? 'Berhasil diselesaikan' : isActive ? 'Memproses...' : 'Menunggu...'}</span>
+                          <span>{pct}%</span>
+                        </div>
+                        <div style={{ height: '5px', background: '#e9ebec', borderRadius: '4px', overflow: 'hidden' }}>
+                          <div
+                            style={{
+                              height: '100%',
+                              width: `${pct}%`,
+                              background: isDone
+                                ? 'linear-gradient(90deg, #0ab39c, #43c6ac)'
+                                : 'linear-gradient(90deg, #0ab39c, #43c6ac)',
+                              transition: 'width 0.3s ease',
+                              borderRadius: '4px',
+                              animation: isActive && pct < 100 ? 'progress-shimmer 1.5s infinite' : 'none',
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>

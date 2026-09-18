@@ -17,6 +17,12 @@ export interface AnalystRow {
   statusPten: 'SAME' | 'DIFFERENT' | 'PTEN FOUND' | 'UNCHECKED';
   groupKota: string;
   fase1Approved: boolean;
+  // Tracking: index baris Master Cabang asal (untuk grouping Fase 1)
+  sourceRowIndex: number;
+  // Total kelurahan yang ada di kota PTEN ini (dari data Kode Pos)
+  allKelurahanCount: number;
+  // Nomor urut kelurahan dalam kelompok kota PTEN (1-based)
+  kelurahanSeq: number;
 
   // Fase 2: Wilayah & Master Cabang
   wilayah: string;
@@ -290,11 +296,8 @@ export async function executeAnalystPipeline(
   if (itemsToProcess.length === 0 && ptenList.length > 0) {
     // Fallback if Master Cabang is empty, create from PTEN with proper wilayah assignment
     itemsToProcess = ptenList.slice(0, 1500).map((p, idx) => {
-      // Determine wilayah based on city name
       let wilayahCode = 'W01';
       const cityUpper = (p.kotaPten || '').toUpperCase();
-
-      // Map cities to wilayah codes based on geographic location
       if (/MEDAN|SUMATERA UTARA|ACEH|RIAU|JAMBI|SUMATERA BARAT|BENGKULU|LAMPUNG|PEKANBARU|PADANG/.test(cityUpper)) {
         wilayahCode = idx % 9 === 0 ? 'W01' : idx % 9 === 1 ? 'W02' : idx % 9 === 2 ? 'W03' : 'W04';
       } else if (/JAWA|JAKARTA|BANTEN|YOGYAKARTA|SEMARANG|SURABAYA|BANDUNG|MALANG|SOLO/.test(cityUpper)) {
@@ -306,7 +309,6 @@ export async function executeAnalystPipeline(
       } else if (/BALI|NUSA TENGGARA|MALUKU|PAPUA|DENPASAR|MATARAM|KUPANG|AMBON|JAYAPURA/.test(cityUpper)) {
         wilayahCode = idx % 3 === 0 ? 'W11' : idx % 3 === 1 ? 'W12' : 'W13';
       }
-
       return {
         Wilayah: wilayahCode,
         'Sandi Cabang': `${String(idx + 1).padStart(3, '0')}`,
@@ -330,44 +332,62 @@ export async function executeAnalystPipeline(
 
   const total = itemsToProcess.length;
   const results: AnalystRow[] = [];
+  let globalRowNo = 1;
 
-  // Progress: Fase 1 starting
-  if (onProgress) {
-    onProgress(1, 15, 0, total, 'Fase 1: Mencocokkan PTEN & Master Kode Pos...');
+  // ─────────────────────────────────────────────────────────────────────────────
+  // ══ FASE 1: PTEN & KODE POS — Expand per Kelurahan/Kecamatan ══
+  // Setiap baris Master Cabang → N baris (1 per kelurahan yang ada di Kota PTEN)
+  // Semua baris dari 1 kota pakai kodePosPten yang SAMA dari PTEN
+  // ─────────────────────────────────────────────────────────────────────────────
+  if (onProgress) onProgress(1, 5, 0, total, 'Fase 1: Menyiapkan index PTEN & Kode Pos...');
+
+  // Cache Fase 2 & 3 computed data per raw row (dipakai di expand loop)
+  interface RowMetaCache {
+    finalKotaPten: string;
+    finalKodePosPten: string;
+    statusPten: 'SAME' | 'DIFFERENT' | 'PTEN FOUND' | 'UNCHECKED';
+    matchedKodePosEntries: KodePosRow[];
+    matchedProvinsi: string;
+    resolvedWilayah: ReturnType<typeof extractWilayahFromBranchCode>;
+    sandiCabang: string;
+    namaOutlet: string;
+    statusOutlet: string;
+    alamat: string;
+    matchedRole: RoleMappingRecord | null;
+    highestRoleScore: number;
+    chosenAlgorithm: string;
+    organisasiTujuan: string;
+    tipeUnit: 'KC' | 'KCP' | 'OUTLET';
+    roleCabsal: number;
+    roleCabapv1: number;
+    roleCabapv2: number;
+    is3RoleLengkap: boolean;
+    alurWondr: string;
+    flowDescription: string;
+    confidenceScore: number;
+    statusAnalisa: 'EXACT_MATCH' | 'HIGH_CONFIDENCE' | 'PERLU_REVIEW' | 'ANOMALI';
   }
+  const rowMetaCache: RowMetaCache[] = [];
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // LOOP UTAMA: EKSEKUSI FASE 1, FASE 2, FASE 3
-  // ───────────────────────────────────────────────────────────────────────────
   for (let i = 0; i < itemsToProcess.length; i++) {
     const raw = itemsToProcess[i];
-    const prevRow = previousRows?.[i];
 
-    // Progress update every 100 rows for smoother animation
-    if (i % 100 === 0 && onProgress) {
-      const pct = Math.round(15 + ((i + 1) / total) * 70);
-      const currentPhase = i < total * 0.33 ? 1 : i < total * 0.66 ? 2 : 3;
-      const phaseMsg = currentPhase === 1 ? 'Mencocokkan PTEN & Kode Pos' : currentPhase === 2 ? 'Validasi Wilayah & Cabang' : 'Mapping Role & Wondr';
-      onProgress(currentPhase, pct, i + 1, total, `Fase ${currentPhase}: ${phaseMsg} (baris ${i + 1}/${total})...`);
-    }
-
-    // Jika mode "Ulangi yang Salah Saja", lewati baris yang sudah valid & disetujui
-    if (reRunOnlyAnomalies && prevRow && prevRow.isFinalApproved && prevRow.statusAnalisa === 'EXACT_MATCH') {
-      results.push(prevRow);
-      continue;
+    // Progress for Fase 1 (global 5% → 33%)
+    if (i % 50 === 0 && onProgress) {
+      const pct = Math.round(5 + (i / total) * 28);
+      onProgress(1, pct, i + 1, total, `Fase 1: Mencocokkan PTEN & Kode Pos (${i + 1}/${total})...`);
     }
 
     const cityRaw = String(raw['Dati II'] || raw.Kota || raw.Kelurahan || '').trim();
     const cityClean = cleanAndStandardizeText(cityRaw);
     const kpRaw = String(raw['KODE POS'] || '').trim();
 
-    // ──────────────────────────── FASE 1: PTEN & KODE POS ─────────────────────
+    // ── Cari PTEN Match ──
     let matchedPtenRecord: PTENRecord | null = null;
     if (ptenCityMap.has(cityClean)) {
       const candidates = ptenCityMap.get(cityClean)!;
       matchedPtenRecord = candidates.find((c) => c.kodePosPten === kpRaw) || candidates[0];
     } else {
-      // Multi-Engine Matching ke daftar Kota PTEN
       let bestScore = 0;
       for (const [ptenCityKey, candidates] of ptenCityMap.entries()) {
         const { score } = calculateUnifiedPrecisionScore(cityClean, ptenCityKey);
@@ -381,11 +401,10 @@ export async function executeAnalystPipeline(
     const finalKotaPten = matchedPtenRecord?.kotaPten || (cityRaw ? cityRaw.toUpperCase() : 'KOTA JAKARTA PUSAT');
     const finalKodePosPten = matchedPtenRecord?.kodePosPten || kpRaw || '10110';
 
-    // Ambil Kelurahan & Kecamatan dari Master Kode Pos berdasarkan Kota PTEN
+    // ── Cari SEMUA Kelurahan & Kecamatan dari Data Kode Pos untuk Kota PTEN ini ──
     const ptenCleanCity = cleanAndStandardizeText(finalKotaPten);
     let matchedKodePosEntries = kodePosByCity.get(ptenCleanCity) || [];
 
-    // If no exact match, try fuzzy matching
     if (matchedKodePosEntries.length === 0) {
       for (const [cityKey, entries] of kodePosByCity.entries()) {
         const { score } = calculateUnifiedPrecisionScore(ptenCleanCity, cityKey);
@@ -396,19 +415,18 @@ export async function executeAnalystPipeline(
       }
     }
 
-    let matchedKelurahan = String(raw.Kelurahan || '').trim();
-    let matchedKecamatan = String(raw.Kecamatan || '').trim();
-    let matchedProvinsi = String(raw.Provinsi || '').trim();
-
-    if (matchedKodePosEntries.length > 0) {
-      if (!matchedKelurahan) matchedKelurahan = matchedKodePosEntries[0].kelurahan || 'Kelurahan Pusat';
-      if (!matchedKecamatan) matchedKecamatan = matchedKodePosEntries[0].kecamatan || 'Kecamatan Kota';
-      if (!matchedProvinsi) matchedProvinsi = matchedKodePosEntries[0].provinsi || 'DKI JAKARTA';
-    } else {
-      if (!matchedKelurahan) matchedKelurahan = finalKotaPten;
-      if (!matchedKecamatan) matchedKecamatan = finalKotaPten;
-      if (!matchedProvinsi) matchedProvinsi = raw.Provinsi || 'INDONESIA';
+    // Jika tidak ada di Kode Pos, buat 1 entry fallback dari data Master
+    if (matchedKodePosEntries.length === 0) {
+      matchedKodePosEntries = [{
+        kodePos: finalKodePosPten,
+        kelurahan: String(raw.Kelurahan || finalKotaPten).trim() || finalKotaPten,
+        kecamatan: String(raw.Kecamatan || finalKotaPten).trim() || finalKotaPten,
+        kabupatenKota: finalKotaPten,
+        provinsi: String(raw.Provinsi || 'INDONESIA').trim(),
+      } as KodePosRow];
     }
+
+    const matchedProvinsi = matchedKodePosEntries[0]?.provinsi || String(raw.Provinsi || 'INDONESIA').trim();
 
     let statusPten: 'SAME' | 'DIFFERENT' | 'PTEN FOUND' | 'UNCHECKED' = 'UNCHECKED';
     if (kpRaw && finalKodePosPten) {
@@ -417,26 +435,24 @@ export async function executeAnalystPipeline(
       statusPten = 'PTEN FOUND';
     }
 
-    // ──────────────────────────── FASE 2: WILAYAH & MASTER CABANG ─────────────
+    // ── Fase 2: Wilayah & Master Cabang ──
     const branchCode = String(raw['Branch Code'] || raw['Kode Cabang'] || '').trim();
     const resolvedWilayah = extractWilayahFromBranchCode(
       branchCode,
       wilayahSettings,
       raw.Wilayah || formatWilayahName(finalKotaPten)
     );
-
     const sandiCabang =
       raw['Sandi Cabang'] ||
       (raw.Sandi && raw.Cabang ? `${raw.Sandi} - ${raw.Cabang}` : raw.Cabang || raw.Sandi || `00${(i % 99) + 1}`);
     const namaOutlet = raw['Nama Outlet'] || raw.Cabang || `BNI KCP ${finalKotaPten}`;
     const statusOutlet = raw['Status Outlet'] || 'Aktif';
-    const alamat = raw.ALAMAT || `Jl. Protokol No. ${i + 1}, ${matchedKelurahan}, ${finalKotaPten}`;
+    const alamat = raw.ALAMAT || `Jl. Protokol No. ${i + 1}, ${finalKotaPten}`;
 
-    // ──────────────────────────── FASE 3: MAPPING ROLE & 3 ROLE LENGKAP ───────
+    // ── Fase 3: Mapping Role & 3 Role Lengkap ──
     let matchedRole: RoleMappingRecord | null = null;
     let highestRoleScore = 0;
     let chosenAlgorithm = 'Direct Master Join';
-
     const outletNameToMatch = cleanAndStandardizeText(namaOutlet);
     for (let r = 0; r < roleMappingList.length; r++) {
       const roleItem = roleMappingList[r];
@@ -448,42 +464,28 @@ export async function executeAnalystPipeline(
         chosenAlgorithm = algorithm;
       }
     }
-
     if (!matchedRole && roleMappingList.length > 0) {
-      // Fallback: cari berdasarkan kata kota di organisasi tujuan
       const cityKeywords = ptenCleanCity.split(/\s+/).filter(w => w.length > 2);
       for (const keyword of cityKeywords) {
         const found = roleMappingList.find((r) => {
           const orgClean = cleanAndStandardizeText(r.organisasiTujuan);
           return orgClean.includes(keyword.toUpperCase()) || orgClean.includes(keyword);
         });
-        if (found) {
-          matchedRole = found;
-          highestRoleScore = 0.85;
-          chosenAlgorithm = 'Geographic City Keyword Match';
-          break;
-        }
+        if (found) { matchedRole = found; highestRoleScore = 0.85; chosenAlgorithm = 'Geographic City Keyword Match'; break; }
       }
-      if (!matchedRole) {
-        matchedRole = roleMappingList[0];
-        highestRoleScore = 0.70;
-        chosenAlgorithm = 'Default Fallback (First Available)';
-      }
+      if (!matchedRole) { matchedRole = roleMappingList[0]; highestRoleScore = 0.70; chosenAlgorithm = 'Default Fallback (First Available)'; }
     }
 
     const organisasiTujuan = matchedRole?.organisasiTujuan || `${namaOutlet.toUpperCase()} BRANCH OFFICE`;
     const isKc = matchedRole ? getUnitCategory(matchedRole.organisasiTujuan) === 'KC' : true;
     const tipeUnit: 'KC' | 'KCP' | 'OUTLET' = isKc ? 'KC' : 'KCP';
-
     const roleCabsal = matchedRole ? matchedRole.qrsCabsal : 1;
     const roleCabapv1 = matchedRole ? matchedRole.qrsCabapv1 : isKc ? 1 : 0;
     const roleCabapv2 = matchedRole ? matchedRole.qrsCabapv2 : 1;
     const is3RoleLengkap = roleCabsal === 1 && roleCabapv1 === 1 && roleCabapv2 === 1;
-
     const wondr = matchedRole ? getWondrRecommendation(matchedRole) : null;
     const alurWondr = wondr?.tier || (is3RoleLengkap ? 'Tier 1: Full Approval KC' : 'Tier 2: Dual Approval KCP via KC');
     const flowDesc = wondr?.desc || (is3RoleLengkap ? 'Semua role lengkap (Sales, Verifikator, Penyetuju) berada pada 1 unit mandiri.' : 'Role Verifikator/Penyetuju dialihkan ke KC Pengampu dalam 1 pulau.');
-
     const confidenceScore = Math.min(100, Math.round(highestRoleScore * 100));
     let statusAnalisa: 'EXACT_MATCH' | 'HIGH_CONFIDENCE' | 'PERLU_REVIEW' | 'ANOMALI' = 'EXACT_MATCH';
     if (confidenceScore >= 90) statusAnalisa = 'EXACT_MATCH';
@@ -491,54 +493,107 @@ export async function executeAnalystPipeline(
     else if (confidenceScore >= 60) statusAnalisa = 'PERLU_REVIEW';
     else statusAnalisa = 'ANOMALI';
 
-    results.push({
-      id: `analyst-${i + 1}-${Date.now()}`,
-      no: i + 1,
-      // Fase 1
-      kotaPten: finalKotaPten,
-      kodePosPten: finalKodePosPten,
-      kelurahan: matchedKelurahan,
-      kecamatan: matchedKecamatan,
-      provinsi: matchedProvinsi,
-      statusPten,
-      groupKota: finalKotaPten,
-      fase1Approved: true,
-
-      // Fase 2
-      wilayah: resolvedWilayah.wilayahName !== '-' ? resolvedWilayah.wilayahName : 'Wilayah 01',
-      sandiCabang: String(sandiCabang),
-      sandi: String(raw.Sandi || raw['Sandi Cabang'] || ''),
-      cabang: String(raw.Cabang || raw['Sandi Cabang'] || ''),
-      branchCode,
-      kodeCabang: String(raw['Kode Cabang'] || branchCode || ''),
-      namaOutlet,
-      statusOutlet,
-      alamat,
-      fase2Approved: true,
-
-      // Fase 3
-      organisasiTujuan,
-      tipeUnit,
-      is3RoleLengkap,
-      roleCabsal,
-      roleCabapv1,
-      roleCabapv2,
-      roleGrandTotal: matchedRole?.grandTotal || (is3RoleLengkap ? 3 : 2),
-      alurWondr,
-      flowDescription: flowDesc,
-      fase3Approved: true,
-
-      // Overall
-      confidenceScore,
-      matchingAlgorithm: chosenAlgorithm,
-      statusAnalisa,
-      isFinalApproved: statusAnalisa === 'EXACT_MATCH',
+    rowMetaCache.push({
+      finalKotaPten, finalKodePosPten, statusPten,
+      matchedKodePosEntries, matchedProvinsi,
+      resolvedWilayah, sandiCabang, namaOutlet, statusOutlet, alamat,
+      matchedRole, highestRoleScore, chosenAlgorithm,
+      organisasiTujuan, tipeUnit, roleCabsal, roleCabapv1, roleCabapv2,
+      is3RoleLengkap, alurWondr, flowDescription: flowDesc, confidenceScore, statusAnalisa,
     });
   }
 
+  // ── EXPAND: Hasilkan 1 baris per kelurahan/kecamatan per Kota PTEN ──
+  if (onProgress) onProgress(2, 35, 0, total, 'Fase 2: Menyusun data Wilayah & Cabang...');
+
+  for (let i = 0; i < itemsToProcess.length; i++) {
+    const raw = itemsToProcess[i];
+    const meta = rowMetaCache[i];
+    const prevRow = previousRows?.[i];
+
+    // Progress for Fase 2 (global 35% → 66%)
+    if (i % 50 === 0 && onProgress) {
+      const pct = Math.round(35 + (i / total) * 31);
+      onProgress(2, pct, i + 1, total, `Fase 2: Validasi Wilayah & Cabang (${i + 1}/${total})...`);
+    }
+
+    // Jika mode "Ulangi yang Salah Saja", lewati baris yang sudah valid & disetujui
+    if (reRunOnlyAnomalies && prevRow && prevRow.isFinalApproved && prevRow.statusAnalisa === 'EXACT_MATCH') {
+      results.push(prevRow);
+      continue;
+    }
+
+    const allKelurahanCount = meta.matchedKodePosEntries.length;
+
+    // Hasilkan 1 baris per kelurahan/kecamatan
+    meta.matchedKodePosEntries.forEach((kpEntry, seq) => {
+      const kelurahan = kpEntry.kelurahan || meta.finalKotaPten;
+      const kecamatan = kpEntry.kecamatan || meta.finalKotaPten;
+      const provinsi = kpEntry.provinsi || meta.matchedProvinsi;
+
+      results.push({
+        id: `analyst-${i + 1}-${seq + 1}-${Date.now()}`,
+        no: globalRowNo++,
+        // Fase 1
+        kotaPten: meta.finalKotaPten,
+        kodePosPten: meta.finalKodePosPten, // SAMA untuk semua kelurahan dalam 1 kota PTEN
+        kelurahan,
+        kecamatan,
+        provinsi,
+        statusPten: meta.statusPten,
+        groupKota: meta.finalKotaPten,
+        fase1Approved: false,
+        sourceRowIndex: i,
+        allKelurahanCount,
+        kelurahanSeq: seq + 1,
+
+        // Fase 2
+        wilayah: meta.resolvedWilayah.wilayahName !== '-' ? meta.resolvedWilayah.wilayahName : 'Wilayah 01',
+        sandiCabang: String(meta.sandiCabang),
+        sandi: String(raw.Sandi || raw['Sandi Cabang'] || ''),
+        cabang: String(raw.Cabang || raw['Sandi Cabang'] || ''),
+        branchCode: String(raw['Branch Code'] || raw['Kode Cabang'] || '').trim(),
+        kodeCabang: String(raw['Kode Cabang'] || raw['Branch Code'] || '').trim(),
+        namaOutlet: meta.namaOutlet,
+        statusOutlet: meta.statusOutlet,
+        alamat: meta.alamat,
+        fase2Approved: false,
+
+        // Fase 3
+        organisasiTujuan: meta.organisasiTujuan,
+        tipeUnit: meta.tipeUnit,
+        is3RoleLengkap: meta.is3RoleLengkap,
+        roleCabsal: meta.roleCabsal,
+        roleCabapv1: meta.roleCabapv1,
+        roleCabapv2: meta.roleCabapv2,
+        roleGrandTotal: meta.matchedRole?.grandTotal || (meta.is3RoleLengkap ? 3 : 2),
+        alurWondr: meta.alurWondr,
+        flowDescription: meta.flowDescription,
+        fase3Approved: false,
+
+        // Overall
+        confidenceScore: meta.confidenceScore,
+        matchingAlgorithm: meta.chosenAlgorithm,
+        statusAnalisa: meta.statusAnalisa,
+        isFinalApproved: meta.statusAnalisa === 'EXACT_MATCH',
+      });
+    });
+  }
+
+  // Fase 3 progress notification
+  if (onProgress) onProgress(3, 70, total, total, 'Fase 3: Finalisasi Mapping Role & Wondr...');
+
+  // Small async yield to allow UI to breathe
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  if (onProgress) onProgress(3, 95, total, total, 'Fase 3: Menyusun hasil akhir...');
+
+  // Small async yield again
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
   const elapsed = Math.round(performance.now() - startTime);
   if (onProgress) {
-    onProgress(3, 100, total, total, `Analisa 3 Fase selesai dalam ${elapsed}ms.`);
+    onProgress(3, 100, total, total, `Analisa 3 Fase selesai dalam ${elapsed}ms. ${results.length.toLocaleString('id-ID')} baris dihasilkan.`);
   }
 
   return results;
