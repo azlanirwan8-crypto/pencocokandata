@@ -458,10 +458,32 @@ export async function crawlKodePosId(
  * 1) tanya kodepos.id: ada provinsi yang bertambah/berubah sejak patokan diambil?
  * 2) kalau ada, crawl hanya provinsi itu dan perbarui tabel patokan
  * 3) adukan kodepos_data (Neon) terhadap tabel patokan — di level kode pos
+ *
+ * Cloudflare kodepos.id menolak IP datacenter, jadi kalau server diblokir (403)
+ * pemeriksaan tetap jalan memakai patokan terakhir dan alasannya ditampilkan.
  */
 export async function runKodePosLiveSync(onProgress?: SyncProgress): Promise<KodePosSyncPlan> {
   onProgress?.('Menanyakan kondisi terbaru ke kodepos.id...', 6);
   const fresh = await fetchJson('/api/kodepos-id?view=fresh');
+
+  const ambilPatokan = async () => {
+    onProgress?.('Membandingkan dengan database Neon...', 88);
+    const json = await fetchJson('/api/kodepos-baseline?view=diff');
+    if (!json.ready) {
+      throw new Error(
+        fresh.blocked
+          ? 'kodepos.id menolak server ini, dan patokan belum terisi. Jalankan sekali dari laptop: node tools/crawl-kodepos-id.mjs --base <alamat-app>'
+          : 'Patokan belum terisi — jalankan pemeriksaan ini sekali lagi sampai kodepos.id terkumpul.'
+      );
+    }
+    return { ...json, source: fresh.source || json.source };
+  };
+
+  if (fresh.blocked) {
+    const json = await ambilPatokan();
+    return planFromBaselineDiff(json, `kodepos.id menolak server ini (${fresh.reason || '403'}) — hasil di bawah memakai patokan terakhir.`);
+  }
+
   const perlu: string[] = [
     ...((fresh.belumPernah || []) as string[]),
     ...((fresh.berubah || []) as any[]).map((b) => String(b.provinsi)),
@@ -479,16 +501,9 @@ export async function runKodePosLiveSync(onProgress?: SyncProgress): Promise<Kod
     }
   }
 
-  onProgress?.('Membandingkan dengan database Neon...', 88);
-  const json = await fetchJson('/api/kodepos-baseline?view=diff');
-  if (!json.ready) {
-    throw new Error(
-      `kodepos.id sudah disentuh tapi tabel patokan masih kosong — jalankan ulang pemeriksaan ini.`
-    );
-  }
-
+  const json = await ambilPatokan();
   const catatan = perlu.length
     ? `${perlu.length} provinsi diperbarui barusan dari kodepos.id (${perlu.slice(0, 4).join(', ')}${perlu.length > 4 ? ', ...' : ''}).`
     : 'kodepos.id masih sama dengan patokan terakhir, jadi tidak perlu ambil ulang.';
-  return planFromBaselineDiff({ ...json, source: fresh.source || json.source }, catatan);
+  return planFromBaselineDiff(json, catatan);
 }

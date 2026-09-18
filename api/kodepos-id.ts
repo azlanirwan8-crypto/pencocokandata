@@ -256,13 +256,44 @@ export default async function handler(req: any, res: any) {
     /**
      * Cek apakah kodepos.id masih sama dengan terakhir kita kumpul.
      * Murah: per provinsi hanya 3 request (pertama, terakhir, halaman setelah
-     * terakhir). Provinsi yang tumbuh atau isinya berubah masuk daftar `changed`.
+     * terakhir). Provinsi yang tumbuh atau isinya berubah masuk daftar `berubah`.
+     *
+     * Cloudflare-nya kodepos.id menolak IP datacenter (Vercel dapat 403), jadi
+     * kondisi itu dibalas sebagai `blocked: true` supaya klien memakai patokan
+     * terakhir alih-alih gagal merah.
      */
     if (req.method === 'GET' && view === 'fresh') {
       await ensureSchema(sql);
-      const res2 = await fetch(SITE, { headers: BROWSER_HEADERS });
-      if (!res2.ok) throw new Error(`kodepos.id menolak (HTTP ${res2.status}).`);
-      const provinces = parseProvinceSlugs(await res2.text());
+      let provinces: string[];
+      try {
+        const res2 = await fetch(SITE, { headers: BROWSER_HEADERS });
+        if (!res2.ok) {
+          return res.status(200).json({
+            ok: true,
+            configured: true,
+            blocked: true,
+            source: SOURCE_LABEL,
+            reason: `kodepos.id menolak server (HTTP ${res2.status}).`,
+            provinces: [],
+            belumPernah: [],
+            berubah: [],
+            fresh: false,
+          });
+        }
+        provinces = parseProvinceSlugs(await res2.text());
+      } catch (err: any) {
+        return res.status(200).json({
+          ok: true,
+          configured: true,
+          blocked: true,
+          source: SOURCE_LABEL,
+          reason: `kodepos.id tidak bisa dihubungi dari server (${err?.message || 'gagal'}).`,
+          provinces: [],
+          belumPernah: [],
+          berubah: [],
+          fresh: false,
+        });
+      }
       if (provinces.length < 20) throw new Error(`Hanya ${provinces.length} provinsi terbaca — struktur situs berubah.`);
 
       const stored = await sql`SELECT provinsi, halaman, sampel FROM kodepos_crawl_state;`;
@@ -408,7 +439,63 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    return res.status(400).json({ ok: false, error: 'Gunakan GET ?view=provinces atau POST ?view=crawl.' });
+    /**
+     * Terima hasil crawl yang dijalankan dari luar (mis. tools/crawl-kodepos-id.mjs
+     * di laptop sendiri, karena IP datacenter ditolak Cloudflare-nya kodepos.id).
+     * Body: { rows: [{ kodePos, kelurahan, kecamatan, kabupatenKota, provinsi }] }
+     */
+    if (req.method === 'POST' && view === 'ingest') {
+      await ensureSchema(sql);
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
+      const input = Array.isArray(body.rows) ? body.rows : [];
+      if (input.length === 0) return res.status(400).json({ ok: false, error: 'body.rows kosong.' });
+      if (input.length > 5000) return res.status(400).json({ ok: false, error: 'Maksimal 5000 baris per permintaan.' });
+
+      let versi = Number(body.versi) || 0;
+      if (!versi) {
+        const max = await sql`SELECT COALESCE(MAX(versi), 0)::int AS v FROM kodepos_baseline;`;
+        versi = (max?.[0]?.v || 0) + 1;
+      }
+
+      const byKey = new Map<string, CollectedRow>();
+      for (const r of input) {
+        const row: CollectedRow = {
+          kode_wilayah: '',
+          kode_pos: String(r.kodePos ?? r.kode_pos ?? '').trim(),
+          kelurahan: String(r.kelurahan ?? '').trim(),
+          kecamatan: String(r.kecamatan ?? '').trim(),
+          kabupaten_kota: String(r.kabupatenKota ?? r.kabupaten_kota ?? '').trim(),
+          provinsi: String(r.provinsi ?? '').trim(),
+        };
+        if (!/^\d{5}$/.test(row.kode_pos) || !row.kelurahan) continue;
+        byKey.set(rowKey(row), { ...row, kode_wilayah: rowKey(row) });
+      }
+      const unique = [...byKey.values()];
+      if (unique.length === 0) return res.status(400).json({ ok: false, error: 'Tidak ada baris yang sah.' });
+
+      const chunk = JSON.stringify(unique);
+      await sql`
+        INSERT INTO kodepos_baseline (kode_wilayah, kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, sumber, versi, diambil_pada)
+        SELECT kode_wilayah, kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi,
+               ${SOURCE_LABEL}, ${versi}, NOW()
+        FROM json_to_recordset(${chunk}::json) as x(
+          kode_wilayah VARCHAR(13), kode_pos VARCHAR(10), kelurahan TEXT,
+          kecamatan TEXT, kabupaten_kota TEXT, provinsi TEXT
+        )
+        ON CONFLICT (kode_wilayah) DO UPDATE SET
+          kode_pos = EXCLUDED.kode_pos,
+          kelurahan = EXCLUDED.kelurahan,
+          kecamatan = EXCLUDED.kecamatan,
+          kabupaten_kota = EXCLUDED.kabupaten_kota,
+          provinsi = EXCLUDED.provinsi,
+          sumber = EXCLUDED.sumber,
+          versi = EXCLUDED.versi,
+          diambil_pada = NOW();
+      `;
+      return res.status(200).json({ ok: true, configured: true, upserted: unique.length, versi, source: SOURCE_LABEL });
+    }
+
+    return res.status(400).json({ ok: false, error: 'Gunakan GET ?view=provinces|fresh|state atau POST ?view=crawl|commit|ingest.' });
   } catch (error: any) {
     console.error('Kodepos.id crawl error:', error);
     return res.status(502).json({ ok: false, configured: true, error: error?.message || 'Crawl kodepos.id gagal.' });

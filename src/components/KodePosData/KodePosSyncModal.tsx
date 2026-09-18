@@ -1,15 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshCw, X, CloudUpload, CheckCircle2, AlertCircle, ShieldCheck, Download, Globe } from 'lucide-react';
-import {
-  runKodePosSync,
-  runKodePosSourceAudit,
-  runKodePosBaselineAudit,
-  pullKodePosBaseline,
-  crawlKodePosId,
-  runKodePosLiveSync,
-  type KodePosSyncPlan,
-  type SyncProgress,
-} from '../../utils/kodePosSync';
+import { RefreshCw, X, CloudUpload, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react';
+import { runKodePosLiveSync, type KodePosSyncPlan, type SyncProgress } from '../../utils/kodePosSync';
 import { saveKodePosToNeon, type KodePosRow } from '../../utils/neonSync';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
 
@@ -19,7 +10,7 @@ interface KodePosSyncModalProps {
   onImported?: () => void;
 }
 
-type Phase = 'checking' | 'ready' | 'importing' | 'pulling';
+type Phase = 'checking' | 'ready' | 'importing';
 
 const fmt = (n: number) => n.toLocaleString('id-ID');
 
@@ -41,18 +32,11 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [importMsg, setImportMsg] = useState<string | null>(null);
-  // 'langsung' = cek kodepos.id saat tombol diklik; 'baseline' = patokan tersimpan tanpa internet;
-  // 'db' = berkas perangkat ini vs Neon; 'resmi'/'komunitas' = sumber eksternal lain
-  const [sourceMode, setSourceMode] = useState<'langsung' | 'baseline' | 'db' | 'resmi' | 'komunitas'>('langsung');
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const rows = plan?.missingInCloud || [];
-  const codes = plan?.missingCodes || [];
-  const missingCount = plan?.importable === false ? codes.length : rows.length;
   const win = useVirtualWindow({ containerRef: scrollRef, itemCount: rows.length, minRowsToWindow: 60 });
   const renderedRows = win.active ? rows.slice(win.start, win.end) : rows;
-  const codeWin = useVirtualWindow({ containerRef: scrollRef, itemCount: codes.length, minRowsToWindow: 60 });
-  const renderedCodes = codeWin.active ? codes.slice(codeWin.start, codeWin.end) : codes;
 
   const onProgress: SyncProgress = (message, percent) => {
     setStep(message);
@@ -66,19 +50,9 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
     setPlan(null);
     setSelected(new Set());
     try {
-      const result =
-        sourceMode === 'langsung'
-          ? await runKodePosLiveSync(onProgress)
-          : sourceMode === 'db'
-            ? await runKodePosSync(onProgress)
-            : sourceMode === 'baseline'
-              ? await runKodePosBaselineAudit(onProgress)
-              : await runKodePosSourceAudit(sourceMode, onProgress);
+      const result = await runKodePosLiveSync(onProgress);
       setPlan(result);
-      // Default: semua baris yang belum ada di cloud terpilih
-      setSelected(
-        new Set(result.missingInCloud.map((r) => `${r.kodePos}|${r.kelurahan}|${r.kecamatan}`))
-      );
+      setSelected(new Set(result.missingInCloud.map(rowKey)));
       setPhase('ready');
     } catch (err: any) {
       setErrorMsg(err?.message || 'Pemeriksaan sinkronisasi gagal.');
@@ -89,11 +63,10 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
   useEffect(() => {
     if (open) void startCheck();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, sourceMode]);
+  }, [open]);
 
-  const rowKey = (r: KodePosRow) => `${r.kodePos}|${r.kelurahan}|${r.kecamatan}`;
   const allChecked = rows.length > 0 && selected.size === rows.length;
-  const busy = phase === 'checking' || phase === 'pulling';
+  const checking = phase === 'checking';
 
   const toggleAll = () => {
     setSelected(allChecked ? new Set() : new Set(rows.map(rowKey)));
@@ -132,41 +105,6 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
     }
   };
 
-  // Tarik salinan resmi dari Satu Data Indonesia (data.go.id) ke tabel kodepos_baseline.
-  const handlePullBaseline = async () => {
-    setPhase('pulling');
-    setErrorMsg(null);
-    setImportMsg(null);
-    setPct(0);
-    try {
-      const res = await pullKodePosBaseline(onProgress);
-      const msg =
-        `Baseline tersimpan di tabel kodepos_baseline: ${fmt(res.rows)} baris (tarikan ke-${res.version}). Sumber: ${res.sumber}.`;
-      setImportMsg(msg);
-      await startCheck(msg);
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'Gagal menarik baseline dari sumber pemerintah.');
-      setPhase('ready');
-    }
-  };
-
-  // Kumpul patokan dari kodepos.id (diproses per provinsi oleh server).
-  const handleCrawlKodePosId = async () => {
-    setPhase('pulling');
-    setErrorMsg(null);
-    setImportMsg(null);
-    setPct(0);
-    try {
-      const res = await crawlKodePosId(onProgress);
-      const msg = `Patokan dari ${res.sumber} tersimpan: ${fmt(res.rows)} baris dari ${res.provinces} provinsi (tarikan ke-${res.version}).`;
-      setImportMsg(msg);
-      await startCheck(msg);
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'Crawl kodepos.id gagal.');
-      setPhase('ready');
-    }
-  };
-
   if (!open) return null;
 
   return (
@@ -183,83 +121,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
         </div>
 
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
-          <div>
-            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '0.35rem' }}>
-              Adukan data Neon dengan
-            </div>
-            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'nowrap', overflowX: 'auto' }}>
-              {([
-                { key: 'langsung', label: 'kodepos.id (langsung)' },
-                { key: 'baseline', label: 'Patokan di DB kita' },
-                { key: 'db', label: 'Berkas di perangkat ini' },
-                { key: 'resmi', label: 'Sumber resmi' },
-                { key: 'komunitas', label: 'Sumber komunitas' },
-              ] as const).map((s) => {
-                const active = sourceMode === s.key;
-                return (
-                  <button
-                    key={s.key}
-                    type="button"
-                    onClick={() => setSourceMode(s.key)}
-                    disabled={busy || phase === 'importing'}
-                    title={
-                      s.key === 'langsung'
-                        ? 'Klik = cek kodepos.id sekarang juga; provinsi yang berubah diambil ulang, lalu database diadu'
-                        : s.key === 'baseline'
-                        ? 'Tabel kodepos_baseline di database kita sendiri — isinya salinan data pemerintah yang pernah ditarik'
-                        : s.key === 'db'
-                          ? 'Berkas master kode pos yang tersimpan di browser/laptop ini (bukan internet)'
-                          : s.key === 'resmi'
-                            ? 'Kepmendagri + daftar kode pos Pos Indonesia (tanpa nama wilayah, tidak bisa diimpor)'
-                            : 'Dataset GitHub lengkap bernama (asal komunitas, bukan resmi)'
-                    }
-                    style={{
-                      background: active ? '#405189' : '#ffffff',
-                      color: active ? '#ffffff' : '#495057',
-                      border: `1px solid ${active ? '#405189' : '#d5dde3'}`,
-                      borderRadius: '6px',
-                      padding: '0.3rem 0.65rem',
-                      fontSize: '0.73rem',
-                      fontWeight: 700,
-                      cursor: active ? 'default' : 'pointer',
-                      whiteSpace: 'nowrap',
-                      flexShrink: 0,
-                    }}
-                  >
-                    {s.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          {sourceMode === 'langsung' && !busy && phase !== 'importing' && (
-            <div style={{ fontSize: '0.74rem', color: '#878a99' }}>
-              Pemeriksaan ini menghubungi <strong style={{ color: '#495057' }}>kodepos.id</strong> sekarang:
-              hanya provinsi yang isinya berubah yang diambil ulang, lalu database Neon diadu terhadapnya.
-              Sekali pertama ±8-10 menit (menyeluruh); sesudah itu biasanya puluhan detik.
-            </div>
-          )}
-          {sourceMode === 'baseline' && !busy && phase !== 'importing' && (
-            <div>
-              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '0.35rem' }}>
-                Isi ulang patokan
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-                <button type="button" className="btn btn-outline btn-sm" onClick={() => void handleCrawlKodePosId()}>
-                  <Download size={13} style={{ marginRight: '0.3rem' }} />
-                  Ambil ulang semua dari kodepos.id
-                </button>
-                <button type="button" className="btn btn-outline btn-sm" onClick={() => void handlePullBaseline()}>
-                  <Globe size={13} style={{ marginRight: '0.3rem' }} />
-                  Tarik dari data pemerintah
-                </button>
-                <span style={{ fontSize: '0.74rem', color: '#878a99' }}>
-                  Pemeriksaan "Patokan di DB kita" tidak menyentuh internet — tombol ini yang mengisinya.
-                </span>
-              </div>
-            </div>
-          )}
-          {busy && (
+          {checking && (
             <div style={{ padding: '1.5rem 0.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.7rem' }}>
                 <RefreshCw size={16} color="#299cdb" style={{ animation: 'pulse 1.2s ease-in-out infinite' }} />
@@ -270,20 +132,13 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                 <div style={{ width: `${pct}%`, height: '100%', background: '#299cdb', transition: 'width .2s' }} />
               </div>
               <p style={{ fontSize: '0.76rem', color: '#878a99', marginTop: '0.7rem' }}>
-                {phase === 'pulling'
-                  ? 'Fungsi server mengambil data per 1.000 baris (maks. 5 halaman tiap panggilan) lalu menimpanya di tabel kodepos_baseline berdasarkan kode wilayah. Baris lama tetap aman bila sumbernya tidak berubah.'
-                  : sourceMode === 'langsung'
-                    ? 'Server membuka halaman provinsi kodepos.id, membandingkan beberapa halaman sampel dengan jejak terakhir, mengambil ulang yang berubah, lalu Neon diadu terhadap tabel patokan.'
-                    : sourceMode === 'db'
-                      ? 'Membandingkan master lokal dengan tabel kodepos_data di Neon memakai sidik jari per provinsi, lalu menghitung selisih hanya pada provinsi yang berbeda.'
-                      : sourceMode === 'baseline'
-                        ? 'Membandingkan daftar kode pos unik di tabel kodepos_data Neon dengan isi tabel kodepos_baseline milik kita sendiri — tanpa menyentuh internet.'
-                        : 'Server mengunduh dataset eksternal lalu membandingkan daftar kode posnya dengan DISTINCT kode_pos di tabel kodepos_data Neon. Hasilnya di-cache 10 menit.'}
+                Server membuka halaman provinsi kodepos.id, membandingkan beberapa halaman sampel dengan
+                jejak terakhir, mengambil ulang yang berubah, lalu database Neon diadu terhadapnya.
               </p>
             </div>
           )}
 
-          {!busy && errorMsg && (
+          {!checking && errorMsg && (
             <div
               style={{
                 display: 'flex',
@@ -303,20 +158,20 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
             </div>
           )}
 
-          {!busy && !errorMsg && plan && (
+          {!checking && !errorMsg && plan && (
             <>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.75rem' }}>
                 <StatCard
                   label="1. Kode pos di Neon"
                   value={fmt(plan.dbTotal)}
-                  sub={sourceMode === 'db' ? 'baris tersimpan di cloud' : 'kode pos unik tersimpan di cloud'}
+                  sub="kode pos unik tersimpan di cloud"
                   color="#405189"
                 />
                 <StatCard
                   label="2. Belum ada di Neon"
-                  value={fmt(missingCount)}
+                  value={fmt(rows.length)}
                   sub={`dibandingkan ${plan.compareLabel.toLowerCase()}`}
-                  color={missingCount > 0 ? '#f06548' : '#0ab39c'}
+                  color={rows.length > 0 ? '#f06548' : '#0ab39c'}
                 />
                 <StatCard
                   label="3. Provinsi terdampak"
@@ -325,10 +180,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                   color="#d68b0c"
                 />
               </div>
-              <div
-                title={plan.sourceDetail}
-                style={{ fontSize: '0.76rem', color: '#878a99', lineHeight: 1.6 }}
-              >
+              <div title={plan.sourceDetail} style={{ fontSize: '0.76rem', color: '#878a99', lineHeight: 1.6 }}>
                 <strong style={{ color: '#495057' }}>Sumber data kartu 2:</strong>{' '}
                 {plan.sourceLabel || plan.compareLabel}
                 {' · '}
@@ -346,7 +198,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
             </>
           )}
 
-          {!busy && !errorMsg && plan && plan.status === 'SYNCED' && (
+          {!checking && !errorMsg && plan && plan.status === 'SYNCED' && (
             <div
               style={{
                 display: 'flex',
@@ -364,67 +216,22 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                   Database kita sudah versi terbaru dan valid.
                 </div>
                 <div style={{ fontSize: '0.79rem', color: '#495057', marginTop: '0.3rem', lineHeight: 1.6 }}>
-                  Tidak ada selisih: seluruh data dari {plan.compareLabel.toLowerCase()} sudah tersimpan di Neon.
+                  Tidak ada selisih: seluruh kode pos dari {plan.compareLabel.toLowerCase()} sudah tersimpan di Neon.
                   {plan.lastUpdated ? ` Diperbarui: ${new Date(plan.lastUpdated).toLocaleString('id-ID')}.` : ''}
                 </div>
                 {plan.note && (
                   <div style={{ fontSize: '0.74rem', color: '#878a99', marginTop: '0.5rem' }}>{plan.note}</div>
                 )}
-                {plan.cloudOnlyProvinces.length > 0 && (
-                  <div style={{ fontSize: '0.76rem', color: '#d68b0c', marginTop: '0.5rem' }}>
-                    Catatan: {plan.cloudOnlyProvinces.length} provinsi hanya ada di cloud
-                    ({plan.cloudOnlyProvinces.map((p) => p.provinsi).join(', ')}).
-                  </div>
-                )}
               </div>
             </div>
           )}
 
-          {!busy && !errorMsg && plan && plan.status === 'DIFF' && (
+          {!checking && !errorMsg && plan && plan.status === 'DIFF' && (
             <>
               <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#495057' }}>
-                {plan.importable === false
-                  ? `Daftar ${fmt(codes.length)} kode pos resmi yang belum ada di Neon`
-                  : `Daftar ${fmt(rows.length)} baris ber-kode pos yang belum ada di Neon`}
+                Daftar {fmt(rows.length)} baris ber-kode pos yang belum ada di Neon
               </div>
-              {plan.note && (
-                <div style={{ fontSize: '0.74rem', color: '#878a99' }}>{plan.note}</div>
-              )}
-
-              {plan.importable === false ? (
-                <div ref={scrollRef} className="table-container" style={{ maxHeight: '360px', overflow: 'auto', border: '1px solid #e9ebec', borderRadius: '6px' }}>
-                  <table className="modern-table" style={{ fontSize: '0.76rem' }}>
-                    <thead style={{ position: 'sticky', top: 0, zIndex: 5, background: '#f3f6f9' }}>
-                      <tr>
-                        <th style={{ width: '160px' }}>Kode wilayah (Kepmendagri)</th>
-                        <th style={{ width: '110px', textAlign: 'center' }}>Kode pos</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {codes.length === 0 ? (
-                        <tr>
-                          <td colSpan={2} style={{ textAlign: 'center', padding: '2rem', color: '#878a99' }}>
-                            Semua kode pos sumber resmi sudah tersimpan di Neon.
-                          </td>
-                        </tr>
-                      ) : (
-                        <>
-                          {codeWin.active && codeWin.padTop > 0 && <tr aria-hidden="true" style={{ height: `${codeWin.padTop}px` }} />}
-                          {renderedCodes.map((c, i) => (
-                            <tr key={`${c.kode}-${i}`} data-vrow={i === 0 ? 'true' : undefined}>
-                              <td className="code-cell">{c.kode}</td>
-                              <td className="code-cell" style={{ textAlign: 'center', fontWeight: 700, color: '#0ab39c' }}>
-                                {c.kodePos}
-                              </td>
-                            </tr>
-                          ))}
-                          {codeWin.active && codeWin.padBottom > 0 && <tr aria-hidden="true" style={{ height: `${codeWin.padBottom}px` }} />}
-                        </>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
+              {plan.note && <div style={{ fontSize: '0.74rem', color: '#878a99' }}>{plan.note}</div>}
 
               <div ref={scrollRef} className="table-container" style={{ maxHeight: '360px', overflow: 'auto', border: '1px solid #e9ebec', borderRadius: '6px' }}>
                 <table className="modern-table" style={{ fontSize: '0.76rem' }}>
@@ -472,14 +279,6 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                   </tbody>
                 </table>
               </div>
-              )}
-
-              {plan.missingInLocal.length > 0 && (
-                <div style={{ fontSize: '0.75rem', color: '#878a99' }}>
-                  {plan.missingInLocal.length} baris contoh (maks. 500 per provinsi) ada di Neon tetapi tidak ada di
-                  master perangkat ini — periksa kembali berkas sumber kode pos lokal bila itu bukan memang dihapus.
-                </div>
-              )}
             </>
           )}
         </div>
@@ -496,19 +295,18 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
             type="button"
             className="btn btn-primary btn-sm"
             onClick={() => void handleImport()}
-            disabled={phase !== 'ready' || plan?.importable === false || selectedRows.length === 0}
-            title={plan?.importable === false ? 'Sumber resmi tidak memuat nama wilayah, jadi tidak bisa diimpor langsung' : undefined}
+            disabled={phase !== 'ready' || selectedRows.length === 0}
             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
           >
             <CloudUpload size={13} />
-            {phase === 'importing'
-              ? 'Menyimpan...'
-              : plan?.importable === false
-                ? 'Tidak bisa diimpor dari sumber resmi'
-                : `Simpan/Import Data Terpilih ke Neon (${fmt(selectedRows.length)})`}
+            {phase === 'importing' ? 'Menyimpan...' : `Simpan/Import Data Terpilih ke Neon (${fmt(selectedRows.length)})`}
           </button>
         </div>
       </div>
     </div>
   );
 };
+
+function rowKey(r: KodePosRow) {
+  return `${r.kodePos}|${r.kelurahan}|${r.kecamatan}`;
+}
