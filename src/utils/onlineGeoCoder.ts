@@ -16,6 +16,35 @@ const IDB_PREFIX = 'geo_cache_';
 // In-Memory ephemeral session cache (RAM only, 0 bytes in code/harddisk)
 const sessionCache = new Map<string, GeoLocationResult>();
 
+type TitikSimpanan = { lat: number; lng: number; sumber: 'google' | 'esri' | 'osm' };
+let titikKodePos: Promise<Record<string, TitikSimpanan>> | null = null;
+
+/**
+ * Titik kode pos yang sudah tersimpan di Neon (tabel kodepos_geo). Inilah sumber
+ * lokasi peta dashboard: sekali muat per sesi, tidak menebak ulang lewat internet.
+ */
+function ambilTitikKodePos(): Promise<Record<string, TitikSimpanan>> {
+  if (!titikKodePos) {
+    titikKodePos = fetch('/api/kodepos-geo?view=points')
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then((json: any) => {
+        const out: Record<string, TitikSimpanan> = {};
+        for (const t of json?.data || []) {
+          const kode = String(t?.kodePos || '').trim();
+          const lat = Number(t?.lat);
+          const lng = Number(t?.lng);
+          const sumber = t?.sumber;
+          if (!kode || !Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+          if (sumber !== 'google' && sumber !== 'esri' && sumber !== 'osm') continue;
+          out[kode] = { lat, lng, sumber };
+        }
+        return out;
+      })
+      .catch(() => ({} as Record<string, TitikSimpanan>));
+  }
+  return titikKodePos;
+}
+
 export function getStoredGoogleApiKey(): string {
   if (typeof window === 'undefined') return '';
   return (
@@ -102,6 +131,25 @@ export async function geocodeRealtime(
   }
 
   const activeKey = apiKey || getStoredGoogleApiKey();
+
+  // 0. Titik kode pos yang sudah tersimpan & terverifikasi di Neon menang mutlak:
+  //    peta dashboard harus memakai titik yang sama dengan menu Kode Pos. Hanya
+  //    angka 5 digit di ujung query (bukan nomor jalan) yang dianggap kode pos.
+  const kodePos = (clean.match(/(\d{5})(?:,\s*Indonesia)?\s*$/) || [])[1];
+  if (kodePos) {
+    const titik = (await ambilTitikKodePos())[kodePos];
+    if (titik) {
+      const result: GeoLocationResult = {
+        lat: titik.lat,
+        lng: titik.lng,
+        formattedAddress: `Titik kode pos ${kodePos} (tersimpan di Neon)`,
+        source: titik.sumber,
+      };
+      sessionCache.set(cacheKey, result);
+      try { await set(IDB_PREFIX + cacheKey, result); } catch (e) {}
+      return result;
+    }
+  }
 
   // 1. Try local or Vercel serverless /api/geocode endpoint
   try {

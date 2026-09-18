@@ -1,7 +1,7 @@
 import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshCw, X, CloudUpload, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react';
+import { RefreshCw, X, CloudUpload, CheckCircle2, AlertCircle, ShieldCheck, ExternalLink } from 'lucide-react';
 import { runKodePosLiveSync, type KodePosSyncPlan, type SyncProgress } from '../../utils/kodePosSync';
-import { saveKodePosToNeon, type KodePosRow } from '../../utils/neonSync';
+import { saveKodePosToNeon, mapsUrlFor, geoLabel, type KodePosRow } from '../../utils/neonSync';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
 
 interface KodePosSyncModalProps {
@@ -120,7 +120,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
 
   return (
     <div className="modal-backdrop">
-      <div className="modal-container" style={{ maxWidth: '860px' }}>
+      <div className="modal-container" style={{ maxWidth: '1000px' }}>
         <div className="modal-header">
           <h4 className="modal-title">
             <RefreshCw size={16} color="#405189" />
@@ -259,12 +259,15 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                       <th>Kecamatan</th>
                       <th>Kota / Kabupaten</th>
                       <th>Provinsi</th>
+                      <th style={{ width: '105px', textAlign: 'right' }}>Latitude</th>
+                      <th style={{ width: '105px', textAlign: 'right' }}>Longitude</th>
+                      <th style={{ width: '70px', textAlign: 'center' }}>Maps</th>
                     </tr>
                   </thead>
                   <tbody>
                     {shownRows.length === 0 ? (
                       <tr>
-                        <td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: '#878a99' }}>
+                        <td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: '#878a99' }}>
                           {rows.length === 0 ? 'Tidak ada baris yang perlu dikirim ke Neon.' : 'Tidak ada yang cocok dengan pencarian.'}
                         </td>
                       </tr>
@@ -284,6 +287,53 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                               <td>{r.kecamatan}</td>
                               <td>{r.kabupatenKota}</td>
                               <td>{r.provinsi}</td>
+                              <td
+                                title={geoLabel(r)}
+                                style={{
+                                  textAlign: 'right',
+                                  fontFamily: 'monospace',
+                                  color: r.latitude == null ? '#adb5bd' : '#495057',
+                                }}
+                              >
+                                {r.latitude == null ? '—' : r.latitude.toFixed(6)}
+                              </td>
+                              <td
+                                title={geoLabel(r)}
+                                style={{
+                                  textAlign: 'right',
+                                  fontFamily: 'monospace',
+                                  color: r.longitude == null ? '#adb5bd' : '#495057',
+                                }}
+                              >
+                                {r.longitude == null ? '—' : r.longitude.toFixed(6)}
+                              </td>
+                              <td style={{ textAlign: 'center' }}>
+                                <button
+                                  type="button"
+                                  disabled={r.latitude == null || r.longitude == null}
+                                  onClick={() =>
+                                    window.open(
+                                      mapsUrlFor(r.latitude as number, r.longitude as number),
+                                      '_blank',
+                                      'noopener,noreferrer'
+                                    )
+                                  }
+                                  title={
+                                    r.latitude == null
+                                      ? 'Titik koordinat belum ada — jalankan "Isi Koordinat" di tabel Kode Pos'
+                                      : `Buka Maps/Google · ${geoLabel(r)}`
+                                  }
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: r.latitude == null ? '#ced4da' : '#0ab39c',
+                                    cursor: r.latitude == null ? 'not-allowed' : 'pointer',
+                                    padding: '2px',
+                                  }}
+                                >
+                                  <ExternalLink size={13} />
+                                </button>
+                              </td>
                             </tr>
                           );
                         })}

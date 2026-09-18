@@ -11,7 +11,7 @@ import { neon } from '@neondatabase/serverless';
  * DELETE ?id=X                                  → hapus satu baris
  * DELETE ?all=1                                 → truncate semua
  *
- * Table: kodepos_data (dedicated, dengan index)
+ * Table: kodepos_data (dedicated, dengan index); titik koordinatnya di kodepos_geo
  */
 
 // Bulk import (83k baris) & export bisa lama — naikkan batas serverless Vercel.
@@ -37,7 +37,36 @@ function mapRow(r: any) {
     kabupatenKota: r.kabupaten_kota ?? '',
     provinsi: r.provinsi ?? '',
     status: r.status ?? 'AKTIF',
+    latitude: r.latitude == null ? null : Number(r.latitude),
+    longitude: r.longitude == null ? null : Number(r.longitude),
+    geoSumber: r.geo_sumber ?? null,
+    geoPresisi: r.geo_presisi ?? null,
+    geoTerverifikasi: r.terverifikasi_google === true,
   };
+}
+
+/** Tabel geo pernah gagal dibaca — setelah itu halaman selalu jatuh ke query polos. */
+let geoTerganggu = false;
+
+/**
+ * Baca dengan titik koordinat, tetapi jangan pernah membuat tabel kode pos mati
+ * hanya karena kodepos_geo belum ada/belum bisa dibuat di deployment ini.
+ */
+async function bacaDenganTitik(
+  sql: any,
+  sqlGeo: string,
+  sqlPolos: string,
+  params: any[]
+): Promise<any[]> {
+  if (!geoTerganggu) {
+    try {
+      return (await sql.query(sqlGeo, params)) as any[];
+    } catch (err) {
+      geoTerganggu = true;
+      console.warn('kodepos_geo belum terbaca, halaman disajikan tanpa titik koordinat:', err);
+    }
+  }
+  return (await sql.query(sqlPolos, params)) as any[];
 }
 
 /**
@@ -128,6 +157,22 @@ export default async function handler(req: any, res: any) {
           await sql`CREATE INDEX IF NOT EXISTS idx_kodepos_kode       ON kodepos_data(kode_pos);`;
           await sql`CREATE INDEX IF NOT EXISTS idx_kodepos_provinsi   ON kodepos_data(provinsi);`;
           await sql`CREATE INDEX IF NOT EXISTS idx_kodepos_kabupaten  ON kodepos_data(kabupaten_kota);`;
+          await sql`
+            CREATE TABLE IF NOT EXISTS kodepos_geo (
+              kode_pos              VARCHAR(10) PRIMARY KEY,
+              latitude              DOUBLE PRECISION,
+              longitude             DOUBLE PRECISION,
+              sumber                TEXT,
+              presisi               TEXT,
+              terverifikasi_google  BOOLEAN DEFAULT FALSE,
+              alamat                TEXT,
+              dicari                TEXT,
+              provinsi              TEXT,
+              kabupaten_kota        TEXT,
+              diambil_pada          TIMESTAMPTZ,
+              dibuat_pada           TIMESTAMPTZ DEFAULT NOW()
+            );
+          `;
         } catch (err) {
           console.warn('Migrasi skema kodepos dilewati:', err);
         }
@@ -206,7 +251,16 @@ export default async function handler(req: any, res: any) {
 
       // export: semua baris yang cocok filter (tanpa pagination)
       if (view === 'export') {
-        const rows = await sql.query(
+        const rows = await bacaDenganTitik(
+          sql,
+          `WITH s AS (
+             SELECT id, kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, status
+             FROM kodepos_data ${whereSql}
+           )
+           SELECT s.*, g.latitude, g.longitude,
+                  g.sumber AS geo_sumber, g.presisi AS geo_presisi, g.terverifikasi_google
+           FROM s LEFT JOIN kodepos_geo g ON g.kode_pos = upper(btrim(s.kode_pos))
+           ORDER BY s.id;`,
           `SELECT id, kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, status
            FROM kodepos_data ${whereSql} ORDER BY id;`,
           params
@@ -257,7 +311,16 @@ export default async function handler(req: any, res: any) {
 
       const limitIdx = params.length + 1;
       const offsetIdx = params.length + 2;
-      const rows = await sql.query(
+      const rows = await bacaDenganTitik(
+        sql,
+        `WITH s AS (
+           SELECT id, kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, status
+           FROM kodepos_data ${whereSql} ORDER BY id LIMIT $${limitIdx} OFFSET $${offsetIdx}
+         )
+         SELECT s.*, g.latitude, g.longitude,
+                g.sumber AS geo_sumber, g.presisi AS geo_presisi, g.terverifikasi_google
+         FROM s LEFT JOIN kodepos_geo g ON g.kode_pos = upper(btrim(s.kode_pos))
+         ORDER BY s.id;`,
         `SELECT id, kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, status
          FROM kodepos_data ${whereSql}
          ORDER BY id

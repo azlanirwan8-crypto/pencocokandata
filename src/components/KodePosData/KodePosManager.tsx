@@ -23,6 +23,8 @@ import {
   Check,
   Filter,
   Info,
+  ExternalLink,
+  Navigation,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { DEFAULT_KODEPOS_DATA } from './defaultKodePosData';
@@ -35,9 +37,15 @@ import {
   createKodePosRow,
   updateKodePosRow,
   deleteKodePosRow,
+  fetchKodePosGeoStats,
+  runKodePosGeoBatch,
+  mapsUrlFor,
+  geoLabel,
   type KodePosRow,
   type KodePosStats,
+  type KodePosGeoStats,
 } from '../../utils/neonSync';
+import { getStoredGoogleApiKey } from '../../utils/onlineGeoCoder';
 import { KodePosSyncModal } from './KodePosSyncModal';
 
 interface KodePosManagerProps {
@@ -86,6 +94,16 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
   const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
   const [showSyncModal, setShowSyncModal] = useState<boolean>(false);
   const [detailItem, setDetailItem] = useState<KodePosRow | null>(null);
+
+  // Titik koordinat (kodepos_geo di Neon)
+  const [geoStats, setGeoStats] = useState<KodePosGeoStats | null>(null);
+  const [geoRun, setGeoRun] = useState<{ aktif: boolean; mode: 'isi' | 'verifikasi'; pesan: string; persen: number }>({
+    aktif: false,
+    mode: 'isi',
+    pesan: '',
+    persen: 0,
+  });
+  const geoStopRef = useRef<boolean>(false);
 
   const [formData, setFormData] = useState<KodePosRow>({
     kodePos: '',
@@ -200,6 +218,64 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
   const refreshAfterMutation = () => {
     refreshStats();
     setReloadKey((k) => k + 1);
+  };
+
+  // ─────────────── Titik koordinat kode pos ───────────────
+  const refreshGeo = useCallback(async () => {
+    const g = await fetchKodePosGeoStats();
+    if (g) setGeoStats(g);
+  }, []);
+
+  useEffect(() => {
+    void refreshGeo();
+  }, [refreshGeo, reloadKey]);
+
+  /** Kunci Google: menempel di browser (pengaturan peta) atau terpasang di server Vercel. */
+  const kunciGoogle = Boolean(getStoredGoogleApiKey()) || Boolean(geoStats?.googleSiap);
+
+  const jalankanGeo = async (mode: 'isi' | 'verifikasi') => {
+    if (geoRun.aktif) {
+      geoStopRef.current = true;
+      return;
+    }
+    geoStopRef.current = false;
+    setGeoRun({ aktif: true, mode, pesan: 'Menghubungi penyedia peta...', persen: 0 });
+    let diproses = 0;
+    let pesanAkhir = '';
+    try {
+      // Serverless Vercel mati setelah 60 detik, jadi tahap kecil diulang terus.
+      while (!geoStopRef.current) {
+        const hasil = await runKodePosGeoBatch({
+          mode,
+          jumlah: 40,
+          provinsi: selectedProvinsi !== 'ALL' ? selectedProvinsi : null,
+          apiKey: getStoredGoogleApiKey(),
+        });
+        if (!hasil) {
+          pesanAkhir = 'Server geocoding gagal menjawab. Coba lagi.';
+          break;
+        }
+        diproses += hasil.diproses;
+        const sisa = hasil.menunggu || 0;
+        const keterangan =
+          (mode === 'isi'
+            ? `${diproses.toLocaleString('id-ID')} kode pos dikerjakan · ${sisa.toLocaleString('id-ID')} belum punya titik`
+            : `${diproses.toLocaleString('id-ID')} titik dicek ke Google · ${sisa.toLocaleString('id-ID')} masih belum terverifikasi`) +
+          (hasil.googleTerhenti ? ' · kuota Google habis, titik diisi ESRI' : '');
+        setGeoRun({
+          aktif: true,
+          mode,
+          pesan: keterangan,
+          persen: Math.min(99, Math.round((diproses / Math.max(diproses + sisa, 1)) * 100)),
+        });
+        if (hasil.diproses === 0 || sisa === 0) break;
+      }
+    } finally {
+      geoStopRef.current = false;
+      setGeoRun({ aktif: false, mode, pesan: pesanAkhir, persen: 0 });
+      await refreshGeo();
+      setReloadKey((k) => k + 1);
+    }
   };
 
   // Handle Create / Update Form Submit
@@ -450,6 +526,9 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
         'KABUPATEN / KOTA': r.kabupatenKota,
         'PROVINSI': r.provinsi,
         'STATUS': r.status || 'AKTIF',
+        'LATITUDE': r.latitude ?? '',
+        'LONGITUDE': r.longitude ?? '',
+        'SUMBER KOORDINAT': r.latitude == null ? '' : geoLabel(r).replace('Sumber: ', ''),
       }))
     );
     const wb = XLSX.utils.book_new();
@@ -560,6 +639,43 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
             <RefreshCw size={13} />
             <span>Sync Data</span>
           </button>
+
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={() => void jalankanGeo('isi')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              color: '#0ab39c',
+              borderColor: 'rgba(10, 179, 156, 0.35)',
+            }}
+            title={
+              (geoStats?.menunggu
+                ? `Cari titik koordinat untuk ${geoStats.menunggu.toLocaleString('id-ID')} kode pos yang belum punya lokasi. `
+                : 'Cari titik koordinat kode pos yang belum punya lokasi. ') +
+              (kunciGoogle
+                ? 'Google Geocoding dipakai lebih dulu.'
+                : 'Kunci Google belum dipasang, jadi titik diisi ESRI/OpenStreetMap (kolom sumber menandai itu).')
+            }
+          >
+            <Navigation size={13} />
+            <span>{geoRun.aktif && geoRun.mode === 'isi' ? 'Hentikan' : 'Isi Koordinat'}</span>
+          </button>
+
+          {kunciGoogle && (
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => void jalankanGeo('verifikasi')}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+              title="Cek ulang titik yang belum dikonfirmasi Google Geocoding API"
+            >
+              <CheckCircle2 size={13} />
+              <span>{geoRun.aktif && geoRun.mode === 'verifikasi' ? 'Hentikan' : 'Verifikasi Google'}</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -727,7 +843,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
         </div>
       )}
 
-      {/* 3. 5 KPI Metric Cards matching other menus */}
+      {/* 3. 6 KPI Metric Cards matching other menus */}
       <div className="metrics-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
         <div
           className="metric-card blue"
@@ -794,6 +910,30 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
           </div>
           <div className="metric-value">{stats.totalKelurahan.toLocaleString('id-ID')}</div>
           <div className="metric-footer">Kelurahan / Desa</div>
+        </div>
+
+        <div
+          className="metric-card emerald"
+          title={
+            geoStats
+              ? `${geoStats.geo.punya.toLocaleString('id-ID')} kode pos punya titik · ${geoStats.geo.google.toLocaleString('id-ID')} terverifikasi Google · ${geoStats.menunggu.toLocaleString('id-ID')} belum dicari` +
+                (geoStats.geo.perkiraan ? ` · ${geoStats.geo.perkiraan.toLocaleString('id-ID')} hanya perkiraan wilayah` : '') +
+                (geoStats.geo.gagal ? ` · ${geoStats.geo.gagal.toLocaleString('id-ID')} tidak ditemukan` : '')
+              : 'Titik koordinat kode pos diambil dari tabel kodepos_geo di Neon'
+          }
+        >
+          <div className="metric-header">
+            <span className="metric-title">TITIK KOORDINAT</span>
+            <div className="metric-icon-bubble">
+              <Navigation size={14} />
+            </div>
+          </div>
+          <div className="metric-value">{(geoStats?.geo.punya || 0).toLocaleString('id-ID')}</div>
+          <div className="metric-footer">
+            {geoStats?.geo.google
+              ? `${geoStats.geo.google.toLocaleString('id-ID')} dari Google`
+              : `${(geoStats?.menunggu || 0).toLocaleString('id-ID')} belum ada`}
+          </div>
         </div>
       </div>
 
@@ -933,6 +1073,20 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
           </div>
         )}
 
+        {/* Progress titik koordinat */}
+        {(geoRun.aktif || geoRun.pesan) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.5rem 0.65rem', background: '#f8f9fe', border: '1px solid #e9ebec', borderRadius: '6px' }}>
+            <Navigation size={14} color="#0ab39c" style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: '0.76rem', fontWeight: 600, color: '#405189' }}>
+              {geoRun.pesan || 'Memproses...'}
+            </span>
+            <div style={{ flex: 1, height: '6px', background: '#e9ebec', borderRadius: '4px', overflow: 'hidden', minWidth: '80px' }}>
+              <div style={{ width: `${geoRun.persen}%`, height: '100%', background: 'linear-gradient(90deg, #405189, #0ab39c)', transition: 'width .2s' }} />
+            </div>
+            <span style={{ fontSize: '0.72rem', color: '#878a99', whiteSpace: 'nowrap' }}>{geoRun.persen}%</span>
+          </div>
+        )}
+
         {/* Modern Table Container */}
         <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', overflowX: 'auto', maxHeight: '580px' }}>
           <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
@@ -944,19 +1098,21 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                 <th>KECAMATAN</th>
                 <th>KOTA / KABUPATEN</th>
                 <th>PROVINSI</th>
-                <th style={{ width: '100px', textAlign: 'center' }}>AKSI</th>
+                <th style={{ width: '110px', textAlign: 'right' }} title="Titik koordinat kode pos di Neon">LATITUDE</th>
+                <th style={{ width: '110px', textAlign: 'right' }} title="Titik koordinat kode pos di Neon">LONGITUDE</th>
+                <th style={{ width: '140px', textAlign: 'center' }}>AKSI</th>
               </tr>
             </thead>
             <tbody>
               {loading && rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
+                  <td colSpan={9} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
                     Memuat data dari database...
                   </td>
                 </tr>
               ) : total === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
+                  <td colSpan={9} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
                       <Mail size={32} color="#adb5bd" />
                       <span style={{ fontWeight: 600 }}>Tidak ada data Kode Pos yang cocok dengan kriteria pencarian.</span>
@@ -1039,9 +1195,75 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                         </span>
                       </td>
 
+                      {/* Latitude / Longitude */}
+                      <td
+                        title={geoLabel(item)}
+                        style={{
+                          textAlign: 'right',
+                          fontFamily: 'monospace',
+                          fontSize: '0.74rem',
+                          color: item.latitude == null ? '#adb5bd' : '#495057',
+                        }}
+                      >
+                        {item.latitude == null ? '—' : item.latitude.toFixed(6)}
+                      </td>
+                      <td
+                        title={geoLabel(item)}
+                        style={{
+                          textAlign: 'right',
+                          fontFamily: 'monospace',
+                          fontSize: '0.74rem',
+                          color: item.longitude == null ? '#adb5bd' : '#495057',
+                        }}
+                      >
+                        {item.longitude == null ? '—' : item.longitude.toFixed(6)}
+                        {item.latitude != null && item.longitude != null && (
+                          <span
+                            style={{
+                              display: 'block',
+                              fontSize: '0.6rem',
+                              fontWeight: 700,
+                              letterSpacing: '0.03em',
+                              color: item.geoTerverifikasi ? '#0ab39c' : item.geoPresisi === 'PERKIRAAN WILAYAH' ? '#d68b0c' : '#878a99',
+                            }}
+                          >
+                            {item.geoTerverifikasi ? 'GOOGLE' : item.geoPresisi === 'PERKIRAAN WILAYAH' ? 'PERKIRAAN' : (item.geoSumber || '').toUpperCase()}
+                          </span>
+                        )}
+                      </td>
+
                       {/* Actions */}
                       <td style={{ textAlign: 'center' }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <button
+                            type="button"
+                            disabled={item.latitude == null || item.longitude == null}
+                            onClick={() =>
+                              window.open(mapsUrlFor(item.latitude as number, item.longitude as number), '_blank', 'noopener,noreferrer')
+                            }
+                            title={
+                              item.latitude == null
+                                ? 'Titik koordinat belum ada — klik "Isi Koordinat"'
+                                : `Buka Maps/Google · ${geoLabel(item)}`
+                            }
+                            style={{
+                              background: 'rgba(10, 179, 156, 0.1)',
+                              border: '1px solid rgba(10, 179, 156, 0.28)',
+                              color: item.latitude == null ? '#adb5bd' : '#0ab39c',
+                              borderRadius: '4px',
+                              padding: '0.22rem 0.4rem',
+                              cursor: item.latitude == null ? 'not-allowed' : 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '0.2rem',
+                              fontSize: '0.66rem',
+                              fontWeight: 700,
+                            }}
+                          >
+                            <ExternalLink size={11} />
+                            MAPS
+                          </button>
                           <button
                             type="button"
                             onClick={() => {
@@ -1398,6 +1620,54 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                 >
                   {detailItem.status || 'AKTIF'}
                 </span>
+              </div>
+
+              <div
+                style={{
+                  background: '#f8f9fa',
+                  padding: '0.6rem 0.75rem',
+                  borderRadius: '5px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '0.6rem',
+                  fontSize: '0.8rem',
+                }}
+              >
+                <div title={geoLabel(detailItem)}>
+                  <div style={{ fontSize: '0.7rem', color: '#878a99', fontWeight: 600 }}>TITIK KOORDINAT</div>
+                  <div style={{ fontWeight: 700, color: '#212529', fontFamily: 'monospace', marginTop: '0.15rem' }}>
+                    {detailItem.latitude == null || detailItem.longitude == null
+                      ? 'belum ada'
+                      : `${detailItem.latitude.toFixed(6)}, ${detailItem.longitude.toFixed(6)}`}
+                  </div>
+                  <div style={{ fontSize: '0.68rem', color: '#878a99', marginTop: '0.15rem' }}>{geoLabel(detailItem)}</div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  disabled={detailItem.latitude == null || detailItem.longitude == null}
+                  onClick={() =>
+                    window.open(
+                      mapsUrlFor(detailItem.latitude as number, detailItem.longitude as number),
+                      '_blank',
+                      'noopener,noreferrer'
+                    )
+                  }
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                    background: 'rgba(10, 179, 156, 0.12)',
+                    border: '1px solid rgba(10, 179, 156, 0.3)',
+                    color: detailItem.latitude == null ? '#adb5bd' : '#0ab39c',
+                    cursor: detailItem.latitude == null ? 'not-allowed' : 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <ExternalLink size={12} />
+                  Buka Maps/Google
+                </button>
               </div>
             </div>
 

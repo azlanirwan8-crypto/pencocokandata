@@ -428,6 +428,99 @@ export interface KodePosRow {
   kabupatenKota: string;
   provinsi: string;
   status: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  geoSumber?: string | null;
+  geoPresisi?: string | null;
+  geoTerverifikasi?: boolean;
+}
+
+export interface KodePosGeoStats {
+  googleSiap: boolean;
+  menunggu: number;
+  perluVerifikasi: number;
+  geo: {
+    tercatat: number;
+    punya: number;
+    gagal: number;
+    google: number;
+    esri: number;
+    osm: number;
+    perkiraan: number;
+  };
+}
+
+export interface KodePosGeoRunResult {
+  diproses: number;
+  berhasil: number;
+  gagal: number;
+  googleTerhenti: boolean;
+  menunggu: number;
+}
+
+/** Ambil ringkasan titik koordinat kode pos dari Neon. */
+export async function fetchKodePosGeoStats(): Promise<KodePosGeoStats | null> {
+  try {
+    const res = await fetchWithRetry('/api/kodepos-geo?view=stats', {}, 15000, 1);
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json?.ok ? (json as KodePosGeoStats) : null;
+  } catch (err) {
+    console.warn('Neon kodepos geo stats error:', err);
+    return null;
+  }
+}
+
+/**
+ * Satu tahap pengerjaan titik koordinat (server hanya bisa jalan 60 detik,
+ * jadi pemanggil mengulang fungsi ini sampai `menunggu` habis).
+ */
+export async function runKodePosGeoBatch(opts: {
+  mode?: 'isi' | 'verifikasi';
+  jumlah?: number;
+  provinsi?: string | null;
+  apiKey?: string;
+}): Promise<KodePosGeoRunResult | null> {
+  try {
+    const res = await fetch('/api/kodepos-geo?view=run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode: opts.mode || 'isi',
+        jumlah: opts.jumlah || 40,
+        provinsi: opts.provinsi || undefined,
+        apiKey: opts.apiKey || undefined,
+      }),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json?.ok ? (json as KodePosGeoRunResult) : null;
+  } catch (err) {
+    console.warn('Neon kodepos geo run error:', err);
+    return null;
+  }
+}
+
+/** URL Google Maps untuk satu titik tersimpan. */
+export function mapsUrlFor(lat: number, lng: number): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lng}`)}`;
+}
+
+/** Keterangan sumber & mutu satu titik koordinat kode pos (dipakai tabel Kode Pos & tab Sync). */
+export function geoLabel(row: KodePosRow): string {
+  if (row.latitude == null || row.longitude == null) {
+    return row.geoSumber === 'TIDAK DITEMUKAN'
+      ? 'Sudah dicari di Google / ESRI / OpenStreetMap, tidak ditemukan'
+      : 'Titik belum dicari — klik "Isi Koordinat"';
+  }
+  const sumber = row.geoTerverifikasi
+    ? 'Google Geocoding API (terverifikasi)'
+    : row.geoSumber === 'esri'
+      ? 'ESRI World Geocoder (belum dicek Google)'
+      : row.geoSumber === 'osm'
+        ? 'OpenStreetMap (belum dicek Google)'
+        : row.geoSumber || 'penyedia peta';
+  return `Sumber: ${sumber}${row.geoPresisi ? ` · Presisi: ${row.geoPresisi}` : ''}`;
 }
 
 export interface KodePosPageQuery {

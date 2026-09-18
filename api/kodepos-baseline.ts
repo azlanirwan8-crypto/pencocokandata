@@ -159,6 +159,22 @@ function ensureSchema(sql: any): Promise<void> {
         await sql`ALTER TABLE kodepos_baseline ADD COLUMN IF NOT EXISTS versi INT;`;
         await sql`ALTER TABLE kodepos_baseline ADD COLUMN IF NOT EXISTS diambil_pada TIMESTAMPTZ DEFAULT NOW();`;
         await sql`CREATE INDEX IF NOT EXISTS idx_baseline_kode_pos ON kodepos_baseline(kode_pos);`;
+        await sql`
+          CREATE TABLE IF NOT EXISTS kodepos_geo (
+            kode_pos              VARCHAR(10) PRIMARY KEY,
+            latitude              DOUBLE PRECISION,
+            longitude             DOUBLE PRECISION,
+            sumber                TEXT,
+            presisi               TEXT,
+            terverifikasi_google  BOOLEAN DEFAULT FALSE,
+            alamat                TEXT,
+            dicari                TEXT,
+            provinsi              TEXT,
+            kabupaten_kota        TEXT,
+            diambil_pada          TIMESTAMPTZ,
+            dibuat_pada           TIMESTAMPTZ DEFAULT NOW()
+          );
+        `;
       } catch (err) {
         console.warn('Migrasi kodepos_baseline dilewati:', err);
         schemaReady = null;
@@ -244,12 +260,19 @@ export default async function handler(req: any, res: any) {
       const [dbRes, baseRes, totals] = await Promise.all([
         sql.query(DB_CODES_SQL),
         // Kode pos baseline yang belum ada di master aplikasi (baris contoh, dibatasi).
+        // Titik koordinatnya ikut dibawa dari kodepos_geo supaya tab Sinkronisasi
+        // menampilkan kolom lokasi yang sama dengan tabel induk.
         sql.query(
-          `SELECT b.kode_pos, b.kelurahan, b.kecamatan, b.kabupaten_kota, b.provinsi
-             FROM kodepos_baseline b
-             WHERE upper(btrim(b.kode_pos)) NOT IN ${DB_CODES_SUB}
-             ORDER BY b.provinsi, b.kabupaten_kota, b.kecamatan, b.kode_pos
-             LIMIT $1;`,
+          `WITH b AS (
+             SELECT kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi
+             FROM kodepos_baseline
+             WHERE upper(btrim(kode_pos)) NOT IN ${DB_CODES_SUB}
+             ORDER BY provinsi, kabupaten_kota, kecamatan, kode_pos
+             LIMIT $1
+           )
+           SELECT b.*, g.latitude, g.longitude,
+                  g.sumber AS geo_sumber, g.presisi AS geo_presisi, g.terverifikasi_google
+           FROM b LEFT JOIN kodepos_geo g ON g.kode_pos = upper(btrim(b.kode_pos));`,
           [DIFF_CAP]
         ),
         sql.query(
@@ -295,6 +318,11 @@ export default async function handler(req: any, res: any) {
           kabupatenKota: r.kabupaten_kota || '',
           provinsi: r.provinsi || '',
           status: 'AKTIF',
+          latitude: r.latitude == null ? null : Number(r.latitude),
+          longitude: r.longitude == null ? null : Number(r.longitude),
+          geoSumber: r.geo_sumber ?? null,
+          geoPresisi: r.geo_presisi ?? null,
+          geoTerverifikasi: r.terverifikasi_google === true,
         })),
         codesOnlyInDb,
         truncated: (baseRes as any[]).length >= DIFF_CAP,
