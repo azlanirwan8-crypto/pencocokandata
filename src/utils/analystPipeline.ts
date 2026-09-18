@@ -15,6 +15,9 @@ export interface AnalystRow {
   kecamatan: string;
   provinsi: string;
   statusPten: 'SAME' | 'DIFFERENT' | 'PTEN FOUND' | 'UNCHECKED';
+  // Integritas penempatan kelurahan/kecamatan → kota/kab (divalidasi via blok kode pos)
+  placementStatus: 'VERIFIED' | 'REVIEW' | 'FALLBACK';
+  placementMethod: string;
   groupKota: string;
   fase1Approved: boolean;
   // Tracking: index baris Master Cabang asal (untuk grouping Fase 1)
@@ -613,6 +616,8 @@ export async function executeAnalystPipeline(
     matchedKodePosEntries: KodePosRow[];
     matchedProvinsi: string;
     usedFallback?: boolean;
+    placementStatus: 'VERIFIED' | 'REVIEW' | 'FALLBACK';
+    placementMethod: string;
     resolvedWilayah: ReturnType<typeof extractWilayahFromBranchCode>;
     sandiCabang: string;
     namaOutlet: string;
@@ -634,11 +639,133 @@ export async function executeAnalystPipeline(
   }
   const rowMetaCache: RowMetaCache[] = [];
 
+  // ── GEOCODE BLOCK INDEX (verifikasi deterministik, bukan kemiripan nama) ──
+  // Kode pos RI: digit 1 = zona provinsi, digit 4-5 = kecamatan/kelurahan,
+  // sehingga blok kode pos adalah bukti geografis yang memisahkan kota.
+  // Hasil uji atas 83.762 baris master: prefiks 2 angka hanya 9,6% unik-pemilik,
+  // 3 angka 70,7%, 4 angka 95,0% → verifikasi pakai cascading 4→3→2 angka.
+  // Ini yang memisahkan kota sesama provinsi bernama mirip, mis.
+  // "OGAN KOMERING ULU" vs "... ULU TIMUR" (skor nama 0,913 tapi bloknya beda).
+  interface CityGeoProfile { p4: Set<string>; p3: Set<string>; p2: Set<string>; prefixes: Set<string>; kecamatanSet: Set<string> }
+  const cityGeoProfile = new Map<string, CityGeoProfile>();
+  kodePosList.forEach((kp) => {
+    const ck = cityMatchKey(kp.kabupatenKota);
+    if (!ck) return;
+    let prof = cityGeoProfile.get(ck);
+    if (!prof) { prof = { p4: new Set(), p3: new Set(), p2: new Set(), prefixes: new Set(), kecamatanSet: new Set() }; cityGeoProfile.set(ck, prof); }
+    const code = String(kp.kodePos || '').trim();
+    if (code.length >= 4) prof.p4.add(code.slice(0, 4));
+    if (code.length >= 3) prof.p3.add(code.slice(0, 3));
+    if (code.length >= 2) prof.p2.add(code.slice(0, 2));
+    if (code) prof.prefixes.add(code);
+    const kec = cityMatchKey(kp.kecamatan);
+    if (kec) prof.kecamatanSet.add(kec);
+  });
+  const cityKeyByPrefix: Map<string, string[]>[] = [new Map(), new Map(), new Map()];
+  cityGeoProfile.forEach((prof, ck) => {
+    ([prof.p4, prof.p3, prof.p2] as Set<string>[]).forEach((set, i) => {
+      set.forEach((p) => {
+        const arr = cityKeyByPrefix[i].get(p) || [];
+        if (!arr.includes(ck)) arr.push(ck);
+        cityKeyByPrefix[i].set(p, arr);
+      });
+    });
+  });
+  const geoVerifiedCityKeys = new Set<string>();
+  // Bukti blok: apakah kode pos ini benar-benar masuk wilayah kota tersebut?
+  const codeConsistentWithCity = (ck: string, kp?: string): boolean => {
+    const prof = cityGeoProfile.get(ck);
+    if (!prof) return false;
+    const code = String(kp || '').trim();
+    if (code.length >= 4 && prof.p4.has(code.slice(0, 4))) return true;
+    if (code.length >= 3 && prof.p3.has(code.slice(0, 3))) return true;
+    if (code.length >= 2 && prof.p2.has(code.slice(0, 2))) return true;
+    return code.length >= 5 && prof.prefixes.has(code);
+  };
+  type Placement = { rows: KodePosRow[]; status: 'VERIFIED' | 'REVIEW'; method: string };
+  // Resolve (nama kota PTEN + kode pos PTEN) → baris kodepos kota yang tepat,
+  // wajib lolos uji blok kode pos. Tidak bisa dibuktikan → REVIEW, bukan tebak.
+  const resolveCityByGeocode = (ptenKey: string, ptenKodePos: string): Placement => {
+    const exact = kodePosByCity.get(ptenKey);
+    if (exact && exact.length > 0) {
+      if (!ptenKodePos) return { rows: exact, status: 'REVIEW', method: 'Nama kota cocok, kode pos PTEN kosong' };
+      // Nama kota bisa dimiliki 2 provinsi (master punya "BANJAR" Jabar 46xxx
+      // DAN Banjar Kalsel 70xxx) → saring baris pada blok provinsi yang sama.
+      const sameBlock = exact.filter((r) => String(r.kodePos || '').slice(0, 2) === ptenKodePos.slice(0, 2));
+      const rowsForCity = sameBlock.length > 0 ? sameBlock : exact;
+      if (!codeConsistentWithCity(ptenKey, ptenKodePos)) {
+        return { rows: rowsForCity, status: 'REVIEW', method: `Blok ${ptenKodePos} bukan wilayah kota ini` };
+      }
+      geoVerifiedCityKeys.add(ptenKey);
+      return { rows: rowsForCity, status: 'VERIFIED', method: sameBlock.length > 0 && sameBlock.length < exact.length ? 'Join nama kota + saring blok provinsi' : 'Join nama kota + blok kode pos' };
+    }
+    const kp = String(ptenKodePos || '').trim();
+    if (kp.length >= 2) {
+      const levels: { map: Map<string, string[]>; pre: string; name: string }[] = [
+        { map: cityKeyByPrefix[0], pre: kp.slice(0, 4), name: '4-angka' },
+        { map: cityKeyByPrefix[1], pre: kp.slice(0, 3), name: '3-angka' },
+        { map: cityKeyByPrefix[2], pre: kp.slice(0, 2), name: '2-angka' },
+      ];
+      for (const lvl of levels) {
+        const ckList = lvl.map.get(lvl.pre) || [];
+        if (ckList.length === 0) continue;
+        // a) nama kota cocok DI DALAM blok kode pos ini → bukti terkuat
+        for (const ck of ckList) {
+          if (calculateCityMatchScore(ptenKey, ck).score >= 0.9) {
+            geoVerifiedCityKeys.add(ck);
+            return { rows: kodePosByCity.get(ck)!, status: 'VERIFIED', method: `Blok ${lvl.name} + nama kota (${lvl.pre})` };
+          }
+        }
+        // b) nama kecamatan PTEN dimiliki tepat satu kota di blok ini
+        if (ptenKey.length >= 4) {
+          const owners = ckList.filter((ck) => cityGeoProfile.get(ck)?.kecamatanSet.has(ptenKey));
+          if (owners.length === 1) {
+            geoVerifiedCityKeys.add(owners[0]);
+            return { rows: kodePosByCity.get(owners[0])!, status: 'VERIFIED', method: `Blok ${lvl.name} + kecamatan (${lvl.pre})` };
+          }
+        }
+        // c) blok menunjuk tepat satu kota KOMPAK (≤4 sub-blok)
+        if (ckList.length === 1) {
+          const onlyProf = cityGeoProfile.get(ckList[0]);
+          if (onlyProf && onlyProf.p3.size <= 4) {
+            geoVerifiedCityKeys.add(ckList[0]);
+            return { rows: kodePosByCity.get(ckList[0])!, status: 'VERIFIED', method: `Blok ${lvl.name} tunggal (${lvl.pre})` };
+          }
+        }
+        // d) blok milik banyak kota & nama tidak cocok → JANGAN menebak
+        return { rows: [], status: 'REVIEW', method: `Blok ${lvl.name} (${lvl.pre}) punya ${ckList.length} kota, nama tak cocok` };
+      }
+      // e) blok tidak dikenal master (data beda vintage) → fuzzy ketat, WAJIB review
+      const candidates: { ck: string; score: number }[] = [];
+      cityGeoProfile.forEach((_, ck) => {
+        const { score } = calculateCityMatchScore(ptenKey, ck);
+        if (score >= 0.88) candidates.push({ ck, score });
+      });
+      candidates.sort((a, b) => b.score - a.score);
+      if (candidates.length === 1) {
+        return { rows: kodePosByCity.get(candidates[0].ck) || [], status: 'REVIEW', method: `Blok ${kp.slice(0, 2)}xx tak dikenal, mirip "${candidates[0].ck}"` };
+      }
+      return { rows: [], status: 'REVIEW', method: `Blok ${kp.slice(0, 2)}xx tidak ada di master kodepos` };
+    }
+    // Tanpa kode pos PTEN: fallback fuzzy ketat, wajib review
+    let bestKey = '';
+    let bestScore = 0;
+    kodePosByCity.forEach((_, ck) => {
+      const { score } = calculateCityMatchScore(ptenKey, ck);
+      if (score > bestScore && score >= 0.88) { bestScore = score; bestKey = ck; }
+    });
+    return {
+      rows: bestKey ? kodePosByCity.get(bestKey)! : [],
+      status: 'REVIEW',
+      method: bestKey ? `Tanpa kode pos PTEN, mirip nama "${bestKey}"` : 'Tanpa kode pos & nama kota tak dikenal',
+    };
+  };
+
   // Non-blocking helpers: yield to browser event loop so progress bar can render
   const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
   // Memo caches — fuzzy matching is O(n*m) and expensive; identical inputs repeat heavily
   const ptenFuzzyCache = new Map<string, PTENRecord | null>();
-  const kodePosCityCache = new Map<string, KodePosRow[]>();
+  const kodePosCityCache = new Map<string, { rows: KodePosRow[]; status: 'VERIFIED' | 'REVIEW'; method: string }>();
   const roleMatchCache = new Map<string, { role: RoleMappingRecord | null; score: number; algorithm: string }>();
   const preCleanedRoles = roleMappingList.map((r) => ({ record: r, orgClean: cleanAndStandardizeText(r.organisasiTujuan) }));
 
@@ -680,32 +807,32 @@ export async function executeAnalystPipeline(
     const finalKodePosPten = matchedPtenRecord?.kodePosPten || kpRaw || '10110';
 
     // ── Cari SEMUA Kelurahan & Kecamatan dari Data Kode Pos untuk Kota PTEN ini ──
+    // Resolusi deterministik: nama kota join dulu, lalu DIBUKTIKAN dengan blok
+    // kode pos (digit depan) + keanggotaan kecamatan. Kota yang tidak bisa
+    // dibuktikan tidak akan ditebak → status "Perlu Review".
     const ptenCleanCity = cityMatchKey(finalKotaPten);
+    const cachedPlacement = kodePosCityCache.get(ptenCleanCity);
     let matchedKodePosEntries: KodePosRow[];
-    const cachedKodePos = kodePosCityCache.get(ptenCleanCity);
-    if (cachedKodePos) {
-      matchedKodePosEntries = cachedKodePos;
+    let placementStatus: 'VERIFIED' | 'REVIEW' | 'FALLBACK';
+    let placementMethod: string;
+    if (cachedPlacement) {
+      matchedKodePosEntries = cachedPlacement.rows;
+      placementStatus = cachedPlacement.status;
+      placementMethod = cachedPlacement.method;
     } else {
-      matchedKodePosEntries = kodePosByCity.get(ptenCleanCity) || [];
-      if (matchedKodePosEntries.length === 0) {
-        // Cocok-TERBAIK (bukan cocok-pertama) dengan city-strict matcher:
-        // mencegah kota salah tempel, mis. "TANGERANG SELATAN" ← "KOTA TANGERANG"
-        let bestScore = 0;
-        for (const [cityKey, entries] of kodePosByCity.entries()) {
-          const { score } = calculateCityMatchScore(ptenCleanCity, cityKey);
-          if (score > bestScore && score >= 0.88) {
-            bestScore = score;
-            matchedKodePosEntries = entries;
-          }
-        }
-      }
-      kodePosCityCache.set(ptenCleanCity, matchedKodePosEntries);
+      const placed = resolveCityByGeocode(ptenCleanCity, finalKodePosPten);
+      matchedKodePosEntries = placed.rows;
+      placementStatus = placed.status;
+      placementMethod = placed.method;
+      kodePosCityCache.set(ptenCleanCity, placed);
     }
 
     // Jika tidak ada di Kode Pos, buat 1 entry fallback dari data Master
     let usedFallback = false;
     if (matchedKodePosEntries.length === 0) {
       usedFallback = true;
+      placementStatus = 'FALLBACK';
+      placementMethod = `${placementMethod} → baris Master (tanpa data kodepos)`;
       matchedKodePosEntries = [{
         kodePos: finalKodePosPten,
         kelurahan: String(raw.Kelurahan || finalKotaPten).trim() || finalKotaPten,
@@ -788,6 +915,7 @@ export async function executeAnalystPipeline(
     rowMetaCache.push({
       finalKotaPten, finalKodePosPten, statusPten,
       matchedKodePosEntries, matchedProvinsi, usedFallback,
+      placementStatus, placementMethod,
       resolvedWilayah, sandiCabang, namaOutlet, statusOutlet, alamat,
       matchedRole, highestRoleScore, chosenAlgorithm,
       organisasiTujuan, tipeUnit, roleCabsal, roleCabapv1, roleCabapv2,
@@ -801,6 +929,13 @@ export async function executeAnalystPipeline(
   // Tracking cakupan: baris kodepos mana yang benar-benar masuk Fase 1
   const usedKodePosRows = new Set<KodePosRow>();
   let fallbackCityCount = 0;
+  let reviewCityCount = 0;
+  // Baris kodepos yang kotanya terbukti lewat join nama + verifikasi geocode
+  let verifiedKodePosRows = 0;
+  let reviewRow = 0;
+  kodePosByCity.forEach((entries, ck) => {
+    if (geoVerifiedCityKeys.has(ck)) verifiedKodePosRows += entries.length;
+  });
 
   for (let i = 0; i < itemsToProcess.length; i++) {
     const raw = itemsToProcess[i];
@@ -809,7 +944,10 @@ export async function executeAnalystPipeline(
 
     // Tandai semua baris kodepos kota ini sebagai terpetakan (termasuk saat mode re-run)
     if (meta.usedFallback) fallbackCityCount++;
-    else for (const kp of meta.matchedKodePosEntries) usedKodePosRows.add(kp);
+    else {
+      for (const kp of meta.matchedKodePosEntries) usedKodePosRows.add(kp);
+      if (meta.placementStatus === 'REVIEW') { reviewCityCount++; reviewRow += meta.matchedKodePosEntries.length; }
+    }
 
     // Progress for Fase 2 (global 35% → 66%)
     if (i % 50 === 0 && onProgress) {
@@ -843,6 +981,8 @@ export async function executeAnalystPipeline(
         kecamatan,
         provinsi,
         statusPten: meta.statusPten,
+        placementStatus: meta.placementStatus,
+        placementMethod: meta.placementMethod,
         groupKota: meta.finalKotaPten,
         fase1Approved: false,
         sourceRowIndex: i,
@@ -896,8 +1036,15 @@ export async function executeAnalystPipeline(
   const elapsed = Math.round(performance.now() - startTime);
   const mappedKodePos = usedKodePosRows.size;
   const unmappedKodePos = Math.max(0, kodePosList.length - mappedKodePos);
+  const verifiedRows = Math.max(0, verifiedKodePosRows - reviewRow);
+  const fmt = (n: number) => n.toLocaleString('id-ID');
   if (onProgress) {
-    onProgress(3, 100, total, total, `Analisa 3 Fase selesai dalam ${elapsed}ms. ${results.length.toLocaleString('id-ID')} baris dihasilkan. KodePos terpetakan ${mappedKodePos.toLocaleString('id-ID')}/${kodePosList.length.toLocaleString('id-ID')}${unmappedKodePos > 0 ? ` (${unmappedKodePos.toLocaleString('id-ID')} baris belum masuk karena kotanya tidak ada di PTEN)` : ''}${fallbackCityCount > 0 ? `. Kota tanpa data kodepos (butuh review): ${fallbackCityCount}` : ''}.`);
+    onProgress(3, 100, total, total, `Analisa 3 Fase selesai dalam ${elapsed}ms. ${fmt(results.length)} baris dihasilkan. ` +
+      `KodePos terpetakan ${fmt(mappedKodePos)}/${fmt(kodePosList.length)} — terbukti geocode ${fmt(verifiedRows)}` +
+      `${reviewRow > 0 ? `, perlu review ${fmt(reviewRow)}` : ''}` +
+      `${unmappedKodePos > 0 ? `, belum masuk ${fmt(unmappedKodePos)} (kotanya tidak ada di PTEN)` : ''}` +
+      `${reviewCityCount > 0 ? `. Kota perlu review manual: ${reviewCityCount}` : ''}` +
+      `${fallbackCityCount > 0 ? `. Kota tanpa data kodepos (baris fallback): ${fallbackCityCount}` : ''}.`);
   }
 
   return results;

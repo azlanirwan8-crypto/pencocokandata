@@ -52,7 +52,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<'all' | 'fase1' | 'fase2' | 'fase3'>('fase1');
   const [selectedWilayah, setSelectedWilayah] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ANOMALI' | 'EXACT_MATCH' | 'HIGH_CONFIDENCE'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ANOMALI' | 'EXACT_MATCH' | 'HIGH_CONFIDENCE' | 'PENEMPATAN_REVIEW'>('ALL');
 
   // Pagination states
   const [page, setPage] = useState<number>(1);
@@ -89,6 +89,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     let exact = 0;
     let highConf = 0;
     let anomalies = 0;
+    let placementReview = 0;
+    let placementVerified = 0;
     let approved = 0;
     let role3Complete = 0;
 
@@ -96,6 +98,9 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       if (r.statusAnalisa === 'EXACT_MATCH') exact++;
       else if (r.statusAnalisa === 'HIGH_CONFIDENCE') highConf++;
       else anomalies++;
+
+      if (r.placementStatus === 'VERIFIED') placementVerified++;
+      else placementReview++;
 
       if (r.isFinalApproved) approved++;
       if (r.is3RoleLengkap) role3Complete++;
@@ -109,6 +114,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       exact,
       highConf,
       anomalies,
+      placementReview,
+      placementVerified,
       approved,
       role3Complete,
       accuracyRate,
@@ -150,6 +157,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       if (statusFilter === 'ANOMALI' && r.statusAnalisa !== 'ANOMALI' && r.statusAnalisa !== 'PERLU_REVIEW') return false;
       if (statusFilter === 'EXACT_MATCH' && r.statusAnalisa !== 'EXACT_MATCH') return false;
       if (statusFilter === 'HIGH_CONFIDENCE' && r.statusAnalisa !== 'HIGH_CONFIDENCE') return false;
+      if (statusFilter === 'PENEMPATAN_REVIEW' && r.placementStatus === 'VERIFIED') return false;
 
       if (q) {
         const match =
@@ -217,6 +225,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
           'KOTA PTEN': r.kotaPten,
           'KODE POS PTEN': r.kodePosPten,
           'CEK KODE POS + PTEN': r.statusPten,
+          'VERIFIKASI PENEMPATAN': r.placementStatus === 'VERIFIED' ? 'TERVERIFIKASI' : r.placementStatus === 'REVIEW' ? 'PERLU REVIEW' : 'FALLBACK',
+          'METODE PENEMPATAN': r.placementMethod,
           'ORGANISASI TUJUAN': r.organisasiTujuan,
           'Tipe Unit': r.tipeUnit,
           'Alur Wondr': r.alurWondr,
@@ -618,6 +628,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
               <option value="EXACT_MATCH">Exact Cocok Sempurna ({stats.exact})</option>
               <option value="HIGH_CONFIDENCE">High Confidence ({stats.highConf})</option>
               {stats.anomalies > 0 && <option value="ANOMALI">Perlu Review / Anomali ({stats.anomalies})</option>}
+              {stats.placementReview > 0 && <option value="PENEMPATAN_REVIEW">Penempatan Belum Terverifikasi ({stats.placementReview})</option>}
             </select>
           </div>
 
@@ -674,7 +685,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                     <th colSpan={3} style={{ textAlign: 'center', background: '#eff6fb', color: '#299cdb', borderLeft: '2px solid #d5e7f2' }}>
                       📮 DATA POS (Kelurahan &amp; Wilayah Administrasi)
                     </th>
-                    <th colSpan={3} style={{ textAlign: 'center', background: '#eefaf6', color: '#0ab39c', borderLeft: '2px solid #b7ebe4' }}>
+                    <th colSpan={4} style={{ textAlign: 'center', background: '#eefaf6', color: '#0ab39c', borderLeft: '2px solid #b7ebe4' }}>
                       🛡️ DATA PTEN (Kota / Provinsi / Kode Pos)
                     </th>
                     <th rowSpan={2} style={{ width: '120px', textAlign: 'center', verticalAlign: 'middle' }}>Aksi Review</th>
@@ -686,6 +697,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                     <th style={{ minWidth: '150px', borderLeft: '2px solid #b7ebe4' }}>Kota / Kabupaten</th>
                     <th style={{ width: '100px', textAlign: 'center' }}>Kode Pos</th>
                     <th style={{ width: '100px', textAlign: 'center' }}>Status PTEN</th>
+                    <th style={{ width: '150px', textAlign: 'center' }}>Verifikasi Penempatan</th>
                   </tr>
                 </>
               )}
@@ -724,7 +736,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
             <tbody>
               {filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={13} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
+                  <td colSpan={14} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
                     Tidak ada baris analisa yang cocok dengan filter pencarian "{searchTerm}".
                   </td>
                 </tr>
@@ -784,6 +796,12 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                           </td>
                           <td style={{ textAlign: 'center' }}>
                             <span className={`badge ${r.statusPten === 'DIFFERENT' || r.statusPten === 'UNCHECKED' ? 'badge-level2' : 'badge-match'}`}>{r.statusPten}</span>
+                          </td>
+                          <td style={{ textAlign: 'center' }} title={r.placementMethod || ''}>
+                            <span className={`badge ${r.placementStatus === 'VERIFIED' ? 'badge-match' : r.placementStatus === 'REVIEW' ? 'badge-level2' : 'badge-level1'}`}>
+                              {r.placementStatus === 'VERIFIED' ? '✓ Terverifikasi' : r.placementStatus === 'REVIEW' ? '! Perlu Review' : 'Fallback'}
+                            </span>
+                            <div style={{ fontSize: '0.62rem', color: '#878a99', marginTop: '2px' }}>{r.placementMethod}</div>
                           </td>
                         </>
                       )}
