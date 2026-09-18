@@ -291,11 +291,45 @@ export async function executeAnalystPipeline(
     kodePosByCity.get(c)!.push(kp);
   });
 
-  // Base items to process: derived from Master Cabang, or existing rows if re-run anomalies
-  let itemsToProcess: MasterRow[] = masterCabangRows;
-  if (itemsToProcess.length === 0 && ptenList.length > 0) {
-    // Fallback if Master Cabang is empty, create from PTEN with proper wilayah assignment
-    itemsToProcess = ptenList.slice(0, 1500).map((p, idx) => {
+  // ── DRIVER FASE 1 = KOTA/KABUPATEN UNIK DARI DATA PTEN (grouping berdasar PTEN) ──
+  // Setiap kota unik di PTEN → SEMUA kelurahan/kecamatan dari Master KodePos kota itu
+  // di-mapping ke kota tersebut, memakai kode pos PTEN dari kota yang sama.
+  // Master Cabang se-kota (jika ada) jadi representasi data Fase 2 & 3.
+  let itemsToProcess: MasterRow[];
+  if (ptenCityMap.size > 0) {
+    const masterByCity = new Map<string, MasterRow[]>();
+    masterCabangRows.forEach((m) => {
+      const k = cleanAndStandardizeText(String(m['Dati II'] || m.Kota || m.Kelurahan || ''));
+      if (!k) return;
+      if (!masterByCity.has(k)) masterByCity.set(k, []);
+      masterByCity.get(k)!.push(m);
+    });
+
+    const masterCityFuzzyCache = new Map<string, MasterRow[]>();
+    const findMasterByCity = (cityKey: string): MasterRow[] => {
+      const exact = masterByCity.get(cityKey);
+      if (exact) return exact;
+      const cached = masterCityFuzzyCache.get(cityKey);
+      if (cached) return cached;
+      let best: MasterRow[] = [];
+      let bestScore = 0;
+      for (const [mKey, mVals] of masterByCity.entries()) {
+        const { score } = calculateUnifiedPrecisionScore(cityKey, mKey);
+        if (score > bestScore && score >= 0.75) {
+          bestScore = score;
+          best = mVals;
+        }
+      }
+      masterCityFuzzyCache.set(cityKey, best);
+      return best;
+    };
+
+    itemsToProcess = Array.from(ptenCityMap.entries()).map(([cityKey, ptenRecs], idx) => {
+      const masters = findMasterByCity(cityKey);
+      if (masters.length > 0) return masters[0];
+
+      // Kota PTEN tanpa cabang → baris sintetis dari data PTEN itu sendiri
+      const p = ptenRecs[0];
       let wilayahCode = 'W01';
       const cityUpper = (p.kotaPten || '').toUpperCase();
       if (/MEDAN|SUMATERA UTARA|ACEH|RIAU|JAMBI|SUMATERA BARAT|BENGKULU|LAMPUNG|PEKANBARU|PADANG/.test(cityUpper)) {
@@ -328,6 +362,9 @@ export async function executeAnalystPipeline(
         Telp: '',
       };
     });
+  } else {
+    // Tanpa data PTEN → kembali ke baris Master Cabang apa adanya
+    itemsToProcess = masterCabangRows;
   }
 
   const total = itemsToProcess.length;
