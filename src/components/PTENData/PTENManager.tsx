@@ -218,8 +218,19 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
           return;
         }
 
+        // Header Excel bisa beda spasi ("KOTA / KABUPATEN" vs "KOTA/KABUPATEN"),
+        // jadi kolom dicari lewat pencocokan longgar supaya nama kota penuh tidak
+        // jatuh ke kolom MAX 15 DIGIT (hasilnya terpotong: MANDAILING NATAL -> MANDAILING NATA).
+        const headers = Object.keys(rawJson[0] || {});
+        const normH = (h: string) => String(h).toUpperCase().replace(/\s+/g, ' ').trim();
+        const pickCol = (pred: (h: string) => boolean) => headers.find((h) => pred(normH(h)));
+        const cityCol = pickCol((h) => /KOTA/.test(h) && /KABUPATEN/.test(h) && !/15/.test(h));
+        const city15Col = pickCol((h) => /15/.test(h));
+        const kodePosCol = pickCol((h) => /KODE\s*POS/.test(h));
+
         const imported: PTENRecord[] = rawJson.map((row: any) => {
           const rawKodePos = String(
+            (kodePosCol && row[kodePosCol]) ||
             row['KODEPOS (yang digunakan untuk pendaftaran merchant)'] ||
             row['KODEPOS'] ||
             row['KODE POS'] ||
@@ -232,9 +243,8 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
           const cleanKodePos = rawKodePos.replace(/\D/g, '').padStart(5, '0');
 
           const rawKota = String(
+            (cityCol && row[cityCol]) ||
             row['KOTA/KABUPATEN'] ||
-            row['KOTA/KABUPATEN MAX 15 DIGIT (yang digunakan untuk pendaftaran merchant)'] ||
-            row['KOTA/KABUPATEN MAX 15 DIGIT'] ||
             row['Kota'] ||
             row['KOTA'] ||
             row['Dati II'] ||
@@ -243,6 +253,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
           ).trim();
 
           const rawKotaMax15 = String(
+            (city15Col && row[city15Col]) ||
             row['KOTA/KABUPATEN MAX 15 DIGIT (yang digunakan untuk pendaftaran merchant)'] ||
             row['KOTA/KABUPATEN MAX 15 DIGIT'] ||
             rawKota
@@ -252,7 +263,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
 
           return {
             kodePosPten: cleanKodePos || rawKodePos,
-            kotaPten: rawKota.toUpperCase(),
+            kotaPten: (rawKota || rawKotaMax15).toUpperCase(),
             kotaPtenMax15: rawKotaMax15.toUpperCase(),
             status: (rawStatus === 'NON-AKTIF' ? 'NON-AKTIF' : 'AKTIF') as 'AKTIF' | 'NON-AKTIF',
           };
