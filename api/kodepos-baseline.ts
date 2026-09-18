@@ -262,6 +262,7 @@ export default async function handler(req: any, res: any) {
         ),
       ]);
 
+      const dbRows = await sql`SELECT COUNT(*)::int AS n FROM kodepos_data;`;
       const dbCodes = new Set<string>((dbRes as any[]).map((r) => String(r.kode_pos).trim()));
       const baseCodes = await sql`SELECT DISTINCT upper(btrim(kode_pos)) AS kode_pos FROM kodepos_baseline;`;
       const baseCodeSet = new Set<string>(
@@ -285,6 +286,7 @@ export default async function handler(req: any, res: any) {
         baselineRows: t.baris || 0,
         baselineCodes: t.kode_pos_unik || baseCodeSet.size,
         dbCodes: dbCodes.size,
+        dbRows: (dbRows?.[0] as any)?.n || 0,
         missingCodesTotal: t.belum || 0,
         missingInDb: (baseRes as any[]).map((r) => ({
           kodePos: r.kode_pos,

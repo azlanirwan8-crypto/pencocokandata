@@ -162,13 +162,13 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
             <>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.75rem' }}>
                 <StatCard
-                  label="1. Kode pos di Neon"
+                  label="1. Kode pos unik di Neon"
                   value={fmt(plan.dbTotal)}
-                  sub="kode pos unik tersimpan di cloud"
+                  sub={`dari ${fmt(plan.dbRows || 0)} baris wilayah — 1 kode pos dipakai banyak kelurahan`}
                   color="#405189"
                 />
                 <StatCard
-                  label="2. Belum ada di Neon"
+                  label="2. Baris belum ada di Neon"
                   value={fmt(rows.length)}
                   sub={`dibandingkan ${plan.compareLabel.toLowerCase()}`}
                   color={rows.length > 0 ? '#f06548' : '#0ab39c'}

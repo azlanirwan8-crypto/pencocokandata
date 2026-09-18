@@ -60,8 +60,10 @@ export interface KodePosSyncPlan {
   /** Satuan angka pembanding: 'kode pos' atau 'baris'. */
   compareUnit?: string;
   note?: string;
-  /** Jumlah baris/kode pos yang tersimpan di Neon. */
+  /** Jumlah kode pos unik yang tersimpan di Neon. */
   dbTotal: number;
+  /** Jumlah baris wilayah di Neon (satu kode pos bisa dipakai beberapa kelurahan). */
+  dbRows?: number;
   /** Jumlah baris/kode pos di pembanding (master perangkat ini atau sumber internet). */
   compareTotal: number;
   compareLabel: string;
@@ -322,6 +324,7 @@ function planFromBaselineDiff(json: any, noteTambahan?: string): KodePosSyncPlan
     sourceLabel: json.source,
     compareUnit: 'kode pos',
     dbTotal: json.dbCodes ?? 0,
+    dbRows: json.dbRows ?? 0,
     compareTotal: json.baselineCodes ?? 0,
     compareLabel: 'patokan di database kita',
     sourceDetail:
