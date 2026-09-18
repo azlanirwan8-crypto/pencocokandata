@@ -443,6 +443,34 @@ export function calculateUnifiedPrecisionScore(textA: string, textB: string): { 
   return { score: hybrid, algorithm: 'Multi-Engine Weighted Hybrid (6-Signal)' };
 }
 
+// 🏙️ CITY-STRICT MATCHER — khusus pencocokan KOTA/KABUPATEN.
+// Sengaja TIDAK memakai token containment/initialism (subset nama = kota berbeda,
+// mis. TANGERANG vs TANGERANG SELATAN). Hanya terima: exact canonical, fonetik,
+// atau kemiripan sangat tinggi multi-sinyal. Lebih baik kota masuk review
+// (fallback) daripada kelurahan salah tempel kota.
+export function calculateCityMatchScore(textA: string, textB: string): { score: number; algorithm: string } {
+  const normA = expertNormalize(textA);
+  const normB = expertNormalize(textB);
+  if (normA === normB && normA.length > 0) {
+    return { score: 1.0, algorithm: 'City Exact Canonical Match' };
+  }
+  const keyA = indoPhoneticKey(normA).replace(/ /g, '');
+  const keyB = indoPhoneticKey(normB).replace(/ /g, '');
+  if (keyA.length >= 4 && keyA === keyB) {
+    return { score: 0.96, algorithm: 'City Phonetic Match' };
+  }
+  const jaccard = calculateTokenSetJaccard(normA, normB);
+  const jaro = jaroWinklerDistance(normA, normB);
+  const tri = triGramCosineSimilarity(normA, normB);
+  const dam = damerauLevenshteinSimilarity(normA, normB);
+  const gest = ratcliffObershelpSimilarity(normA, normB);
+  const best = Math.max(jaccard, jaro, tri, dam, gest);
+  if (best >= 0.9 && (jaccard >= 0.6 || jaro >= 0.93 || tri >= 0.9)) {
+    return { score: best, algorithm: 'City Strict Ensemble Match' };
+  }
+  return { score: 0.55 * jaccard + 0.45 * jaro, algorithm: 'City Strict Reject' };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 🚀 PIPELINE ANALISIS 3 FASE BERBASIS 100% DATA MASTER
 // ─────────────────────────────────────────────────────────────────────────────
@@ -508,8 +536,8 @@ export async function executeAnalystPipeline(
       let best: MasterRow[] = [];
       let bestScore = 0;
       for (const [mKey, mVals] of masterByCity.entries()) {
-        const { score } = calculateUnifiedPrecisionScore(cityKey, mKey);
-        if (score > bestScore && score >= 0.75) {
+        const { score } = calculateCityMatchScore(cityKey, mKey);
+        if (score > bestScore && score >= 0.88) {
           bestScore = score;
           best = mVals;
         }
@@ -584,6 +612,7 @@ export async function executeAnalystPipeline(
     statusPten: 'SAME' | 'DIFFERENT' | 'PTEN FOUND' | 'UNCHECKED';
     matchedKodePosEntries: KodePosRow[];
     matchedProvinsi: string;
+    usedFallback?: boolean;
     resolvedWilayah: ReturnType<typeof extractWilayahFromBranchCode>;
     sandiCabang: string;
     namaOutlet: string;
@@ -638,8 +667,8 @@ export async function executeAnalystPipeline(
     } else {
       let bestScore = 0;
       for (const [ptenCityKey, candidates] of ptenCityMap.entries()) {
-        const { score } = calculateUnifiedPrecisionScore(cityClean, ptenCityKey);
-        if (score > bestScore && score >= 0.75) {
+        const { score } = calculateCityMatchScore(cityClean, ptenCityKey);
+        if (score > bestScore && score >= 0.88) {
           bestScore = score;
           matchedPtenRecord = candidates[0];
         }
@@ -659,11 +688,14 @@ export async function executeAnalystPipeline(
     } else {
       matchedKodePosEntries = kodePosByCity.get(ptenCleanCity) || [];
       if (matchedKodePosEntries.length === 0) {
+        // Cocok-TERBAIK (bukan cocok-pertama) dengan city-strict matcher:
+        // mencegah kota salah tempel, mis. "TANGERANG SELATAN" ← "KOTA TANGERANG"
+        let bestScore = 0;
         for (const [cityKey, entries] of kodePosByCity.entries()) {
-          const { score } = calculateUnifiedPrecisionScore(ptenCleanCity, cityKey);
-          if (score >= 0.7) {
+          const { score } = calculateCityMatchScore(ptenCleanCity, cityKey);
+          if (score > bestScore && score >= 0.88) {
+            bestScore = score;
             matchedKodePosEntries = entries;
-            break;
           }
         }
       }
@@ -671,7 +703,9 @@ export async function executeAnalystPipeline(
     }
 
     // Jika tidak ada di Kode Pos, buat 1 entry fallback dari data Master
+    let usedFallback = false;
     if (matchedKodePosEntries.length === 0) {
+      usedFallback = true;
       matchedKodePosEntries = [{
         kodePos: finalKodePosPten,
         kelurahan: String(raw.Kelurahan || finalKotaPten).trim() || finalKotaPten,
@@ -753,7 +787,7 @@ export async function executeAnalystPipeline(
 
     rowMetaCache.push({
       finalKotaPten, finalKodePosPten, statusPten,
-      matchedKodePosEntries, matchedProvinsi,
+      matchedKodePosEntries, matchedProvinsi, usedFallback,
       resolvedWilayah, sandiCabang, namaOutlet, statusOutlet, alamat,
       matchedRole, highestRoleScore, chosenAlgorithm,
       organisasiTujuan, tipeUnit, roleCabsal, roleCabapv1, roleCabapv2,
@@ -764,10 +798,18 @@ export async function executeAnalystPipeline(
   // ── EXPAND: Hasilkan 1 baris per kelurahan/kecamatan per Kota PTEN ──
   if (onProgress) onProgress(2, 35, 0, total, 'Fase 2: Menyusun data Wilayah & Cabang...');
 
+  // Tracking cakupan: baris kodepos mana yang benar-benar masuk Fase 1
+  const usedKodePosRows = new Set<KodePosRow>();
+  let fallbackCityCount = 0;
+
   for (let i = 0; i < itemsToProcess.length; i++) {
     const raw = itemsToProcess[i];
     const meta = rowMetaCache[i];
     const prevRow = previousRows?.[i];
+
+    // Tandai semua baris kodepos kota ini sebagai terpetakan (termasuk saat mode re-run)
+    if (meta.usedFallback) fallbackCityCount++;
+    else for (const kp of meta.matchedKodePosEntries) usedKodePosRows.add(kp);
 
     // Progress for Fase 2 (global 35% → 66%)
     if (i % 50 === 0 && onProgress) {
@@ -786,6 +828,7 @@ export async function executeAnalystPipeline(
 
     // Hasilkan 1 baris per kelurahan/kecamatan
     meta.matchedKodePosEntries.forEach((kpEntry, seq) => {
+      if (!meta.usedFallback) usedKodePosRows.add(kpEntry);
       const kelurahan = kpEntry.kelurahan || meta.finalKotaPten;
       const kecamatan = kpEntry.kecamatan || meta.finalKotaPten;
       const provinsi = kpEntry.provinsi || meta.matchedProvinsi;
@@ -851,8 +894,10 @@ export async function executeAnalystPipeline(
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   const elapsed = Math.round(performance.now() - startTime);
+  const mappedKodePos = usedKodePosRows.size;
+  const unmappedKodePos = Math.max(0, kodePosList.length - mappedKodePos);
   if (onProgress) {
-    onProgress(3, 100, total, total, `Analisa 3 Fase selesai dalam ${elapsed}ms. ${results.length.toLocaleString('id-ID')} baris dihasilkan.`);
+    onProgress(3, 100, total, total, `Analisa 3 Fase selesai dalam ${elapsed}ms. ${results.length.toLocaleString('id-ID')} baris dihasilkan. KodePos terpetakan ${mappedKodePos.toLocaleString('id-ID')}/${kodePosList.length.toLocaleString('id-ID')}${unmappedKodePos > 0 ? ` (${unmappedKodePos.toLocaleString('id-ID')} baris belum masuk karena kotanya tidak ada di PTEN)` : ''}${fallbackCityCount > 0 ? `. Kota tanpa data kodepos (butuh review): ${fallbackCityCount}` : ''}.`);
   }
 
   return results;
