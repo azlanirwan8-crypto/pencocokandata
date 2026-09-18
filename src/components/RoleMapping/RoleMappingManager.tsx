@@ -687,6 +687,17 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
     handleSaveData(updated);
   };
 
+  // Reset ke data default bawaan
+  const handleResetToDefault = async () => {
+    setRoleList(DEFAULT_ROLE_MAPPING_DATA);
+    setShowResetConfirm(false);
+    await setItem('role_mapping_data', DEFAULT_ROLE_MAPPING_DATA);
+    onRoleMappingCountChange?.(DEFAULT_ROLE_MAPPING_DATA.length);
+    setSuccessMsg('Data mapping role berhasil dikembalikan ke data standar bawaan!');
+    setTimeout(() => setSuccessMsg(null), 4000);
+    saveRoleMappingToNeon(DEFAULT_ROLE_MAPPING_DATA).catch(() => undefined);
+  };
+
   // Reset / Clear all Records
   const handleResetAll = async () => {
     setRoleList([]);
@@ -2174,20 +2185,20 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
               background: '#ffffff',
               borderRadius: '8px',
               width: '100%',
-              maxWidth: '420px',
+              maxWidth: '460px',
               padding: '1.5rem',
               boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
               textAlign: 'center',
             }}
           >
-            <AlertCircle size={40} color="#f06548" style={{ margin: '0 auto 0.75rem' }} />
-            <h4 style={{ margin: '0 0 0.5rem', fontSize: '1rem', fontWeight: 700, color: '#212529' }}>
-              Kosongkan Semua Data Mapping Role?
+            <RefreshCw size={36} color="#405189" style={{ margin: '0 auto 0.5rem' }} />
+            <h4 style={{ margin: '0 0 0.4rem', fontSize: '1rem', fontWeight: 700, color: '#212529' }}>
+              Reset Data Mapping Role
             </h4>
-            <p style={{ fontSize: '0.8rem', color: '#878a99', margin: '0 0 1.25rem' }}>
-              Tindakan ini akan menghapus seluruh data mapping role ({roleList.length.toLocaleString('id-ID')} entri). Anda dapat mengimpor kembali berkas Excel baru setelahnya.
+            <p style={{ fontSize: '0.8rem', color: '#878a99', margin: '0 0 1.25rem', lineHeight: 1.5 }}>
+              Pilih apakah Anda ingin mengembalikan data ke standar bawaan ({DEFAULT_ROLE_MAPPING_DATA.length.toLocaleString('id-ID')} entri) atau mengosongkan seluruh data untuk impor baru dari awal.
             </p>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
               <button
                 type="button"
                 className="btn btn-outline btn-sm"
@@ -2197,11 +2208,19 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
               </button>
               <button
                 type="button"
-                className="btn btn-sm"
+                className="btn btn-outline btn-sm"
+                style={{ color: '#f06548', borderColor: 'rgba(240, 101, 72, 0.4)' }}
                 onClick={handleResetAll}
-                style={{ background: '#f06548', color: '#ffffff', border: 'none' }}
+                title="Kosongkan seluruh data menjadi 0"
               >
-                Ya, Kosongkan Semua
+                Kosongkan Semua
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={handleResetToDefault}
+              >
+                Reset ke Standar Bawaan
               </button>
             </div>
           </div>

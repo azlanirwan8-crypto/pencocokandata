@@ -697,7 +697,7 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
               <thead>
                 <tr>
                   <th style={{ width: '40px', textAlign: 'center' }}>No</th>
-                  <th style={{ width: '65px', textAlign: 'center' }}>Wilayah</th>
+                  <th style={{ width: '78px', textAlign: 'center' }}>Wilayah</th>
                   {hasCombinedSandiCabang ? (
                     <th>Sandi & Cabang</th>
                   ) : (
@@ -762,7 +762,7 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
                           <div style={{ fontSize: '0.7rem', color: '#878a99' }}>{r.Kecamatan || ''}</div>
                         </td>
                         <td style={{ color: '#495057' }}>{r['Dati II'] || '-'}</td>
-                        <td style={{ maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.ALAMAT}>
+                        <td title={r.ALAMAT}>
                           {r.ALAMAT || '-'}
                         </td>
                         <td style={{ color: '#878a99', fontSize: '0.74rem' }}>{r.Telp || '-'}</td>

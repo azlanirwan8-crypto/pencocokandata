@@ -187,7 +187,7 @@ export const MasterHealthCard: React.FC<MasterHealthCardProps> = ({ health }) =>
                       <td>{row.Kecamatan || '-'}</td>
                       <td>{row['Dati II'] || '-'}</td>
                       <td>{row.Provinsi || '-'}</td>
-                      <td style={{ maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis' }} title={row.ALAMAT}>
+                      <td title={row.ALAMAT}>
                         {row.ALAMAT || '-'}
                       </td>
                       <td style={{ color: '#878a99', fontSize: '0.78rem' }}>{row.Telp || '-'}</td>

@@ -861,6 +861,8 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
                             fontWeight: 700,
                             background: '#e2e5e8',
                             color: '#495057',
+                            whiteSpace: 'nowrap',
+                            wordBreak: 'keep-all',
                           }}
                         >
                           {item.statusOutlet || 'KANWIL'}
@@ -868,7 +870,7 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
                       </td>
 
                       {/* Alamat */}
-                      <td title={item.alamat} style={{ maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <td title={item.alamat}>
                         {item.alamat || '-'}
                       </td>
 

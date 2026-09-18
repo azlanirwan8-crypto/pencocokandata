@@ -185,7 +185,7 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
           <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
             <tr>
               <th style={{ width: '40px', textAlign: 'center' }}>No</th>
-              <th style={{ width: '60px', textAlign: 'center' }}>Wilayah</th>
+              <th style={{ width: '78px', textAlign: 'center' }}>Wilayah</th>
               {hasCombinedSandiCabang ? (
                 <th>Sandi & Nama Cabang</th>
               ) : (
@@ -246,7 +246,7 @@ export const MasterDataGrid: React.FC<MasterDataGridProps> = ({ masterRows }) =>
                     <td>{r.Kecamatan || '-'}</td>
                     <td>{r.Kelurahan || '-'}</td>
                     <td>{r['Dati II'] || '-'}</td>
-                    <td style={{ maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.ALAMAT}>
+                    <td title={r.ALAMAT}>
                       {r.ALAMAT || '-'}
                     </td>
                     <td style={{ color: '#878a99', fontSize: '0.78rem' }}>{r.Telp || '-'}</td>

@@ -68,7 +68,6 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
   const [debouncedSearch, setDebouncedSearch] = useState<string>('');
   const [selectedProvinsi, setSelectedProvinsi] = useState<string>('ALL');
   const [selectedKota, setSelectedKota] = useState<string>('ALL');
-  const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
 
   const [showBanner, setShowBanner] = useState<boolean>(true);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -113,7 +112,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
   // Reset ke halaman 1 saat filter / pencarian berubah
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, selectedProvinsi, selectedKota, selectedStatus]);
+  }, [debouncedSearch, selectedProvinsi, selectedKota]);
 
   const refreshStats = useCallback(async () => {
     const s = await fetchKodePosStats();
@@ -151,7 +150,6 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
       search: debouncedSearch,
       provinsi: selectedProvinsi,
       kota: selectedKota,
-      status: selectedStatus,
     }).then((r) => {
       if (!alive) return;
       if (r) {
@@ -170,7 +168,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     return () => {
       alive = false;
     };
-  }, [page, pageSize, debouncedSearch, selectedProvinsi, selectedKota, selectedStatus, reloadKey]);
+  }, [page, pageSize, debouncedSearch, selectedProvinsi, selectedKota, reloadKey]);
 
   // Jaga page tetap valid bila totalPages menyusut
   useEffect(() => {
@@ -268,7 +266,6 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     if (ok) {
       setSelectedProvinsi('ALL');
       setSelectedKota('ALL');
-      setSelectedStatus('ALL');
       setSearchTerm('');
       setSuccessMsg('Data Kode Pos berhasil dikembalikan ke data standar bawaan!');
       refreshAfterMutation();
@@ -436,7 +433,6 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
       search: debouncedSearch,
       provinsi: selectedProvinsi,
       kota: selectedKota,
-      status: selectedStatus,
     });
     if (!exportRows || exportRows.length === 0) {
       setErrorMsg('Tidak ada data untuk diekspor.');
@@ -725,7 +721,6 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
           onClick={() => {
             setSelectedProvinsi('ALL');
             setSelectedKota('ALL');
-            setSelectedStatus('ALL');
             setSearchTerm('');
           }}
           style={{
@@ -855,17 +850,6 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                 </option>
               ))}
             </select>
-
-            {/* Filter Status */}
-            <select
-              className="filter-select"
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-            >
-              <option value="ALL">Semua Status</option>
-              <option value="AKTIF">Status AKTIF</option>
-              <option value="NON-AKTIF">Status NON-AKTIF</option>
-            </select>
           </div>
 
           {/* Page Size Selector */}
@@ -889,7 +873,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
         </div>
 
         {/* Active Filter Indicator Badge */}
-        {(searchTerm || selectedProvinsi !== 'ALL' || selectedKota !== 'ALL' || selectedStatus !== 'ALL') && (
+        {(searchTerm || selectedProvinsi !== 'ALL' || selectedKota !== 'ALL') && (
           <div
             style={{
               display: 'flex',
@@ -910,7 +894,6 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               {searchTerm && <strong>Pencarian: "{searchTerm}" </strong>}
               {selectedProvinsi !== 'ALL' && <strong>Provinsi: {selectedProvinsi} </strong>}
               {selectedKota !== 'ALL' && <strong>Kota: {selectedKota} </strong>}
-              {selectedStatus !== 'ALL' && <strong>Status: {selectedStatus} </strong>}
               ({total.toLocaleString('id-ID')} data ditemukan)
             </span>
             <button
@@ -919,7 +902,6 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                 setSearchTerm('');
                 setSelectedProvinsi('ALL');
                 setSelectedKota('ALL');
-                setSelectedStatus('ALL');
               }}
               style={{
                 background: 'none',
@@ -949,20 +931,19 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                 <th>KECAMATAN</th>
                 <th>KOTA / KABUPATEN</th>
                 <th>PROVINSI</th>
-                <th style={{ width: '95px', textAlign: 'center' }}>STATUS</th>
                 <th style={{ width: '100px', textAlign: 'center' }}>AKSI</th>
               </tr>
             </thead>
             <tbody>
               {loading && rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
                     Memuat data dari database...
                   </td>
                 </tr>
               ) : total === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
                       <Mail size={32} color="#adb5bd" />
                       <span style={{ fontWeight: 600 }}>Tidak ada data Kode Pos yang cocok dengan kriteria pencarian.</span>
@@ -1042,22 +1023,6 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                           }}
                         >
                           {item.provinsi || '-'}
-                        </span>
-                      </td>
-
-                      {/* Status */}
-                      <td style={{ textAlign: 'center' }}>
-                        <span
-                          style={{
-                            fontSize: '0.68rem',
-                            fontWeight: 700,
-                            padding: '0.15rem 0.45rem',
-                            borderRadius: '4px',
-                            background: item.status === 'NON-AKTIF' ? 'rgba(240, 101, 72, 0.12)' : 'rgba(10, 179, 156, 0.12)',
-                            color: item.status === 'NON-AKTIF' ? '#f06548' : '#0ab39c',
-                          }}
-                        >
-                          {item.status || 'AKTIF'}
                         </span>
                       </td>
 

@@ -766,6 +766,8 @@ body {
   font-size: 0.68rem;
   font-weight: 600;
   white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
   letter-spacing: 0.01em;
 }
 

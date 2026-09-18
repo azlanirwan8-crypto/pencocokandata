@@ -386,6 +386,17 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
     handleSaveData(updated);
   };
 
+  // Reset ke data default bawaan
+  const handleResetToDefault = async () => {
+    setPtenList(DEFAULT_PTEN_DATA);
+    setShowResetConfirm(false);
+    await setItem('pten_master_data', DEFAULT_PTEN_DATA);
+    onPtenCountChange?.(DEFAULT_PTEN_DATA.length);
+    setSuccessMsg('Data master PTEN berhasil dikembalikan ke data standar bawaan!');
+    setTimeout(() => setSuccessMsg(null), 4000);
+    savePtenToNeon(DEFAULT_PTEN_DATA).catch(() => undefined);
+  };
+
   // Reset / Clear all PTEN records
   const handleResetAll = async () => {
     setPtenList([]);
@@ -1054,17 +1065,17 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
       {/* Reset Confirmation Modal */}
       {showResetConfirm && (
         <div className="modal-backdrop">
-          <div className="modal-container" style={{ maxWidth: '440px' }}>
+          <div className="modal-container" style={{ maxWidth: '460px' }}>
             <div className="modal-body" style={{ textAlign: 'center', alignItems: 'center', padding: '1.5rem' }}>
-              <RefreshCw size={36} color="#f06548" />
-              <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#212529' }}>
-                Kosongkan Seluruh Data PTEN?
+              <RefreshCw size={36} color="#405189" />
+              <h4 style={{ margin: '0.5rem 0 0.25rem', fontSize: '1rem', fontWeight: 700, color: '#212529' }}>
+                Reset Data Master PTEN
               </h4>
               <p style={{ fontSize: '0.8rem', color: '#878a99', margin: 0, lineHeight: 1.5 }}>
-                Seluruh data referensi master PTEN akan dihapus permanen agar Anda dapat mengimpor berkas Excel baru dari awal.
+                Pilih apakah Anda ingin mengembalikan data ke standar bawaan ({DEFAULT_PTEN_DATA.length.toLocaleString('id-ID')} referensi) atau mengosongkan seluruh data untuk impor baru dari awal.
               </p>
             </div>
-            <div className="modal-footer" style={{ justifyContent: 'center' }}>
+            <div className="modal-footer" style={{ justifyContent: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
               <button
                 type="button"
                 className="btn btn-outline btn-sm"
@@ -1074,10 +1085,19 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
               </button>
               <button
                 type="button"
-                className="btn btn-danger btn-sm"
+                className="btn btn-outline btn-sm"
+                style={{ color: '#f06548', borderColor: 'rgba(240, 101, 72, 0.4)' }}
                 onClick={handleResetAll}
+                title="Kosongkan seluruh data menjadi 0"
               >
-                Ya, Hapus Semua Data
+                Kosongkan Semua
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={handleResetToDefault}
+              >
+                Reset ke Standar Bawaan
               </button>
             </div>
           </div>

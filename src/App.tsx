@@ -548,19 +548,16 @@ export const App: React.FC = () => {
   };
 
   const handleResetMaster = async () => {
-    if (window.confirm('Kosongkan seluruh data master cabang?')) {
+    try {
+      setMasterRows([]);
+      await setItem('master_data', { rows: [], fileName: '' });
       try {
-        setMasterRows([]);
-        // setMasterFileName('');
-        await setItem('master_data', { rows: [], fileName: '' });
-        try {
-          await clearMasterFromNeon();
-        } catch (e) {
-          console.warn('Neon clear warning:', e);
-        }
+        await clearMasterFromNeon();
       } catch (e) {
-        console.warn('Reset master error:', e);
+        console.warn('Neon clear warning:', e);
       }
+    } catch (e) {
+      console.warn('Reset master error:', e);
     }
   };
 
@@ -620,18 +617,16 @@ export const App: React.FC = () => {
   };
 
   const handleResetTarget = async () => {
-    if (window.confirm('Kosongkan seluruh data target operasional (Data Cek)?')) {
-      try {
-        setTargetRows([]);
-        setInitialTargetCount(0);
-        setTargetFileName('');
-        setMatchedDone(false);
-        setProgress(0);
-        await setItem('target_data', { rows: [], fileName: '', initialCount: 0, matchedDone: false });
-        clearTargetFromNeon().catch((e) => console.warn('Neon target clear warning:', e));
-      } catch (e) {
-        console.warn('Reset target error:', e);
-      }
+    try {
+      setTargetRows([]);
+      setInitialTargetCount(0);
+      setTargetFileName('');
+      setMatchedDone(false);
+      setProgress(0);
+      await setItem('target_data', { rows: [], fileName: '', initialCount: 0, matchedDone: false });
+      clearTargetFromNeon().catch((e) => console.warn('Neon target clear warning:', e));
+    } catch (e) {
+      console.warn('Reset target error:', e);
     }
   };
 
