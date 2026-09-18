@@ -306,19 +306,8 @@ export async function runKodePosSourceAudit(
   };
 }
 
-/**
- * Patokan tersimpan di database sendiri (tabel kodepos_baseline). Pemeriksaan sync tidak
- * menyentuh situs pihak ketiga saat dijalankan — hanya saat baseline ditarik ulang.
- */
-export async function runKodePosBaselineAudit(onProgress?: SyncProgress): Promise<KodePosSyncPlan> {
-  onProgress?.('Membandingkan database dengan baseline tersimpan...', 40);
-  const json = await fetchJson('/api/kodepos-baseline?view=diff');
-  onProgress?.('Selesai', 100);
-
-  if (!json.ready) {
-    throw new Error('Patokan belum tersimpan di database. Klik tombol "Tarik data terbaru" sekali terlebih dahulu.');
-  }
-
+/** Bangun rencana hasil adu dari respons /api/kodepos-baseline?view=diff. */
+function planFromBaselineDiff(json: any, noteTambahan?: string): KodePosSyncPlan {
   const rows: KodePosRow[] = json.missingInDb || [];
   const provinces = Array.from(new Set(rows.map((r) => kodePosProvinceOf(r)))).sort();
   return {
@@ -339,18 +328,33 @@ export async function runKodePosBaselineAudit(onProgress?: SyncProgress): Promis
       `Tarikan ke-${json.version ?? '?'} pada tabel \`kodepos_baseline\` ` +
       `(${(json.baselineRows ?? 0).toLocaleString('id-ID')} baris, ${(json.baselineCodes ?? 0).toLocaleString('id-ID')} kode pos unik) ` +
       `- sumber: ${json.source}. ` +
-      `${(json.missingCodesTotal ?? 0).toLocaleString('id-ID')} kode pos baseline belum ada di Neon, ` +
+      `${(json.missingCodesTotal ?? 0).toLocaleString('id-ID')} kode pos patokan belum ada di Neon, ` +
       `${(json.codesOnlyInDb ?? 0).toLocaleString('id-ID')} kode pos hanya ada di Neon.`,
     provincesAffected: provinces,
     importable: true,
     missingCodes: [],
     note:
+      (noteTambahan ? noteTambahan + ' ' : '') +
       (json.truncated
         ? `Daftar dibatasi ${rows.length.toLocaleString('id-ID')} baris pertama; `
         : '') +
-      'Perbandingan dilakukan di level kode pos dan nama wilayah dari sumber pemerintah ditulis UPPERCASE ' +
-      '(mis. "KEUDE BAKONGAN"), jadi gaya penulisan baris hasil impor bisa berbeda dengan master yang sekarang.',
+      'Perbandingan dilakukan di level kode pos, jadi nama wilayah yang ditulis beda (mis. UPPERCASE) ' +
+      'tidak dianggap data baru.',
   };
+}
+
+/**
+ * Patokan tersimpan di database sendiri (tabel kodepos_baseline). Pemeriksaan sync tidak
+ * menyentuh situs pihak ketiga saat dijalankan — hanya saat baseline ditarik ulang.
+ */
+export async function runKodePosBaselineAudit(onProgress?: SyncProgress): Promise<KodePosSyncPlan> {
+  onProgress?.('Membandingkan database dengan patokan tersimpan...', 40);
+  const json = await fetchJson('/api/kodepos-baseline?view=diff');
+  onProgress?.('Selesai', 100);
+  if (!json.ready) {
+    throw new Error('Patokan belum tersimpan di database. Klik "Ambil data dari kodepos.id" atau "Tarik dari data pemerintah" terlebih dahulu.');
+  }
+  return planFromBaselineDiff(json);
 }
 
 /** Cicil penarikan baseline (server membatasi 5 halaman x 1000 baris tiap panggilan). */
@@ -390,10 +394,41 @@ export async function pullKodePosBaseline(
 }
 
 /**
- * Kumpul patokan dari kodepos.id. Situs ini tidak punya API maupun berkas
- * unduhan, jadi server menelusuri halaman provinsinya yang berpaginasi
- * (±4.700 halaman). Dipanggil per provinsi supaya tiap fungsi selesai < 60 detik.
+ * Crawl satu provinsi dari kodepos.id sampai halamannya habis, lalu simpan
+ * jejaknya (jumlah halaman + hash halaman sampel) supaya pemeriksaan berikutnya
+ * cukup membandingkan beberapa halaman saja.
  */
+async function crawlKodePosIdProvince(
+  provinsi: string,
+  versi: number | undefined,
+  onRow?: (tambah: number, halaman: number) => void
+): Promise<{ versi: number; rows: number; halaman: number }> {
+  let fromPage = 1;
+  let rows = 0;
+  let lastPage = 0;
+  let v = versi;
+  for (let guard = 0; guard < 200; guard++) {
+    const json = await fetchJson('/api/kodepos-id?view=crawl', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provinsi, fromPage, versi: v }),
+    });
+    v = json.versi;
+    rows += json.upserted || 0;
+    lastPage = Math.max(lastPage, json.lastPage || 0);
+    onRow?.(json.upserted || 0, json.next - 1);
+    if (json.done || json.next <= fromPage) break;
+    fromPage = json.next;
+  }
+  const commit = await fetchJson('/api/kodepos-id?view=commit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provinsi, halaman: lastPage, baris: rows, versi: v }),
+  });
+  return { versi: commit.versi ?? v ?? 0, rows, halaman: lastPage };
+}
+
+/** Kumpul ulang SELURUH kodepos.id (±4.700 halaman, ±8-10 menit). */
 export async function crawlKodePosId(
   onProgress?: SyncProgress
 ): Promise<{ version: number; rows: number; provinces: number; sumber: string }> {
@@ -405,24 +440,55 @@ export async function crawlKodePosId(
   let versi: number | undefined;
   let rows = 0;
   for (let i = 0; i < provinces.length; i++) {
-    const provinsi = provinces[i];
-    let fromPage = 1;
-    for (let guard = 0; guard < 200; guard++) {
-      const json = await fetchJson('/api/kodepos-id?view=crawl', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provinsi, fromPage, versi }),
-      });
-      versi = json.versi;
-      rows += json.upserted || 0;
+    const r = await crawlKodePosIdProvince(provinces[i], versi, (tambah, halaman) => {
+      rows += tambah;
       onProgress?.(
-        `Mengambil ${provinsi} (halaman ${json.next - 1}) — total ${rows.toLocaleString('id-ID')} baris...`,
+        `Mengambil ${provinces[i]} (halaman ${halaman}) — total ${rows.toLocaleString('id-ID')} baris...`,
         Math.min(97, Math.round(((i + 1) / provinces.length) * 100))
       );
-      if (json.done || json.next <= fromPage) break;
-      fromPage = json.next;
-    }
+    });
+    versi = r.versi;
   }
   onProgress?.('Patokan tersimpan', 100);
   return { version: versi ?? 0, rows, provinces: provinces.length, sumber: list.source || 'kodepos.id' };
+}
+
+/**
+ * INI YANG JALAN SAAT KLIK "Sync Data".
+ * 1) tanya kodepos.id: ada provinsi yang bertambah/berubah sejak patokan diambil?
+ * 2) kalau ada, crawl hanya provinsi itu dan perbarui tabel patokan
+ * 3) adukan kodepos_data (Neon) terhadap tabel patokan — di level kode pos
+ */
+export async function runKodePosLiveSync(onProgress?: SyncProgress): Promise<KodePosSyncPlan> {
+  onProgress?.('Menanyakan kondisi terbaru ke kodepos.id...', 6);
+  const fresh = await fetchJson('/api/kodepos-id?view=fresh');
+  const perlu: string[] = [
+    ...((fresh.belumPernah || []) as string[]),
+    ...((fresh.berubah || []) as any[]).map((b) => String(b.provinsi)),
+  ];
+
+  let versi: number | undefined;
+  if (perlu.length > 0) {
+    for (let i = 0; i < perlu.length; i++) {
+      onProgress?.(
+        `Ada perubahan — mengambil ulang ${perlu[i]} (${i + 1}/${perlu.length})...`,
+        10 + Math.round(((i + 1) / perlu.length) * 70)
+      );
+      const r = await crawlKodePosIdProvince(perlu[i], versi);
+      versi = r.versi;
+    }
+  }
+
+  onProgress?.('Membandingkan dengan database Neon...', 88);
+  const json = await fetchJson('/api/kodepos-baseline?view=diff');
+  if (!json.ready) {
+    throw new Error(
+      `kodepos.id sudah disentuh tapi tabel patokan masih kosong — jalankan ulang pemeriksaan ini.`
+    );
+  }
+
+  const catatan = perlu.length
+    ? `${perlu.length} provinsi diperbarui barusan dari kodepos.id (${perlu.slice(0, 4).join(', ')}${perlu.length > 4 ? ', ...' : ''}).`
+    : 'kodepos.id masih sama dengan patokan terakhir, jadi tidak perlu ambil ulang.';
+  return planFromBaselineDiff({ ...json, source: fresh.source || json.source }, catatan);
 }

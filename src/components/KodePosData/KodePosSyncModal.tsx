@@ -6,6 +6,7 @@ import {
   runKodePosBaselineAudit,
   pullKodePosBaseline,
   crawlKodePosId,
+  runKodePosLiveSync,
   type KodePosSyncPlan,
   type SyncProgress,
 } from '../../utils/kodePosSync';
@@ -40,9 +41,9 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [importMsg, setImportMsg] = useState<string | null>(null);
-  // 'baseline' = patokan tersimpan di DB sendiri; 'db' = master perangkat ini vs Neon;
-  // 'resmi'/'komunitas' = bandingkan Neon langsung dengan sumber eksternal
-  const [sourceMode, setSourceMode] = useState<'baseline' | 'db' | 'resmi' | 'komunitas'>('baseline');
+  // 'langsung' = cek kodepos.id saat tombol diklik; 'baseline' = patokan tersimpan tanpa internet;
+  // 'db' = berkas perangkat ini vs Neon; 'resmi'/'komunitas' = sumber eksternal lain
+  const [sourceMode, setSourceMode] = useState<'langsung' | 'baseline' | 'db' | 'resmi' | 'komunitas'>('langsung');
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const rows = plan?.missingInCloud || [];
@@ -66,11 +67,13 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
     setSelected(new Set());
     try {
       const result =
-        sourceMode === 'db'
-          ? await runKodePosSync(onProgress)
-          : sourceMode === 'baseline'
-            ? await runKodePosBaselineAudit(onProgress)
-            : await runKodePosSourceAudit(sourceMode, onProgress);
+        sourceMode === 'langsung'
+          ? await runKodePosLiveSync(onProgress)
+          : sourceMode === 'db'
+            ? await runKodePosSync(onProgress)
+            : sourceMode === 'baseline'
+              ? await runKodePosBaselineAudit(onProgress)
+              : await runKodePosSourceAudit(sourceMode, onProgress);
       setPlan(result);
       // Default: semua baris yang belum ada di cloud terpilih
       setSelected(
@@ -186,6 +189,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
             </div>
             <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'nowrap', overflowX: 'auto' }}>
               {([
+                { key: 'langsung', label: 'kodepos.id (langsung)' },
                 { key: 'baseline', label: 'Patokan di DB kita' },
                 { key: 'db', label: 'Berkas di perangkat ini' },
                 { key: 'resmi', label: 'Sumber resmi' },
@@ -199,7 +203,9 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                     onClick={() => setSourceMode(s.key)}
                     disabled={busy || phase === 'importing'}
                     title={
-                      s.key === 'baseline'
+                      s.key === 'langsung'
+                        ? 'Klik = cek kodepos.id sekarang juga; provinsi yang berubah diambil ulang, lalu database diadu'
+                        : s.key === 'baseline'
                         ? 'Tabel kodepos_baseline di database kita sendiri — isinya salinan data pemerintah yang pernah ditarik'
                         : s.key === 'db'
                           ? 'Berkas master kode pos yang tersimpan di browser/laptop ini (bukan internet)'
@@ -226,23 +232,29 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
               })}
             </div>
           </div>
+          {sourceMode === 'langsung' && !busy && phase !== 'importing' && (
+            <div style={{ fontSize: '0.74rem', color: '#878a99' }}>
+              Pemeriksaan ini menghubungi <strong style={{ color: '#495057' }}>kodepos.id</strong> sekarang:
+              hanya provinsi yang isinya berubah yang diambil ulang, lalu database Neon diadu terhadapnya.
+              Sekali pertama ±8-10 menit (menyeluruh); sesudah itu biasanya puluhan detik.
+            </div>
+          )}
           {sourceMode === 'baseline' && !busy && phase !== 'importing' && (
             <div>
               <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '0.35rem' }}>
-                Perintah
+                Isi ulang patokan
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-                <button type="button" className="btn btn-primary btn-sm" onClick={() => void handleCrawlKodePosId()}>
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => void handleCrawlKodePosId()}>
                   <Download size={13} style={{ marginRight: '0.3rem' }} />
-                  Ambil data dari kodepos.id
+                  Ambil ulang semua dari kodepos.id
                 </button>
                 <button type="button" className="btn btn-outline btn-sm" onClick={() => void handlePullBaseline()}>
                   <Globe size={13} style={{ marginRight: '0.3rem' }} />
                   Tarik dari data pemerintah
                 </button>
                 <span style={{ fontSize: '0.74rem', color: '#878a99' }}>
-                  Isi ulang patokan di tabel kodepos_baseline. Pakai kodepos.id ±5-10 menit sekali jalan;
-                  sumber yang terpakai dicatat di baris sumber.
+                  Pemeriksaan "Patokan di DB kita" tidak menyentuh internet — tombol ini yang mengisinya.
                 </span>
               </div>
             </div>
@@ -260,11 +272,13 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
               <p style={{ fontSize: '0.76rem', color: '#878a99', marginTop: '0.7rem' }}>
                 {phase === 'pulling'
                   ? 'Fungsi server mengambil data per 1.000 baris (maks. 5 halaman tiap panggilan) lalu menimpanya di tabel kodepos_baseline berdasarkan kode wilayah. Baris lama tetap aman bila sumbernya tidak berubah.'
-                  : sourceMode === 'db'
-                    ? 'Membandingkan master lokal dengan tabel kodepos_data di Neon memakai sidik jari per provinsi, lalu menghitung selisih hanya pada provinsi yang berbeda.'
-                    : sourceMode === 'baseline'
-                      ? 'Membandingkan daftar kode pos unik di tabel kodepos_data Neon dengan isi tabel kodepos_baseline milik kita sendiri — tanpa menyentuh internet.'
-                      : 'Server mengunduh dataset eksternal lalu membandingkan daftar kode posnya dengan DISTINCT kode_pos di tabel kodepos_data Neon. Hasilnya di-cache 10 menit.'}
+                  : sourceMode === 'langsung'
+                    ? 'Server membuka halaman provinsi kodepos.id, membandingkan beberapa halaman sampel dengan jejak terakhir, mengambil ulang yang berubah, lalu Neon diadu terhadap tabel patokan.'
+                    : sourceMode === 'db'
+                      ? 'Membandingkan master lokal dengan tabel kodepos_data di Neon memakai sidik jari per provinsi, lalu menghitung selisih hanya pada provinsi yang berbeda.'
+                      : sourceMode === 'baseline'
+                        ? 'Membandingkan daftar kode pos unik di tabel kodepos_data Neon dengan isi tabel kodepos_baseline milik kita sendiri — tanpa menyentuh internet.'
+                        : 'Server mengunduh dataset eksternal lalu membandingkan daftar kode posnya dengan DISTINCT kode_pos di tabel kodepos_data Neon. Hasilnya di-cache 10 menit.'}
               </p>
             </div>
           )}

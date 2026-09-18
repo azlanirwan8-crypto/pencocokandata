@@ -1,21 +1,27 @@
 import { neon } from '@neondatabase/serverless';
+import { createHash } from 'node:crypto';
 
 /**
- * /api/kodepos-id — pengumpul patokan kode pos dari kodepos.id.
+ * /api/kodepos-id — patokan kode pos yang bersumber dari kodepos.id.
  *
  * Situs itu tidak punya API maupun berkas unduhan, tapi halaman provinsinya
  * berpaginasi rapi: https://kodepos.id/{slug-provinsi}?page=N berisi tabel
  * [Provinsi, Kota/Kabupaten, Kecamatan, Kelurahan, Kode Pos] 20 baris per
  * halaman, berhenti sendiri saat halamannya kosong. Total nasional ±4.700
- * halaman, jadi satu kali crawl penuh masih masuk akal.
+ * halaman, jadi crawl penuh ±8-10 menit dan tidak mungkin tiap kali Sync.
  *
- * GET  ?view=provinces      daftar slug provinsi dari halaman utama
- * POST ?view=crawl          body { provinsi, fromPage, pages, versi }
- *                           -> ambil `pages` halaman (paralel terbatas), upsert
- *                              ke kodepos_baseline, balas { upserted, next, done }
+ * Karena itu ada dua lapis:
+ *  - ?view=fresh   (GET)  cek terbaru/tidak cukup cepat: 1 probe halaman
+ *                  setelah halaman terakhir + hash 3 halaman sampel per provinsi.
+ *                  Hanya provinsi yang berubah yang perlu di-crawl ulang.
+ *  - ?view=crawl   (POST) ambil `pages` halaman sebuah provinsi, upsert ke
+ *                  kodepos_baseline.
+ *  - ?view=commit  (POST) simpan hasil crawl sebuah provinsi (jumlah halaman + hash
+ *                  sampel) ke kodepos_crawl_state supaya ?view=fresh bisa membanding.
+ *  - ?view=state   (GET)  ringkasan state per provinsi.
  *
- * Hasilnya masuk ke tabel patokan yang sama dengan sumber pemerintah, jadi
- * pemeriksaan "Sync Data" tidak berubah dan tetap tidak menyentuh internet.
+ * Pemeriksaan "Sync Data" memakai tabel kodepos_baseline, jadi tetap bisa diulang
+ * tanpa internet; internet hanya disentuh saat cek terbaru / crawl.
  */
 
 export const maxDuration = 60;
@@ -117,6 +123,17 @@ function ensureSchema(sql: any): Promise<void> {
         await sql`ALTER TABLE kodepos_baseline ADD COLUMN IF NOT EXISTS versi INT;`;
         await sql`ALTER TABLE kodepos_baseline ADD COLUMN IF NOT EXISTS diambil_pada TIMESTAMPTZ DEFAULT NOW();`;
         await sql`CREATE INDEX IF NOT EXISTS idx_baseline_kode_pos ON kodepos_baseline(kode_pos);`;
+        await sql`
+          CREATE TABLE IF NOT EXISTS kodepos_crawl_state (
+            provinsi     TEXT PRIMARY KEY,
+            sumber       TEXT,
+            halaman      INT NOT NULL DEFAULT 0,
+            baris        INT NOT NULL DEFAULT 0,
+            sampel       TEXT,
+            versi        INT,
+            diambil_pada TIMESTAMPTZ DEFAULT NOW()
+          );
+        `;
       } catch (err) {
         console.warn('Migrasi kodepos_baseline (kodepos.id) dilewati:', err);
         schemaReady = null;
@@ -124,6 +141,33 @@ function ensureSchema(sql: any): Promise<void> {
     })();
   }
   return schemaReady;
+}
+
+/** Hash isi halaman — dipakai untuk tahu sebuah provinsi berubah atau tidak. */
+function hashRows(rows: CollectedRow[]): string {
+  return createHash('sha256').update(JSON.stringify(rows)).digest('hex').slice(0, 16);
+}
+
+/** Halaman yang di-hash saat commit: awal, tengah, akhir. */
+function samplePages(halaman: number): number[] {
+  if (halaman <= 0) return [];
+  const mid = Math.max(1, Math.round(halaman / 2));
+  return [...new Set([1, mid, halaman])];
+}
+
+/** peta dengan paralel terbatas, supaya tidak membanjiri situs sumber. */
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let cursor = 0;
+  const workers = new Array(Math.min(limit, items.length || 1)).fill(0).map(async () => {
+    for (;;) {
+      const i = cursor++;
+      if (i >= items.length) return;
+      out[i] = await fn(items[i]);
+    }
+  });
+  await Promise.all(workers);
+  return out;
 }
 
 async function fetchPage(provinsi: string, page: number): Promise<CollectedRow[]> {
@@ -139,33 +183,35 @@ async function crawlRange(
   provinsi: string,
   fromPage: number,
   pages: number
-): Promise<{ rows: CollectedRow[]; next: number; done: boolean }> {
+): Promise<{ rows: CollectedRow[]; next: number; done: boolean; lastPage: number }> {
   const rows: CollectedRow[] = [];
   let page = fromPage;
   let blanks = 0;
+  let lastPage = 0;
 
   while (page < fromPage + pages) {
+    const start = page;
     const batch: number[] = [];
     for (let i = 0; i < CONCURRENCY && page + i < fromPage + pages; i++) batch.push(page + i);
     const results = await Promise.all(batch.map((p) => fetchPage(provinsi, p).catch(() => null)));
-    let hit = 0;
-    for (const r of results) {
+    let lastWithData = -1;
+    results.forEach((r, i) => {
       if (r && r.length > 0) {
         rows.push(...r);
-        hit += r.length;
+        lastWithData = i;
       }
-    }
+    });
     page += batch.length;
-    // Halaman terakhir batch tidak bisa dipastikan; kalau batch ini kosong semua,
-    // ulangi sekali untuk memastikan provinsinya memang sudah habis.
-    if (hit === 0) {
-      blanks++;
-      if (blanks >= BLANK_LIMIT) return { rows, next: page - batch.length, done: true };
-    } else {
+    if (lastWithData >= 0) {
+      lastPage = start + lastWithData;
       blanks = 0;
+      continue;
     }
+    // Batch tanpa isi: ulangi sekali lagi sebelum menyimpulkan provinsinya habis.
+    blanks++;
+    if (blanks >= BLANK_LIMIT) return { rows, next: page, done: true, lastPage };
   }
-  return { rows, next: page, done: false };
+  return { rows, next: page, done: false, lastPage };
 }
 
 export default async function handler(req: any, res: any) {
@@ -198,6 +244,111 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({ ok: true, configured: true, source: SOURCE_LABEL, provinces });
     }
 
+    if (req.method === 'GET' && view === 'state') {
+      await ensureSchema(sql);
+      const rows = await sql`
+        SELECT provinsi, sumber, halaman, baris, versi, diambil_pada
+        FROM kodepos_crawl_state ORDER BY provinsi;
+      `;
+      return res.status(200).json({ ok: true, configured: true, source: SOURCE_LABEL, states: rows });
+    }
+
+    /**
+     * Cek apakah kodepos.id masih sama dengan terakhir kita kumpul.
+     * Murah: per provinsi hanya 3 request (pertama, terakhir, halaman setelah
+     * terakhir). Provinsi yang tumbuh atau isinya berubah masuk daftar `changed`.
+     */
+    if (req.method === 'GET' && view === 'fresh') {
+      await ensureSchema(sql);
+      const res2 = await fetch(SITE, { headers: BROWSER_HEADERS });
+      if (!res2.ok) throw new Error(`kodepos.id menolak (HTTP ${res2.status}).`);
+      const provinces = parseProvinceSlugs(await res2.text());
+      if (provinces.length < 20) throw new Error(`Hanya ${provinces.length} provinsi terbaca — struktur situs berubah.`);
+
+      const stored = await sql`SELECT provinsi, halaman, sampel FROM kodepos_crawl_state;`;
+      const byProv = new Map<string, { halaman: number; sampel: Record<string, string> }>();
+      for (const s of stored as any[]) {
+        let sampel: Record<string, string> = {};
+        try {
+          sampel = JSON.parse(String(s.sampel || '{}'));
+        } catch {
+          sampel = {};
+        }
+        byProv.set(String(s.provinsi), { halaman: Number(s.halaman) || 0, sampel });
+      }
+
+      const belum = provinces.filter((p) => !byProv.has(p));
+      const sudah = provinces.filter((p) => byProv.has(p));
+
+      const hasil = await mapLimit(sudah, 4, async (provinsi) => {
+          const st = byProv.get(provinsi)!;
+          const cek = samplePages(st.halaman);
+          try {
+            const [tumbuh, ...sampelRows] = await Promise.all([
+              fetchPage(provinsi, st.halaman + 1),
+              ...cek.map((p) => fetchPage(provinsi, p)),
+            ]);
+            if (tumbuh.length > 0) return { provinsi, berubah: true, alasan: 'bertambah' };
+            for (let i = 0; i < cek.length; i++) {
+              const lama = st.sampel[String(cek[i])];
+              if (lama && lama !== hashRows(sampelRows[i])) return { provinsi, berubah: true, alasan: 'isi berubah' };
+            }
+            return { provinsi, berubah: false };
+          } catch {
+            // halaman tidak terambil — anggap perlu crawl ulang provinsi itu
+            return { provinsi, berubah: true, alasan: 'gagal dicek' };
+          }
+      });
+
+      const berubah = [...belum, ...hasil.filter((h) => h.berubah).map((h) => h.provinsi)];
+      return res.status(200).json({
+        ok: true,
+        configured: true,
+        source: SOURCE_LABEL,
+        provinces,
+        belumPernah: belum,
+        berubah: hasil.filter((h) => h.berubah),
+        fresh: berubah.length === 0,
+        diperiksa: sudah.length + belum.length,
+      });
+    }
+
+    /** Simpan jejak crawl satu provinsi supaya ?view=fresh bisa membandingkan. */
+    if (req.method === 'POST' && view === 'commit') {
+      await ensureSchema(sql);
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
+      const provinsi = String(body.provinsi || '').trim().toLowerCase();
+      const halaman = Math.max(0, Math.min(5000, Number(body.halaman) || 0));
+      const baris = Math.max(0, Number(body.baris) || 0);
+      if (!/^[a-z][a-z-]{2,40}$/.test(provinsi)) {
+        return res.status(400).json({ ok: false, error: 'Slug provinsi tidak valid.' });
+      }
+
+      let versi = Number(body.versi) || 0;
+      if (!versi) {
+        const max = await sql`SELECT COALESCE(MAX(versi), 0)::int AS v FROM kodepos_crawl_state;`;
+        versi = (max?.[0]?.v || 0) + 1;
+      }
+
+      const pages = samplePages(halaman);
+      const sampelRows = await Promise.all(pages.map((p) => fetchPage(provinsi, p).catch(() => [] as CollectedRow[])));
+      const sampel: Record<string, string> = {};
+      pages.forEach((p, i) => (sampel[String(p)] = hashRows(sampelRows[i])));
+
+      await sql`
+        INSERT INTO kodepos_crawl_state (provinsi, sumber, halaman, baris, sampel, versi, diambil_pada)
+        VALUES (${provinsi}, ${SOURCE_LABEL}, ${halaman}, ${baris}, ${JSON.stringify(sampel)}, ${versi}, NOW())
+        ON CONFLICT (provinsi) DO UPDATE SET
+          sumber = EXCLUDED.sumber,
+          halaman = EXCLUDED.halaman,
+          baris = EXCLUDED.baris,
+          sampel = EXCLUDED.sampel,
+          versi = EXCLUDED.versi,
+          diambil_pada = NOW();
+      `;
+      return res.status(200).json({ ok: true, configured: true, provinsi, halaman, versi, sampel: pages });
+    }
+
     if (req.method === 'POST' && view === 'crawl') {
       await ensureSchema(sql);
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
@@ -214,7 +365,7 @@ export default async function handler(req: any, res: any) {
         versi = (max?.[0]?.v || 0) + 1;
       }
 
-      const { rows, next, done } = await crawlRange(provinsi, fromPage, pages);
+      const { rows, next, done, lastPage } = await crawlRange(provinsi, fromPage, pages);
 
       // Satu kunci tidak boleh muncul dua kali dalam satu pernyataan upsert.
       const byKey = new Map<string, CollectedRow>();
@@ -251,6 +402,7 @@ export default async function handler(req: any, res: any) {
         upserted: unique.length,
         fromPage,
         next,
+        lastPage,
         done,
         source: SOURCE_LABEL,
       });
