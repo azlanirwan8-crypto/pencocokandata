@@ -162,12 +162,12 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
         </div>
 
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'nowrap', overflowX: 'auto' }}>
             {([
-              { key: 'baseline', label: 'Baseline pemerintah di database kita (patokan)' },
-              { key: 'db', label: 'Master perangkat ini vs Neon' },
-              { key: 'resmi', label: 'Sumber resmi (Kepmendagri + kode pos Pos Indonesia)' },
-              { key: 'komunitas', label: 'Sumber komunitas (dataset lengkap bernama)' },
+              { key: 'baseline', label: 'Baseline DB kita (patokan)' },
+              { key: 'db', label: 'Perangkat vs Neon' },
+              { key: 'resmi', label: 'Sumber resmi' },
+              { key: 'komunitas', label: 'Sumber komunitas' },
             ] as const).map((s) => {
               const active = sourceMode === s.key;
               return (
@@ -176,15 +176,26 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                   type="button"
                   onClick={() => setSourceMode(s.key)}
                   disabled={busy || phase === 'importing'}
+                  title={
+                    s.key === 'baseline'
+                      ? 'Bandingkan Neon dengan tabel kodepos_baseline milik kita sendiri'
+                      : s.key === 'db'
+                        ? 'Bandingkan master kode pos di perangkat ini dengan Neon'
+                        : s.key === 'resmi'
+                          ? 'Kepmendagri + daftar kode pos Pos Indonesia (tanpa nama wilayah, tidak bisa diimpor)'
+                          : 'Dataset GitHub lengkap bernama (asal komunitas, bukan resmi)'
+                  }
                   style={{
                     background: active ? '#405189' : '#ffffff',
                     color: active ? '#ffffff' : '#495057',
                     border: `1px solid ${active ? '#405189' : '#d5dde3'}`,
                     borderRadius: '6px',
-                    padding: '0.35rem 0.8rem',
-                    fontSize: '0.78rem',
+                    padding: '0.3rem 0.65rem',
+                    fontSize: '0.73rem',
                     fontWeight: 700,
                     cursor: active ? 'default' : 'pointer',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
                   }}
                 >
                   {s.label}
