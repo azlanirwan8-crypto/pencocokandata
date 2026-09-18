@@ -19,6 +19,8 @@ export interface AnalystRow {
   placementStatus: 'VERIFIED' | 'REVIEW' | 'FALLBACK';
   placementMethod: string;
   groupKota: string;
+  // 'DIANALISA' = terpetakan ke kota PTEN; 'TIDAK_ANALISA' = kotanya tak ada di PTEN
+  kategori: 'DIANALISA' | 'TIDAK_ANALISA';
   fase1Approved: boolean;
   // Tracking: index baris Master Cabang asal (untuk grouping Fase 1)
   sourceRowIndex: number;
@@ -495,6 +497,7 @@ export interface AnalystCoverage {
   verifiedRows: number;
   reviewRows: number;
   resultRows: number;
+  unanalysedRows: number;
   unmappedCities: CoverageCity[];
   includedCities: CoverageCity[];
 }
@@ -1016,6 +1019,7 @@ export async function executeAnalystPipeline(
         placementStatus: meta.placementStatus,
         placementMethod: meta.placementMethod,
         groupKota: meta.finalKotaPten,
+        kategori: 'DIANALISA',
         fase1Approved: false,
         sourceRowIndex: i,
         allKelurahanCount,
@@ -1071,6 +1075,7 @@ export async function executeAnalystPipeline(
   const verifiedRows = Math.max(0, verifiedKodePosRows - reviewRow);
   // Kota di master kodepos yang tidak ikut ke Fase 1 = penyebab jumlah < 83.762
   const unmappedCities: CoverageCity[] = [];
+  const unanalysedRows: AnalystRow[] = [];
   kodePosByCity.forEach((entries, ck) => {
     if (entries.length === 0 || includedCityMap.has(ck)) return;
     unmappedCities.push({
@@ -1080,17 +1085,66 @@ export async function executeAnalystPipeline(
       sampleKodePos: entries[0]?.kodePos || '',
       provinsi: entries[0]?.provinsi || '',
     });
+    // Sertakan baris mentahnya supaya bisa dianalisa manual (bukan dibuang diam-diam)
+    entries.forEach((e, seq) => {
+      unanalysedRows.push({
+        id: `analyst-na-${ck}-${seq + 1}-${Date.now()}`,
+        no: 0,
+        kotaPten: '',
+        kodePosPten: e.kodePos,
+        kelurahan: e.kelurahan || '',
+        kecamatan: e.kecamatan || '',
+        provinsi: e.provinsi || '',
+        statusPten: 'UNCHECKED',
+        placementStatus: 'REVIEW',
+        placementMethod: 'Kota/Kabupaten tidak ada di data PTEN',
+        groupKota: e.kabupatenKota || ck,
+        kategori: 'TIDAK_ANALISA',
+        fase1Approved: false,
+        sourceRowIndex: -1,
+        allKelurahanCount: entries.length,
+        kelurahanSeq: seq + 1,
+        wilayah: '',
+        sandiCabang: '',
+        sandi: '',
+        cabang: '',
+        branchCode: '',
+        kodeCabang: '',
+        namaOutlet: '',
+        statusOutlet: '',
+        alamat: '',
+        fase2Approved: false,
+        organisasiTujuan: '',
+        tipeUnit: 'OUTLET',
+        is3RoleLengkap: false,
+        roleCabsal: 0,
+        roleCabapv1: 0,
+        roleCabapv2: 0,
+        roleGrandTotal: 0,
+        alurWondr: '',
+        flowDescription: '',
+        fase3Approved: false,
+        confidenceScore: 0,
+        matchingAlgorithm: 'Belum dianalisa (kota tidak ada di PTEN)',
+        statusAnalisa: 'PERLU_REVIEW',
+        isFinalApproved: false,
+      });
+    });
   });
   unmappedCities.sort((a, b) => b.rows - a.rows);
+  unanalysedRows.sort((a, b) => a.groupKota.localeCompare(b.groupKota) || a.kelurahan.localeCompare(b.kelurahan));
   const coverage: AnalystCoverage = {
     kodePosTotal: kodePosList.length,
     kodePosMapped: mappedKodePos,
     verifiedRows,
     reviewRows: reviewRow,
     resultRows: results.length,
+    unanalysedRows: unanalysedRows.length,
     unmappedCities,
     includedCities: Array.from(includedCityMap.values()).sort((a, b) => b.rows - a.rows),
   };
+  unanalysedRows.forEach((r) => { r.no = globalRowNo++; });
+  results.push(...unanalysedRows);
   const fmt = (n: number) => n.toLocaleString('id-ID');
   if (onProgress) {
     onProgress(3, 100, total, total, `Analisa 3 Fase selesai dalam ${elapsed}ms. ${fmt(results.length)} baris dihasilkan. ` +

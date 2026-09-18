@@ -555,6 +555,7 @@ export const App: React.FC = () => {
   const handleApproveAnalystFase = (fase: 1 | 2 | 3) => {
     setAnalystRows((prev) => {
       const next = prev.map((r) => {
+        if (r.kategori === 'TIDAK_ANALISA') return r; // perlu koreksi manual, jangan ikut disetujui otomatis
         if (fase === 1) return { ...r, fase1Approved: true };
         if (fase === 2) return { ...r, fase2Approved: true };
         return { ...r, fase3Approved: true };

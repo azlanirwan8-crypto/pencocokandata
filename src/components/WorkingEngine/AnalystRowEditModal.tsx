@@ -9,6 +9,7 @@ interface AnalystRowEditModalProps {
   onClose: () => void;
   onSave: (updatedRow: AnalystRow) => void;
   wilayahSettings: WilayahSetting[];
+  phase: 'fase1' | 'fase2' | 'fase3' | 'final';
 }
 
 export const AnalystRowEditModal: React.FC<AnalystRowEditModalProps> = ({
@@ -17,6 +18,7 @@ export const AnalystRowEditModal: React.FC<AnalystRowEditModalProps> = ({
   onClose,
   onSave,
   wilayahSettings,
+  phase,
 }) => {
   const [formData, setFormData] = useState<AnalystRow | null>(row);
 
@@ -25,6 +27,15 @@ export const AnalystRowEditModal: React.FC<AnalystRowEditModalProps> = ({
   }, [row]);
 
   if (!isOpen || !formData) return null;
+
+  const showFase1 = phase === 'fase1' || phase === 'final';
+  const showFase2 = phase === 'fase2' || phase === 'final';
+  const showFase3 = phase === 'fase3' || phase === 'final';
+  const phaseLabel =
+    phase === 'fase1' ? 'Fase 1 (PTEN & Kode Pos)' :
+    phase === 'fase2' ? 'Fase 2 (Wilayah & Master Cabang)' :
+    phase === 'fase3' ? 'Fase 3 (Mapping Role & Wondr)' :
+    'Data Final';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,10 +109,10 @@ export const AnalystRowEditModal: React.FC<AnalystRowEditModalProps> = ({
             </div>
             <div>
               <h3 style={{ fontSize: '0.96rem', fontWeight: 700, color: '#212529', margin: 0 }}>
-                Koreksi & Edit Data Hasil Analisa (Baris #{formData.no})
+                Koreksi & Edit Data {phaseLabel} (Baris #{formData.no})
               </h3>
               <p style={{ fontSize: '0.74rem', color: '#878a99', margin: '0.1rem 0 0' }}>
-                Sesuaikan atribut Fase 1 (PTEN), Fase 2 (Cabang), atau Fase 3 (Mapping Role)
+                Hanya atribut {phaseLabel} yang dapat diubah pada review fase ini
               </p>
             </div>
           </div>
@@ -125,6 +136,7 @@ export const AnalystRowEditModal: React.FC<AnalystRowEditModalProps> = ({
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <div style={{ padding: '1.25rem 1.4rem', overflowY: 'auto', maxHeight: 'calc(90vh - 140px)', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             {/* Section 1: Fase 1 PTEN & Kode Pos */}
+            {showFase1 && (
             <div style={{ background: '#f8fafc', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.82rem', fontWeight: 700, color: '#299cdb', marginBottom: '0.65rem' }}>
                 <MapPin size={15} />
@@ -175,8 +187,10 @@ export const AnalystRowEditModal: React.FC<AnalystRowEditModalProps> = ({
                 </div>
               </div>
             </div>
+            )}
 
             {/* Section 2: Fase 2 Wilayah & Master Cabang */}
+            {showFase2 && (
             <div style={{ background: '#f8fafc', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.82rem', fontWeight: 700, color: '#405189', marginBottom: '0.65rem' }}>
                 <Building2 size={15} />
@@ -241,8 +255,10 @@ export const AnalystRowEditModal: React.FC<AnalystRowEditModalProps> = ({
                 </div>
               </div>
             </div>
+            )}
 
             {/* Section 3: Fase 3 Mapping Role */}
+            {showFase3 && (
             <div style={{ background: '#f8fafc', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.82rem', fontWeight: 700, color: '#0ab39c', marginBottom: '0.65rem' }}>
                 <Users size={15} />
@@ -313,6 +329,7 @@ export const AnalystRowEditModal: React.FC<AnalystRowEditModalProps> = ({
                 </div>
               </div>
             </div>
+            )}
           </div>
 
           {/* Modal Footer */}

@@ -55,6 +55,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   const [selectedWilayah, setSelectedWilayah] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ANOMALI' | 'EXACT_MATCH' | 'HIGH_CONFIDENCE' | 'PENEMPATAN_REVIEW'>('ALL');
+  // Inner tab pada Fase 1: data yang teranalisa vs yang perlu analisa manual
+  const [fase1Inner, setFase1Inner] = useState<'DIANALISA' | 'TIDAK_ANALISA'>('DIANALISA');
 
   // Pagination states
   const [page, setPage] = useState<number>(1);
@@ -85,9 +87,11 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     });
   }, [rows]);
 
-  // Executive KPI Aggregates
+  // Executive KPI Aggregates (baris "TIDAK_ANALISA" dihitung terpisah)
   const stats = useMemo(() => {
-    const total = rows.length;
+    const analysed = rows.filter((r) => r.kategori !== 'TIDAK_ANALISA');
+    const total = analysed.length;
+    const unanalysed = rows.length - total;
     let exact = 0;
     let highConf = 0;
     let anomalies = 0;
@@ -96,7 +100,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     let approved = 0;
     let role3Complete = 0;
 
-    rows.forEach((r) => {
+    analysed.forEach((r) => {
       if (r.statusAnalisa === 'EXACT_MATCH') exact++;
       else if (r.statusAnalisa === 'HIGH_CONFIDENCE') highConf++;
       else anomalies++;
@@ -113,6 +117,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
 
     return {
       total,
+      unanalysed,
       exact,
       highConf,
       anomalies,
@@ -127,10 +132,11 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
 
   // ── Sequential Phase Flow: Fase 1 → unlock Fase 2 → unlock Fase 3 → Data Final ──
   const phaseState = useMemo(() => {
-    const total = rows.length;
-    const f1 = total > 0 && rows.every((r) => r.fase1Approved);
-    const f2 = total > 0 && rows.every((r) => r.fase2Approved);
-    const f3 = total > 0 && rows.every((r) => r.fase3Approved);
+    const analysed = rows.filter((r) => r.kategori !== 'TIDAK_ANALISA');
+    const total = analysed.length;
+    const f1 = total > 0 && analysed.every((r) => r.fase1Approved);
+    const f2 = total > 0 && analysed.every((r) => r.fase2Approved);
+    const f3 = total > 0 && analysed.every((r) => r.fase3Approved);
     const step: 1 | 2 | 3 | 4 = !f1 ? 1 : !f2 ? 2 : !f3 ? 3 : 4;
     return {
       fase1Done: f1,
@@ -155,7 +161,13 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   const filteredRows = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
     return rows.filter((r) => {
-      if (selectedWilayah !== 'ALL' && r.wilayah !== selectedWilayah) return false;
+      // Baris yang belum teranalisa hanya tampil di inner tab "Analisa Manual" (Fase 1)
+      if (viewTab !== 'fase1') {
+        if (r.kategori === 'TIDAK_ANALISA') return false;
+      } else if (r.kategori === 'TIDAK_ANALISA' && fase1Inner !== 'TIDAK_ANALISA') return false;
+      else if (r.kategori !== 'TIDAK_ANALISA' && fase1Inner === 'TIDAK_ANALISA') return false;
+
+      if (r.kategori !== 'TIDAK_ANALISA' && selectedWilayah !== 'ALL' && r.wilayah !== selectedWilayah) return false;
       if (statusFilter === 'ANOMALI' && r.statusAnalisa !== 'ANOMALI' && r.statusAnalisa !== 'PERLU_REVIEW') return false;
       if (statusFilter === 'EXACT_MATCH' && r.statusAnalisa !== 'EXACT_MATCH') return false;
       if (statusFilter === 'HIGH_CONFIDENCE' && r.statusAnalisa !== 'HIGH_CONFIDENCE') return false;
@@ -165,6 +177,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
         const match =
           String(r.no).includes(q) ||
           r.kotaPten?.toLowerCase().includes(q) ||
+          r.groupKota?.toLowerCase().includes(q) ||
+          r.provinsi?.toLowerCase().includes(q) ||
           r.kodePosPten?.includes(q) ||
           r.kelurahan?.toLowerCase().includes(q) ||
           r.kecamatan?.toLowerCase().includes(q) ||
@@ -178,7 +192,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       }
       return true;
     });
-  }, [rows, selectedWilayah, statusFilter, searchTerm]);
+  }, [rows, selectedWilayah, statusFilter, searchTerm, viewTab, fase1Inner]);
 
   // Pagination calculation
   const totalPages = pageSize === 'ALL' ? 1 : Math.max(1, Math.ceil(filteredRows.length / pageSize));
@@ -193,9 +207,9 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     try {
       const wb = XLSX.utils.book_new();
 
-      // 1. Group rows by Wilayah
+      // 1. Group rows by Wilayah (hanya hasil analisa; baris "TIDAK_ANALISA" bukan keluaran engine)
       const wilayahMap = new Map<string, AnalystRow[]>();
-      rows.forEach((r) => {
+      rows.filter((r) => r.kategori !== 'TIDAK_ANALISA').forEach((r) => {
         const wKey = formatWilayahCode(r.wilayah || 'W01');
         if (!wilayahMap.has(wKey)) wilayahMap.set(wKey, []);
         wilayahMap.get(wKey)!.push(r);
@@ -244,7 +258,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       });
 
       // Sheet Summary All
-      const allExport = rows.map((r, idx) => ({
+      const allExport = rows.filter((r) => r.kategori !== 'TIDAK_ANALISA').map((r, idx) => ({
         'No': idx + 1,
         'Wilayah': r.wilayah,
         'Sandi Cabang': r.sandiCabang,
@@ -303,16 +317,29 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
           </div>
         </div>
 
-        {/* Akurasi Engine */}
-        <div className="metric-card emerald">
+        {/* Data Tidak Dianalisa */}
+        <div
+          className="metric-card emerald"
+          onClick={() => {
+            setActiveSubTab('fase1');
+            setFase1Inner('TIDAK_ANALISA');
+            setPage(1);
+          }}
+          title="Lihat baris KodePos yang kotanya tidak ada di data PTEN (perlu analisa manual)"
+          style={{ cursor: 'pointer' }}
+        >
           <div className="metric-header">
-            <span className="metric-title">Tingkat Akurasi Engine</span>
+            <span className="metric-title">Data Tidak Dianalisa</span>
             <div className="metric-icon-bubble">
               <CheckCircle2 size={15} />
             </div>
           </div>
-          <div className="metric-value">{stats.accuracyRate}%</div>
-          <div className="metric-footer">{stats.exact.toLocaleString('id-ID')} Exact Cocok Sempurna</div>
+          <div className="metric-value">{stats.unanalysed.toLocaleString('id-ID')}</div>
+          <div className="metric-footer">
+            {coverage
+              ? `${coverage.unmappedCities.length.toLocaleString('id-ID')} kota di luar data PTEN — klik untuk analisa manual`
+              : 'Klik untuk analisa manual'}
+          </div>
         </div>
 
         {/* Fase 1: PTEN & Kode Pos */}
@@ -702,6 +729,46 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
         {/* ────────────────────────────────────────────────────────────────────────── */}
         {/* 4. DATA TABLES PER SUB-TAB                                                */}
         {/* ────────────────────────────────────────────────────────────────────────── */}
+        {/* Inner tab khusus Fase 1: hasil analisa vs data yang tidak bisa dianalisa */}
+        {viewTab === 'fase1' && (
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {([
+              { key: 'DIANALISA', label: `✅ Berhasil Dianalisa (${stats.total.toLocaleString('id-ID')})`, color: '#0ab39c' },
+              { key: 'TIDAK_ANALISA', label: `⚠️ Perlu Analisa Manual (${stats.unanalysed.toLocaleString('id-ID')})`, color: '#f0ad4e' },
+            ] as const).map((t) => {
+              const active = fase1Inner === t.key;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => {
+                    setFase1Inner(t.key);
+                    setPage(1);
+                  }}
+                  style={{
+                    background: active ? t.color : '#ffffff',
+                    color: active ? '#ffffff' : '#495057',
+                    border: `1px solid ${active ? t.color : '#d5dde3'}`,
+                    borderRadius: '6px',
+                    padding: '0.4rem 0.9rem',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+            {fase1Inner === 'TIDAK_ANALISA' && (
+              <span style={{ alignSelf: 'center', fontSize: '0.76rem', color: '#878a99' }}>
+                Baris KodePos ini kotanya tidak ada di data PTEN — isi Kota PTEN &amp; Kode Pos manual lewat tombol Revisi.
+              </span>
+            )}
+          </div>
+        )}
+
         <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', maxHeight: '600px', overflowX: 'auto' }}>
           <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
@@ -733,9 +800,11 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                       📮 DATA POS (Kelurahan &amp; Wilayah Administrasi)
                     </th>
                     <th colSpan={4} style={{ textAlign: 'center', background: '#eefaf6', color: '#0ab39c', borderLeft: '2px solid #b7ebe4' }}>
-                      🛡️ DATA PTEN (Kota / Provinsi / Kode Pos)
+                      {fase1Inner === 'TIDAK_ANALISA'
+                        ? '🛡️ DATA PTEN (belum terpetakan — isi manual lewat Revisi)'
+                        : '🛡️ DATA PTEN (Kota / Provinsi / Kode Pos)'}
                     </th>
-                    <th rowSpan={2} style={{ width: '120px', textAlign: 'center', verticalAlign: 'middle' }}>Aksi Review</th>
+                    <th rowSpan={2} style={{ width: '165px', textAlign: 'center', verticalAlign: 'middle' }}>Aksi Review</th>
                   </tr>
                   <tr>
                     <th style={{ minWidth: '140px', borderLeft: '2px solid #d5e7f2' }}>Kelurahan</th>
@@ -837,7 +906,9 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                           <td style={{ fontWeight: 700, color: '#212529', borderLeft: '2px solid #d5e7f2' }}>{r.kelurahan}</td>
                           <td>{r.kecamatan}</td>
                           <td>{r.provinsi}</td>
-                          <td style={{ fontWeight: 700, color: '#212529', borderLeft: '2px solid #b7ebe4' }}>{r.kotaPten}</td>
+                          <td style={{ fontWeight: 700, color: r.kotaPten ? '#212529' : '#f0ad4e', borderLeft: '2px solid #b7ebe4' }}>
+                            {r.kotaPten || `${r.groupKota} (belum ada di PTEN)`}
+                          </td>
                           <td className="code-cell" style={{ textAlign: 'center', color: '#0ab39c', fontWeight: 700 }}>
                             {r.kodePosPten}
                           </td>
@@ -900,7 +971,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
 
                       {/* ACTION REVIEW BUTTONS (Appears on ALL tabs) */}
                       <td style={{ textAlign: 'center' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'nowrap', gap: '0.25rem', whiteSpace: 'nowrap' }}>
                           {(() => {
                             const rowPhaseApproved =
                               viewTab === 'fase1' ? r.fase1Approved :
@@ -930,6 +1001,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                   gap: '0.25rem',
                                   fontSize: '0.72rem',
                                   fontWeight: 700,
+                                  whiteSpace: 'nowrap',
                                 }}
                               >
                                 <Check size={12} />
@@ -958,6 +1030,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                 gap: '0.25rem',
                                 fontSize: '0.72rem',
                                 fontWeight: 700,
+                                whiteSpace: 'nowrap',
                               }}
                             >
                               <Edit size={12} />
@@ -1053,6 +1126,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
           showToast(`Berhasil menyimpan koreksi pada baris #${updated.no} (${updated.namaOutlet})!`);
         }}
         wilayahSettings={wilayahSettings}
+        phase={viewTab === 'all' ? 'final' : viewTab}
       />
     </div>
   );
