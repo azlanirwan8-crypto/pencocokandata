@@ -27,7 +27,7 @@ import { DEFAULT_PTEN_DATA } from './components/PTENData/defaultPtenData';
 import { DEFAULT_KODEPOS_DATA } from './components/KodePosData/defaultKodePosData';
 import { buildPtenIndex, validatePtenForTarget } from './utils/ptenMatcher';
 
-import { getItem, setItem } from './utils/storage';
+import { getItem, setItem, deleteKey } from './utils/storage';
 import {
   checkNeonStatus,
   loadMasterFromNeon,
@@ -180,9 +180,16 @@ export const App: React.FC = () => {
           setItem('kodepos_master_data', DEFAULT_KODEPOS_DATA);
         }
 
-        const savedAnalyst = await getItem<AnalystRow[]>('analyst_results_data');
-        if (savedAnalyst && Array.isArray(savedAnalyst) && savedAnalyst.length > 0) {
-          setAnalystRows(savedAnalyst);
+        // HARD PURGE sekali: hapus permanen hasil Analisa lama (struktur lama tidak
+        // kompatibel dengan pipeline berbasis kota PTEN + kodepos penuh)
+        if (localStorage.getItem('analyst_purge_v2') !== 'done') {
+          await deleteKey('analyst_results_data');
+          localStorage.setItem('analyst_purge_v2', 'done');
+        } else {
+          const savedAnalyst = await getItem<AnalystRow[]>('analyst_results_data');
+          if (savedAnalyst && Array.isArray(savedAnalyst) && savedAnalyst.length > 0) {
+            setAnalystRows(savedAnalyst);
+          }
         }
       } catch (err) {
         console.warn('Local cache restore skipped:', err);

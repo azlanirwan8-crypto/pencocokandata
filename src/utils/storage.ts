@@ -58,6 +58,22 @@ export async function getItem<T>(key: string): Promise<T | null> {
   }
 }
 
+export async function deleteKey(key: string): Promise<void> {
+  try {
+    const db = await getDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.delete(key);
+      req.onsuccess = () => resolve();
+      // NotFoundError (key belum ada) bukan masalah — tetap anggap berhasil
+      req.onerror = () => resolve();
+    });
+  } catch (err) {
+    console.warn('Gagal menghapus key dari IndexedDB:', err);
+  }
+}
+
 export async function clearAllStorage(): Promise<void> {
   try {
     const db = await getDB();
