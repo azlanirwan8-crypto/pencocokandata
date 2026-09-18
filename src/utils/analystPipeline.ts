@@ -464,6 +464,24 @@ export function calculateCityMatchScore(textA: string, textB: string): { score: 
   if (keyA.length >= 4 && keyA === keyB) {
     return { score: 0.96, algorithm: 'City Phonetic Match' };
   }
+  // 📏 MASTER PTEN memakai kolom "KOTA/KABUPATEN MAX 15 DIGIT" → nama panjang
+  // dipotong mentah (MANDAILING NATAL -> MANDAILING NATA) atau dipotong per kata
+  // (SERAM BAGIAN TIMUR -> SERAM BAG TIMUR). Keduanya kecocokan deterministik,
+  // bukan fuzzy: prefix harus persis dan hanya memotong di batas 15 karakter.
+  const tokA = normA.split(' ').filter(Boolean);
+  const tokB = normB.split(' ').filter(Boolean);
+  const [normS, normL] = normA.length <= normB.length ? [normA, normB] : [normB, normA];
+  const [tokS, tokL] = normA.length <= normB.length ? [tokA, tokB] : [tokB, tokA];
+  if (normS.length >= 15 && normL.length > normS.length && normL.startsWith(normS)) {
+    return { score: 0.97, algorithm: 'City PTEN 15-Char Truncation' };
+  }
+  if (
+    tokS.length >= 2 && tokS.length === tokL.length && normL.length >= 12 &&
+    tokS.every((t, i) => tokL[i].startsWith(t) && t.length >= 3) &&
+    tokS.some((t, i) => t !== tokL[i])
+  ) {
+    return { score: 0.95, algorithm: 'City PTEN Word-Cut Match' };
+  }
   const jaccard = calculateTokenSetJaccard(normA, normB);
   const jaro = jaroWinklerDistance(normA, normB);
   const tri = triGramCosineSimilarity(normA, normB);
