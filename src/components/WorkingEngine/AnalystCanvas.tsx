@@ -44,6 +44,12 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
 }) => {
   const [showTheories, setShowTheories] = useState<boolean>(true);
 
+  // Pesan langkah terbaru tampil di kartu fase yang sedang berjalan (prefix [Fase n] dibuang).
+  const stepText = (fallback: string) => {
+    const m = (progressMessage || '').replace(/^\[Fase \d\]\s*/, '');
+    return m || fallback;
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginBottom: '1.25rem' }}>
       {/* ────────────────────────────────────────────────────────────────────────── */}
@@ -167,7 +173,12 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
                     {showBar && (
                       <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', fontWeight: 600, color: isDone ? '#0ab39c' : '#299cdb', marginBottom: '0.25rem' }}>
-                          <span>{isDone ? 'Berhasil diselesaikan' : isActive ? 'Memproses...' : 'Menunggu...'}</span>
+                          <span
+                            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '68%' }}
+                            title={isActive ? stepText('Memproses...') : undefined}
+                          >
+                            {isDone ? 'Berhasil diselesaikan' : isActive ? stepText('Memproses...') : 'Menunggu...'}
+                          </span>
                           <span>{pct}%</span>
                         </div>
                         <div style={{ height: '5px', background: '#e9ebec', borderRadius: '4px', overflow: 'hidden' }}>
@@ -227,7 +238,12 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
                     {showBar && (
                       <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', fontWeight: 600, color: isDone ? '#0ab39c' : '#405189', marginBottom: '0.25rem' }}>
-                          <span>{isDone ? 'Berhasil diselesaikan' : isActive ? 'Memproses...' : 'Menunggu...'}</span>
+                          <span
+                            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '68%' }}
+                            title={isActive ? stepText('Memproses...') : undefined}
+                          >
+                            {isDone ? 'Berhasil diselesaikan' : isActive ? stepText('Memproses...') : 'Menunggu...'}
+                          </span>
                           <span>{pct}%</span>
                         </div>
                         <div style={{ height: '5px', background: '#e9ebec', borderRadius: '4px', overflow: 'hidden' }}>
@@ -287,7 +303,12 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
                     {showBar && (
                       <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', fontWeight: 600, color: '#0ab39c', marginBottom: '0.25rem' }}>
-                          <span>{isDone ? 'Berhasil diselesaikan' : isActive ? 'Memproses...' : 'Menunggu...'}</span>
+                          <span
+                            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '68%' }}
+                            title={isActive ? stepText('Memproses...') : undefined}
+                          >
+                            {isDone ? 'Berhasil diselesaikan' : isActive ? stepText('Memproses...') : 'Menunggu...'}
+                          </span>
                           <span>{pct}%</span>
                         </div>
                         <div style={{ height: '5px', background: '#e9ebec', borderRadius: '4px', overflow: 'hidden' }}>
@@ -395,26 +416,6 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
           </div>
         </div>
 
-        {/* Progress Bar Active Animation */}
-        {isAnalyzing && (
-          <div style={{ marginTop: '1rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 600, color: '#405189', marginBottom: '0.35rem' }}>
-              <span>{progressMessage || 'Memproses pipeline 3 fase...'}</span>
-              <span>{progressPercent}%</span>
-            </div>
-            <div style={{ height: '7px', background: '#e9ebec', borderRadius: '4px', overflow: 'hidden' }}>
-              <div
-                style={{
-                  height: '100%',
-                  width: `${progressPercent}%`,
-                  background: 'linear-gradient(90deg, #405189, #0ab39c)',
-                  transition: 'width 0.2s ease',
-                  borderRadius: '4px',
-                }}
-              />
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ────────────────────────────────────────────────────────────────────────── */}
