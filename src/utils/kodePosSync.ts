@@ -287,3 +287,85 @@ export async function runKodePosSourceAudit(
       'di level kelurahan.',
   };
 }
+
+/**
+ * Patokan tersimpan di database sendiri (tabel kodepos_baseline). Pemeriksaan sync tidak
+ * menyentuh situs pihak ketiga saat dijalankan — hanya saat baseline ditarik ulang.
+ */
+export async function runKodePosBaselineAudit(onProgress?: SyncProgress): Promise<KodePosSyncPlan> {
+  onProgress?.('Membandingkan database dengan baseline tersimpan...', 40);
+  const json = await fetchJson('/api/kodepos-baseline?view=diff');
+  onProgress?.('Selesai', 100);
+
+  if (!json.ready) {
+    throw new Error('Baseline belum tersimpan di database. Klik "Tarik baseline dari sumber pemerintah" sekali terlebih dahulu.');
+  }
+
+  const rows: KodePosRow[] = json.missingInDb || [];
+  const provinces = Array.from(new Set(rows.map((r) => kodePosProvinceOf(r)))).sort();
+  return {
+    status: rows.length > 0 ? 'DIFF' : 'SYNCED',
+    localTotal: json.dbCodes ?? 0,
+    cloudTotal: json.baselineCodes ?? 0,
+    lastUpdated: json.takenAt ?? null,
+    missingInCloud: rows,
+    missingInLocal: [],
+    cloudOnlyProvinces: [],
+    diffProvinces: [],
+    sourceLabel: json.source,
+    dbTotal: json.dbCodes ?? 0,
+    compareTotal: json.baselineCodes ?? 0,
+    compareLabel: 'Baseline tersimpan',
+    sourceDetail:
+      `Tarikan ke-${json.version ?? '?'} pada tabel \`kodepos_baseline\` ` +
+      `(${(json.baselineRows ?? 0).toLocaleString('id-ID')} baris, ${(json.baselineCodes ?? 0).toLocaleString('id-ID')} kode pos unik) ` +
+      `- sumber: ${json.source}. ` +
+      `${(json.missingCodesTotal ?? 0).toLocaleString('id-ID')} kode pos baseline belum ada di Neon, ` +
+      `${(json.codesOnlyInDb ?? 0).toLocaleString('id-ID')} kode pos hanya ada di Neon.`,
+    provincesAffected: provinces,
+    importable: true,
+    missingCodes: [],
+    note:
+      (json.truncated
+        ? `Daftar dibatasi ${rows.length.toLocaleString('id-ID')} baris pertama; `
+        : '') +
+      'Perbandingan dilakukan di level kode pos dan nama wilayah dari sumber pemerintah ditulis UPPERCASE ' +
+      '(mis. "KEUDE BAKONGAN"), jadi gaya penulisan baris hasil impor bisa berbeda dengan master yang sekarang.',
+  };
+}
+
+/** Cicil penarikan baseline (server membatasi 5 halaman x 1000 baris tiap panggilan). */
+export async function pullKodePosBaseline(
+  onProgress?: SyncProgress
+): Promise<{ version: number; rows: number; sumber: string }> {
+  let start = 0;
+  let versi: number | undefined;
+  let rows = 0;
+  let sumberId: string | undefined;
+  let sumber = '';
+  for (let guard = 0; guard < 40; guard++) {
+    const json = await fetchJson('/api/kodepos-baseline?view=fetch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ start, versi, sourceId: sumberId }),
+    });
+    versi = json.versi;
+    sumberId = json.sumberId || sumberId;
+    sumber = json.sumber || sumber;
+    rows += json.upserted || 0;
+    if (json.done) {
+      if (!rows) throw new Error('Sumber tidak mengirim satu barispun, jadi baseline tidak diperbarui.');
+      onProgress?.('Baseline tersimpan', 100);
+      return { version: versi ?? 0, rows, sumber: sumber || 'sumber' };
+    }
+    if (!json.nextStart) {
+      throw new Error('Sumber berhenti di tengah jalan tanpa memberi lanjutan data.');
+    }
+    start = json.nextStart;
+    onProgress?.(
+      `Menarik baseline (${sumber || 'sumber'}): ${rows.toLocaleString('id-ID')} dari ${(json.total || 0).toLocaleString('id-ID')} baris...`,
+      Math.min(95, Math.round((rows / Math.max(1, json.total || 1)) * 100))
+    );
+  }
+  throw new Error('Penarikan baseline berhenti setelah 40 tahap; jalankan ulang untuk melanjutkan.');
+}

@@ -1,6 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshCw, X, CloudUpload, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react';
-import { runKodePosSync, runKodePosSourceAudit, type KodePosSyncPlan, type SyncProgress } from '../../utils/kodePosSync';
+import { RefreshCw, X, CloudUpload, CheckCircle2, AlertCircle, ShieldCheck, Download } from 'lucide-react';
+import {
+  runKodePosSync,
+  runKodePosSourceAudit,
+  runKodePosBaselineAudit,
+  pullKodePosBaseline,
+  type KodePosSyncPlan,
+  type SyncProgress,
+} from '../../utils/kodePosSync';
 import { saveKodePosToNeon, type KodePosRow } from '../../utils/neonSync';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
 
@@ -10,7 +17,7 @@ interface KodePosSyncModalProps {
   onImported?: () => void;
 }
 
-type Phase = 'checking' | 'ready' | 'importing';
+type Phase = 'checking' | 'ready' | 'importing' | 'pulling';
 
 const fmt = (n: number) => n.toLocaleString('id-ID');
 
@@ -32,9 +39,9 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [importMsg, setImportMsg] = useState<string | null>(null);
-  // 'db' = bandingkan master perangkat ini dengan Neon; 'resmi'/'komunitas' =
-  // bandingkan Neon dengan sumber eksternal
-  const [sourceMode, setSourceMode] = useState<'db' | 'resmi' | 'komunitas'>('db');
+  // 'baseline' = patokan tersimpan di DB sendiri; 'db' = master perangkat ini vs Neon;
+  // 'resmi'/'komunitas' = bandingkan Neon langsung dengan sumber eksternal
+  const [sourceMode, setSourceMode] = useState<'baseline' | 'db' | 'resmi' | 'komunitas'>('baseline');
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const rows = plan?.missingInCloud || [];
@@ -50,15 +57,19 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
     setPct(percent);
   };
 
-  const startCheck = async () => {
+  const startCheck = async (keepMsg?: string) => {
     setPhase('checking');
     setErrorMsg(null);
-    setImportMsg(null);
+    setImportMsg(keepMsg ?? null);
     setPlan(null);
     setSelected(new Set());
     try {
       const result =
-        sourceMode === 'db' ? await runKodePosSync(onProgress) : await runKodePosSourceAudit(sourceMode, onProgress);
+        sourceMode === 'db'
+          ? await runKodePosSync(onProgress)
+          : sourceMode === 'baseline'
+            ? await runKodePosBaselineAudit(onProgress)
+            : await runKodePosSourceAudit(sourceMode, onProgress);
       setPlan(result);
       // Default: semua baris yang belum ada di cloud terpilih
       setSelected(
@@ -78,6 +89,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
 
   const rowKey = (r: KodePosRow) => `${r.kodePos}|${r.kelurahan}|${r.kecamatan}`;
   const allChecked = rows.length > 0 && selected.size === rows.length;
+  const busy = phase === 'checking' || phase === 'pulling';
 
   const toggleAll = () => {
     setSelected(allChecked ? new Set() : new Set(rows.map(rowKey)));
@@ -106,11 +118,30 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
     try {
       const ok = await saveKodePosToNeon(selectedRows, 'append');
       if (!ok) throw new Error('Neon menolak permintaan simpan.');
-      setImportMsg(`${fmt(selectedRows.length)} baris berhasil dikirim ke database Neon.`);
+      const msg = `${fmt(selectedRows.length)} baris berhasil dikirim ke database Neon.`;
+      setImportMsg(msg);
       onImported?.();
-      await startCheck();
+      await startCheck(msg);
     } catch (err: any) {
       setErrorMsg(err?.message || 'Gagal menyimpan ke Neon.');
+      setPhase('ready');
+    }
+  };
+
+  // Tarik salinan resmi dari Satu Data Indonesia (data.go.id) ke tabel kodepos_baseline.
+  const handlePullBaseline = async () => {
+    setPhase('pulling');
+    setErrorMsg(null);
+    setImportMsg(null);
+    setPct(0);
+    try {
+      const res = await pullKodePosBaseline(onProgress);
+      const msg =
+        `Baseline tersimpan di tabel kodepos_baseline: ${fmt(res.rows)} baris (tarikan ke-${res.version}). Sumber: ${res.sumber}.`;
+      setImportMsg(msg);
+      await startCheck(msg);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Gagal menarik baseline dari sumber pemerintah.');
       setPhase('ready');
     }
   };
@@ -133,6 +164,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             {([
+              { key: 'baseline', label: 'Baseline pemerintah di database kita (patokan)' },
               { key: 'db', label: 'Master perangkat ini vs Neon' },
               { key: 'resmi', label: 'Sumber resmi (Kepmendagri + kode pos Pos Indonesia)' },
               { key: 'komunitas', label: 'Sumber komunitas (dataset lengkap bernama)' },
@@ -143,7 +175,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                   key={s.key}
                   type="button"
                   onClick={() => setSourceMode(s.key)}
-                  disabled={phase === 'checking' || phase === 'importing'}
+                  disabled={busy || phase === 'importing'}
                   style={{
                     background: active ? '#405189' : '#ffffff',
                     color: active ? '#ffffff' : '#495057',
@@ -160,7 +192,19 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
               );
             })}
           </div>
-          {phase === 'checking' && (
+          {sourceMode === 'baseline' && !busy && phase !== 'importing' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => void handlePullBaseline()}>
+                <Download size={13} style={{ marginRight: '0.3rem' }} />
+                Tarik baseline dari sumber pemerintah
+              </button>
+              <span style={{ fontSize: '0.74rem', color: '#878a99' }}>
+                Sumbernya milik pemerintah (Satu Data Indonesia / Bappenas), jadi versi terbaru dipegang database kita
+                sendiri — GitHub orang lain tidak lagi jadi patokan.
+              </span>
+            </div>
+          )}
+          {busy && (
             <div style={{ padding: '1.5rem 0.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.7rem' }}>
                 <RefreshCw size={16} color="#299cdb" style={{ animation: 'pulse 1.2s ease-in-out infinite' }} />
@@ -171,14 +215,18 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                 <div style={{ width: `${pct}%`, height: '100%', background: '#299cdb', transition: 'width .2s' }} />
               </div>
               <p style={{ fontSize: '0.76rem', color: '#878a99', marginTop: '0.7rem' }}>
-                {sourceMode === 'db'
-                  ? 'Membandingkan master lokal dengan tabel kodepos_data di Neon memakai sidik jari per provinsi, lalu menghitung selisih hanya pada provinsi yang berbeda.'
-                  : 'Server mengunduh dataset eksternal lalu membandingkan daftar kode posnya dengan DISTINCT kode_pos di tabel kodepos_data Neon. Hasilnya di-cache 10 menit.'}
+                {phase === 'pulling'
+                  ? 'Fungsi server mengambil data per 1.000 baris (maks. 5 halaman tiap panggilan) lalu menimpanya di tabel kodepos_baseline berdasarkan kode wilayah. Baris lama tetap aman bila sumbernya tidak berubah.'
+                  : sourceMode === 'db'
+                    ? 'Membandingkan master lokal dengan tabel kodepos_data di Neon memakai sidik jari per provinsi, lalu menghitung selisih hanya pada provinsi yang berbeda.'
+                    : sourceMode === 'baseline'
+                      ? 'Membandingkan daftar kode pos unik di tabel kodepos_data Neon dengan isi tabel kodepos_baseline milik kita sendiri — tanpa menyentuh internet.'
+                      : 'Server mengunduh dataset eksternal lalu membandingkan daftar kode posnya dengan DISTINCT kode_pos di tabel kodepos_data Neon. Hasilnya di-cache 10 menit.'}
               </p>
             </div>
           )}
 
-          {phase !== 'checking' && errorMsg && (
+          {!busy && errorMsg && (
             <div
               style={{
                 display: 'flex',
@@ -198,7 +246,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
             </div>
           )}
 
-          {phase !== 'checking' && !errorMsg && plan && (
+          {!busy && !errorMsg && plan && (
             <>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.75rem' }}>
                 <StatCard
@@ -223,10 +271,16 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
               <div style={{ fontSize: '0.74rem', color: '#878a99', lineHeight: 1.6 }}>
                 <strong style={{ color: '#495057' }}>Sumber data kartu 2:</strong> {plan.sourceDetail}
               </div>
+              {importMsg && (
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.8rem', color: '#0ab39c' }}>
+                  <CheckCircle2 size={15} />
+                  {importMsg}
+                </div>
+              )}
             </>
           )}
 
-          {phase !== 'checking' && !errorMsg && plan && plan.status === 'SYNCED' && (
+          {!busy && !errorMsg && plan && plan.status === 'SYNCED' && (
             <div
               style={{
                 display: 'flex',
@@ -260,7 +314,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
             </div>
           )}
 
-          {phase !== 'checking' && !errorMsg && plan && plan.status === 'DIFF' && (
+          {!busy && !errorMsg && plan && plan.status === 'DIFF' && (
             <>
               <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#495057' }}>
                 {plan.importable === false
@@ -269,13 +323,6 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
               </div>
               {plan.note && (
                 <div style={{ fontSize: '0.74rem', color: '#878a99' }}>{plan.note}</div>
-              )}
-
-              {importMsg && (
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.8rem', color: '#0ab39c' }}>
-                  <CheckCircle2 size={15} />
-                  {importMsg}
-                </div>
               )}
 
               {plan.importable === false ? (
