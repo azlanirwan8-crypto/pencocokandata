@@ -29,6 +29,9 @@ export interface PlottedBranchPin {
   totalTargetCount: number;
   isOnlineVerified?: boolean;
   onlineSource?: 'google' | 'esri' | 'osm';
+  // Layer Final Data: status penempatan baris analisa (bukan cabang master)
+  finalStatus?: 'OK' | 'REVIEW' | 'ANOMALI';
+  finalCount?: number;
 }
 
 // 1. Regional Island Centroids (for rapid map zooming and camera bounds)

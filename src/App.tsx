@@ -931,6 +931,7 @@ export const App: React.FC = () => {
               <IndonesiaBranchMap
                 masterRows={masterRows}
                 targetRows={targetRows}
+                finalRows={finalRows}
                 selectedWilayah={dashboardWilayahFilter}
                 onNavigateToMaster={() => setActiveTab('master')}
                 onNavigateToEngine={() => {
