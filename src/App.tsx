@@ -447,7 +447,9 @@ export const App: React.FC = () => {
   }, [dashboardFilteredRows, dashboardWilayahFilter]);
 
   // Execution Trigger for New Data Analyst Engine (3-Phase Pipeline)
-  const handleStartAnalystPipeline = async (reRunAnomaliesOnly = false) => {
+  // `overrides` dipakai saat re-run langsung setelah Setujui/Batalkan — state
+  // cityOverrides belum ter-update di render ini, jadi kirim nilainya eksplisit.
+  const handleStartAnalystPipeline = async (reRunAnomaliesOnly = false, overrides?: Record<string, string>) => {
     setIsAnalyzing(true);
     setAnalystProgress(10);
     setAnalystMessage('Menyiapkan 5 Data Master & indeks memori O(1)...');
@@ -477,14 +479,15 @@ export const App: React.FC = () => {
       }
 
       let lastPhase: 1 | 2 | 3 = 1;
+      const activeOverrides = overrides || cityOverrides;
       // ── Pemetaan manual (Setujui di laporan cakupan): baris master kota yang
       //    dipetakan operator dipakai ATAS NAMA kota PTEN pilihan, sehingga ikut
       //    join nama-kota deterministik seperti kota asli PTEN (bukan fuzzy). ──
-      const overrideKeys = Object.keys(cityOverrides);
+      const overrideKeys = Object.keys(activeOverrides);
       const kodePosInput =
         overrideKeys.length > 0
           ? kodePosForPipeline.map((kp) => {
-              const ptenKota = cityOverrides[cityMatchKey(kp.kabupatenKota)];
+              const ptenKota = activeOverrides[cityMatchKey(kp.kabupatenKota)];
               return ptenKota ? { ...kp, kabupatenKota: ptenKota } : kp;
             })
           : kodePosForPipeline;
@@ -572,7 +575,7 @@ export const App: React.FC = () => {
     const next = { ...cityOverrides, [cityMatchKey(masterCity)]: ptenKota };
     setCityOverrides(next);
     await setItem('analyst_city_overrides', next);
-    await handleStartAnalystPipeline(false);
+    await handleStartAnalystPipeline(false, next);
   };
 
   const handleRemoveCityOverride = async (masterKey: string) => {
@@ -580,7 +583,7 @@ export const App: React.FC = () => {
     delete next[masterKey];
     setCityOverrides(next);
     await setItem('analyst_city_overrides', next);
-    if (analystRows.length > 0) await handleStartAnalystPipeline(false);
+    if (analystRows.length > 0) await handleStartAnalystPipeline(false, next);
   };
 
   const handleUpdateAnalystRow = (updated: AnalystRow) => {
