@@ -1345,47 +1345,69 @@ body {
 
 .bni-map-pin {
   position: relative;
+  width: var(--s, 26px);
+  height: var(--s, 26px);
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2.5px solid var(--pin, #6366f1);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--pin, #6366f1);
-  border: 2px solid #ffffff;
-  border-radius: 50% 50% 50% 0;
-  transform: rotate(-45deg);
-  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.3);
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.28);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.bni-map-pin::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 8px solid var(--pin, #6366f1);
 }
 
 .bni-map-pin__glyph {
-  transform: rotate(45deg);
-  font-size: 13px;
+  font-size: calc(var(--s, 26px) * 0.5);
   line-height: 1;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
+}
+
+.bni-map-pin:hover {
+  transform: scale(1.14);
 }
 
 .bni-map-pin--selected {
-  border-color: #f59e0b;
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.35), 0 4px 10px rgba(15, 23, 42, 0.42);
+  border-width: 3px;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.3), 0 5px 12px rgba(15, 23, 42, 0.35);
   animation: bniPinDrop 0.26s ease-out;
 }
 
-.bni-map-pin--selected .bni-map-pin__glyph {
-  font-size: 16px;
+.bni-map-pin--selected::after {
+  bottom: -8px;
+  border-top-width: 9px;
+  border-left-width: 6px;
+  border-right-width: 6px;
 }
 
 @keyframes bniPinDrop {
   from {
-    transform: rotate(-45deg) translate(-6px, -12px);
+    transform: translateY(-10px);
     opacity: 0;
   }
   to {
-    transform: rotate(-45deg) translate(0, 0);
+    transform: translateY(0);
     opacity: 1;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bni-map-pin {
+  .bni-map-pin,
+  .bni-map-pin--selected {
     animation: none;
+    transition: none;
   }
 }
 

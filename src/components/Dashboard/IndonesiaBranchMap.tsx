@@ -59,17 +59,16 @@ const PIN_GLYPH: Record<PinKind, string> = { KODEPOS: '📮', KC: '🏦', KCP: '
 const PIN_LABEL: Record<PinKind, string> = { KODEPOS: 'Kode Pos', KC: 'KC (Cabang)', KCP: 'KCP (Outlet)', MULTI: 'Multi-Outlet' };
 
 function makePinIcon(kind: PinKind, color: string, selected: boolean): L.DivIcon {
-  const size = selected ? 36 : 28;
-  const glyph = PIN_GLYPH[kind];
+  const s = selected ? 34 : 26; // diameter kepala pin
   const html =
-    `<div class="bni-map-pin${selected ? ' bni-map-pin--selected' : ''}" style="--pin:${color};width:${size}px;height:${size}px;">` +
-    `<span class="bni-map-pin__glyph">${glyph}</span></div>`;
+    `<div class="bni-map-pin${selected ? ' bni-map-pin--selected' : ''}" style="--pin:${color};--s:${s}px;">` +
+    `<span class="bni-map-pin__glyph">${PIN_GLYPH[kind]}</span></div>`;
   return L.divIcon({
     html,
     className: 'bni-map-pin-wrap',
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size],
-    tooltipAnchor: [0, -size + 4],
+    iconSize: [s, s + 8],
+    iconAnchor: [s / 2, s + 8],
+    tooltipAnchor: [0, -(s + 8) + 6],
   });
 }
 
@@ -894,22 +893,6 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
     markersLayer.clearLayers();
     const overlapCounts = new Map<string, number>();
-
-    if (selectedPin) {
-      const selectedHalo = L.circleMarker([selectedPin.lat, selectedPin.lng], {
-        pane: 'selectedPane',
-        renderer: svgRendererRef.current || canvasRenderer,
-        radius: 17,
-        color: '#f59e0b',
-        weight: 2,
-        opacity: 0.9,
-        fillColor: '#f59e0b',
-        fillOpacity: 0.12,
-        interactive: false,
-        className: 'bni-selected-halo',
-      });
-      markersLayer.addLayer(selectedHalo);
-    }
 
     filteredPins.forEach((pin) => {
       const isMulti = isMultiOutletPin(pin);
