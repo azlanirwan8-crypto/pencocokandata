@@ -894,9 +894,6 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
     markersLayer.clearLayers();
     const overlapCounts = new Map<string, number>();
-    // Ikon DOM dipakai untuk jumlah pin wajar; bila sangat banyak, kembali ke lingkaran
-    // canvas agar peta tetap ringan (bentuk diganti, tapi warna tetap membedakan).
-    const useIcons = filteredPins.length <= 1200;
 
     if (selectedPin) {
       const selectedHalo = L.circleMarker([selectedPin.lat, selectedPin.lng], {
@@ -928,32 +925,18 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         ? 'KC'
         : 'KCP';
 
-      // Color coding:
-      // - Selected Pin: Glowing Golden Amber / Cyan Halo
-      // - Multi-outlet: Vibrant Orange / Coral (#f06548)
-      // - Active with Matched records: Vibrant Teal / Emerald (#0ab39c)
-      // - Standby: Slate / Steel Blue (#6366f1)
-      let fillColor = '#6366f1';
-      let strokeColor = '#ffffff';
-      let radius = 5.5;
-
+      // Color coding (isi ikon; bentuk sudah menunjukkan jenis):
+      // - Selected: Golden Amber · Multi-outlet: Coral · Matched: Teal · Standby: Steel Blue
+      // - Final Data: teal=OK, amber=review, coral=anomali
+      let fillColor = '#818cf8';
       if (pin.finalStatus) {
-        // Layer Final Data: warna mengikuti standar app (teal=OK, amber=review, coral=anomali)
         fillColor = pin.finalStatus === 'ANOMALI' ? '#f06548' : pin.finalStatus === 'REVIEW' ? '#f0ad4e' : '#0ab39c';
-        radius = 7;
       } else if (isSelected) {
         fillColor = '#f59e0b';
-        strokeColor = '#ffffff';
-        radius = 10;
       } else if (isMulti) {
         fillColor = '#f06548';
-        radius = 8.5;
       } else if (hasMatch) {
         fillColor = '#0ab39c';
-        radius = 7;
-      } else {
-        fillColor = '#818cf8';
-        radius = 5.5;
       }
 
       const overlapKey = `${pin.lat.toFixed(5)}:${pin.lng.toFixed(5)}`;
@@ -963,22 +946,12 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         ? [pin.lat, pin.lng]
         : [pin.lat + Math.sin(overlappingIndex * 2.4) * 0.002, pin.lng + Math.cos(overlappingIndex * 2.4) * 0.002];
 
-      const marker = useIcons
-        ? L.marker(visualCoords, {
-            pane: 'markersPane',
-            icon: makePinIcon(kind, fillColor, isSelected),
-            zIndexOffset: isSelected ? 1000 : 0,
-          })
-        : L.circleMarker(visualCoords, {
-            pane: 'markersPane',
-            renderer: canvasRenderer,
-            radius,
-            fillColor,
-            color: strokeColor,
-            weight: isSelected ? 3.5 : (isMulti ? 2.5 : 1.8),
-            opacity: 1,
-            fillOpacity: isSelected ? 1 : (hasMatch ? 0.95 : 0.85),
-          });
+      const marker = L.marker(visualCoords, {
+        pane: 'markersPane',
+        icon: makePinIcon(kind, fillColor, isSelected),
+        zIndexOffset: isSelected ? 1000 : 0,
+        keyboard: false,
+      });
 
       // Instant lightweight hover tooltip
       const finalBadge = pin.finalStatus

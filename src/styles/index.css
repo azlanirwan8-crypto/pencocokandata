@@ -1352,8 +1352,7 @@ body {
   border: 2px solid #ffffff;
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
-  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.35);
-  animation: bniPinDrop 0.26s ease-out;
+  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.3);
 }
 
 .bni-map-pin__glyph {
@@ -1366,6 +1365,7 @@ body {
 .bni-map-pin--selected {
   border-color: #f59e0b;
   box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.35), 0 4px 10px rgba(15, 23, 42, 0.42);
+  animation: bniPinDrop 0.26s ease-out;
 }
 
 .bni-map-pin--selected .bni-map-pin__glyph {
