@@ -21,6 +21,7 @@ import {
   Sparkles,
   AlertTriangle,
   ExternalLink,
+  Shield,
 } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import type { AnalystRow, AnalystCoverage } from '../../utils/analystPipeline';
@@ -30,6 +31,8 @@ import type { PTENRecord } from '../PTENData/PTENManager';
 import type { MasterRow, TargetRow, WilayahSetting } from '../../types';
 import type { RoleMappingRecord } from '../RoleMapping/RoleMappingManager';
 import { buildMasterProximityIndex, findClosestMasterRecommendation, type CandidateOption, type RecommendationResult } from '../../utils/recommender';
+import { findTopRoleMatchesByLocation } from '../../utils/roleRecommender';
+import { getUnitCategory, getWondrRecommendation } from '../RoleMapping/RoleMappingManager';
 import { extractWilayahFromBranchCode } from '../../utils/normalizer';
 import { AnalystRowEditModal } from './AnalystRowEditModal';
 import { CandidateDetailModal } from './CandidateDetailModal';
@@ -98,6 +101,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     rec: RecommendationResult;
     chosen: CandidateOption;
   } | null>(null);
+  // Pilihan role mapping per baris Fase 3 (index kandidat 0-2)
+  const [fase3RoleChoice, setFase3RoleChoice] = useState<Record<string, number>>({});
 
   // Pagination states
   const [page, setPage] = useState<number>(1);
@@ -151,6 +156,25 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     () => (masterRows.length > 0 ? buildMasterProximityIndex(masterRows) : null),
     [masterRows]
   );
+  // Proyeksi baris hasil analisa → bentuk TargetRow (dipakai recommender & role engine lama)
+  const targetFromAnalystRow = (r: AnalystRow): TargetRow => ({
+    No: r.no,
+    Wilayah: r.wilayah,
+    'Sandi Cabang': r.sandiCabang,
+    'Branch Code': r.branchCode,
+    'Kode Cabang': r.kodeCabang,
+    'Nama Outlet': r.namaOutlet,
+    'Status Outlet': r.statusOutlet,
+    ALAMAT: r.alamat,
+    'KODE POS': r.kodePosPten,
+    Kelurahan: r.kelurahan,
+    Kecamatan: r.kecamatan,
+    'Dati II': r.groupKota,
+    'Kode Dati II': '',
+    Provinsi: r.provinsi,
+    _originalFilledSandiCabang: r.sandiCabang,
+    _originalFilledNamaOutlet: r.namaOutlet,
+  } as unknown as TargetRow);
   // Cache per kota: rekomendasi hanya dihitung ulang bila field Fase 2 kota itu berubah
   const fase2RecCacheRef = useRef(new Map<string, { sig: string; rec: RecommendationResult | null }>());
   const fase2Recs = useMemo(() => {
@@ -161,24 +185,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       if (r.kategori === 'TIDAK_ANALISA') return;
       const ck = cityMatchKey(r.groupKota);
       if (!ck || m.has(ck)) return;
-      const target = {
-        No: r.no,
-        Wilayah: r.wilayah,
-        'Sandi Cabang': r.sandiCabang,
-        'Branch Code': r.branchCode,
-        'Kode Cabang': r.kodeCabang,
-        'Nama Outlet': r.namaOutlet,
-        'Status Outlet': r.statusOutlet,
-        ALAMAT: r.alamat,
-        'KODE POS': r.kodePosPten,
-        Kelurahan: r.kelurahan,
-        Kecamatan: r.kecamatan,
-        'Dati II': r.groupKota,
-        'Kode Dati II': '',
-        Provinsi: r.provinsi,
-        _originalFilledSandiCabang: r.sandiCabang,
-        _originalFilledNamaOutlet: r.namaOutlet,
-      } as unknown as TargetRow;
+      const target = targetFromAnalystRow(r);
       const sig = `${r.sandiCabang}|${r.namaOutlet}|${r.branchCode}`;
       const cached = cache.get(ck);
       let rec: RecommendationResult | null;
@@ -241,6 +248,44 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       editedManually: true,
     });
     showToast(`Baris #${r.no}: outlet diganti ke ${namaOutlet} — wilayah & role dihitung ulang`);
+  };
+
+  // ── FASE 3: rekomendasi mapping role 3-cabang-terdekat (engine lama, strict 1 pulau) ──
+  const masterByBranchCode = useMemo(() => {
+    const mp = new Map<string, MasterRow>();
+    masterRows.forEach((m) => {
+      const bc = String(m['Branch Code'] || m['Kode Cabang'] || '').trim();
+      if (bc && !mp.has(bc)) mp.set(bc, m);
+    });
+    return mp;
+  }, [masterRows]);
+
+  const applyFase3Role = (r: AnalystRow, rec: RoleMappingRecord) => {
+    const isKc = getUnitCategory(rec.organisasiTujuan) === 'KC';
+    const tipeUnit: 'KC' | 'KCP' = isKc ? 'KC' : 'KCP';
+    const roleCabsal = rec.qrsCabsal ?? 0;
+    const roleCabapv1 = rec.qrsCabapv1 ?? 0;
+    const roleCabapv2 = rec.qrsCabapv2 ?? 0;
+    const is3RoleLengkap = roleCabsal === 1 && roleCabapv1 === 1 && roleCabapv2 === 1;
+    const wondr = getWondrRecommendation(rec);
+    onUpdateRow({
+      ...r,
+      organisasiTujuan: rec.organisasiTujuan,
+      tipeUnit,
+      roleCabsal,
+      roleCabapv1,
+      roleCabapv2,
+      roleGrandTotal: rec.grandTotal ?? roleCabsal + roleCabapv1 + roleCabapv2,
+      is3RoleLengkap,
+      alurWondr: wondr?.tier || (is3RoleLengkap ? 'Tier 1: Full Approval KC' : 'Tier 2: Dual Approval KCP via KC'),
+      flowDescription: wondr?.desc || r.flowDescription,
+      confidenceScore: 100,
+      matchingAlgorithm: 'Manual Role Selection (Terdekat, 1 Pulau)',
+      statusAnalisa: 'EXACT_MATCH',
+      isFinalApproved: false,
+      editedManually: true,
+    });
+    showToast(`Baris #${r.no}: role dipasang ke ${rec.organisasiTujuan}`);
   };
 
   const openOverrideModal = (masterCity: string) => {
@@ -1127,6 +1172,23 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                 <tr>
                   <th style={{ width: '40px', textAlign: 'center' }}>No</th>
                   <th style={{ minWidth: '180px' }}>Nama Outlet</th>
+                  {roleMappingList.length > 0 && (
+                    <th
+                      style={{
+                        minWidth: '340px',
+                        background: '#f0fdf8',
+                        color: '#059669',
+                        borderLeft: '2px solid rgba(16, 185, 129, 0.35)',
+                        padding: '0.55rem 0.65rem',
+                        verticalAlign: 'middle',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <Shield size={13} color="#059669" />
+                        <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>Rekomendasi Mapping Role</span>
+                      </div>
+                    </th>
+                  )}
                   <th style={{ minWidth: '220px' }}>ORGANISASI TUJUAN</th>
                   <th style={{ width: '80px', textAlign: 'center' }}>Tipe Unit</th>
                   <th style={{ width: '60px', textAlign: 'center' }}>Sales</th>
@@ -1471,6 +1533,104 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                         <>
                           <td style={{ textAlign: 'center', color: '#878a99' }}>{displayIdx}</td>
                           <td style={{ fontWeight: 600, color: '#405189' }}>{r.namaOutlet}</td>
+                          {roleMappingList.length > 0 &&
+                            (() => {
+                              // Engine lama: 3 cabang role lengkap terdekat dari outlet hasil Fase 2,
+                              // strict 1 pulau, KC diprioritaskan, cache internal per outlet
+                              const activeMaster = masterByBranchCode.get(String(r.branchCode || '').trim());
+                              const topRoles = findTopRoleMatchesByLocation(activeMaster, targetFromAnalystRow(r), roleMappingList, masterRows, 3);
+                              const autoIdx = topRoles.findIndex((x) => x.rec.organisasiTujuan === r.organisasiTujuan);
+                              const selectedIdx = fase3RoleChoice[r.id] ?? (autoIdx >= 0 ? autoIdx : 0);
+                              if (topRoles.length === 0)
+                                return (
+                                  <td style={{ background: '#fafffe', borderLeft: '2px solid rgba(16,185,129,0.2)', padding: '0.5rem 0.6rem' }}>
+                                    <span style={{ fontSize: '0.7rem', color: '#adb5bd' }}>Belum ada data role lengkap di pulau ini</span>
+                                  </td>
+                                );
+                              const rankTheme = [
+                                { bg: 'rgba(16,185,129,0.09)', border: '#6ee7b7', text: '#065f46', badge: '#059669', selBg: 'rgba(16,185,129,0.22)', selBorder: '#059669' },
+                                { bg: 'rgba(14,165,233,0.07)', border: '#7dd3fc', text: '#0c4a6e', badge: '#0284c7', selBg: 'rgba(14,165,233,0.2)', selBorder: '#0284c7' },
+                                { bg: 'rgba(99,102,241,0.07)', border: '#c4b5fd', text: '#312e81', badge: '#4f46e5', selBg: 'rgba(99,102,241,0.18)', selBorder: '#4f46e5' },
+                              ];
+                              return (
+                                <td style={{ background: '#fafffe', borderLeft: '2px solid rgba(16,185,129,0.2)', padding: '0.5rem 0.6rem', verticalAlign: 'top', minWidth: '340px', boxSizing: 'border-box' }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.32rem' }}>
+                                    {topRoles.map((item, rIdx) => {
+                                      const role = item.rec;
+                                      const isSelected = selectedIdx === rIdx;
+                                      const isKc = getUnitCategory(role.organisasiTujuan) === 'KC';
+                                      const t = rankTheme[rIdx] || rankTheme[0];
+                                      return (
+                                        <div
+                                          key={`rm-${r.id}-${rIdx}`}
+                                          role="button"
+                                          tabIndex={0}
+                                          onClick={() => setFase3RoleChoice((prev) => ({ ...prev, [r.id]: isSelected ? -1 : rIdx }))}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ' ') setFase3RoleChoice((prev) => ({ ...prev, [r.id]: isSelected ? -1 : rIdx }));
+                                          }}
+                                          title={`Klik untuk ${isSelected ? 'batalkan pilihan' : 'pilih'} cabang ini${autoIdx === rIdx ? ' — ini role yang kini terpasang' : ''}`}
+                                          style={{
+                                            background: isSelected ? t.selBg : t.bg,
+                                            border: `1.5px solid ${isSelected ? t.selBorder : t.border}`,
+                                            borderRadius: '6px',
+                                            padding: '0.3rem 0.42rem',
+                                            cursor: 'pointer',
+                                            outline: 'none',
+                                            boxShadow: isSelected ? `0 0 0 2px ${t.selBorder}33` : 'none',
+                                          }}
+                                        >
+                                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.3rem' }}>
+                                            <span style={{ flexShrink: 0, width: '16px', height: '16px', borderRadius: '50%', background: isSelected ? t.selBorder : t.badge, color: '#fff', fontSize: '0.6rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                                              {isSelected ? '✓' : rIdx + 1}
+                                            </span>
+                                            <span style={{ flex: 1, fontSize: '0.7rem', fontWeight: 700, color: t.text, lineHeight: 1.25, wordBreak: 'break-word' }}>
+                                              {role.organisasiTujuan}
+                                            </span>
+                                            {autoIdx === rIdx && !isSelected && (
+                                              <span style={{ flexShrink: 0, fontSize: '0.58rem', fontWeight: 700, color: t.badge }}>Terpasang</span>
+                                            )}
+                                          </div>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', paddingLeft: '1.3rem', marginTop: '0.15rem', flexWrap: 'wrap' }}>
+                                            <span style={{ fontSize: '0.6rem', fontWeight: 700, padding: '0.04rem 0.28rem', borderRadius: '3px', background: isKc ? 'rgba(64,81,137,0.11)' : 'rgba(41,156,219,0.11)', color: isKc ? '#405189' : '#0284c7' }}>
+                                              {isKc ? 'Cabang Utama (KC)' : 'Outlet (KCP)'}
+                                            </span>
+                                            {item.distanceKm !== null ? (
+                                              <span
+                                                style={{ fontSize: '0.6rem', fontWeight: 700, color: !item.sameIsland ? '#dc2626' : item.distanceKm < 50 ? '#059669' : item.distanceKm < 200 ? '#d97706' : '#6b7280', display: 'inline-flex', alignItems: 'center', gap: '0.15rem' }}
+                                                title={!item.sameIsland ? 'Peringatan: cabang ini berada di pulau berbeda' : `Estimasi jarak lurus: ${item.distanceKm} km`}
+                                              >
+                                                <MapPin size={9} />
+                                                {item.distanceKm.toLocaleString('id-ID')} km
+                                                {!item.sameIsland && ' ⚠️ beda pulau'}
+                                              </span>
+                                            ) : (
+                                              <span style={{ fontSize: '0.6rem', color: '#adb5bd' }}>jarak tidak diketahui</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                    {selectedIdx >= 0 && topRoles[selectedIdx] && (
+                                      <div style={{ fontSize: '0.62rem', color: '#059669', fontWeight: 600, background: 'rgba(16,185,129,0.07)', borderRadius: '4px', padding: '0.2rem 0.4rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                        <CheckCircle2 size={11} />
+                                        Dipilih: {topRoles[selectedIdx].rec.organisasiTujuan}
+                                      </div>
+                                    )}
+                                    {selectedIdx >= 0 && topRoles[selectedIdx] && autoIdx !== selectedIdx && (
+                                      <button
+                                        type="button"
+                                        onClick={() => applyFase3Role(r, topRoles[selectedIdx].rec)}
+                                        disabled={isProcessing}
+                                        style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.22rem 0.6rem', fontSize: '0.7rem', fontWeight: 700, border: '1px solid #059669', borderRadius: '4px', background: '#059669', color: '#fff', cursor: isProcessing ? 'wait' : 'pointer' }}
+                                      >
+                                        <Check size={11} /> Terapkan Role Ini
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              );
+                            })()}
                           <td style={{ fontWeight: 700, color: '#212529' }}>{r.organisasiTujuan}</td>
                           <td style={{ textAlign: 'center' }}>
                             <span className={`badge ${r.tipeUnit === 'KC' ? 'badge-match' : 'badge-level2'}`}>
