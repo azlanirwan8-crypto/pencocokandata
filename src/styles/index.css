@@ -1576,9 +1576,36 @@ body {
 .modal-body {
   padding: 1.25rem;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+}
+
+/* Tanpa ini, tabel lebar memaksa lebar konten body sehingga kartu di atasnya tergeser ke kiri. */
+.modal-body > * {
+  min-width: 0;
+}
+
+/* Kolom identitas (checkbox + kode pos) tetap terlihat saat tabel digeser horizontal. */
+.kp-sticky-col .sticky-col {
+  position: sticky;
+  z-index: 2;
+  background: var(--row-bg, #ffffff);
+}
+
+.kp-sticky-col .sticky-col:nth-child(1) {
+  left: 0;
+}
+
+.kp-sticky-col .sticky-col:nth-child(2) {
+  left: 40px;
+  box-shadow: 2px 0 4px rgba(15, 23, 42, 0.06);
+}
+
+.kp-sticky-col thead .sticky-col {
+  z-index: 11;
+  background: #f3f6f9;
 }
 
 .modal-footer {

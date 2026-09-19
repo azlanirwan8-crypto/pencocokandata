@@ -47,6 +47,8 @@ import {
 } from '../../utils/neonSync';
 import { getStoredGoogleApiKey } from '../../utils/onlineGeoCoder';
 import { KodePosSyncModal } from './KodePosSyncModal';
+import { GoogleApiKeyModal } from '../GoogleApiKeyModal';
+import { useGeoTooltip } from '../GeoTooltip';
 
 interface KodePosManagerProps {
   onKodePosCountChange?: (count: number) => void;
@@ -93,6 +95,8 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
   const [deleteTarget, setDeleteTarget] = useState<KodePosRow | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
   const [showSyncModal, setShowSyncModal] = useState<boolean>(false);
+  const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
+  const [kunciGoogleTersimpan, setKunciGoogleTersimpan] = useState<boolean>(() => Boolean(getStoredGoogleApiKey()));
   const [detailItem, setDetailItem] = useState<KodePosRow | null>(null);
 
   // Titik koordinat (kodepos_geo di Neon)
@@ -232,8 +236,9 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     void refreshGeo();
   }, [refreshGeo, reloadKey]);
 
-  /** Kunci Google: menempel di browser (pengaturan peta) atau terpasang di server Vercel. */
-  const kunciGoogle = Boolean(getStoredGoogleApiKey()) || Boolean(geoStats?.googleSiap);
+  /** Kunci Google: menempel di browser (dialog kunci) atau terpasang di server Vercel. */
+  const kunciGoogle = kunciGoogleTersimpan || Boolean(geoStats?.googleSiap);
+  const { tipProps, tooltipNode } = useGeoTooltip();
 
   const jalankanGeo = async (mode: 'isi' | 'verifikasi') => {
     if (geoRun.aktif) {
@@ -655,31 +660,39 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               color: '#0ab39c',
               borderColor: 'rgba(10, 179, 156, 0.35)',
             }}
-            title={
+            {...tipProps(
               (geoStats?.menunggu
                 ? `Cari titik koordinat untuk ${geoStats.menunggu.toLocaleString('id-ID')} kode pos yang belum punya lokasi. `
                 : 'Cari titik koordinat kode pos yang belum punya lokasi. ') +
               (kunciGoogle
                 ? 'Google Geocoding dipakai lebih dulu.'
                 : 'Kunci Google belum dipasang, jadi titik diisi ESRI/OpenStreetMap (kolom sumber menandai itu).')
-            }
+            )}
           >
             <Navigation size={13} />
             <span>{geoRun.aktif && geoRun.mode === 'isi' ? 'Hentikan' : 'Isi Koordinat'}</span>
           </button>
 
-          {kunciGoogle && (
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => void jalankanGeo('verifikasi')}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-              title="Cek ulang titik yang belum dikonfirmasi Google Geocoding API"
-            >
-              <CheckCircle2 size={13} />
-              <span>{geoRun.aktif && geoRun.mode === 'verifikasi' ? 'Hentikan' : 'Verifikasi Google'}</span>
-            </button>
-          )}
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={() => (kunciGoogle ? void jalankanGeo('verifikasi') : setShowApiKeyModal(true))}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+            {...tipProps(
+              kunciGoogle
+                ? 'Cek ulang titik yang belum dikonfirmasi Google Geocoding API'
+                : 'Verifikasi koordinat butuh API key Google. Klik untuk memasang kunci, verifikasi langsung jalan setelah kunci tersimpan.'
+            )}
+          >
+            <CheckCircle2 size={13} />
+            <span>
+              {geoRun.aktif && geoRun.mode === 'verifikasi'
+                ? 'Hentikan'
+                : kunciGoogle
+                  ? 'Verifikasi Google'
+                  : 'Pasang Kunci Google'}
+            </span>
+          </button>
 
           <button
             type="button"
@@ -918,7 +931,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
 
         <div
           className="metric-card emerald"
-          title={
+          {...tipProps(
             geoRun.aktif
               ? geoRun.pesan
               : geoStats
@@ -926,7 +939,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                   (geoStats.geo.perkiraan ? ` · ${geoStats.geo.perkiraan.toLocaleString('id-ID')} hanya perkiraan wilayah` : '') +
                   (geoStats.geo.gagal ? ` · ${geoStats.geo.gagal.toLocaleString('id-ID')} tidak ditemukan` : '')
                 : 'Titik koordinat kode pos diambil dari tabel kodepos_geo di Neon'
-          }
+          )}
         >
           <div className="metric-header">
             <span className="metric-title">TITIK KOORDINAT</span>
@@ -973,12 +986,13 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                 <button
                   type="button"
                   onClick={() => setSearchTerm('')}
+                  aria-label="Hapus kata kunci pencarian"
                   style={{
                     position: 'absolute',
                     right: '8px',
                     background: 'none',
                     border: 'none',
-                    color: '#878a99',
+                    color: '#5b5f6e',
                     cursor: 'pointer',
                     padding: 0,
                     display: 'inline-flex',
@@ -1200,7 +1214,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
 
                       {/* Latitude / Longitude */}
                       <td
-                        title={geoLabel(item)}
+                        {...tipProps(geoLabel(item))}
                         style={{
                           textAlign: 'right',
                           fontFamily: 'monospace',
@@ -1211,7 +1225,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                         {item.latitude == null ? '—' : item.latitude.toFixed(6)}
                       </td>
                       <td
-                        title={geoLabel(item)}
+                        {...tipProps(geoLabel(item))}
                         style={{
                           textAlign: 'right',
                           fontFamily: 'monospace',
@@ -1224,10 +1238,10 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                           <span
                             style={{
                               display: 'block',
-                              fontSize: '0.6rem',
+                              fontSize: '0.78rem',
                               fontWeight: 700,
                               letterSpacing: '0.03em',
-                              color: item.geoTerverifikasi ? '#0ab39c' : item.geoPresisi === 'PERKIRAAN WILAYAH' ? '#d68b0c' : '#878a99',
+                              color: item.geoTerverifikasi ? '#0ab39c' : item.geoPresisi === 'PERKIRAAN WILAYAH' ? '#b45309' : '#5b5f6e',
                             }}
                           >
                             {item.geoTerverifikasi ? 'GOOGLE' : item.geoPresisi === 'PERKIRAAN WILAYAH' ? 'PERKIRAAN' : (item.geoSumber || '').toUpperCase()}
@@ -1237,30 +1251,32 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
 
                       {/* Actions */}
                       <td style={{ textAlign: 'center' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
                           <button
                             type="button"
                             disabled={item.latitude == null || item.longitude == null}
                             onClick={() =>
                               window.open(mapsUrlFor(item.latitude as number, item.longitude as number), '_blank', 'noopener,noreferrer')
                             }
-                            title={
+                            aria-label={`Buka Maps untuk kode pos ${item.kodePos}`}
+                            {...tipProps(
                               item.latitude == null
                                 ? 'Titik koordinat belum ada — klik "Isi Koordinat"'
                                 : `Buka Maps/Google · ${geoLabel(item)}`
-                            }
+                            )}
                             style={{
                               background: 'rgba(10, 179, 156, 0.1)',
                               border: '1px solid rgba(10, 179, 156, 0.28)',
                               color: item.latitude == null ? '#adb5bd' : '#0ab39c',
                               borderRadius: '4px',
-                              padding: '0.22rem 0.4rem',
+                              padding: '0.3rem 0.45rem',
+                              whiteSpace: 'nowrap',
                               cursor: item.latitude == null ? 'not-allowed' : 'pointer',
                               display: 'inline-flex',
                               alignItems: 'center',
                               justifyContent: 'center',
                               gap: '0.2rem',
-                              fontSize: '0.66rem',
+                              fontSize: '0.72rem',
                               fontWeight: 700,
                             }}
                           >
@@ -1279,7 +1295,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                               border: '1px solid rgba(41, 156, 219, 0.25)',
                               color: '#299cdb',
                               borderRadius: '4px',
-                              padding: '0.22rem 0.35rem',
+                              padding: '0.35rem',
                               cursor: 'pointer',
                               display: 'inline-flex',
                               alignItems: 'center',
@@ -1301,7 +1317,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                               border: '1px solid rgba(64, 81, 137, 0.25)',
                               color: '#405189',
                               borderRadius: '4px',
-                              padding: '0.22rem 0.35rem',
+                              padding: '0.35rem',
                               cursor: 'pointer',
                               display: 'inline-flex',
                               alignItems: 'center',
@@ -1319,7 +1335,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                               border: '1px solid rgba(240, 101, 72, 0.25)',
                               color: '#f06548',
                               borderRadius: '4px',
-                              padding: '0.22rem 0.35rem',
+                              padding: '0.35rem',
                               cursor: 'pointer',
                               display: 'inline-flex',
                               alignItems: 'center',
@@ -1448,6 +1464,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               <button
                 type="button"
                 className="modal-close"
+                aria-label="Tutup dialog"
                 onClick={() => setModalMode(null)}
               >
                 <X size={16} />
@@ -1568,6 +1585,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               <button
                 type="button"
                 className="modal-close"
+                aria-label="Tutup dialog"
                 onClick={() => setModalMode(null)}
               >
                 <X size={16} />
@@ -1637,14 +1655,23 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                   fontSize: '0.8rem',
                 }}
               >
-                <div title={geoLabel(detailItem)}>
-                  <div style={{ fontSize: '0.7rem', color: '#878a99', fontWeight: 600 }}>TITIK KOORDINAT</div>
+                <div>
+                  <div style={{ fontSize: '0.72rem', color: '#5b5f6e', fontWeight: 600 }}>TITIK KOORDINAT</div>
                   <div style={{ fontWeight: 700, color: '#212529', fontFamily: 'monospace', marginTop: '0.15rem' }}>
                     {detailItem.latitude == null || detailItem.longitude == null
                       ? 'belum ada'
                       : `${detailItem.latitude.toFixed(6)}, ${detailItem.longitude.toFixed(6)}`}
                   </div>
-                  <div style={{ fontSize: '0.68rem', color: '#878a99', marginTop: '0.15rem' }}>{geoLabel(detailItem)}</div>
+                  <div
+                    style={{
+                      fontSize: '0.72rem',
+                      fontWeight: detailItem.geoTerverifikasi ? 600 : 700,
+                      color: detailItem.geoTerverifikasi ? '#0a7b6c' : '#b45309',
+                      marginTop: '0.15rem',
+                    }}
+                  >
+                    {geoLabel(detailItem)}
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -1699,6 +1726,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               <button
                 type="button"
                 className="modal-close"
+                aria-label="Tutup dialog hapus"
                 onClick={() => setDeleteTarget(null)}
               >
                 <X size={16} />
@@ -1769,6 +1797,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               <button
                 type="button"
                 className="modal-close"
+                aria-label="Tutup dialog reset"
                 onClick={() => setShowResetConfirm(false)}
               >
                 <X size={16} />
@@ -1816,6 +1845,18 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
           </div>
         </div>
       )}
+
+      {showApiKeyModal && (
+        <GoogleApiKeyModal
+          onClose={() => setShowApiKeyModal(false)}
+          onSaved={(kunci) => {
+            setKunciGoogleTersimpan(Boolean(kunci));
+            if (kunci) void jalankanGeo('verifikasi');
+            else void refreshGeo();
+          }}
+        />
+      )}
+      {tooltipNode}
     </div>
   );
 };

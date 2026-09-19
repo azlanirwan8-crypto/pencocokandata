@@ -3,6 +3,7 @@ import { RefreshCw, X, CloudUpload, CheckCircle2, AlertCircle, ShieldCheck, Exte
 import { runKodePosLiveSync, type KodePosSyncPlan, type SyncProgress } from '../../utils/kodePosSync';
 import { saveKodePosToNeon, mapsUrlFor, geoLabel, type KodePosRow } from '../../utils/neonSync';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
+import { useGeoTooltip } from '../GeoTooltip';
 
 interface KodePosSyncModalProps {
   open: boolean;
@@ -12,15 +13,22 @@ interface KodePosSyncModalProps {
 
 type Phase = 'checking' | 'ready' | 'importing';
 
+type TipProps = (text: string) => {
+  onMouseEnter: (e: React.MouseEvent) => void;
+  onMouseLeave: () => void;
+  onFocus: (e: React.FocusEvent) => void;
+  onBlur: () => void;
+};
+
 const fmt = (n: number) => n.toLocaleString('id-ID');
 
-const StatCard: React.FC<{ label: string; value: string; sub: string; color: string; title?: string }> = ({ label, value, sub, color, title }) => (
-  <div title={title} style={{ border: '1px solid #e9ebec', borderLeft: `4px solid ${color}`, borderRadius: '6px', padding: '0.75rem 0.9rem' }}>
-    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+const StatCard: React.FC<{ label: string; value: string; sub: string; color: string; tip?: string; tipProps: TipProps }> = ({ label, value, sub, color, tip, tipProps }) => (
+  <div {...(tip ? tipProps(tip) : {})} style={{ border: '1px solid #e9ebec', borderLeft: `4px solid ${color}`, borderRadius: '6px', padding: '0.75rem 0.9rem' }}>
+    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#5b5f6e', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
       {label}
     </div>
     <div style={{ fontSize: '1.5rem', fontWeight: 700, color, lineHeight: 1.2 }}>{value}</div>
-    <div style={{ fontSize: '0.72rem', color: '#878a99' }}>{sub}</div>
+    <div style={{ fontSize: '0.8rem', color: '#5b5f6e' }}>{sub}</div>
   </div>
 );
 
@@ -37,6 +45,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
   const deferredSearch = useDeferredValue(search);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const { tipProps, tooltipNode } = useGeoTooltip();
   const rows = plan?.missingInCloud || [];
   const shownRows = useMemo(() => {
     const q = deferredSearch.trim().toLowerCase();
@@ -76,7 +85,17 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
   const allChecked = shownRows.length > 0 && shownRows.every((r) => selected.has(rowKey(r)));
+  const someChecked = shownRows.some((r) => selected.has(rowKey(r)));
   const checking = phase === 'checking';
 
   const toggleAll = () => {
@@ -120,18 +139,18 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
 
   return (
     <div className="modal-backdrop">
-      <div className="modal-container" style={{ maxWidth: '1000px' }}>
+      <div className="modal-container" role="dialog" aria-modal="true" aria-labelledby="kodepos-sync-title" style={{ maxWidth: '1000px' }}>
         <div className="modal-header">
-          <h4 className="modal-title">
+          <h4 className="modal-title" id="kodepos-sync-title">
             <RefreshCw size={16} color="#405189" />
             Sinkronisasi Kode Pos Seluruh Indonesia
           </h4>
           {plan?.lastUpdated && !checking && (
-            <span style={{ marginLeft: 'auto', marginRight: '0.75rem', fontSize: '0.68rem', color: '#878a99', whiteSpace: 'nowrap' }}>
+            <span style={{ marginLeft: 'auto', marginRight: '0.75rem', fontSize: '0.72rem', color: '#5b5f6e', whiteSpace: 'nowrap' }}>
               diperbarui {new Date(plan.lastUpdated).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
             </span>
           )}
-          <button type="button" className="modal-close" onClick={onClose}>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Tutup dialog sinkronisasi">
             <X size={16} />
           </button>
         </div>
@@ -178,19 +197,22 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
             <>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.75rem' }}>
                 <StatCard
+                  tipProps={tipProps}
                   label="1. Total Kode Pos"
                   value={fmt(plan.dbRows || 0)}
                   sub="baris wilayah tersimpan di Neon"
-                  title={`${fmt(plan.dbTotal)} kode pos unik dipakai ${fmt(plan.dbRows || 0)} baris wilayah`}
+                  tip={`${fmt(plan.dbTotal)} kode pos unik dipakai ${fmt(plan.dbRows || 0)} baris wilayah`}
                   color="#405189"
                 />
                 <StatCard
+                  tipProps={tipProps}
                   label="2. Kode Pos belum ada"
                   value={fmt(rows.length)}
                   sub="baris patokan yang belum tersimpan di Neon"
                   color={rows.length > 0 ? '#f06548' : '#0ab39c'}
                 />
                 <StatCard
+                  tipProps={tipProps}
                   label="3. Provinsi terdampak"
                   value={fmt(plan.provincesAffected.length)}
                   sub="provinsi yang punya selisih data"
@@ -247,14 +269,22 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                 </span>
               </div>
 
-              <div ref={scrollRef} className="table-container" style={{ maxHeight: '360px', overflow: 'auto', border: '1px solid #e9ebec', borderRadius: '6px' }}>
-                <table className="modern-table" style={{ fontSize: '0.76rem' }}>
+              <div ref={scrollRef} className="table-container" style={{ maxHeight: 'calc(90vh - 300px)', minHeight: '200px', overflow: 'auto', border: '1px solid #e9ebec', borderRadius: '6px', minWidth: 0 }}>
+                <table className="modern-table kp-sticky-col" style={{ fontSize: '0.78rem' }}>
                   <thead style={{ position: 'sticky', top: 0, zIndex: 5, background: '#f3f6f9' }}>
                     <tr>
-                      <th style={{ width: '40px', textAlign: 'center' }}>
-                        <input type="checkbox" checked={allChecked} onChange={toggleAll} title="Pilih semua" />
+                      <th className="sticky-col" style={{ width: '40px', textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={allChecked}
+                          ref={(el) => {
+                            if (el) el.indeterminate = someChecked && !allChecked;
+                          }}
+                          onChange={toggleAll}
+                          aria-label="Pilih semua baris"
+                        />
                       </th>
-                      <th style={{ width: '80px', textAlign: 'center' }}>Kode Pos</th>
+                      <th className="sticky-col" style={{ width: '80px', textAlign: 'center' }}>Kode Pos</th>
                       <th>Kelurahan</th>
                       <th>Kecamatan</th>
                       <th>Kota / Kabupaten</th>
@@ -278,17 +308,24 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                           const key = rowKey(r);
                           const idx = (win.active ? win.start : 0) + i;
                           return (
-                            <tr key={`${key}-${idx}`} data-vrow={i === 0 ? 'true' : undefined} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
-                              <td style={{ textAlign: 'center' }}>
-                                <input type="checkbox" checked={selected.has(key)} onChange={() => toggleOne(key)} />
+                            <tr
+                              key={`${key}-${idx}`}
+                              data-vrow={i === 0 ? 'true' : undefined}
+                              style={{
+                                background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd',
+                                ['--row-bg' as never]: idx % 2 === 0 ? '#ffffff' : '#f9fbfd',
+                              }}
+                            >
+                              <td className="sticky-col" style={{ textAlign: 'center' }}>
+                                <input type="checkbox" checked={selected.has(key)} onChange={() => toggleOne(key)} aria-label={`Pilih kode pos ${r.kodePos}`} />
                               </td>
-                              <td className="code-cell" style={{ textAlign: 'center', fontWeight: 700, color: '#0ab39c' }}>{r.kodePos}</td>
+                              <td className="code-cell sticky-col" style={{ textAlign: 'center', fontWeight: 700, color: '#0ab39c' }}>{r.kodePos}</td>
                               <td style={{ fontWeight: 600, color: '#212529' }}>{r.kelurahan}</td>
                               <td>{r.kecamatan}</td>
                               <td>{r.kabupatenKota}</td>
                               <td>{r.provinsi}</td>
                               <td
-                                title={geoLabel(r)}
+                                {...tipProps(geoLabel(r))}
                                 style={{
                                   textAlign: 'right',
                                   fontFamily: 'monospace',
@@ -298,7 +335,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                                 {r.latitude == null ? '—' : r.latitude.toFixed(6)}
                               </td>
                               <td
-                                title={geoLabel(r)}
+                                {...tipProps(geoLabel(r))}
                                 style={{
                                   textAlign: 'right',
                                   fontFamily: 'monospace',
@@ -318,20 +355,22 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                                       'noopener,noreferrer'
                                     )
                                   }
-                                  title={
+                                  aria-label={`Buka Maps untuk kode pos ${r.kodePos}`}
+                                  {...tipProps(
                                     r.latitude == null
                                       ? 'Titik koordinat belum ada — jalankan "Isi Koordinat" di tabel Kode Pos'
                                       : `Buka Maps/Google · ${geoLabel(r)}`
-                                  }
+                                  )}
                                   style={{
                                     background: 'none',
                                     border: 'none',
                                     color: r.latitude == null ? '#ced4da' : '#0ab39c',
                                     cursor: r.latitude == null ? 'not-allowed' : 'pointer',
-                                    padding: '2px',
+                                    padding: '0.35rem',
+                                    lineHeight: 1,
                                   }}
                                 >
-                                  <ExternalLink size={13} />
+                                  <ExternalLink size={15} />
                                 </button>
                               </td>
                             </tr>
@@ -367,6 +406,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
           </button>
         </div>
       </div>
+      {tooltipNode}
     </div>
   );
 };

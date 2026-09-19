@@ -19,7 +19,6 @@ import {
   Radio,
   FileSpreadsheet,
   ShieldCheck,
-  Key,
 } from 'lucide-react';
 import type { MasterRow, TargetRow } from '../../types';
 import type { AnalystRow } from '../../utils/analystPipeline';
@@ -43,13 +42,13 @@ import {
   buildTargetQuery,
   batchGeocodeUniqueQueries,
   getStoredGoogleApiKey,
-  setStoredGoogleApiKey,
   muatTitikKodePos,
   kodePosUjung,
   type GeoLocationResult,
   type BatchProgress,
 } from '../../utils/onlineGeoCoder';
 import { get, keys } from 'idb-keyval';
+import { GoogleApiKeyModal } from '../GoogleApiKeyModal';
 import { cleanDati, cleanProvinsi } from '../../utils/normalizer';
 import { getUnitCategory } from '../RoleMapping/RoleMappingManager';
 
@@ -230,6 +229,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
   // Toggle for Curved Arcs and Matched Detail Modal
   const [showCurvedArcs, setShowCurvedArcs] = useState(true);
+  const [cameraLocked, setCameraLocked] = useState(false);
   const [showMatchedModal, setShowMatchedModal] = useState(false);
   const [modalSearchTerm, setModalSearchTerm] = useState('');
   const [trackingMode, setTrackingMode] = useState<'none' | 'aceh_kim'>('none');
@@ -243,7 +243,6 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   // Realtime Google Maps / Online Geocoding State
   const [googleApiKey, setGoogleApiKey] = useState(() => getStoredGoogleApiKey());
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState('');
   const [resolvedCoords, setResolvedCoords] = useState<Map<string, GeoLocationResult>>(new Map());
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [geocodingProgress, setGeocodingProgress] = useState<BatchProgress | null>(null);
@@ -745,12 +744,12 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
   // Fly ke titik anomali ketika dipilih dari panel
   useEffect(() => {
-    if (!selectedAnomalyRow) return;
+    if (!selectedAnomalyRow || cameraLocked) return;
     const kp = String(selectedAnomalyRow.kodePosPten || '').replace(/\D/g, '').trim();
     const titik = kp ? titikKodePos[kp] : undefined;
     const map = mapInstanceRef.current;
     if (map && titik) map.flyTo([titik.lat, titik.lng], Math.max(map.getZoom(), 11), { duration: 0.6 });
-  }, [selectedAnomalyRow, titikKodePos]);
+  }, [selectedAnomalyRow, titikKodePos, cameraLocked]);
 
 
   // Filtered rows inside the Matched Detail Modal
@@ -1137,6 +1136,12 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     }
     if (lastAutoFitKeyRef.current === cameraKey) return;
 
+    // Kamera terkunci: kunci tetap dicatat supaya saat dibuka tidak melompat mendadak.
+    if (cameraLocked) {
+      lastAutoFitKeyRef.current = cameraKey;
+      return;
+    }
+
     lastAutoFitKeyRef.current = cameraKey;
     if (displayScope === 'SELECTED_ONLY' && selectedPin) {
       map.flyTo([selectedPin.lat, selectedPin.lng], 14, { duration: 0.55 });
@@ -1144,7 +1149,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       const bounds = L.latLngBounds(filteredPins.map((p) => [p.lat, p.lng]));
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12, animate: true, duration: 0.55 });
     }
-  }, [displayScope, selectedPin, selectedWilayah, filteredPins]);
+  }, [displayScope, selectedPin, selectedWilayah, filteredPins, cameraLocked]);
 
   useEffect(() => {
     if (!selectedPin) return;
@@ -1252,7 +1257,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       arcsLayer.addLayer(originDot);
     });
 
-    if (isIsolated && allArcEndpoints.length > 0) {
+    if (!cameraLocked && isIsolated && allArcEndpoints.length > 0) {
       if (allArcEndpoints.length > 1) {
         const arcBounds = L.latLngBounds(allArcEndpoints);
         map.fitBounds(arcBounds, { padding: [60, 60], maxZoom: 13 });
@@ -1260,7 +1265,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         map.flyTo(destCoords, 14, { duration: 0.8 });
       }
     }
-  }, [selectedPin, showCurvedArcs, selectedMatchedRows, displayScope, trackingMode, resolvedCoords]);
+  }, [selectedPin, showCurvedArcs, selectedMatchedRows, displayScope, trackingMode, resolvedCoords, cameraLocked]);
 
 
   // Handle Quick Island Navigation
@@ -2045,7 +2050,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         <div className="bni-map-container" style={{ position: 'relative' }}>
           <div ref={mapContainerRef} style={{ width: '100%', height: '580px', borderRadius: '6px', cursor: 'default' }} />
 
-          {/* Legenda bentuk penanda (bentuk = jenis, warna = status) */}
+          {/* Legenda bentuk penanda (bentuk = jenis, warna = status) + pengunci kamera */}
           <div
             style={{
               position: 'absolute',
@@ -2057,19 +2062,66 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
               border: '1px solid #e2e8f0',
               borderRadius: '8px',
               boxShadow: '0 4px 12px rgba(15,23,42,0.12)',
-              padding: '0.4rem 0.55rem',
+              padding: '0.5rem 0.65rem',
               display: 'flex',
               flexDirection: 'column',
-              gap: '0.18rem',
+              gap: '0.35rem',
               fontSize: '0.68rem',
               color: '#475569',
+              maxWidth: '240px',
             }}
           >
-            <span style={{ fontWeight: 700, color: '#405189', marginBottom: '0.05rem' }}>Jenis Titik</span>
-            <span><span style={{ marginRight: 4 }}>🏦</span>KC (Cabang Utama)</span>
-            <span><span style={{ marginRight: 4 }}>🏬</span>KCP (Outlet / Sub Branch)</span>
-            <span><span style={{ marginRight: 4 }}>🏢</span>Multi-Outlet (banyak cabang 1 titik)</span>
-            <span><span style={{ marginRight: 4 }}>📮</span>Kode Pos (Data Final)</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+              <span style={{ fontWeight: 700, color: '#405189', marginBottom: '0.05rem' }}>Jenis Titik</span>
+              <span><span style={{ marginRight: 4 }}>🏦</span>KC (Cabang Utama)</span>
+              <span><span style={{ marginRight: 4 }}>🏬</span>KCP (Outlet / Sub Branch)</span>
+              <span><span style={{ marginRight: 4 }}>🏢</span>Multi-Outlet (banyak cabang 1 titik)</span>
+              <span><span style={{ marginRight: 4 }}>📮</span>Kode Pos (Data Final)</span>
+            </div>
+            <div style={{ height: 1, background: '#e2e8f0' }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+              <span style={{ fontWeight: 700, color: '#405189', marginBottom: '0.05rem' }}>Status Titik</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#0ab39c', display: 'inline-block', border: '1.5px solid #fff', flexShrink: 0 }} />
+                <span style={{ fontWeight: 600 }}>Cabang Matched</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#6366f1', display: 'inline-block', border: '1.5px solid #fff', flexShrink: 0 }} />
+                <span style={{ fontWeight: 600 }}>Cabang Master</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <span style={{ width: '11px', height: '11px', borderRadius: '50%', background: '#f06548', display: 'inline-block', border: '2px solid #fff', flexShrink: 0 }} />
+                <span style={{ fontWeight: 600 }}>Multi-Cabang (&gt;1)</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <span style={{ width: '14px', height: '3px', background: '#0ab39c', display: 'inline-block', borderRadius: '2px', flexShrink: 0 }} />
+                <span style={{ color: '#0ab39c', fontWeight: 600 }}>Garis Lengkung Match</span>
+              </div>
+            </div>
+            <div style={{ height: 1, background: '#e2e8f0' }} />
+            <button
+              type="button"
+              onClick={() => setCameraLocked((v) => !v)}
+              title={
+                cameraLocked
+                  ? 'Kamera terkunci: peta tidak otomatis bergeser/memperbesar saat memilih titik, wilayah, atau garis. Klik untuk membuka.'
+                  : 'Klik untuk mengunci posisi & zoom peta agar tidak melompat saat memilih titik.'
+              }
+              style={{
+                pointerEvents: 'auto',
+                cursor: 'pointer',
+                fontSize: '0.68rem',
+                fontWeight: 700,
+                padding: '0.3rem 0.5rem',
+                borderRadius: '6px',
+                border: cameraLocked ? '1px solid #0ab39c' : '1px solid #ced4da',
+                background: cameraLocked ? 'rgba(10,179,156,0.12)' : '#ffffff',
+                color: cameraLocked ? '#0ab39c' : '#6c757d',
+                textAlign: 'left',
+              }}
+            >
+              {cameraLocked ? '🔒 Kamera terkunci' : '🔓 Kamera bebas'}
+            </button>
           </div>
 
           {selectedPin && (
@@ -2127,42 +2179,6 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
             </div>
           )}
 
-          {/* Floating Minimalist Legend */}
-          <div
-            style={{
-              position: 'absolute',
-              bottom: '12px',
-              left: '12px',
-              background: 'rgba(255, 255, 255, 0.95)',
-              backdropFilter: 'blur(6px)',
-              padding: '0.4rem 0.75rem',
-              borderRadius: '6px',
-              border: '1px solid #e2e8f0',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-              fontSize: '0.68rem',
-              zIndex: 1000,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#0ab39c', display: 'inline-block', border: '1.5px solid #fff' }} />
-              <span style={{ color: '#495057', fontWeight: 600 }}>Cabang Matched</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#6366f1', display: 'inline-block', border: '1.5px solid #fff' }} />
-              <span style={{ color: '#495057', fontWeight: 600 }}>Cabang Master</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <span style={{ width: '11px', height: '11px', borderRadius: '50%', background: '#f06548', display: 'inline-block', border: '2px solid #fff' }} />
-              <span style={{ color: '#495057', fontWeight: 600 }}>Multi-Cabang (&gt;1)</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <span style={{ width: '14px', height: '3px', background: '#0ab39c', display: 'inline-block', borderRadius: '2px' }} />
-              <span style={{ color: '#0ab39c', fontWeight: 600 }}>Garis Lengkung Match</span>
-            </div>
-          </div>
         </div>
 
         {/* Selected Pin Side Drawer / Detail Card with Matched Data Correlation */}
@@ -2931,154 +2947,11 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         </div>
       )}
 
-      {/* Google Maps API Key Configuration Modal */}
       {showApiKeyModal && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 10000,
-            background: 'rgba(15, 23, 42, 0.65)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-          }}
-        >
-          <div
-            style={{
-              background: '#ffffff',
-              borderRadius: '12px',
-              maxWidth: '460px',
-              width: '100%',
-              padding: '1.5rem',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-              border: '1px solid #e2e8f0',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <div style={{ padding: '0.4rem', borderRadius: '8px', background: 'rgba(59, 130, 246, 0.1)', color: '#2563eb' }}>
-                  <Key size={18} />
-                </div>
-                <div>
-                  <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
-                    Google Maps Geocoding API
-                  </h4>
-                  <p style={{ margin: 0, fontSize: '0.72rem', color: '#64748b' }}>
-                    Validasi koordinat langsung ke server Google Maps
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowApiKeyModal(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1rem', fontSize: '0.75rem', color: '#334155', lineHeight: 1.5 }}>
-              <p style={{ margin: 0, marginBottom: '0.4rem' }}>
-                💡 <strong>Gratis $200/bulan dari Google Cloud</strong> (setara ~40.000 request gratis setiap bulan).
-              </p>
-              <p style={{ margin: 0, color: '#64748b' }}>
-                Jika dikosongkan, sistem secara otomatis menggunakan engine publik (ESRI / OpenStreetMap) secara gratis tanpa perlu API Key.
-              </p>
-            </div>
-
-            <div style={{ marginBottom: '1.25rem' }}>
-              <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#334155', marginBottom: '0.35rem' }}>
-                Google Maps API Key:
-              </label>
-              <input
-                type="password"
-                value={apiKeyInput}
-                onChange={(e) => setApiKeyInput(e.target.value)}
-                placeholder="AIzaSy..."
-                style={{
-                  width: '100%',
-                  padding: '0.5rem 0.75rem',
-                  fontSize: '0.82rem',
-                  borderRadius: '6px',
-                  border: '1px solid #cbd5e1',
-                  outline: 'none',
-                  fontFamily: 'monospace',
-                  boxSizing: 'border-box',
-                }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setApiKeyInput('');
-                  setStoredGoogleApiKey('');
-                  setGoogleApiKey('');
-                  setShowApiKeyModal(false);
-                }}
-                style={{
-                  padding: '0.4rem 0.75rem',
-                  fontSize: '0.74rem',
-                  fontWeight: 600,
-                  color: '#e11d48',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                Hapus Key
-              </button>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowApiKeyModal(false)}
-                  style={{
-                    padding: '0.4rem 0.85rem',
-                    fontSize: '0.74rem',
-                    fontWeight: 600,
-                    color: '#64748b',
-                    background: '#f1f5f9',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Batal
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const cleanKey = apiKeyInput.trim();
-                    setStoredGoogleApiKey(cleanKey);
-                    setGoogleApiKey(cleanKey);
-                    setShowApiKeyModal(false);
-                  }}
-                  style={{
-                    padding: '0.4rem 0.95rem',
-                    fontSize: '0.74rem',
-                    fontWeight: 600,
-                    color: '#ffffff',
-                    background: '#2563eb',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    boxShadow: '0 2px 4px rgba(37, 99, 235, 0.25)',
-                  }}
-                >
-                  Simpan & Terapkan
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <GoogleApiKeyModal
+          onClose={() => setShowApiKeyModal(false)}
+          onSaved={(kunci) => setGoogleApiKey(kunci)}
+        />
       )}
     </div>
   );
