@@ -2,7 +2,7 @@ import React, { useMemo, useState, useDeferredValue } from 'react';
 import { ClipboardCheck, Search, FileSpreadsheet, Undo2 } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import type { AnalystRow } from '../../utils/analystPipeline';
-import { formatWilayahCode } from '../../utils/excel';
+import { formatWilayahCode, applyStandardSheetStyle } from '../../utils/excel';
 
 interface FinalDataManagerProps {
   rows: AnalystRow[];
@@ -50,6 +50,12 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
   const tampil = filtered.slice((hal - 1) * PAGE_SIZE, hal * PAGE_SIZE);
 
   const handleExport = () => {
+    const columns = [
+      'No', 'Wilayah', 'Sandi Cabang', 'Branch Code', 'Kode Cabang', 'Nama Outlet', 'Status Outlet',
+      'ALAMAT', 'KODE POS', 'Kelurahan', 'Kecamatan', 'Dati II', 'Provinsi',
+      'ORGANISASI TUJUAN', 'Tipe Unit', 'QRS_CABSAL', 'QRS_CABAPV1', 'QRS_CABAPV2', 'Grand Total',
+      'Alur Wondr', '3 Role Lengkap', 'Status',
+    ];
     const data = filtered.map((r, i) => ({
       No: i + 1,
       Wilayah: r.wilayah,
@@ -62,20 +68,21 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
       'KODE POS': r.kodePosPten,
       Kelurahan: r.kelurahan,
       Kecamatan: r.kecamatan,
-      'Dati II (KOTA/KABUPATEN MAX 15 DIGIT)': r.kotaPtenMax15 || r.kotaPten,
+      'Dati II': r.kotaPtenMax15 || r.kotaPten,
       Provinsi: r.provinsi,
       'ORGANISASI TUJUAN': r.organisasiTujuan,
       'Tipe Unit': r.tipeUnit,
       QRS_CABSAL: r.roleCabsal,
       QRS_CABAPV1: r.roleCabapv1,
       QRS_CABAPV2: r.roleCabapv2,
-      'Alur Wondr': r.alurWondr,
       'Grand Total': r.roleGrandTotal,
+      'Alur Wondr': r.alurWondr,
       '3 Role Lengkap': r.is3RoleLengkap ? 'YA' : 'TIDAK',
       Status: r.isFinalApproved ? 'FINAL' : r.statusAnalisa,
     }));
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(data);
+    const ws = XLSX.utils.json_to_sheet(data, { header: columns });
+    applyStandardSheetStyle(ws, columns, data.length);
     XLSX.utils.book_append_sheet(wb, ws, 'FINAL_DATA');
     XLSX.writeFile(wb, `Final_Data_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };

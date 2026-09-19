@@ -40,7 +40,7 @@ import { PtenCityPicker } from './PtenCityPicker';
 import { CityOverrideModal } from './CityOverrideModal';
 import { ConfirmDialog } from './ConfirmDialog';
 import { formatWilayahName, cleanKelurahan, cleanKecamatan } from '../../utils/normalizer';
-import { formatWilayahCode } from '../../utils/excel';
+import { formatWilayahCode, applyStandardSheetStyle } from '../../utils/excel';
 import { exportAnalystExecutivePdf } from '../../utils/pdfExport';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
 
@@ -528,6 +528,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
         }));
 
         const ws = XLSX.utils.json_to_sheet(exportData);
+        applyStandardSheetStyle(ws, Object.keys(exportData[0] || {}), exportData.length);
         XLSX.utils.book_append_sheet(wb, ws, wKey);
       });
 
@@ -551,6 +552,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
         'Alur Wondr': r.alurWondr,
       }));
       const wsAll = XLSX.utils.json_to_sheet(allExport);
+      applyStandardSheetStyle(wsAll, Object.keys(allExport[0] || {}), allExport.length);
       XLSX.utils.book_append_sheet(wb, wsAll, 'SEMUA_DATA');
 
       XLSX.writeFile(wb, `Laporan_Final_Data_Analyst_${new Date().toISOString().slice(0, 10)}.xlsx`);

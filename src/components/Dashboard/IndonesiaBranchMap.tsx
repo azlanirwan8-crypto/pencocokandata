@@ -897,8 +897,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       let radius = 5.5;
 
       if (pin.finalStatus) {
-        // Layer Final Data: hijau beres, amber perlu review, merah anomali
-        fillColor = pin.finalStatus === 'ANOMALI' ? '#dc2626' : pin.finalStatus === 'REVIEW' ? '#f59e0b' : '#0ab39c';
+        // Layer Final Data: warna mengikuti standar app (teal=OK, amber=review, coral=anomali)
+        fillColor = pin.finalStatus === 'ANOMALI' ? '#f06548' : pin.finalStatus === 'REVIEW' ? '#f0ad4e' : '#0ab39c';
         radius = 7;
       } else if (isSelected) {
         fillColor = '#f59e0b';
@@ -935,7 +935,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
       // Instant lightweight hover tooltip
       const finalBadge = pin.finalStatus
-        ? `<div style="font-weight:700;font-size:11px;margin-top:3px;color:${pin.finalStatus === 'ANOMALI' ? '#dc2626' : pin.finalStatus === 'REVIEW' ? '#b45309' : '#0ab39c'};">
+        ? `<div style="font-weight:700;font-size:11px;margin-top:3px;color:${pin.finalStatus === 'ANOMALI' ? '#f06548' : pin.finalStatus === 'REVIEW' ? '#b45309' : '#0ab39c'};">
             ${pin.finalStatus === 'ANOMALI' ? '⛔ Anomali' : pin.finalStatus === 'REVIEW' ? '⚠️ Perlu Review' : '✓ Final · Terverifikasi'} · ${pin.finalCount?.toLocaleString('id-ID') ?? pin.branchCount.toLocaleString('id-ID')} baris
           </div>`
         : '';
@@ -1016,13 +1016,13 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           pane: 'markersPane',
           renderer: canvasRenderer,
           radius: 11,
-          fillColor: '#dc2626',
+          fillColor: '#f06548',
           color: '#ffffff',
           weight: 3,
           fillOpacity: 0.95,
         });
         anomalyMarker.bindTooltip(
-          `<strong style="color:#b91c1c;">⚠️ Anomali Final · ${selectedAnomalyRow.namaOutlet || '-'}</strong><br/>${selectedAnomalyRow.kotaPtenMax15 || selectedAnomalyRow.kotaPten || '-'}<br/>KP ${selectedAnomalyRow.kodePosPten || '-'}`,
+          `<strong style="color:#c2410c;">⚠️ Anomali Final · ${selectedAnomalyRow.namaOutlet || '-'}</strong><br/>${selectedAnomalyRow.kotaPtenMax15 || selectedAnomalyRow.kotaPten || '-'}<br/>KP ${selectedAnomalyRow.kodePosPten || '-'}`,
           { direction: 'top', className: 'bni-map-fast-tooltip' }
         );
         markersLayer.addLayer(anomalyMarker);

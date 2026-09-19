@@ -435,6 +435,47 @@ export function getDataCellStyle(col: string) {
 }
 
 /**
+ * Lebar kolom standar berdasarkan nama kolom (dipakai semua export agar seragam).
+ */
+function colWidthFor(col: string): { wch: number } {
+  const norm = col.trim().toUpperCase();
+  if (norm === 'NO') return { wch: 8 };
+  if (norm === 'WILAYAH') return { wch: 14 };
+  if (norm === 'ALAMAT') return { wch: 45 };
+  if (norm === 'CABANG' || norm === 'NAMA OUTLET' || norm === 'SANDI CABANG') return { wch: 28 };
+  if (norm === 'ORGANISASI TUJUAN' || norm === 'ALUR WONDR') return { wch: 30 };
+  if (norm === 'KODE POS' || norm === 'KODE POS PTEN') return { wch: 15 };
+  if (norm === 'CEK KODE POS + PTEN' || norm === 'VERIFIKASI PENEMPATAN' || norm === 'METODE PENEMPATAN') return { wch: 22 };
+  if (norm === 'SUMBER DATA') return { wch: 18 };
+  if (norm === 'CEK DUPLIKAT KODE POS') return { wch: 24 };
+  return { wch: Math.max(col.length + 3, 16) };
+}
+
+/**
+ * Terapkan pewarnaan header + kerapian baris + lebar kolom STANDAR ke worksheet apa pun,
+ * supaya semua export (Master, Target, Analisa, Final Data) memakai satu bahasa warna:
+ * navy=identitas cabang, hijau=alamat/admin, oranye=Dati II, kuning=PTEN/verifikasi/role.
+ */
+export function applyStandardSheetStyle(
+  worksheet: XLSX.WorkSheet,
+  columns: string[],
+  rowCount: number
+): void {
+  columns.forEach((col, cIdx) => {
+    const ref = XLSX.utils.encode_cell({ r: 0, c: cIdx });
+    if (worksheet[ref]) worksheet[ref].s = getHeaderStyle(col);
+  });
+  for (let rIdx = 1; rIdx <= rowCount; rIdx++) {
+    columns.forEach((col, cIdx) => {
+      const ref = XLSX.utils.encode_cell({ r: rIdx, c: cIdx });
+      if (worksheet[ref]) worksheet[ref].s = getDataCellStyle(col);
+    });
+  }
+  worksheet['!rows'] = [{ hpt: 26 }];
+  worksheet['!cols'] = columns.map(colWidthFor);
+}
+
+/**
  * Helper untuk membuat worksheet Excel dari baris TargetRow dengan pewarnaan asli
  */
 function createTargetWorksheet(rows: TargetRow[], exportColumns: string[]): XLSX.WorkSheet {
