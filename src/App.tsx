@@ -972,6 +972,8 @@ export const App: React.FC = () => {
                   cityOverrides={cityOverrides}
                   onApproveCityOverride={handleApproveCityOverride}
                   onRemoveCityOverride={handleRemoveCityOverride}
+                  masterRows={masterRows}
+                  roleMappingList={roleMappingList}
                 />
               )}
             </div>

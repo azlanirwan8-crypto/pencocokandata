@@ -554,6 +554,55 @@ export function calculateCityMatchScore(textA: string, textB: string): { score: 
 // 🚀 PIPELINE ANALISIS 3 FASE BERBASIS 100% DATA MASTER
 // ─────────────────────────────────────────────────────────────────────────────
 
+// 🏢 Helper UI Fase 2: hitung ulang mapping role & Wondr (Fase 3) untuk satu nama
+// outlet — dipakai grid saat operator mengganti outlet lewat rekomendasi terdekat,
+// supaya field Fase 3 baris itu tetap konsisten dengan rumus pipeline.
+export function matchRoleForOutlet(namaOutlet: string, cityKey: string, roleMappingList: RoleMappingRecord[]) {
+  const preCleanedRoles = roleMappingList.map((r) => ({ record: r, orgClean: cleanAndStandardizeText(r.organisasiTujuan) }));
+  let matchedRole: RoleMappingRecord | null = null;
+  let highestRoleScore = 0;
+  let chosenAlgorithm = 'Direct Master Join';
+  const outletNameToMatch = cleanAndStandardizeText(namaOutlet);
+  for (const { record: roleItem, orgClean } of preCleanedRoles) {
+    const { score, algorithm } = calculateUnifiedPrecisionScore(outletNameToMatch, orgClean);
+    if (score > highestRoleScore && score >= 0.75) {
+      highestRoleScore = score;
+      matchedRole = roleItem;
+      chosenAlgorithm = algorithm;
+    }
+  }
+  if (!matchedRole && roleMappingList.length > 0) {
+    const cityKeywords = cityKey.split(/\s+/).filter((w) => w.length > 2);
+    for (const keyword of cityKeywords) {
+      const found = preCleanedRoles.find(({ orgClean }) => orgClean.includes(keyword.toUpperCase()) || orgClean.includes(keyword));
+      if (found) { matchedRole = found.record; highestRoleScore = 0.85; chosenAlgorithm = 'Geographic City Keyword Match'; break; }
+    }
+    if (!matchedRole) { matchedRole = roleMappingList[0]; highestRoleScore = 0.70; chosenAlgorithm = 'Default Fallback (First Available)'; }
+  }
+  const organisasiTujuan = matchedRole?.organisasiTujuan || `${namaOutlet.toUpperCase()} BRANCH OFFICE`;
+  const isKc = matchedRole ? getUnitCategory(matchedRole.organisasiTujuan) === 'KC' : true;
+  const tipeUnit: 'KC' | 'KCP' | 'OUTLET' = isKc ? 'KC' : 'KCP';
+  const roleCabsal = matchedRole ? matchedRole.qrsCabsal : 1;
+  const roleCabapv1 = matchedRole ? matchedRole.qrsCabapv1 : isKc ? 1 : 0;
+  const roleCabapv2 = matchedRole ? matchedRole.qrsCabapv2 : 1;
+  const is3RoleLengkap = roleCabsal === 1 && roleCabapv1 === 1 && roleCabapv2 === 1;
+  const wondr = matchedRole ? getWondrRecommendation(matchedRole) : null;
+  const alurWondr = wondr?.tier || (is3RoleLengkap ? 'Tier 1: Full Approval KC' : 'Tier 2: Dual Approval KCP via KC');
+  const flowDescription = wondr?.desc || (is3RoleLengkap ? 'Semua role lengkap (Sales, Verifikator, Penyetuju) berada pada 1 unit mandiri.' : 'Role Verifikator/Penyetuju dialihkan ke KC Pengampu dalam 1 pulau.');
+  const confidenceScore = Math.min(100, Math.round(highestRoleScore * 100));
+  let statusAnalisa: 'EXACT_MATCH' | 'HIGH_CONFIDENCE' | 'PERLU_REVIEW' | 'ANOMALI' = 'EXACT_MATCH';
+  if (confidenceScore >= 90) statusAnalisa = 'EXACT_MATCH';
+  else if (confidenceScore >= 75) statusAnalisa = 'HIGH_CONFIDENCE';
+  else if (confidenceScore >= 60) statusAnalisa = 'PERLU_REVIEW';
+  else statusAnalisa = 'ANOMALI';
+  return {
+    organisasiTujuan, tipeUnit, roleCabsal, roleCabapv1, roleCabapv2,
+    roleGrandTotal: matchedRole?.grandTotal || (is3RoleLengkap ? 3 : 2),
+    is3RoleLengkap, alurWondr, flowDescription, confidenceScore,
+    matchingAlgorithm: chosenAlgorithm, statusAnalisa,
+  };
+}
+
 export interface PipelineProgressCallback {
   (phase: 1 | 2 | 3, percent: number, processed: number, total: number, message: string): void;
 }

@@ -17,14 +17,19 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Lock,
+  Info,
 } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import type { AnalystRow, AnalystCoverage } from '../../utils/analystPipeline';
-import { cityMatchKey } from '../../utils/analystPipeline';
+import { cityMatchKey, matchRoleForOutlet } from '../../utils/analystPipeline';
 import type { KodePosRow } from '../../utils/neonSync';
 import type { PTENRecord } from '../PTENData/PTENManager';
-import type { WilayahSetting } from '../../types';
+import type { MasterRow, TargetRow, WilayahSetting } from '../../types';
+import type { RoleMappingRecord } from '../RoleMapping/RoleMappingManager';
+import { buildMasterProximityIndex, findClosestMasterRecommendation, type CandidateOption, type RecommendationResult } from '../../utils/recommender';
+import { extractWilayahFromBranchCode } from '../../utils/normalizer';
 import { AnalystRowEditModal } from './AnalystRowEditModal';
+import { CandidateDetailModal } from './CandidateDetailModal';
 import { PtenCityPicker } from './PtenCityPicker';
 import { CityOverrideModal } from './CityOverrideModal';
 import { formatWilayahName } from '../../utils/normalizer';
@@ -48,6 +53,8 @@ interface AnalystResultsGridProps {
   cityOverrides?: Record<string, string>;
   onApproveCityOverride?: (masterCity: string, ptenKota: string) => void;
   onRemoveCityOverride?: (masterKey: string) => void;
+  masterRows?: MasterRow[];
+  roleMappingList?: RoleMappingRecord[];
 }
 
 export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
@@ -66,6 +73,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   cityOverrides = {},
   onApproveCityOverride,
   onRemoveCityOverride,
+  masterRows = [],
+  roleMappingList = [],
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'all' | 'fase1' | 'fase2' | 'fase3'>('fase1');
   const [selectedWilayah, setSelectedWilayah] = useState<string>('ALL');
@@ -75,6 +84,17 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ANOMALI' | 'EXACT_MATCH' | 'HIGH_CONFIDENCE' | 'PENEMPATAN_REVIEW'>('ALL');
   // Inner tab pada Fase 1: data yang teranalisa vs yang perlu analisa manual
   const [fase1Inner, setFase1Inner] = useState<'DIANALISA' | 'TIDAK_ANALISA'>('DIANALISA');
+  // Inner tab pada Fase 2: outlet tervalidasi otomatis (cabang fill-in masuk Top-3
+  // rekomendasi jarak terdekat) vs yang butuh validasi manual operator
+  const [fase2Inner, setFase2Inner] = useState<'VALID' | 'MANUAL'>('VALID');
+  // Pilihan kandidat aktif per baris (rank 1-3) + modal detail kandidat
+  const [fase2Choice, setFase2Choice] = useState<Record<string, number>>({});
+  const [fase2Detail, setFase2Detail] = useState<{
+    row: AnalystRow;
+    target: TargetRow;
+    rec: RecommendationResult;
+    chosen: CandidateOption;
+  } | null>(null);
 
   // Pagination states
   const [page, setPage] = useState<number>(1);
@@ -121,6 +141,103 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   const masterRowsForCity = (cityRaw: string): KodePosRow[] => {
     const key = cityMatchKey(cityRaw);
     return kodePosRows.filter((r) => cityMatchKey(r.kabupatenKota) === key);
+  };
+
+  // ── FASE 2: 3 rekomendasi outlet terdekat (engine lama recommender.ts, dipakai ulang) ──
+  const masterIndex = useMemo(
+    () => (masterRows.length > 0 ? buildMasterProximityIndex(masterRows) : null),
+    [masterRows]
+  );
+  // Cache per kota: rekomendasi hanya dihitung ulang bila field Fase 2 kota itu berubah
+  const fase2RecCacheRef = useRef(new Map<string, { sig: string; rec: RecommendationResult | null }>());
+  const fase2Recs = useMemo(() => {
+    const m = new Map<string, { rec: RecommendationResult | null; target: TargetRow }>();
+    if (!masterIndex) return m;
+    const cache = fase2RecCacheRef.current;
+    rows.forEach((r) => {
+      if (r.kategori === 'TIDAK_ANALISA') return;
+      const ck = cityMatchKey(r.groupKota);
+      if (!ck || m.has(ck)) return;
+      const target = {
+        No: r.no,
+        Wilayah: r.wilayah,
+        'Sandi Cabang': r.sandiCabang,
+        'Branch Code': r.branchCode,
+        'Kode Cabang': r.kodeCabang,
+        'Nama Outlet': r.namaOutlet,
+        'Status Outlet': r.statusOutlet,
+        ALAMAT: r.alamat,
+        'KODE POS': r.kodePosPten,
+        Kelurahan: r.kelurahan,
+        Kecamatan: r.kecamatan,
+        'Dati II': r.groupKota,
+        'Kode Dati II': '',
+        Provinsi: r.provinsi,
+        _originalFilledSandiCabang: r.sandiCabang,
+        _originalFilledNamaOutlet: r.namaOutlet,
+      } as unknown as TargetRow;
+      const sig = `${r.sandiCabang}|${r.namaOutlet}|${r.branchCode}`;
+      const cached = cache.get(ck);
+      let rec: RecommendationResult | null;
+      if (cached && cached.sig === sig) {
+        rec = cached.rec;
+      } else {
+        try {
+          rec = findClosestMasterRecommendation(target, masterIndex);
+        } catch {
+          rec = null;
+        }
+        cache.set(ck, { sig, rec });
+      }
+      m.set(ck, { rec, target });
+    });
+    return m;
+  }, [rows, masterIndex]);
+  // "Sudah tervalidasi" = cabang yang terlanjur terisi di data ikut masuk Top-3
+  // rekomendasi jarak (audit flow lama); selain itu → validasi manual operator.
+  const fase2ValidCities = useMemo(() => {
+    const s = new Set<string>();
+    fase2Recs.forEach((v, k) => {
+      const st = v.rec?.userPrefilledAudit?.status;
+      if (st === 'match_top1' || st === 'match_top2' || st === 'match_top3') s.add(k);
+    });
+    return s;
+  }, [fase2Recs]);
+  const [fase2Counts, fase2ValidCount] = useMemo(() => {
+    let valid = 0;
+    let total = 0;
+    rows.forEach((r) => {
+      if (r.kategori === 'TIDAK_ANALISA') return;
+      total++;
+      if (fase2ValidCities.has(cityMatchKey(r.groupKota))) valid++;
+    });
+    return [{ total, valid } as const, valid];
+  }, [rows, fase2ValidCities]);
+  const fase2ManualCount = fase2Counts.total - fase2ValidCount;
+
+  const applyFase2Candidate = (r: AnalystRow, master: MasterRow) => {
+    const branchCode = String(master['Branch Code'] || master['Kode Cabang'] || '').trim();
+    const resolved = extractWilayahFromBranchCode(branchCode, wilayahSettings, r.wilayah);
+    const sandiCabang = String(
+      master['Sandi Cabang'] ||
+        (master.Sandi && master.Cabang ? `${master.Sandi} - ${master.Cabang}` : master.Cabang || master.Sandi || r.sandiCabang)
+    );
+    const namaOutlet = String(master['Nama Outlet'] || master.Cabang || r.namaOutlet);
+    const role = matchRoleForOutlet(namaOutlet, cityMatchKey(r.groupKota), roleMappingList);
+    onUpdateRow({
+      ...r,
+      wilayah: resolved.wilayahName !== '-' ? resolved.wilayahName : r.wilayah,
+      sandiCabang,
+      branchCode,
+      kodeCabang: String(master['Kode Cabang'] || branchCode),
+      namaOutlet,
+      statusOutlet: String(master['Status Outlet'] || r.statusOutlet || 'Aktif'),
+      alamat: String(master.ALAMAT || r.alamat),
+      ...role,
+      isFinalApproved: role.statusAnalisa === 'EXACT_MATCH' ? r.isFinalApproved : false,
+      editedManually: true,
+    });
+    showToast(`Baris #${r.no}: outlet diganti ke ${namaOutlet} — wilayah & role dihitung ulang`);
   };
 
   const openOverrideModal = (masterCity: string) => {
@@ -235,6 +352,12 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       } else if (r.kategori === 'TIDAK_ANALISA' && fase1Inner !== 'TIDAK_ANALISA') return false;
       else if (r.kategori !== 'TIDAK_ANALISA' && fase1Inner === 'TIDAK_ANALISA') return false;
 
+      // Fase 2: pisahkan outlet tervalidasi otomatis vs yang butuh validasi manual
+      if (viewTab === 'fase2') {
+        const valid = fase2ValidCities.has(cityMatchKey(r.groupKota));
+        if (fase2Inner === 'VALID' ? !valid : valid) return false;
+      }
+
       if (r.kategori !== 'TIDAK_ANALISA' && selectedWilayah !== 'ALL' && r.wilayah !== selectedWilayah) return false;
       if (statusFilter === 'ANOMALI' && r.statusAnalisa !== 'ANOMALI' && r.statusAnalisa !== 'PERLU_REVIEW') return false;
       if (statusFilter === 'EXACT_MATCH' && r.statusAnalisa !== 'EXACT_MATCH') return false;
@@ -260,7 +383,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       }
       return true;
     });
-  }, [rows, selectedWilayah, statusFilter, deferredSearch, viewTab, fase1Inner]);
+  }, [rows, selectedWilayah, statusFilter, deferredSearch, viewTab, fase1Inner, fase2Inner, fase2ValidCities]);
 
   // Pagination calculation
   const totalPages = pageSize === 'ALL' ? 1 : Math.max(1, Math.ceil(filteredRows.length / pageSize));
@@ -279,7 +402,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
 
   useEffect(() => {
     tableScrollRef.current?.scrollTo({ top: 0 });
-  }, [page, pageSize, selectedWilayah, statusFilter, viewTab, fase1Inner, deferredSearch]);
+  }, [page, pageSize, selectedWilayah, statusFilter, viewTab, fase1Inner, fase2Inner, deferredSearch]);
 
   // Export Multi-Sheet per Wilayah (W01 - W17)
   const handleExportExcel = () => {
@@ -948,6 +1071,46 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
           </div>
         )}
 
+        {/* Inner tab khusus Fase 2: outlet tervalidasi jarak vs validasi manual */}
+        {viewTab === 'fase2' && (
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {([
+              { key: 'VALID', label: `✅ Sudah Tervalidasi (${fase2ValidCount.toLocaleString('id-ID')})`, color: '#0ab39c' },
+              { key: 'MANUAL', label: `✋ Validasi Manual (${fase2ManualCount.toLocaleString('id-ID')})`, color: '#f0ad4e' },
+            ] as const).map((t) => {
+              const active = fase2Inner === t.key;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => {
+                    setFase2Inner(t.key);
+                    setPage(1);
+                  }}
+                  style={{
+                    background: active ? t.color : '#ffffff',
+                    color: active ? '#ffffff' : '#495057',
+                    border: `1px solid ${active ? t.color : '#d5dde3'}`,
+                    borderRadius: '6px',
+                    padding: '0.4rem 0.9rem',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+            {fase2Inner === 'MANUAL' && (
+              <span style={{ alignSelf: 'center', fontSize: '0.76rem', color: '#878a99' }}>
+                Cabang terisi tidak masuk 3 outlet terdekat — pilih kandidat di kolom Rekomendasi lalu "Gunakan Cabang Ini", atau Revisi manual.
+              </span>
+            )}
+          </div>
+        )}
+
         <div ref={tableScrollRef} className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', maxHeight: '600px', overflow: 'auto' }}>
           <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
@@ -1007,6 +1170,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                   <th style={{ minWidth: '180px' }}>Nama Outlet Master</th>
                   <th style={{ width: '80px', textAlign: 'center' }}>Status</th>
                   <th style={{ minWidth: '220px' }}>ALAMAT Cabang</th>
+                  <th style={{ minWidth: '240px', textAlign: 'center' }}>📍 Rekomendasi 3 Outlet Terdekat</th>
                   <th style={{ width: '95px', textAlign: 'center' }}>Aksi Review</th>
                 </tr>
               )}
@@ -1133,6 +1297,79 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                             <span className="badge badge-match">{r.statusOutlet}</span>
                           </td>
                           <td title={r.alamat}>{r.alamat}</td>
+                          {(() => {
+                            const entry = fase2Recs.get(cityMatchKey(r.groupKota));
+                            const cands = entry?.rec?.candidates || [];
+                            if (!cands.length || !entry) return <td style={{ textAlign: 'center', color: '#adb5bd' }}>—</td>;
+                            const chosenRank = fase2Choice[r.id] || entry.rec!.userPrefilledAudit?.matchedRank || 1;
+                            return (
+                              <td>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.18rem' }}>
+                                  {cands.map((c) => {
+                                    const active = chosenRank === c.rank;
+                                    const color = c.rank === 1 ? '#0ab39c' : c.rank === 2 ? '#d97706' : '#3577f1';
+                                    return (
+                                      <button
+                                        key={c.rank}
+                                        type="button"
+                                        title={`${c.reason || ''}${c.distanceBasis ? ` · dasar jarak: ${c.distanceBasis}` : ''}`}
+                                        onClick={() => setFase2Choice((p) => ({ ...p, [r.id]: c.rank }))}
+                                        style={{
+                                          display: 'flex',
+                                          gap: '0.35rem',
+                                          alignItems: 'center',
+                                          justifyContent: 'space-between',
+                                          padding: '0.15rem 0.4rem',
+                                          fontSize: '0.68rem',
+                                          borderRadius: '4px',
+                                          cursor: 'pointer',
+                                          border: active ? `1px solid ${color}` : '1px dashed #d5dce8',
+                                          background: active ? `${color}18` : '#fff',
+                                          color: active ? color : '#495057',
+                                          fontWeight: active ? 700 : 500,
+                                          textAlign: 'left',
+                                        }}
+                                      >
+                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px' }}>
+                                          #{c.rank} {c.master['Nama Outlet'] || c.master.Cabang || c.master['Sandi Cabang']}
+                                        </span>
+                                        <span style={{ whiteSpace: 'nowrap' }}>
+                                          {c.score}% · {c.formattedDistance || '-'}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setFase2Detail({
+                                        row: r,
+                                        target: entry.target,
+                                        rec: entry.rec!,
+                                        chosen: cands.find((c) => c.rank === chosenRank) || cands[0],
+                                      })
+                                    }
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      gap: '0.25rem',
+                                      padding: '0.15rem 0.4rem',
+                                      fontSize: '0.68rem',
+                                      fontWeight: 700,
+                                      border: '1px solid rgba(64, 81, 137, 0.3)',
+                                      borderRadius: '4px',
+                                      background: 'rgba(64, 81, 137, 0.08)',
+                                      color: '#405189',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    <Info size={11} /> Detail &amp; Rute Maps
+                                  </button>
+                                </div>
+                              </td>
+                            );
+                          })()}
                         </>
                       )}
 
@@ -1203,14 +1440,14 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                               </button>
                             );
                           })()}
-                          {viewTab === 'fase1' && (
+                          {(viewTab === 'fase1' || viewTab === 'fase2') && (
                             <button
                               type="button"
                               onClick={() => {
                                 setEditingRow(r);
                                 setIsEditModalOpen(true);
                               }}
-                              title="Edit / Revisi Manual Baris Fase 1 Ini"
+                              title="Edit / Revisi Manual Baris Ini"
                               style={{
                                 background: 'rgba(64, 81, 137, 0.1)',
                                 border: '1px solid rgba(64, 81, 137, 0.3)',
@@ -1323,6 +1560,27 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
         }}
         wilayahSettings={wilayahSettings}
         phase={viewTab === 'all' ? 'final' : viewTab}
+      />
+
+      {/* Modal detail kandidat outlet Fase 2 (engine rekomendasi lama) */}
+      <CandidateDetailModal
+        isOpen={fase2Detail !== null}
+        onClose={() => setFase2Detail(null)}
+        wilayahSettings={wilayahSettings}
+        data={
+          fase2Detail
+            ? {
+                targetRow: fase2Detail.target,
+                candidate: fase2Detail.chosen,
+                allCandidates: fase2Detail.rec.candidates,
+                recommendationReason: fase2Detail.rec.reason,
+              }
+            : null
+        }
+        onApprove={(_no, master) => {
+          if (fase2Detail) applyFase2Candidate(fase2Detail.row, master);
+          setFase2Detail(null);
+        }}
       />
 
       {/* Modal Setujui Pemetaan Kota Manual */}
