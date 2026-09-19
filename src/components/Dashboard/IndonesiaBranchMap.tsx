@@ -50,6 +50,28 @@ import {
 } from '../../utils/onlineGeoCoder';
 import { get, keys } from 'idb-keyval';
 import { cleanDati, cleanProvinsi } from '../../utils/normalizer';
+import { getUnitCategory } from '../RoleMapping/RoleMappingManager';
+
+// ── Ikon penanda peta: bentuk = JENIS titik, warna = STATUS (agar user langsung tahu
+//    "ini KC / KCP / Kode Pos / Multi-Outlet" tanpa harus klik). ──
+type PinKind = 'KODEPOS' | 'KC' | 'KCP' | 'MULTI';
+const PIN_GLYPH: Record<PinKind, string> = { KODEPOS: '📮', KC: '🏦', KCP: '🏬', MULTI: '🏢' };
+const PIN_LABEL: Record<PinKind, string> = { KODEPOS: 'Kode Pos', KC: 'KC (Cabang)', KCP: 'KCP (Outlet)', MULTI: 'Multi-Outlet' };
+
+function makePinIcon(kind: PinKind, color: string, selected: boolean): L.DivIcon {
+  const size = selected ? 36 : 28;
+  const glyph = PIN_GLYPH[kind];
+  const html =
+    `<div class="bni-map-pin${selected ? ' bni-map-pin--selected' : ''}" style="--pin:${color};width:${size}px;height:${size}px;">` +
+    `<span class="bni-map-pin__glyph">${glyph}</span></div>`;
+  return L.divIcon({
+    html,
+    className: 'bni-map-pin-wrap',
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size],
+    tooltipAnchor: [0, -size + 4],
+  });
+}
 
 interface IndonesiaBranchMapProps {
   masterRows: MasterRow[];
@@ -872,6 +894,9 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
     markersLayer.clearLayers();
     const overlapCounts = new Map<string, number>();
+    // Ikon DOM dipakai untuk jumlah pin wajar; bila sangat banyak, kembali ke lingkaran
+    // canvas agar peta tetap ringan (bentuk diganti, tapi warna tetap membedakan).
+    const useIcons = filteredPins.length <= 1200;
 
     if (selectedPin) {
       const selectedHalo = L.circleMarker([selectedPin.lat, selectedPin.lng], {
@@ -893,6 +918,15 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       const isMulti = isMultiOutletPin(pin);
       const hasMatch = pin.matchedCount > 0;
       const isSelected = selectedPin?.id === pin.id;
+
+      // Jenis titik → ikon; status → warna.
+      const kind: PinKind = pin.finalStatus
+        ? 'KODEPOS'
+        : isMulti
+        ? 'MULTI'
+        : getUnitCategory(pin.primaryOutletName) === 'KC'
+        ? 'KC'
+        : 'KCP';
 
       // Color coding:
       // - Selected Pin: Glowing Golden Amber / Cyan Halo
@@ -929,16 +963,22 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         ? [pin.lat, pin.lng]
         : [pin.lat + Math.sin(overlappingIndex * 2.4) * 0.002, pin.lng + Math.cos(overlappingIndex * 2.4) * 0.002];
 
-      const marker = L.circleMarker(visualCoords, {
-        pane: 'markersPane',
-        renderer: canvasRenderer,
-        radius,
-        fillColor,
-        color: strokeColor,
-        weight: isSelected ? 3.5 : (isMulti ? 2.5 : 1.8),
-        opacity: 1,
-        fillOpacity: isSelected ? 1 : (hasMatch ? 0.95 : 0.85),
-      });
+      const marker = useIcons
+        ? L.marker(visualCoords, {
+            pane: 'markersPane',
+            icon: makePinIcon(kind, fillColor, isSelected),
+            zIndexOffset: isSelected ? 1000 : 0,
+          })
+        : L.circleMarker(visualCoords, {
+            pane: 'markersPane',
+            renderer: canvasRenderer,
+            radius,
+            fillColor,
+            color: strokeColor,
+            weight: isSelected ? 3.5 : (isMulti ? 2.5 : 1.8),
+            opacity: 1,
+            fillOpacity: isSelected ? 1 : (hasMatch ? 0.95 : 0.85),
+          });
 
       // Instant lightweight hover tooltip
       const finalBadge = pin.finalStatus
@@ -949,6 +989,9 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       const tooltipContent = `
         <div style="font-family:inherit;font-size:11.5px;padding:3px 5px;line-height:1.4;">
           <div style="font-weight:700;color:#212529;display:flex;align-items:center;gap:4px;">
+            <span>${PIN_GLYPH[kind]} ${PIN_LABEL[kind]}</span>
+          </div>
+          <div style="color:#212529;font-size:11px;margin-top:1px;">
             <span>${pin.primaryOutletName}</span>
           </div>
           <div style="color:#6c757d;font-size:10.5px;margin-top:2px;">
@@ -1994,6 +2037,33 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         {/* Leaflet Hardware Canvas Map */}
         <div className="bni-map-container" style={{ position: 'relative' }}>
           <div ref={mapContainerRef} style={{ width: '100%', height: '580px', borderRadius: '6px', cursor: 'default' }} />
+
+          {/* Legenda bentuk penanda (bentuk = jenis, warna = status) */}
+          <div
+            style={{
+              position: 'absolute',
+              left: '12px',
+              bottom: '12px',
+              zIndex: 900,
+              pointerEvents: 'none',
+              background: 'rgba(255,255,255,0.95)',
+              border: '1px solid #e2e8f0',
+              borderRadius: '8px',
+              boxShadow: '0 4px 12px rgba(15,23,42,0.12)',
+              padding: '0.4rem 0.55rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.18rem',
+              fontSize: '0.68rem',
+              color: '#475569',
+            }}
+          >
+            <span style={{ fontWeight: 700, color: '#405189', marginBottom: '0.05rem' }}>Jenis Titik</span>
+            <span><span style={{ marginRight: 4 }}>🏦</span>KC (Cabang Utama)</span>
+            <span><span style={{ marginRight: 4 }}>🏬</span>KCP (Outlet / Sub Branch)</span>
+            <span><span style={{ marginRight: 4 }}>🏢</span>Multi-Outlet (banyak cabang 1 titik)</span>
+            <span><span style={{ marginRight: 4 }}>📮</span>Kode Pos (Data Final)</span>
+          </div>
 
           {selectedPin && (
             <div

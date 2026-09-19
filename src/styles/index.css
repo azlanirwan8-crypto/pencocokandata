@@ -1337,6 +1337,58 @@ body {
   border-top-color: rgba(255, 255, 255, 0.98) !important;
 }
 
+/* Penanda peta berbasis ikon: bentuk = jenis titik, warna = status */
+.bni-map-pin-wrap {
+  background: transparent;
+  border: none;
+}
+
+.bni-map-pin {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--pin, #6366f1);
+  border: 2px solid #ffffff;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.35);
+  animation: bniPinDrop 0.26s ease-out;
+}
+
+.bni-map-pin__glyph {
+  transform: rotate(45deg);
+  font-size: 13px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
+}
+
+.bni-map-pin--selected {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.35), 0 4px 10px rgba(15, 23, 42, 0.42);
+}
+
+.bni-map-pin--selected .bni-map-pin__glyph {
+  font-size: 16px;
+}
+
+@keyframes bniPinDrop {
+  from {
+    transform: rotate(-45deg) translate(-6px, -12px);
+    opacity: 0;
+  }
+  to {
+    transform: rotate(-45deg) translate(0, 0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bni-map-pin {
+    animation: none;
+  }
+}
+
 /* Animated Flowing Curved Lines (Trajectory Arcs) */
 @keyframes flowDash {
   to {
