@@ -38,6 +38,7 @@ import { AnalystRowEditModal } from './AnalystRowEditModal';
 import { CandidateDetailModal } from './CandidateDetailModal';
 import { PtenCityPicker } from './PtenCityPicker';
 import { CityOverrideModal } from './CityOverrideModal';
+import { ConfirmDialog } from './ConfirmDialog';
 import { formatWilayahName, cleanKelurahan, cleanKecamatan } from '../../utils/normalizer';
 import { formatWilayahCode } from '../../utils/excel';
 import { exportAnalystExecutivePdf } from '../../utils/pdfExport';
@@ -103,6 +104,9 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   } | null>(null);
   // Pilihan role mapping per baris Fase 3 (index kandidat 0-2)
   const [fase3RoleChoice, setFase3RoleChoice] = useState<Record<string, number>>({});
+
+  // Dialog konfirmasi sebelum menyetujui tiap fase / final analisa
+  const [confirmKind, setConfirmKind] = useState<null | 'fase1' | 'fase2' | 'fase3' | 'final'>(null);
 
   // Pagination states
   const [page, setPage] = useState<number>(1);
@@ -305,6 +309,26 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   const showToast = (message: string, type: 'success' | 'info' = 'success') => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 4000);
+  };
+
+  // Jalankan aksi setujui setelah operator mengonfirmasi dialog
+  const handleConfirmApprove = () => {
+    if (confirmKind === 'fase1') {
+      onApproveFase(1);
+      setActiveSubTab('fase2');
+      showToast('Fase 1 disetujui — Fase 2 (Wilayah & Cabang) kini terbuka untuk direview!');
+    } else if (confirmKind === 'fase2') {
+      onApproveFase(2);
+      setActiveSubTab('fase3');
+      showToast('Fase 2 disetujui — Fase 3 (Mapping Role & Wondr) kini terbuka untuk direview!');
+    } else if (confirmKind === 'fase3') {
+      onApproveFase(3);
+      setActiveSubTab('all');
+      showToast('Fase 3 disetujui — Data Final kini terbuka!');
+    } else if (confirmKind === 'final') {
+      onApproveAllFinal();
+    }
+    setConfirmKind(null);
   };
 
   // Unique Wilayah list for filter
@@ -772,7 +796,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
             <button
               type="button"
               className="btn btn-outline btn-sm"
-              onClick={() => { onApproveFase(1); setActiveSubTab('fase2'); showToast('Fase 1 disetujui — Fase 2 (Wilayah & Cabang) kini terbuka untuk direview!'); }}
+              onClick={() => setConfirmKind('fase1')}
               disabled={isProcessing || phaseState.fase1Done}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.65rem', fontSize: '0.74rem', color: phaseState.fase1Done ? '#0ab39c' : '#299cdb', borderColor: phaseState.fase1Done ? 'rgba(10, 179, 156, 0.35)' : 'rgba(41, 156, 219, 0.3)' }}
               title={phaseState.fase1Done ? 'Fase 1 sudah disetujui' : 'Setujui seluruh hasil analisa Fase 1 dan buka Fase 2'}
@@ -783,7 +807,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
             <button
               type="button"
               className="btn btn-outline btn-sm"
-              onClick={() => { onApproveFase(2); setActiveSubTab('fase3'); showToast('Fase 2 disetujui — Fase 3 (Mapping Role & Wondr) kini terbuka untuk direview!'); }}
+              onClick={() => setConfirmKind('fase2')}
               disabled={isProcessing || !phaseState.fase1Done || phaseState.fase2Done}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.65rem', fontSize: '0.74rem', color: phaseState.fase2Done ? '#0ab39c' : !phaseState.fase1Done ? '#a2a7b0' : '#405189', borderColor: phaseState.fase2Done ? 'rgba(10, 179, 156, 0.35)' : 'rgba(64, 81, 137, 0.3)' }}
               title={phaseState.fase2Done ? 'Fase 2 sudah disetujui' : !phaseState.fase1Done ? 'Terkunci — setujui Fase 1 terlebih dahulu' : 'Setujui seluruh hasil analisa Fase 2 dan buka Fase 3'}
@@ -794,7 +818,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
             <button
               type="button"
               className="btn btn-outline btn-sm"
-              onClick={() => { onApproveFase(3); setActiveSubTab('all'); showToast('Fase 3 disetujui — Data Final kini terbuka!'); }}
+              onClick={() => setConfirmKind('fase3')}
               disabled={isProcessing || !phaseState.fase2Done || phaseState.fase3Done}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.65rem', fontSize: '0.74rem', color: phaseState.fase3Done ? '#0ab39c' : !phaseState.fase2Done ? '#a2a7b0' : '#0ab39c', borderColor: 'rgba(10, 179, 156, 0.3)' }}
               title={phaseState.fase3Done ? 'Fase 3 sudah disetujui' : !phaseState.fase2Done ? 'Terkunci — setujui Fase 2 terlebih dahulu' : 'Setujui seluruh hasil analisa Fase 3 dan buka Data Final'}
@@ -807,7 +831,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
           <button
             type="button"
             className="btn btn-success btn-sm"
-            onClick={onApproveAllFinal}
+            onClick={() => setConfirmKind('final')}
             disabled={isProcessing || !phaseState.fase3Done || stats.isAllApproved}
             title={!phaseState.fase3Done ? 'Terkunci — setujui Fase 3 terlebih dahulu' : 'Setujui seluruh baris sebagai Final Analisa'}
             style={{
@@ -1858,6 +1882,64 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
           onApproveCityOverride(masterCity, ptenKota);
         }}
       />
+
+      {/* Dialog konfirmasi — wajib sebelum menyetujui Fase 1/2/3 & Final Analisa */}
+      {(() => {
+        const n = stats.total.toLocaleString('id-ID');
+        const cfg = {
+          fase1: {
+            accent: '#299cdb',
+            icon: <MapPin size={20} />,
+            title: 'Setujui Hasil Fase 1?',
+            msg: `Anda akan menyetujui ${n} baris hasil Fase 1 (PTEN & Kode Pos) dan lanjut ke Fase 2 — Wilayah & Master Cabang.`,
+            detail: stats.unanalysed > 0
+              ? `Masih ada ${stats.unanalysed.toLocaleString('id-ID')} baris kota yang belum terpetakan ("Perlu Analisa Manual"). Baris itu tidak ikut disetujui dan tetap tertinggal di Fase 1.`
+              : undefined,
+            confirm: 'Ya, Setujui & Lanjut ke Fase 2',
+          },
+          fase2: {
+            accent: '#405189',
+            icon: <Building2 size={20} />,
+            title: 'Setujui Hasil Fase 2?',
+            msg: `Anda akan menyetujui ${n} baris penempatan outlet ke cabang terdekat (Fase 2) dan lanjut ke Fase 3 — Mapping Role & Wondr.`,
+            detail: stats.placementReview > 0
+              ? `Masih ada ${stats.placementReview.toLocaleString('id-ID')} baris dengan penempatan berstatus "Perlu Review". Pastikan jarak & wilayahnya sudah benar sebelum lanjut.`
+              : undefined,
+            confirm: 'Ya, Setujui & Lanjut ke Fase 3',
+          },
+          fase3: {
+            accent: '#0ab39c',
+            icon: <Users size={20} />,
+            title: 'Setujui Hasil Fase 3?',
+            msg: `Anda akan menyetujui ${n} baris mapping role & alur Wondr (Fase 3) dan membuka tab Data Final.`,
+            detail: stats.anomalies > 0
+              ? `Masih ada ${stats.anomalies.toLocaleString('id-ID')} baris berstatus anomali / perlu review. Tinjau dahulu bila ragu.`
+              : undefined,
+            confirm: 'Ya, Setujui & Buka Data Final',
+          },
+          final: {
+            accent: '#0ab39c',
+            icon: <CheckCircle2 size={20} />,
+            title: 'Pindahkan ke Final Analisa?',
+            msg: `Seluruh ${n} baris hasil analisa Fase 1–3 akan DIPINDAHKAN ke menu Final Data. Menu Data Analyst akan kembali kosong (hanya menyisakan baris yang belum terpetakan).`,
+            detail: 'Tindakan ini bisa dibatalkan kapan saja lewat tombol "Kembalikan ke Data Analyst" di menu Final Data.',
+            confirm: 'Ya, Pindahkan ke Final Data',
+          },
+        }[confirmKind ?? 'fase1'];
+        return (
+          <ConfirmDialog
+            isOpen={confirmKind !== null}
+            icon={cfg.icon}
+            accent={cfg.accent}
+            title={cfg.title}
+            message={cfg.msg}
+            detail={cfg.detail}
+            confirmLabel={cfg.confirm}
+            onConfirm={handleConfirmApprove}
+            onClose={() => setConfirmKind(null)}
+          />
+        );
+      })()}
     </div>
   );
 };
