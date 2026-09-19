@@ -168,6 +168,35 @@ export function cityMatchKey(raw: string): string {
   return CITY_ALIAS_MAP[norm] || norm;
 }
 
+// 🗺️ PEMEKARAN: nama daerah anak = nama induk + kata penanda wilayah. Ini pengetahuan
+// tata usaha negara (Permendagri), BUKAN kemiripan huruf — "LAUT" dan "KEPULAUAN" tidak
+// mirip sama sekali, tetapi BANGGAI LAUT (DOB 2013) memang hasil pemekaran BANGGAI
+// KEPULAUAN. Data PTEN ber-vintage lama hanya punya nama induknya, jadi anak tidak boleh
+// dibuang sebagai "belum terpetakan".
+const PEMEKARAN_TOKENS = new Set([
+  'LAUT', 'SELATAN', 'UTARA', 'BARAT', 'TIMUR', 'TENGAH', 'KEPULAUAN', 'PEGUNUNGAN',
+  'BAGIAN', 'DAYA', 'PULAU', 'P', 'BARATDAYA',
+]);
+export function cityRootParts(key: string): { root: string; mods: string[] } {
+  const mods: string[] = [];
+  const root: string[] = [];
+  key.split(' ').filter(Boolean).forEach((t) => (PEMEKARAN_TOKENS.has(t) ? mods : root).push(t));
+  return { root: root.join(' '), mods };
+}
+/**
+ * True bila dua kunci kota berbeda HANYA pada kata penanda wilayah dan berbagi akar
+ * yang sama: induk ⟷ anak (SAMBAS / SAMBAS BARAT) atau sesama anak (BANGKA BARAT /
+ * BANGKA SELATAN). Akar harus ≥ 4 huruf supaya "P. SERIBU" tidak bertemu "P. ANAMBAS".
+ */
+export function isPemekaranPair(keyA: string, keyB: string): boolean {
+  if (!keyA || !keyB || keyA === keyB) return false;
+  const a = cityRootParts(keyA);
+  const b = cityRootParts(keyB);
+  if (!a.root || a.root !== b.root || a.root.length < 4) return false;
+  // Minimal satu sisi memakai penanda wilayah; kalau tidak, ini dua kota berbeda nama.
+  return a.mods.length > 0 || b.mods.length > 0;
+}
+
 // 2. 🔄 TOKEN SET & JACCARD INTERSECTION (Anti-Kata Terbalik)
 export function calculateTokenSetJaccard(strA: string, strB: string): number {
   const normA = cleanAndStandardizeText(strA);
@@ -799,6 +828,69 @@ export async function executeAnalystPipeline(
     return code.length >= 5 && prof.prefixes.has(code);
   };
   type Placement = { rows: KodePosRow[]; status: 'VERIFIED' | 'REVIEW'; method: string };
+  /**
+   * Kota anak hasil pemekaran / wilayah turunan yang tetap dilayani outlet PTEN kota
+   * induk. Dua bukti independen (keduanya dari data, bukan kemiripan huruf):
+   *  A. nama serumah hanya beda kata penanda wilayah (isPemekaranPair) DAN seluruh blok
+   *     kode pos anak ada di dalam blok induk — BANGGAI LAUT {948} ⊂ BANGGAI KEPULAUAN
+   *     {947,948}, sedangkan BANGGAI {947} bukan walinya;
+   *  B. PTEN sendiri mencantumkan kode pos milik kota lain di daftar kota ini —
+   *     75779 (Mahakam Ulu) tercatat di KUTAI BARAT, 97611/97615 (Kota Tual) di
+   *     MALUKU TENGGARA. Kota pemilik kode ikut masuk wilayah layanan induknya.
+   * Kota yang sudah punya entri PTEN sendiri tidak pernah disentuh, dan anak diberikan
+   * ke calon induk dengan bukti terbanyak supaya hasilnya tidak bergantung urutan baris.
+   */
+  const buktiAnakKode = new Map<string, Map<string, number>>();
+  ptenCodesByCity.forEach((codes, ptenKey) => {
+    codes.forEach((code) => {
+      (masterCityByKodePos.get(code) || []).forEach((ck) => {
+        if (ck === ptenKey || cityNameClaimed.has(ck)) return;
+        const m = buktiAnakKode.get(ck) || new Map<string, number>();
+        m.set(ptenKey, (m.get(ptenKey) || 0) + 1);
+        buktiAnakKode.set(ck, m);
+      });
+    });
+  });
+  const serapAnakPemekaran = (indukKey: string, barisInduk: KodePosRow[]): { rows: KodePosRow[]; anak: string[] } => {
+    const profInduk = cityGeoProfile.get(indukKey);
+    if (!profInduk || profInduk.p3.size === 0) return { rows: barisInduk, anak: [] };
+    const modsInduk = cityRootParts(indukKey).mods.length;
+    const anak: string[] = [];
+    const tambahan: KodePosRow[] = [];
+    kodePosByCity.forEach((entries, ck) => {
+      if (ck === indukKey || cityNameClaimed.has(ck) || claimedMasterCityKeys.has(ck)) return;
+      const prof = cityGeoProfile.get(ck);
+      if (!prof || prof.p3.size === 0) return;
+      const diDalamInduk = [...prof.p3].every((b) => profInduk.p3.has(b));
+      const namaSerumah = isPemekaranPair(ck, indukKey);
+      const suara = buktiAnakKode.get(ck) || new Map<string, number>();
+      const buktiKode = suara.get(indukKey) || 0;
+      if (!(namaSerumah ? diDalamInduk : buktiKode >= 1)) return;
+      // Wali paling sah: nama serumah + blok penuh adalah bukti terkuat; kalau kita
+      // hanya bermodal kode pos, calon induk dengan bukti kode lebih banyak menang.
+      const saingLain =
+        !namaSerumah &&
+        Array.from(suara.entries()).some(([k, v]) => k !== indukKey && v > buktiKode);
+      const waliLain =
+        saingLain ||
+        Array.from(kodePosByCity.keys()).some(
+          (k) =>
+            k !== indukKey &&
+            ptenCityMap.has(k) &&
+            cityRootParts(k).mods.length < modsInduk &&
+            isPemekaranPair(k, ck) &&
+            [...prof.p3].every((b) => (cityGeoProfile.get(k)?.p3 || new Set<string>()).has(b))
+        );
+      if (waliLain) return;
+      anak.push(ck);
+      entries.forEach((r) => tambahan.push(r));
+      claimedMasterCityKeys.add(ck);
+      if (geoVerifiedCityKeys.has(indukKey)) geoVerifiedCityKeys.add(ck);
+    });
+    return tambahan.length > 0 ? { rows: [...barisInduk, ...tambahan], anak } : { rows: barisInduk, anak };
+  };
+  const catatanAnak = (anak: string[]): string =>
+    anak.length > 0 ? ` + ${anak.length} kota turunan (pemekaran/wilayah PTEN): ${anak.join(', ')}` : '';
   // Resolve (nama kota PTEN + kode pos PTEN) → baris kodepos kota yang tepat,
   // wajib lolos uji blok kode pos. Tidak bisa dibuktikan → REVIEW, bukan tebak.
   const resolveCityByGeocode = (ptenKey: string, ptenKodePos: string): Placement => {
@@ -836,7 +928,14 @@ export async function executeAnalystPipeline(
       }
       geoVerifiedCityKeys.add(ptenKey);
       claimedMasterCityKeys.add(ptenKey);
-      return { rows: rowsForCity, status: 'VERIFIED', method: sameBlock.length < exact.length ? 'Join nama kota + saring blok kode pos PTEN' : 'Join nama kota + blok kode pos' };
+      const serap = serapAnakPemekaran(ptenKey, rowsForCity);
+      return {
+        rows: serap.rows,
+        status: 'VERIFIED',
+        method:
+          (sameBlock.length < exact.length ? 'Join nama kota + saring blok kode pos PTEN' : 'Join nama kota + blok kode pos') +
+          catatanAnak(serap.anak),
+      };
     }
     // Nama kota PTEN tidak dikenal master → tanya pemilik persis kode posnya di master.
     const codeVotes = voteMasterCity(ptenKey, true);
@@ -964,6 +1063,27 @@ export async function executeAnalystPipeline(
         if (score > bestScore && score >= 0.88) {
           bestScore = score;
           matchedPtenRecord = candidates[0];
+        }
+      }
+      // Anak pemekaran: nama kotanya tidak ada di PTEN sama sekali, tapi PTEN punya
+      // induknya (BANGGAI LAUT ⟶ BANGGAI KEPULAUAN). Induk dipilih yang blok kode posnya
+      // menaungi SELURUH blok anak dan paling umum di antara kandidat.
+      if (!matchedPtenRecord) {
+        const prof = cityGeoProfile.get(cityClean);
+        if (prof && prof.p3.size > 0) {
+          const kandidat: { key: string; mods: number }[] = [];
+          ptenCityMap.forEach((_c, ptenCityKey) => {
+            if (!isPemekaranPair(cityClean, ptenCityKey)) return;
+            const profInduk = cityGeoProfile.get(ptenCityKey);
+            if (!profInduk) return;
+            if (![...prof.p3].every((b) => profInduk.p3.has(b))) return;
+            kandidat.push({ key: ptenCityKey, mods: cityRootParts(ptenCityKey).mods.length });
+          });
+          if (kandidat.length > 0) {
+            const palingUmum = Math.min(...kandidat.map((k) => k.mods));
+            const terpilih = kandidat.filter((k) => k.mods === palingUmum);
+            if (terpilih.length === 1) matchedPtenRecord = ptenCityMap.get(terpilih[0].key)![0];
+          }
         }
       }
       ptenFuzzyCache.set(cityClean, matchedPtenRecord);

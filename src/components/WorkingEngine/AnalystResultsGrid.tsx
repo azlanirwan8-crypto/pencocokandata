@@ -813,7 +813,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                     <th colSpan={3} style={{ textAlign: 'center', background: '#eff6fb', color: '#299cdb', borderLeft: '2px solid #d5e7f2' }}>
                       📮 DATA POS (Kelurahan &amp; Wilayah Administrasi)
                     </th>
-                    <th colSpan={4} style={{ textAlign: 'center', background: '#eefaf6', color: '#0ab39c', borderLeft: '2px solid #b7ebe4' }}>
+                    <th colSpan={3} style={{ textAlign: 'center', background: '#eefaf6', color: '#0ab39c', borderLeft: '2px solid #b7ebe4' }}>
                       {fase1Inner === 'TIDAK_ANALISA'
                         ? '🛡️ DATA PTEN (belum terpetakan — isi manual lewat Revisi)'
                         : '🛡️ DATA PTEN (Kota / Provinsi / Kode Pos)'}
@@ -826,8 +826,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                     <th style={{ minWidth: '130px' }}>Provinsi</th>
                     <th style={{ minWidth: '150px', borderLeft: '2px solid #b7ebe4' }}>Kota / Kabupaten</th>
                     <th style={{ width: '100px', textAlign: 'center' }}>Kode Pos</th>
-                    <th style={{ width: '100px', textAlign: 'center' }}>Status PTEN</th>
-                    <th style={{ width: '150px', textAlign: 'center' }}>Verifikasi Penempatan</th>
+                    <th style={{ minWidth: '170px', textAlign: 'center' }}>Status PTEN</th>
                   </tr>
                 </>
               )}
@@ -933,14 +932,23 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                           <td className="code-cell" style={{ textAlign: 'center', color: '#0ab39c', fontWeight: 700 }}>
                             {r.kodePosPten}
                           </td>
-                          <td style={{ textAlign: 'center' }}>
-                            <span className={`badge ${r.statusPten === 'DIFFERENT' || r.statusPten === 'UNCHECKED' ? 'badge-level2' : 'badge-match'}`}>{r.statusPten}</span>
-                          </td>
+                          {/* Satu kartu label: warna = status, teks kecil di bawahnya = alasannya */}
                           <td style={{ textAlign: 'center' }} title={r.placementMethod || ''}>
-                            <span className={`badge ${r.placementStatus === 'VERIFIED' ? 'badge-match' : r.placementStatus === 'REVIEW' ? 'badge-level2' : 'badge-level1'}`}>
-                              {r.placementStatus === 'VERIFIED' ? '✓ Terverifikasi' : r.placementStatus === 'REVIEW' ? '! Perlu Review' : 'Fallback'}
-                            </span>
-                            <div style={{ fontSize: '0.62rem', color: '#878a99', marginTop: '2px' }}>{r.placementMethod}</div>
+                            {(() => {
+                              const belumAda = !r.kotaPten && r.statusPten === 'UNCHECKED';
+                              const hijau = !belumAda && (r.statusPten === 'SAME' || r.statusPten === 'PTEN FOUND');
+                              const cls = belumAda ? 'badge-diff' : hijau ? 'badge-match' : 'badge-level2';
+                              return (
+                                <>
+                                  <span className={`badge ${cls}`}>{belumAda ? 'TIDAK ADA DI PTEN' : r.statusPten}</span>
+                                  {r.placementMethod && (
+                                    <div style={{ fontSize: '0.62rem', color: '#878a99', marginTop: '2px', whiteSpace: 'normal' }}>
+                                      {r.placementMethod}
+                                    </div>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </td>
                         </>
                       )}
