@@ -45,6 +45,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       onClick={onClose}
     >
       <div
+        className="qdr-confirm-panel"
         style={{
           width: '100%',
           maxWidth: '480px',

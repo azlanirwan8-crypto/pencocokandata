@@ -172,6 +172,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const canvasRendererRef = useRef<L.Canvas | null>(null);
+  const svgRendererRef = useRef<L.SVG | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const arcsLayerRef = useRef<L.LayerGroup | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
@@ -768,6 +769,9 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     if (!mapInstanceRef.current) {
       const canvasRenderer = L.canvas({ padding: 0.5, tolerance: 12 });
       canvasRendererRef.current = canvasRenderer;
+      // Renderer SVG khusus utk arc & halo terpilih → animasi CSS (flowDash/pulse) jadi hidup
+      const svgRenderer = L.svg({ padding: 0.6 });
+      svgRendererRef.current = svgRenderer;
 
       const map = L.map(mapContainerRef.current, {
         center: INDONESIA_REGIONS.ALL.center,
@@ -781,8 +785,11 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         wheelDebounceTime: 80,
         wheelPxPerZoomLevel: 120,
         zoomAnimation: true,
-        fadeAnimation: false,
-        markerZoomAnimation: false,
+        fadeAnimation: true,
+        markerZoomAnimation: true,
+        inertia: true,
+        inertiaDeceleration: 2600,
+        easeLinearity: 0.22,
         preferCanvas: true,
       });
 
@@ -869,7 +876,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     if (selectedPin) {
       const selectedHalo = L.circleMarker([selectedPin.lat, selectedPin.lng], {
         pane: 'selectedPane',
-        renderer: canvasRenderer,
+        renderer: svgRendererRef.current || canvasRenderer,
         radius: 17,
         color: '#f59e0b',
         weight: 2,
@@ -1143,7 +1150,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         if (arcPoints.length > 0) {
           const curvedPolyline = L.polyline(arcPoints, {
             pane: 'arcsPane',
-            color: isAnomalyGroup ? '#dc2626' : '#0ab39c',
+            renderer: svgRendererRef.current || undefined,
+            color: isAnomalyGroup ? '#f06548' : '#0ab39c',
             weight: Math.min(2 + Math.log10(count + 1), 4),
             opacity: 0.82,
             interactive: false, // Prevents curved lines from blocking clicks on markers

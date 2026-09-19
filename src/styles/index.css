@@ -1534,3 +1534,111 @@ body {
   border-color: #e0553a;
   color: #ffffff;
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   LANTAI ANIMASI GLOBAL — bikin web terasa hidup, tidak kaku.
+   Aturan warna tetap: teal=OK, amber=review, coral=anomali, navy=identitas.
+   ══════════════════════════════════════════════════════════════════════ */
+@keyframes qdrFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes qdrRise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes qdrScaleIn {
+  from { opacity: 0; transform: scale(0.94) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes qdrSlideIn {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Ganti tab / muat konten: seluruh area konten naik halus */
+.page-content {
+  animation: qdrFade 0.28s ease both;
+}
+
+/* Kartu Velzon: masuk lembut + angkat saat hover */
+.glass-card {
+  animation: qdrRise 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition: box-shadow 0.22s ease, transform 0.22s ease, border-color 0.22s ease;
+}
+.glass-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(56, 65, 74, 0.12);
+  border-color: rgba(64, 81, 137, 0.22);
+}
+
+/* Kartu metrik KPI beri jeda masuk bertahap (terasa mengalir) */
+.metrics-grid > *:nth-child(1) { animation-delay: 0.02s; }
+.metrics-grid > *:nth-child(2) { animation-delay: 0.08s; }
+.metrics-grid > *:nth-child(3) { animation-delay: 0.14s; }
+.metrics-grid > *:nth-child(4) { animation-delay: 0.2s; }
+.metrics-grid > *:nth-child(5) { animation-delay: 0.26s; }
+
+/* Tombol: umpan balik tekan yang renyah */
+.btn {
+  transition: all 0.16s ease, transform 0.12s ease;
+}
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
+}
+
+/* Baris tabel: transisi hover lembut */
+.modern-table tbody tr {
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Modal Velzon standar: latar pudar, panel mengecil-masuk */
+.modal-backdrop {
+  animation: qdrFade 0.2s ease both;
+}
+.modal-container {
+  animation: qdrScaleIn 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Panel dialog konfirmasi (ConfirmDialog) */
+.qdr-confirm-panel {
+  animation: qdrScaleIn 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Peta: masuk pudar + kontrol zoom beranimasi */
+.bni-map-container {
+  animation: qdrFade 0.5s ease both;
+}
+.bni-map-container .leaflet-control-zoom a {
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+.bni-map-container .leaflet-control-zoom a:hover {
+  background: #eef2f7;
+  transform: translateY(-1px);
+}
+.bni-map-container .leaflet-control-zoom a:active {
+  transform: translateY(0) scale(0.94);
+}
+/* Titik terpilih berdenyut (SVG renderer mengaktifkan keyframe ini) */
+.bni-selected-halo {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Hormati preferensi pengguna yang tidak suka animasi */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
