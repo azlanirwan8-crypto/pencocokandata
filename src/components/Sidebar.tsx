@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Database,
   FileCheck,
+  ClipboardCheck,
   Layers,
   Map,
   ShieldCheck,
@@ -13,7 +14,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 
-export type ActiveTab = 'dashboard' | 'working' | 'wilayah' | 'pten' | 'master' | 'mapping_role' | 'kodepos';
+export type ActiveTab = 'dashboard' | 'working' | 'final' | 'wilayah' | 'pten' | 'master' | 'mapping_role' | 'kodepos';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -21,6 +22,7 @@ interface SidebarProps {
   isCollapsed: boolean;
   masterCount?: number;
   targetCount?: number;
+  finalCount?: number;
   wilayahCount?: number;
   ptenCount?: number;
   roleMappingCount?: number;
@@ -33,6 +35,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed,
   masterCount,
   targetCount,
+  finalCount,
   wilayahCount,
   ptenCount,
   roleMappingCount,
@@ -96,7 +99,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </button>
 
-          {/* 3. Data Master (Collapsible Parent) */}
+          {/* 3. Final Data */}
+          <button
+            type="button"
+            className={`sidebar-nav-item ${activeTab === 'final' ? 'active' : ''}`}
+            onClick={() => setActiveTab('final')}
+            id="sidebar-btn-final"
+            title="Final Data (hasil analisa yang telah disetujui)"
+          >
+            <div className="nav-item-icon">
+              <ClipboardCheck size={17} />
+            </div>
+            <span className="nav-item-label">Final Data</span>
+            {finalCount !== undefined && finalCount > 0 && (
+              <span className="sidebar-badge badge-target">{finalCount.toLocaleString('id-ID')}</span>
+            )}
+          </button>
+
+          {/* 4. Data Master (Collapsible Parent) */}
           <div>
             <button
               type="button"

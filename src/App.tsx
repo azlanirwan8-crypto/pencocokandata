@@ -14,6 +14,7 @@ import { RoleMappingManager } from './components/RoleMapping/RoleMappingManager'
 import { KodePosManager } from './components/KodePosData/KodePosManager';
 import { AnalystCanvas } from './components/WorkingEngine/AnalystCanvas';
 import { AnalystResultsGrid } from './components/WorkingEngine/AnalystResultsGrid';
+import { FinalDataManager } from './components/WorkingEngine/FinalDataManager';
 import { executeAnalystPipeline, cityMatchKey, type AnalystRow, type AnalystCoverage } from './utils/analystPipeline';
 import type { ActiveTab } from './components/Sidebar';
 
@@ -88,6 +89,8 @@ export const App: React.FC = () => {
   // New Data Analyst 3-Phase Engine State (100% Data Master Driven)
   const [analystRows, setAnalystRows] = useState<AnalystRow[]>([]);
   const [analystCoverage, setAnalystCoverage] = useState<AnalystCoverage | null>(null);
+  // Final Data: baris hasil analisa yang sudah disetujui ("Saya Setuju") pindah ke sini.
+  const [finalRows, setFinalRows] = useState<AnalystRow[]>([]);
   // Pemetaan manual hasil "Setujui" di laporan cakupan: kunci kota master (cityMatchKey)
   // → nama kota PTEN. Baris master kota itu dipakai atas nama kota PTEN terpilih.
   const [cityOverrides, setCityOverrides] = useState<Record<string, string>>({});
@@ -198,11 +201,18 @@ export const App: React.FC = () => {
         // kompatibel dengan pipeline berbasis kota PTEN + kodepos penuh)
         if (localStorage.getItem('analyst_purge_v2') !== 'done') {
           await deleteKey('analyst_results_data');
+          await deleteKey('analyst_final_data');
           localStorage.setItem('analyst_purge_v2', 'done');
         } else {
-          const savedAnalyst = await getItem<AnalystRow[]>('analyst_results_data');
+          const [savedAnalyst, savedFinal] = await Promise.all([
+            getItem<AnalystRow[]>('analyst_results_data'),
+            getItem<AnalystRow[]>('analyst_final_data'),
+          ]);
           if (savedAnalyst && Array.isArray(savedAnalyst) && savedAnalyst.length > 0) {
             setAnalystRows(savedAnalyst);
+          }
+          if (savedFinal && Array.isArray(savedFinal) && savedFinal.length > 0) {
+            setFinalRows(savedFinal);
           }
         }
       } catch (err) {
@@ -605,12 +615,40 @@ export const App: React.FC = () => {
     });
   };
 
+  // "Saya Setuju (Masuk ke Final Analisa)": pindahkan baris hasil analisa ke menu Final Data.
+  // Baris TIDAK_ANALISA (kota belum terpetakan) TETAP di Data Analyst sebagai antrean kerja —
+  // bukan hasil final, jadi tidak ikut dipindahkan agar Final Data berisi data yang benar/real.
   const handleApproveAllAnalystFinal = () => {
-    setAnalystRows((prev) => {
-      const next = prev.map((r) => ({ ...r, isFinalApproved: true }));
-      setItemDebounced('analyst_results_data', next);
-      return next;
-    });
+    const moving = analystRows.filter((r) => r.kategori !== 'TIDAK_ANALISA').map((r) => ({ ...r, isFinalApproved: true }));
+    if (moving.length === 0) return;
+    const remaining = analystRows.filter((r) => r.kategori === 'TIDAK_ANALISA');
+
+    const byId = new Map<string, AnalystRow>();
+    for (const r of finalRows) byId.set(r.id, r);
+    for (const r of moving) byId.set(r.id, r); // baris terbaru menimpa yang lama
+    const merged = Array.from(byId.values());
+
+    setFinalRows(merged);
+    setItem('analyst_final_data', merged).catch(() => {});
+    setAnalystRows(remaining);
+    setItem('analyst_results_data', remaining).catch(() => {});
+    setAnalystCoverage(null);
+    setActiveTab('final');
+  };
+
+  // "Kembalikan ke Data Analyst": pindahkan seluruh Final Data kembali ke antrean analisa.
+  const handleReturnFinalToAnalyst = () => {
+    if (finalRows.length === 0) return;
+    const byId = new Map<string, AnalystRow>();
+    for (const r of analystRows) byId.set(r.id, { ...r, isFinalApproved: false });
+    for (const r of finalRows) byId.set(r.id, { ...r, isFinalApproved: false });
+    const merged = Array.from(byId.values());
+
+    setAnalystRows(merged);
+    setItem('analyst_results_data', merged).catch(() => {});
+    setFinalRows([]);
+    setItem('analyst_final_data', []).catch(() => {});
+    setActiveTab('working');
   };
 
   const handleApproveAnalystFase = (fase: 1 | 2 | 3) => {
@@ -791,6 +829,7 @@ export const App: React.FC = () => {
         isCollapsed={isSidebarCollapsed}
         masterCount={masterRows.length}
         targetCount={analystRows.length}
+        finalCount={finalRows.length}
         wilayahCount={wilayahSettings.length}
         ptenCount={ptenCount}
         roleMappingCount={roleMappingCount}
@@ -980,6 +1019,11 @@ export const App: React.FC = () => {
                 />
               )}
             </div>
+          )}
+
+          {/* MENU FINAL DATA (hasil analisa yang telah disetujui) */}
+          {activeTab === 'final' && (
+            <FinalDataManager rows={finalRows} onReturnAll={handleReturnFinalToAnalyst} />
           )}
 
           {/* MENU MASTER: SETTING WILAYAH */}
