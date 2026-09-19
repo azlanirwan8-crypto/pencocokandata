@@ -32,6 +32,9 @@ export interface AnalystRow {
 
   // Fase 2: Wilayah & Master Cabang
   wilayah: string;
+  // 🧾 CATATAN KERAS: mulai Fase 2 dst (final & semua export) nama kota WAJIB dari
+  // kolom PTEN "KOTA/KABUPATEN MAX 15 DIGIT" — nama penuh hanya dipakai di Fase 1.
+  kotaPtenMax15: string;
   sandiCabang: string;
   sandi: string;
   cabang: string;
@@ -764,6 +767,7 @@ export async function executeAnalystPipeline(
     placementMethod: string;
     cityKey: string;
     cityRawName: string;
+    kotaPtenMax15: string;
     resolvedWilayah: ReturnType<typeof extractWilayahFromBranchCode>;
     sandiCabang: string;
     branchCode: string;
@@ -1149,6 +1153,12 @@ export async function executeAnalystPipeline(
 
     const finalKotaPten = matchedPtenRecord?.kotaPten || (cityRaw ? cityRaw.toUpperCase() : 'KOTA JAKARTA PUSAT');
     const finalKodePosPten = matchedPtenRecord?.kodePosPten || kpRaw || '10110';
+    // 🧾 CATATAN KERAS: nama kota utk Fase 2 dst = kolom PTEN "KOTA/KABUPATEN MAX 15
+    // DIGIT" (kotaPtenMax15). Bila file PTEN tidak punya kolom itu → potong keras 15
+    // karakter, karena itulah definisi kolom tersebut.
+    const finalKotaPtenMax15 =
+      (matchedPtenRecord?.kotaPtenMax15 || '').trim() ||
+      (finalKotaPten.length > 15 ? finalKotaPten.slice(0, 15) : finalKotaPten);
 
     // ── Cari SEMUA Kelurahan & Kecamatan dari Data Kode Pos untuk Kota PTEN ini ──
     // Resolusi deterministik: nama kota join dulu, lalu DIBUKTIKAN dengan blok
@@ -1274,6 +1284,7 @@ export async function executeAnalystPipeline(
       matchedKodePosEntries, matchedProvinsi, usedFallback,
       placementStatus, placementMethod,
       cityKey: ptenCleanCity, cityRawName: finalKotaPten,
+      kotaPtenMax15: finalKotaPtenMax15,
       resolvedWilayah, sandiCabang, namaOutlet, statusOutlet, alamat,
       branchCode, kodeCabang, sandi, cabang,
       matchedRole, highestRoleScore, chosenAlgorithm,
@@ -1476,6 +1487,7 @@ export async function executeAnalystPipeline(
 
         // Fase 2
         wilayah: meta.resolvedWilayah.wilayahName !== '-' ? meta.resolvedWilayah.wilayahName : 'Wilayah 01',
+        kotaPtenMax15: meta.kotaPtenMax15,
         sandiCabang: String(meta.sandiCabang),
         sandi: meta.sandi,
         cabang: meta.cabang,
@@ -1560,6 +1572,7 @@ export async function executeAnalystPipeline(
         allKelurahanCount: entries.length,
         kelurahanSeq: seq + 1,
         wilayah: '',
+        kotaPtenMax15: '',
         sandiCabang: '',
         sandi: '',
         cabang: '',
