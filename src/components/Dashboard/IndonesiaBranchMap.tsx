@@ -1128,9 +1128,10 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     const destCoords: [number, number] = clampToIndonesia(selectedPin.lat, selectedPin.lng);
     const isIsolated = displayScope === 'SELECTED_ONLY' || trackingMode === 'aceh_kim';
     const originGroups = groupTargetOriginsForMap(auditRows, resolvedCoords);
-    const verifiedOriginSources = new Set(['row_data', 'google', 'esri', 'osm', 'locationiq', 'cache']);
-    const verifiedGroups = originGroups.filter((group) => verifiedOriginSources.has(group.source));
-    const visibleGroups = isIsolated ? verifiedGroups : verifiedGroups.slice(0, 24);
+    // Semua titik asal data matched ikut digambar. Yang bukan hasil geocode nyata
+    // (pusat wilayah / default) tetap tampil tapi ditandai "perkiraan" agar jujur.
+    const APPROX_SOURCES = new Set(['wilayah_centroid', 'default']);
+    const visibleGroups = isIsolated ? originGroups : originGroups.slice(0, 24);
     const allArcEndpoints: [number, number][] = [destCoords];
 
     visibleGroups.forEach((group, gIdx) => {
@@ -1142,6 +1143,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       const count = group.rows.length;
       const firstRow = group.rows[0];
       const isAnomalyGroup = false;
+      const isApprox = APPROX_SOURCES.has(group.source);
 
       if (!isOnSite) {
         const curveDirection = gIdx % 2 === 0 ? 0.1 : -0.08;
@@ -1150,16 +1152,16 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           const curvedPolyline = L.polyline(arcPoints, {
             pane: 'arcsPane',
             renderer: svgRendererRef.current || undefined,
-            color: isAnomalyGroup ? '#f06548' : '#0ab39c',
+            color: isAnomalyGroup ? '#f06548' : isApprox ? '#94a3b8' : '#0ab39c',
             weight: Math.min(2 + Math.log10(count + 1), 4),
-            opacity: 0.82,
+            opacity: isApprox ? 0.55 : 0.82,
             interactive: false, // Prevents curved lines from blocking clicks on markers
-            className: 'bni-flow-arc',
+            className: isApprox ? 'bni-flow-arc bni-flow-arc--approx' : 'bni-flow-arc',
           });
           curvedPolyline.bindTooltip(
-            `<div style="font-size:11px;font-weight:600;color:#0f766e;">
+            `<div style="font-size:11px;font-weight:600;color:${isApprox ? '#475569' : '#0f766e'};">
               ${count.toLocaleString('id-ID')} data dari ${group.label}<br/>
-              <span style="font-size:10px;color:${isAnomalyGroup ? '#b91c1c' : '#64748b'};">${isAnomalyGroup ? '⚠️ Audit anomali →' : '➔'} ${selectedPin.primaryOutletName}</span>
+              <span style="font-size:10px;color:${isAnomalyGroup ? '#b91c1c' : '#64748b'};">${isAnomalyGroup ? '⚠️ Audit anomali →' : '➔'} ${selectedPin.primaryOutletName}${isApprox ? ' · <em>titik asal perkiraan (pusat wilayah)</em>' : ''}</span>
             </div>`,
             { sticky: true }
           );
@@ -1171,7 +1173,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       const originDot = L.circleMarker(isOnSite ? destCoords : startCoords, {
         pane: 'arcsPane',
         radius: isOnSite ? 4 : Math.min(5 + Math.log10(count + 1) * 2, 9),
-        fillColor: isOnSite ? '#a78bfa' : '#38bdf8',
+        fillColor: isOnSite ? '#a78bfa' : isApprox ? '#94a3b8' : '#38bdf8',
         color: '#ffffff',
         weight: 1.8,
         fillOpacity: 0.95,
