@@ -73,6 +73,17 @@ function makePinIcon(kind: PinKind, color: string, selected: boolean): L.DivIcon
   });
 }
 
+function makeClusterIcon(count: number): L.DivIcon {
+  const size = count < 10 ? 34 : count < 50 ? 40 : count < 200 ? 46 : 54;
+  const html = `<div class="bni-map-cluster" style="width:${size}px;height:${size}px;"><span>${count.toLocaleString('id-ID')}</span></div>`;
+  return L.divIcon({
+    html,
+    className: 'bni-map-cluster-wrap',
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
+}
+
 interface IndonesiaBranchMapProps {
   masterRows: MasterRow[];
   targetRows?: TargetRow[];
@@ -881,7 +892,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     markersLayer.clearLayers();
     const overlapCounts = new Map<string, number>();
 
-    filteredPins.forEach((pin) => {
+    // Render satu pin sebagai ikon jenis (perilaku normal saat tidak ter-cluster).
+    const addPinMarker = (pin: PlottedBranchPin) => {
       const isMulti = isMultiOutletPin(pin);
       const hasMatch = pin.matchedCount > 0;
       const isSelected = selectedPin?.id === pin.id;
@@ -982,7 +994,56 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       });
 
       markersLayer.addLayer(marker);
-    });
+    };
+
+    // ── CLUSTERING layar: pin yang berdekatan dilebur jadi gelembung hitung,
+    //    supaya jumlah node DOM (bukan ambang jumlah) yang menjaga peta tetap ringan.
+    //    Klik cluster → zoom ke anggotanya. Pin terpilih selalu tampil utuh. ──
+    const zoom = map.getZoom();
+    if (filteredPins.length <= 40) {
+      filteredPins.forEach(addPinMarker);
+    } else {
+      const cellPx = 56;
+      const buckets = new Map<string, { pins: PlottedBranchPin[]; sumLat: number; sumLng: number }>();
+      for (const pin of filteredPins) {
+        if (selectedPin && pin.id === selectedPin.id) {
+          addPinMarker(pin);
+          continue;
+        }
+        const pt = map.latLngToContainerPoint([pin.lat, pin.lng]);
+        const key = `${Math.floor(pt.x / cellPx)}:${Math.floor(pt.y / cellPx)}`;
+        let b = buckets.get(key);
+        if (!b) { b = { pins: [], sumLat: 0, sumLng: 0 }; buckets.set(key, b); }
+        b.pins.push(pin);
+        b.sumLat += pin.lat;
+        b.sumLng += pin.lng;
+      }
+      buckets.forEach((b) => {
+        if (b.pins.length === 1) {
+          addPinMarker(b.pins[0]);
+          return;
+        }
+        const center: [number, number] = [b.sumLat / b.pins.length, b.sumLng / b.pins.length];
+        const totalBranches = b.pins.reduce((n, p) => n + (p.branchCount || 1), 0);
+        const cluster = L.marker(center, {
+          pane: 'markersPane',
+          icon: makeClusterIcon(b.pins.length),
+          zIndexOffset: -10,
+          keyboard: false,
+        });
+        cluster.bindTooltip(
+          `<div style="font-size:11px;font-weight:600;">${b.pins.length.toLocaleString('id-ID')} titik · ${totalBranches.toLocaleString('id-ID')} cabang<br/><span style="color:#64748b;font-weight:400;">Klik untuk memperbesar</span></div>`,
+          { direction: 'top', className: 'bni-map-fast-tooltip' }
+        );
+        cluster.on('mouseover', () => { if (mapContainerRef.current) mapContainerRef.current.style.cursor = 'zoom-in'; });
+        cluster.on('mouseout', () => { if (mapContainerRef.current) mapContainerRef.current.style.cursor = 'default'; });
+        cluster.on('click', () => {
+          const bounds = L.latLngBounds(b.pins.map((p) => [p.lat, p.lng] as [number, number]));
+          map.fitBounds(bounds.pad(0.4), { maxZoom: Math.min(zoom + 3, 17), animate: true, duration: 0.5 });
+        });
+        markersLayer.addLayer(cluster);
+      });
+    }
 
     // Render all matched target coordinates as orange markers when enabled
     if (showAllMatchMarkers) {

@@ -1343,6 +1343,35 @@ body {
   border: none;
 }
 
+/* Gelembung cluster pin (jumlah titik di satu area layar) */
+.bni-map-cluster-wrap {
+  background: transparent;
+  border: none;
+}
+
+.bni-map-cluster {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #5b6fb0, #405189);
+  color: #ffffff;
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.35);
+  cursor: zoom-in;
+  transition: transform 0.15s ease;
+}
+
+.bni-map-cluster:hover {
+  transform: scale(1.1);
+}
+
+.bni-map-cluster span {
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .bni-map-pin {
   position: relative;
   width: var(--s, 26px);
