@@ -16,7 +16,7 @@ import { AnalystCanvas } from './components/WorkingEngine/AnalystCanvas';
 import { AnalystResultsGrid } from './components/WorkingEngine/AnalystResultsGrid';
 import { FinalDataManager } from './components/WorkingEngine/FinalDataManager';
 import { executeAnalystPipeline, cityMatchKey, makeFinalKey, type AnalystRow, type AnalystCoverage } from './utils/analystPipeline';
-import { getIslandFromProvinsi } from './utils/roleRecommender';
+import { detectFinalAnomalies } from './utils/finalAnomaly';
 import type { ActiveTab } from './components/Sidebar';
 
 import type { MasterRow, TargetRow, MatchingStats, WilayahStat, WilayahSetting } from './types';
@@ -461,41 +461,31 @@ export const App: React.FC = () => {
   }, [dashboardFilteredRows, dashboardWilayahFilter]);
 
   // ── Metrik Dashboard berbasis DATA FINAL (real, bukan dummy) ──
+  // SATUAN = KODE POS (5 digit, distinct), sesuai keputusan Anda.
   const finalMetrics = useMemo(() => {
-    const finalCount = finalRows.length;
+    const finalCount = finalRows.length; // jumlah baris Data Final (dipakai sbg keterangan)
     const normKp = (v: string) => String(v || '').replace(/\D/g, '').slice(0, 5);
-    const distinctKodePos = new Set(finalRows.map((r) => normKp(r.kodePosPten)).filter(Boolean)).size;
+    const finalKodePosSet = new Set(finalRows.map((r) => normKp(r.kodePosPten)).filter(Boolean));
+    const distinctKodePos = finalKodePosSet.size; // kartu "sudah disesuaikan" (kode pos unik)
 
-    // Kartu "belum dikerjakan": cocokkan SELURUH Master Kode Pos dengan Data Final
-    // (kunci kode pos + kelurahan). Bila master penuh belum termuat, pakai selisih jumlah.
+    // Kartu "belum dikerjakan": kode pos di Master yang belum ada di Data Final.
     const fullMaster = kodePosMasterRows.length > DEFAULT_KODEPOS_DATA.length ? kodePosMasterRows : null;
-    const processedKeys = new Set(finalRows.map((r) => makeFinalKey(r.kodePosPten, r.kelurahan)));
-    const totalKodePos = fullMaster ? fullMaster.length : kodePosCount;
-    const belumDikerjakan = fullMaster
-      ? fullMaster.reduce((n, kp) => (processedKeys.has(makeFinalKey(kp.kodePos, kp.kelurahan)) ? n : n + 1), 0)
-      : Math.max(0, totalKodePos - finalCount);
+    let totalKodePos: number;
+    let belumDikerjakan: number;
+    if (fullMaster) {
+      const masterKodePosSet = new Set(fullMaster.map((kp) => normKp(kp.kodePos)).filter(Boolean));
+      let doneInMaster = 0;
+      finalKodePosSet.forEach((k) => { if (masterKodePosSet.has(k)) doneInMaster++; });
+      totalKodePos = masterKodePosSet.size;
+      belumDikerjakan = Math.max(0, masterKodePosSet.size - doneInMaster);
+    } else {
+      // Master penuh belum termuat → taksiran dari jumlah baris (footer tetap jujur).
+      totalKodePos = kodePosCount;
+      belumDikerjakan = Math.max(0, kodePosCount - distinctKodePos);
+    }
 
-    // Kartu anomali: penempatan final yang nyebrang PULAU (dilarang), KECUALI Aceh → KIM.
-    const outletIdx = new Map<string, MasterRow>();
-    const kodeIdx = new Map<string, MasterRow>();
-    for (const m of masterRows) {
-      const no = String(m['Nama Outlet'] || '').trim().toUpperCase();
-      if (no && !outletIdx.has(no)) outletIdx.set(no, m);
-      const kc = String(m['Kode Cabang'] || m['Branch Code'] || '').trim();
-      if (kc && !kodeIdx.has(kc)) kodeIdx.set(kc, m);
-    }
-    const isAceh = (s: string) => /ACEH|NANGGROE|\bNAD\b/.test(String(s || '').toUpperCase());
-    let anomali = 0;
-    for (const r of finalRows) {
-      if (isAceh(`${r.provinsi} ${r.kotaPten} ${r.kotaPtenMax15} ${r.kelurahan} ${r.kecamatan}`)) continue;
-      const branch =
-        outletIdx.get(String(r.namaOutlet || '').trim().toUpperCase()) ||
-        kodeIdx.get(String(r.kodeCabang || r.branchCode || '').trim());
-      if (!branch) continue;
-      const rowIsland = getIslandFromProvinsi(r.provinsi, r.kotaPtenMax15 || r.kotaPten, `${r.kelurahan} ${r.kecamatan}`);
-      const branchIsland = getIslandFromProvinsi(branch.Provinsi, branch['Dati II'], `${branch.Kelurahan} ${branch.Kecamatan}`);
-      if (rowIsland !== 'Lainnya' && branchIsland !== 'Lainnya' && rowIsland !== branchIsland) anomali++;
-    }
+    // Kartu anomali: SATU definisi (detectFinalAnomalies) — sama persis dgn panel Peta.
+    const anomali = detectFinalAnomalies(finalRows, masterRows).length;
 
     // Kartu "kode pos dengan cabang terbanyak" di Data Final.
     const byKode = new Map<string, { count: number; kota: string }>();

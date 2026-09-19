@@ -60,10 +60,10 @@ export const MetricCards: React.FC<MetricCardsProps> = ({ stats, finalMetrics })
             <CheckCircle2 size={14} />
           </div>
         </div>
-        <div className="metric-value">{fmt(fm.finalCount)}</div>
+        <div className="metric-value">{fmt(fm.distinctKodePos)}</div>
         <div className="metric-footer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ color: '#0ab39c', fontWeight: 600 }}>Ada di Data Final</span>
-          <span style={{ color: '#878a99', fontSize: '0.68rem' }}>{fmt(fm.distinctKodePos)} kode pos unik</span>
+          <span style={{ color: '#0ab39c', fontWeight: 600 }}>Kode pos di Data Final</span>
+          <span style={{ color: '#878a99', fontSize: '0.68rem' }}>{fmt(fm.finalCount)} baris</span>
         </div>
       </div>
 
@@ -80,11 +80,11 @@ export const MetricCards: React.FC<MetricCardsProps> = ({ stats, finalMetrics })
           <span style={{ color: '#d68b0c', fontWeight: 600 }}>
             {fm.totalKodePos > 0 ? `${((fm.belumDikerjakan / fm.totalKodePos) * 100).toFixed(1)}% Sisa` : 'Menunggu Master'}
           </span>
-          <span style={{ color: '#878a99', fontSize: '0.68rem' }}>dari {fmt(fm.totalKodePos)} Master Kode Pos</span>
+          <span style={{ color: '#878a99', fontSize: '0.68rem' }}>dari {fmt(fm.totalKodePos)} kode pos</span>
         </div>
       </div>
 
-      {/* 4. TOTAL ANOMALI (penempatan beda pulau, kecuali Aceh) */}
+      {/* 4. TOTAL ANOMALI (definisi tunggal, sama dgn panel Peta) */}
       <div className="metric-card rose">
         <div className="metric-header">
           <span className="metric-title">TOTAL ANOMALI</span>
@@ -95,9 +95,9 @@ export const MetricCards: React.FC<MetricCardsProps> = ({ stats, finalMetrics })
         <div className="metric-value" style={{ color: fm.anomali > 0 ? '#f06548' : '#0ab39c' }}>{fmt(fm.anomali)}</div>
         <div className="metric-footer">
           {fm.anomali > 0 ? (
-            <span style={{ color: '#f06548', fontWeight: 600 }}>Penempatan beda pulau (di luar Aceh)</span>
+            <span style={{ color: '#f06548', fontWeight: 600 }}>Beda pulau / status / penempatan / role</span>
           ) : (
-            <span style={{ color: '#0ab39c', fontWeight: 600 }}>Tidak ada pelanggaran pulau</span>
+            <span style={{ color: '#0ab39c', fontWeight: 600 }}>Semua aturan penempatan bersih</span>
           )}
         </div>
       </div>

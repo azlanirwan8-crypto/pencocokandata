@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import type { MasterRow, TargetRow } from '../../types';
 import type { AnalystRow } from '../../utils/analystPipeline';
+import { detectFinalAnomalies } from '../../utils/finalAnomaly';
 import { formatWilayahName } from '../../utils/normalizer';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
 import { DEFAULT_PTEN_DATA } from '../PTENData/defaultPtenData';
@@ -127,7 +128,7 @@ export function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lo
   return Math.round(R * c * 10) / 10;
 }
 
-export type AnomalyType = 'STATUS' | 'PENEMPATAN' | 'ROLE';
+export type AnomalyType = 'PULAU' | 'STATUS' | 'PENEMPATAN' | 'ROLE';
 
 export interface AnomalyItem {
   row: AnalystRow;
@@ -692,53 +693,39 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
   const [anomalyTypeFilter, setAnomalyTypeFilter] = useState<'ALL' | AnomalyType>('ALL');
 
-  // ── Anomali diambil dari FINAL DATA (bukan lagi Excel vs Master) ──
-  // Satu baris dianggap anomali bila status analisa / penempatan / role belum bersih.
+  // ── Anomali: SATU definisi (detectFinalAnomalies) — identik dgn kartu Dashboard ──
   const anomalyRows: AnomalyItem[] = useMemo(() => {
     if (!showAnomalyPanel) return [];
-    const items: AnomalyItem[] = [];
-    for (const r of finalRows || []) {
-      const isStatus = r.statusAnalisa === 'ANOMALI' || r.statusAnalisa === 'PERLU_REVIEW';
-      const isPlacement = r.placementStatus === 'REVIEW' || r.placementStatus === 'FALLBACK';
-      const isRole = !r.is3RoleLengkap;
-      if (!isStatus && !isPlacement && !isRole) continue;
-
+    const detected = detectFinalAnomalies(finalRows || [], masterRows || []);
+    return detected.map(({ row: r, primary, reasons }) => {
       const kp = String(r.kodePosPten || '').replace(/\D/g, '').trim();
       const titik = kp ? titikKodePos[kp] : undefined;
 
-      const reasons: string[] = [];
-      if (r.statusAnalisa === 'ANOMALI') reasons.push('Status analisa ANOMALI');
-      else if (r.statusAnalisa === 'PERLU_REVIEW') reasons.push('Status analisa PERLU REVIEW (keyakinan rendah)');
-      if (r.placementStatus === 'REVIEW') reasons.push(`Penempatan kelurahan/kecamatan → kota belum terbukti (${r.placementMethod || 'metode review'})`);
-      else if (r.placementStatus === 'FALLBACK') reasons.push('Penempatan memakai fallback (tanpa bukti blok kode pos)');
-      if (!r.is3RoleLengkap) reasons.push(`Role belum lengkap ${r.roleGrandTotal}/3 (Sales ${r.roleCabsal}, Verifikator ${r.roleCabapv1}, Penyetuju ${r.roleCabapv2})`);
-
-      let anomalyType: AnomalyType = 'STATUS';
       let anomalyTitle = 'Anomali Status Analisa';
       let anomalyBadge: { text: string; bg: string; color: string; border: string } = { text: r.statusAnalisa, bg: '#fee2e2', color: '#991b1b', border: '#f87171' };
-      if (!isStatus && isPlacement) {
-        anomalyType = 'PENEMPATAN';
+      if (primary === 'PULAU') {
+        anomalyTitle = 'Penempatan Beda Pulau';
+        anomalyBadge = { text: 'Beda Pulau', bg: '#fee2e2', color: '#991b1b', border: '#f87171' };
+      } else if (primary === 'PENEMPATAN') {
         anomalyTitle = 'Penempatan Belum Terverifikasi';
         anomalyBadge = { text: `Penempatan ${r.placementStatus}`, bg: '#ffedd5', color: '#9a3412', border: '#fb923c' };
-      } else if (!isStatus && !isPlacement && isRole) {
-        anomalyType = 'ROLE';
+      } else if (primary === 'ROLE') {
         anomalyTitle = 'Role Belum Lengkap';
         anomalyBadge = { text: `Role ${r.roleGrandTotal}/3`, bg: '#fef3c7', color: '#92400e', border: '#fcd34d' };
       }
 
-      items.push({
+      return {
         row: r,
         lat: titik?.lat ?? 0,
         lng: titik?.lng ?? 0,
         hasCoord: !!titik,
-        anomalyType,
+        anomalyType: primary,
         anomalyTitle,
         anomalyBadge,
         reasons,
-      });
-    }
-    return items;
-  }, [finalRows, titikKodePos, showAnomalyPanel]);
+      };
+    });
+  }, [finalRows, masterRows, titikKodePos, showAnomalyPanel]);
 
   const filteredAnomalyRows = useMemo(() => {
     if (anomalyTypeFilter === 'ALL') return anomalyRows;
@@ -1911,6 +1898,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
               {[
                 { id: 'ALL', label: `Semua (${anomalyRows.length})` },
+                { id: 'PULAU', label: `Beda Pulau (${anomalyRows.filter((r) => r.anomalyType === 'PULAU').length})` },
                 { id: 'STATUS', label: `Status (${anomalyRows.filter((r) => r.anomalyType === 'STATUS').length})` },
                 { id: 'PENEMPATAN', label: `Penempatan (${anomalyRows.filter((r) => r.anomalyType === 'PENEMPATAN').length})` },
                 { id: 'ROLE', label: `Role (${anomalyRows.filter((r) => r.anomalyType === 'ROLE').length})` },
