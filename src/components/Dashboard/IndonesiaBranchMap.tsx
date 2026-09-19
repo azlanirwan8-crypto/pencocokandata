@@ -44,6 +44,8 @@ import {
   batchGeocodeUniqueQueries,
   getStoredGoogleApiKey,
   setStoredGoogleApiKey,
+  muatTitikKodePos,
+  kodePosUjung,
   type GeoLocationResult,
   type BatchProgress,
 } from '../../utils/onlineGeoCoder';
@@ -228,6 +230,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   const [geocodingProgress, setGeocodingProgress] = useState<BatchProgress | null>(null);
   // Flag: true once the IndexedDB pre-load pass completes (so geocoding effect knows cache is ready)
   const [cachePreloaded, setCachePreloaded] = useState(false);
+  // Flag: true once the stored kode pos points (kodepos_geo) are loaded into memory
+  const [titikKodePosSiap, setTitikKodePosSiap] = useState(false);
   const lastAutoFitKeyRef = useRef('');
   const mapInteractionRef = useRef(false);
   const mapInteractionHandlersRef = useRef<{
@@ -269,11 +273,46 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     return () => { cancelled = true; };
   }, []); // run once on mount
 
-  // Realtime Geocoding Hook: Resolves unique branch & target coordinates via Google Maps / Online API
-  // Only runs AFTER cache preload so it only fetches truly uncached addresses
+  // Titik kode pos tersimpan (kodepos_geo di Neon) menjadi lokasi baris target:
+  // satu sumber dengan menu Kode Pos, jadi peta tidak menebak sendiri.
   useEffect(() => {
-    // Wait for IndexedDB preload to complete before checking what's missing
     if (!cachePreloaded) return;
+    let alive = true;
+    void muatTitikKodePos().then((titik) => {
+      if (!alive) return;
+      const seed = new Map<string, GeoLocationResult>();
+      for (const t of targetRows || []) {
+        if (!t._isMatched || hasExplicitCoordinates(t)) continue;
+        const q = buildTargetQuery(t);
+        const kode = q ? kodePosUjung(q) : undefined;
+        const p = kode ? titik[kode] : undefined;
+        if (!p) continue;
+        seed.set(q, {
+          lat: p.lat,
+          lng: p.lng,
+          formattedAddress: `Titik kode pos ${kode} (tersimpan di Neon)`,
+          source: p.sumber,
+        });
+      }
+      if (seed.size > 0) {
+        setResolvedCoords((prev) => {
+          const next = new Map(prev);
+          seed.forEach((val, key) => next.set(key, val));
+          return next;
+        });
+      }
+      setTitikKodePosSiap(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [cachePreloaded, targetRows]);
+
+  // Realtime Geocoding Hook: Resolves unique branch & target coordinates via Google Maps / Online API
+  // Only runs AFTER cache preload & stored kode pos points so it fetches truly unknown addresses
+  useEffect(() => {
+    // Wait for IndexedDB preload + the kodepos_geo index before checking what's missing
+    if (!cachePreloaded || !titikKodePosSiap) return;
     if (!masterRows || masterRows.length === 0) return;
 
     let isMounted = true;
@@ -351,7 +390,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [cachePreloaded, masterRows, targetRows, googleApiKey]);
+  }, [cachePreloaded, titikKodePosSiap, masterRows, targetRows, googleApiKey]);
 
   // List of exact Wilayah for map filtering
   const mapWilayahList = useMemo(() => {

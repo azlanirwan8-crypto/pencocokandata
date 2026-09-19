@@ -17,15 +17,20 @@ const IDB_PREFIX = 'geo_cache_';
 const sessionCache = new Map<string, GeoLocationResult>();
 
 type TitikSimpanan = { lat: number; lng: number; sumber: 'google' | 'esri' | 'osm' };
-let titikKodePos: Promise<Record<string, TitikSimpanan>> | null = null;
+let titikKodePosJanji: Promise<Record<string, TitikSimpanan>> | null = null;
+
+/** Kode pos = angka 5 digit paling ujung query (bukan nomor jalan di tengah alamat). */
+export function kodePosUjung(query: string): string | undefined {
+  return (query.trim().match(/(\d{5})(?:,\s*Indonesia)?\s*$/) || [])[1];
+}
 
 /**
  * Titik kode pos yang sudah tersimpan di Neon (tabel kodepos_geo). Inilah sumber
  * lokasi peta dashboard: sekali muat per sesi, tidak menebak ulang lewat internet.
  */
-function ambilTitikKodePos(): Promise<Record<string, TitikSimpanan>> {
-  if (!titikKodePos) {
-    titikKodePos = fetch('/api/kodepos-geo?view=points')
+export function muatTitikKodePos(): Promise<Record<string, TitikSimpanan>> {
+  if (!titikKodePosJanji) {
+    titikKodePosJanji = fetch('/api/kodepos-geo?view=points')
       .then((r) => (r.ok ? r.json() : { data: [] }))
       .then((json: any) => {
         const out: Record<string, TitikSimpanan> = {};
@@ -40,9 +45,12 @@ function ambilTitikKodePos(): Promise<Record<string, TitikSimpanan>> {
         }
         return out;
       })
-      .catch(() => ({} as Record<string, TitikSimpanan>));
+      .catch(() => {
+        titikKodePosJanji = null;
+        return {} as Record<string, TitikSimpanan>;
+      });
   }
-  return titikKodePos;
+  return titikKodePosJanji;
 }
 
 export function getStoredGoogleApiKey(): string {
@@ -103,7 +111,8 @@ export function buildTargetQuery(row: TargetRow): string {
 
 /**
  * Single realtime online geocoding lookup.
- * Checks RAM session cache first, then calls backend proxy or public provider.
+ * Kode pos yang sudah punya titik di Neon dipakai lebih dulu; selain itu baru cache,
+ * lalu proxy backend /api/geocode dan penyedia publik.
  */
 export async function geocodeRealtime(
   query: string,
@@ -113,7 +122,25 @@ export async function geocodeRealtime(
   if (!clean) return null;
 
   const cacheKey = clean.toLowerCase();
-  
+
+  // 0. Titik kode pos yang tersimpan di Neon menang mutlak (dan idealnya sudah
+  //    terverifikasi Google): peta dashboard memakai titik yang sama dengan Kode Pos.
+  const kodePos = kodePosUjung(clean);
+  if (kodePos) {
+    const titik = (await muatTitikKodePos())[kodePos];
+    if (titik) {
+      const result: GeoLocationResult = {
+        lat: titik.lat,
+        lng: titik.lng,
+        formattedAddress: `Titik kode pos ${kodePos} (tersimpan di Neon)`,
+        source: titik.sumber,
+      };
+      sessionCache.set(cacheKey, result);
+      try { await set(IDB_PREFIX + cacheKey, result); } catch (e) {}
+      return result;
+    }
+  }
+
   // L1 Cache: In-Memory
   if (sessionCache.has(cacheKey)) {
     return sessionCache.get(cacheKey)!;
@@ -131,25 +158,6 @@ export async function geocodeRealtime(
   }
 
   const activeKey = apiKey || getStoredGoogleApiKey();
-
-  // 0. Titik kode pos yang sudah tersimpan & terverifikasi di Neon menang mutlak:
-  //    peta dashboard harus memakai titik yang sama dengan menu Kode Pos. Hanya
-  //    angka 5 digit di ujung query (bukan nomor jalan) yang dianggap kode pos.
-  const kodePos = (clean.match(/(\d{5})(?:,\s*Indonesia)?\s*$/) || [])[1];
-  if (kodePos) {
-    const titik = (await ambilTitikKodePos())[kodePos];
-    if (titik) {
-      const result: GeoLocationResult = {
-        lat: titik.lat,
-        lng: titik.lng,
-        formattedAddress: `Titik kode pos ${kodePos} (tersimpan di Neon)`,
-        source: titik.sumber,
-      };
-      sessionCache.set(cacheKey, result);
-      try { await set(IDB_PREFIX + cacheKey, result); } catch (e) {}
-      return result;
-    }
-  }
 
   // 1. Try local or Vercel serverless /api/geocode endpoint
   try {
