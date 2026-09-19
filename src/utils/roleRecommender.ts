@@ -69,8 +69,10 @@ export function findTopRoleMatchesByLocation(
   // Reset caches if dataset references changed
   if (lastRoleListCacheRef !== roleMappingList) {
     roleMatchCache.clear();
-    // Gunakan seluruh daftar mapping role agar sub branch (KCP) juga dapat dicocokkan dengan cabang master
-    cachedFullRoleList = roleMappingList;
+    // 🎯 PATOKAN: kandidat role HANYA cabang 3 role lengkap (Sales+Verifikator+Penyetuju = 1).
+    cachedFullRoleList = roleMappingList.filter(
+      (r) => r.qrsCabsal === 1 && r.qrsCabapv1 === 1 && r.qrsCabapv2 === 1
+    );
     lastRoleListCacheRef = roleMappingList;
   }
 

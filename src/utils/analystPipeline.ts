@@ -558,11 +558,19 @@ export function calculateCityMatchScore(textA: string, textB: string): { score: 
 // 🚀 PIPELINE ANALISIS 3 FASE BERBASIS 100% DATA MASTER
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ✅ Cabang sah sebagai tujuan mapping role hanya bila 3 role lengkap (Sales+Verifikator+Penyetuju).
+export function isRoleComplete(r: RoleMappingRecord): boolean {
+  return r.qrsCabsal === 1 && r.qrsCabapv1 === 1 && r.qrsCabapv2 === 1;
+}
+
 // 🏢 Helper UI Fase 2: hitung ulang mapping role & Wondr (Fase 3) untuk satu nama
 // outlet — dipakai grid saat operator mengganti outlet lewat rekomendasi terdekat,
 // supaya field Fase 3 baris itu tetap konsisten dengan rumus pipeline.
 export function matchRoleForOutlet(namaOutlet: string, cityKey: string, roleMappingList: RoleMappingRecord[]) {
-  const preCleanedRoles = roleMappingList.map((r) => ({ record: r, orgClean: cleanAndStandardizeText(r.organisasiTujuan) }));
+  // 🎯 PATOKAN: pencocokan role HANYA boleh mengambil cabang yang 3 role lengkap
+  // (Sales + Verifikator + Penyetuju = 1). Cabang parsial tidak sah sebagai tujuan.
+  const completeRoles = roleMappingList.filter(isRoleComplete);
+  const preCleanedRoles = completeRoles.map((r) => ({ record: r, orgClean: cleanAndStandardizeText(r.organisasiTujuan) }));
   let matchedRole: RoleMappingRecord | null = null;
   let highestRoleScore = 0;
   let chosenAlgorithm = 'Direct Master Join';
@@ -575,13 +583,13 @@ export function matchRoleForOutlet(namaOutlet: string, cityKey: string, roleMapp
       chosenAlgorithm = algorithm;
     }
   }
-  if (!matchedRole && roleMappingList.length > 0) {
+  if (!matchedRole && completeRoles.length > 0) {
     const cityKeywords = cityKey.split(/\s+/).filter((w) => w.length > 2);
     for (const keyword of cityKeywords) {
       const found = preCleanedRoles.find(({ orgClean }) => orgClean.includes(keyword.toUpperCase()) || orgClean.includes(keyword));
       if (found) { matchedRole = found.record; highestRoleScore = 0.85; chosenAlgorithm = 'Geographic City Keyword Match'; break; }
     }
-    if (!matchedRole) { matchedRole = roleMappingList[0]; highestRoleScore = 0.70; chosenAlgorithm = 'Default Fallback (First Available)'; }
+    if (!matchedRole) { matchedRole = completeRoles[0]; highestRoleScore = 0.70; chosenAlgorithm = 'Default Fallback (Cabang 3 Role Lengkap)'; }
   }
   const organisasiTujuan = matchedRole?.organisasiTujuan || `${namaOutlet.toUpperCase()} BRANCH OFFICE`;
   const isKc = matchedRole ? getUnitCategory(matchedRole.organisasiTujuan) === 'KC' : true;
@@ -1094,7 +1102,9 @@ export async function executeAnalystPipeline(
   const ptenFuzzyCache = new Map<string, PTENRecord | null>();
   const kodePosCityCache = new Map<string, { rows: KodePosRow[]; status: 'VERIFIED' | 'REVIEW'; method: string }>();
   const roleMatchCache = new Map<string, { role: RoleMappingRecord | null; score: number; algorithm: string }>();
-  const preCleanedRoles = roleMappingList.map((r) => ({ record: r, orgClean: cleanAndStandardizeText(r.organisasiTujuan) }));
+  // 🎯 PATOKAN: pool pencocokan role = hanya cabang 3 role lengkap (Sales+Verifikator+Penyetuju).
+  const completeRoleList = roleMappingList.filter(isRoleComplete);
+  const preCleanedRoles = completeRoleList.map((r) => ({ record: r, orgClean: cleanAndStandardizeText(r.organisasiTujuan) }));
 
   for (let i = 0; i < itemsToProcess.length; i++) {
     const raw = itemsToProcess[i];
@@ -1251,13 +1261,13 @@ export async function executeAnalystPipeline(
           chosenAlgorithm = algorithm;
         }
       }
-      if (!matchedRole && roleMappingList.length > 0) {
+      if (!matchedRole && completeRoleList.length > 0) {
         const cityKeywords = ptenCleanCity.split(/\s+/).filter(w => w.length > 2);
         for (const keyword of cityKeywords) {
           const found = preCleanedRoles.find(({ orgClean }) => orgClean.includes(keyword.toUpperCase()) || orgClean.includes(keyword));
           if (found) { matchedRole = found.record; highestRoleScore = 0.85; chosenAlgorithm = 'Geographic City Keyword Match'; break; }
         }
-        if (!matchedRole) { matchedRole = roleMappingList[0]; highestRoleScore = 0.70; chosenAlgorithm = 'Default Fallback (First Available)'; }
+        if (!matchedRole) { matchedRole = completeRoleList[0]; highestRoleScore = 0.70; chosenAlgorithm = 'Default Fallback (Cabang 3 Role Lengkap)'; }
       }
       roleMatchCache.set(outletNameToMatch, { role: matchedRole, score: highestRoleScore, algorithm: chosenAlgorithm });
     }
