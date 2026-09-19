@@ -97,11 +97,13 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
 
   // Titik koordinat (kodepos_geo di Neon)
   const [geoStats, setGeoStats] = useState<KodePosGeoStats | null>(null);
-  const [geoRun, setGeoRun] = useState<{ aktif: boolean; mode: 'isi' | 'verifikasi'; pesan: string; persen: number }>({
+  const [geoRun, setGeoRun] = useState<{ aktif: boolean; mode: 'isi' | 'verifikasi'; pesan: string; persen: number; diproses: number; sisa: number }>({
     aktif: false,
     mode: 'isi',
     pesan: '',
     persen: 0,
+    diproses: 0,
+    sisa: 0,
   });
   const geoStopRef = useRef<boolean>(false);
 
@@ -239,7 +241,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
       return;
     }
     geoStopRef.current = false;
-    setGeoRun({ aktif: true, mode, pesan: 'Menghubungi penyedia peta...', persen: 0 });
+    setGeoRun({ aktif: true, mode, pesan: 'Menghubungi penyedia peta...', persen: 0, diproses: 0, sisa: 0 });
     let diproses = 0;
     let pesanAkhir = '';
     try {
@@ -267,12 +269,14 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
           mode,
           pesan: keterangan,
           persen: Math.min(99, Math.round((diproses / Math.max(diproses + sisa, 1)) * 100)),
+          diproses,
+          sisa,
         });
         if (hasil.diproses === 0 || sisa === 0) break;
       }
     } finally {
       geoStopRef.current = false;
-      setGeoRun({ aktif: false, mode, pesan: pesanAkhir, persen: 0 });
+      setGeoRun({ aktif: false, mode, pesan: pesanAkhir, persen: 0, diproses: 0, sisa: 0 });
       await refreshGeo();
       setReloadKey((k) => k + 1);
     }
@@ -915,11 +919,13 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
         <div
           className="metric-card emerald"
           title={
-            geoStats
-              ? `${geoStats.geo.punya.toLocaleString('id-ID')} kode pos punya titik · ${geoStats.geo.google.toLocaleString('id-ID')} terverifikasi Google · ${geoStats.menunggu.toLocaleString('id-ID')} belum dicari` +
-                (geoStats.geo.perkiraan ? ` · ${geoStats.geo.perkiraan.toLocaleString('id-ID')} hanya perkiraan wilayah` : '') +
-                (geoStats.geo.gagal ? ` · ${geoStats.geo.gagal.toLocaleString('id-ID')} tidak ditemukan` : '')
-              : 'Titik koordinat kode pos diambil dari tabel kodepos_geo di Neon'
+            geoRun.aktif
+              ? geoRun.pesan
+              : geoStats
+                ? `${geoStats.geo.punya.toLocaleString('id-ID')} kode pos punya titik · ${geoStats.geo.google.toLocaleString('id-ID')} terverifikasi Google · ${geoStats.menunggu.toLocaleString('id-ID')} belum dicari` +
+                  (geoStats.geo.perkiraan ? ` · ${geoStats.geo.perkiraan.toLocaleString('id-ID')} hanya perkiraan wilayah` : '') +
+                  (geoStats.geo.gagal ? ` · ${geoStats.geo.gagal.toLocaleString('id-ID')} tidak ditemukan` : '')
+                : 'Titik koordinat kode pos diambil dari tabel kodepos_geo di Neon'
           }
         >
           <div className="metric-header">
@@ -928,12 +934,23 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               <Navigation size={14} />
             </div>
           </div>
-          <div className="metric-value">{(geoStats?.geo.punya || 0).toLocaleString('id-ID')}</div>
-          <div className="metric-footer">
-            {geoStats?.geo.google
-              ? `${geoStats.geo.google.toLocaleString('id-ID')} dari Google`
-              : `${(geoStats?.menunggu || 0).toLocaleString('id-ID')} belum ada`}
+          <div className="metric-value">
+            {(geoRun.aktif ? geoRun.diproses : geoStats?.geo.punya || 0).toLocaleString('id-ID')}
           </div>
+          <div className="metric-footer">
+            {geoRun.aktif
+              ? `${geoRun.sisa.toLocaleString('id-ID')} belum ada · ${geoRun.persen}%`
+              : geoRun.pesan
+                ? geoRun.pesan
+                : geoStats?.geo.google
+                  ? `${geoStats.geo.google.toLocaleString('id-ID')} dari Google`
+                  : `${(geoStats?.menunggu || 0).toLocaleString('id-ID')} belum ada`}
+          </div>
+          {geoRun.aktif && (
+            <div style={{ marginTop: '0.5rem', height: '5px', background: 'rgba(10, 179, 156, 0.15)', borderRadius: '4px', overflow: 'hidden' }}>
+              <div style={{ width: `${geoRun.persen}%`, height: '100%', background: 'linear-gradient(90deg, #405189, #0ab39c)', transition: 'width .2s' }} />
+            </div>
+          )}
         </div>
       </div>
 
@@ -1070,20 +1087,6 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
             >
               Reset Filter (Lihat Semua)
             </button>
-          </div>
-        )}
-
-        {/* Progress titik koordinat */}
-        {(geoRun.aktif || geoRun.pesan) && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.5rem 0.65rem', background: '#f8f9fe', border: '1px solid #e9ebec', borderRadius: '6px' }}>
-            <Navigation size={14} color="#0ab39c" style={{ flexShrink: 0 }} />
-            <span style={{ fontSize: '0.76rem', fontWeight: 600, color: '#405189' }}>
-              {geoRun.pesan || 'Memproses...'}
-            </span>
-            <div style={{ flex: 1, height: '6px', background: '#e9ebec', borderRadius: '4px', overflow: 'hidden', minWidth: '80px' }}>
-              <div style={{ width: `${geoRun.persen}%`, height: '100%', background: 'linear-gradient(90deg, #405189, #0ab39c)', transition: 'width .2s' }} />
-            </div>
-            <span style={{ fontSize: '0.72rem', color: '#878a99', whiteSpace: 'nowrap' }}>{geoRun.persen}%</span>
           </div>
         )}
 
