@@ -110,7 +110,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   };
 
   const openOverrideModal = (masterCity: string) => {
-    const ptenKota = overrideDrafts[cityMatchKey(masterCity)];
+    const k = cityMatchKey(masterCity);
+    const ptenKota = overrideDrafts[k] || cityOverrides[k];
     if (!ptenKota || !onApproveCityOverride) return;
     const ptenKodePos = Array.from(
       new Set(ptenList.filter((p) => p.kotaPten === ptenKota).map((p) => String(p.kodePosPten || '').trim()).filter(Boolean))
@@ -450,7 +451,6 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
             Baris kodepos hanya masuk bila kotanya ada di data PTEN. Pilih kota PTEN yang cocok lalu klik Setujui —
             seluruh baris kota itu ikut dianalisa ulang.
           </p>
-          {coverage.unmappedCities.length > 0 && (
           <div style={{ maxHeight: '240px', overflowY: 'auto', border: '1px solid #f0e2c2', borderRadius: '4px' }}>
             <table className="modern-table" style={{ width: '100%', fontSize: '0.75rem' }}>
               <thead style={{ position: 'sticky', top: 0, background: '#fdf3e0' }}>
@@ -504,44 +504,75 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                     </tr>
                   );
                 })}
+                {Object.entries(cityOverrides).map(([key, ptenKota]) => {
+                  const rowsKota = kodePosRows.filter((r) => cityMatchKey(r.kabupatenKota) === key);
+                  const masterName = rowsKota[0]?.kabupatenKota || key;
+                  const draft = overrideDrafts[key] || ptenKota;
+                  return (
+                    <tr key={`ov-${key}`} style={{ background: '#f0faf7' }}>
+                      <td style={{ fontWeight: 600 }}>
+                        {masterName}
+                        <span style={{ marginLeft: '0.4rem', fontSize: '0.66rem', fontWeight: 700, color: '#0ab39c' }}>TERSIPAH</span>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>{rowsKota[0]?.kodePos || ''}</td>
+                      <td>{rowsKota[0]?.provinsi || ''}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 700 }}>{rowsKota.length.toLocaleString('id-ID')}</td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <PtenCityPicker
+                            options={ptenKotaOptions}
+                            value={draft}
+                            disabled={isProcessing || !onApproveCityOverride}
+                            onChange={(kota) => setOverrideDrafts((prev) => ({ ...prev, [key]: kota }))}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => openOverrideModal(masterName)}
+                            disabled={isProcessing || !draft || !onApproveCityOverride}
+                            style={{
+                              flexShrink: 0,
+                              padding: '0.32rem 0.7rem',
+                              fontSize: '0.73rem',
+                              fontWeight: 700,
+                              border: 'none',
+                              borderRadius: '4px',
+                              background: draft && draft !== ptenKota ? '#0ab39c' : '#405189',
+                              color: '#fff',
+                              cursor: draft && !isProcessing ? 'pointer' : 'not-allowed',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            Revisi
+                          </button>
+                          {onRemoveCityOverride && (
+                            <button
+                              type="button"
+                              onClick={() => !isProcessing && onRemoveCityOverride(key)}
+                              disabled={isProcessing}
+                              title="Batalkan pemetaan — kota kembali ke belum terpetakan"
+                              style={{
+                                flexShrink: 0,
+                                padding: '0.32rem 0.55rem',
+                                fontSize: '0.73rem',
+                                border: '1px solid #d5dce8',
+                                borderRadius: '4px',
+                                background: '#fff',
+                                color: '#878a99',
+                                cursor: isProcessing ? 'wait' : 'pointer',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              Batalkan
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-          )}
-          {Object.keys(cityOverrides).length > 0 && (
-            <div style={{ marginTop: '0.55rem', display: 'flex', flexWrap: 'wrap', gap: '0.4rem', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#8a5a00' }}>Pemetaan aktif:</span>
-              {Object.entries(cityOverrides).map(([key, ptenKota]) => {
-                const masterName =
-                  kodePosRows.find((r) => cityMatchKey(r.kabupatenKota) === key)?.kabupatenKota || key;
-                return (
-                  <span
-                    key={key}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '0.3rem',
-                      fontSize: '0.72rem',
-                      background: '#e8f7f5',
-                      border: '1px solid #b7ebe4',
-                      color: '#0ab39c',
-                      borderRadius: '20px',
-                      padding: '0.15rem 0.6rem',
-                    }}
-                  >
-                    {masterName} → {ptenKota}
-                    {onRemoveCityOverride && (
-                      <X
-                        size={12}
-                        style={{ cursor: isProcessing ? 'not-allowed' : 'pointer' }}
-                        onClick={() => !isProcessing && onRemoveCityOverride(key)}
-                      />
-                    )}
-                  </span>
-                );
-              })}
-            </div>
-          )}
         </details>
       )}
 
