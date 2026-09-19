@@ -548,11 +548,14 @@ export const App: React.FC = () => {
   };
 
   // Kartu fase mengikuti status review: persen = bagian baris yang sudah di-approve fase itu.
+  // Baris TIDAK_ANALISA dikecualikan dari penyebut — mereka menunggu pemetaan manual
+  // (bukan bagian persetujuan), sama seperti phaseState di grid.
   const phaseApproval = useMemo(() => {
-    const total = analystRows.length;
+    const analysed = analystRows.filter((r) => r.kategori !== 'TIDAK_ANALISA');
+    const total = analysed.length;
     const share = (count: number) => (total ? Math.round((count / total) * 100) : 0);
     let a = 0, b = 0, c = 0;
-    for (const r of analystRows) {
+    for (const r of analysed) {
       if (r.fase1Approved) a++;
       if (r.fase2Approved) b++;
       if (r.fase3Approved) c++;
