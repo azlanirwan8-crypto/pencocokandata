@@ -14,7 +14,7 @@ import { RoleMappingManager } from './components/RoleMapping/RoleMappingManager'
 import { KodePosManager } from './components/KodePosData/KodePosManager';
 import { AnalystCanvas } from './components/WorkingEngine/AnalystCanvas';
 import { AnalystResultsGrid } from './components/WorkingEngine/AnalystResultsGrid';
-import { executeAnalystPipeline, type AnalystRow, type AnalystCoverage } from './utils/analystPipeline';
+import { executeAnalystPipeline, cityMatchKey, type AnalystRow, type AnalystCoverage } from './utils/analystPipeline';
 import type { ActiveTab } from './components/Sidebar';
 
 import type { MasterRow, TargetRow, MatchingStats, WilayahStat, WilayahSetting } from './types';
@@ -88,6 +88,9 @@ export const App: React.FC = () => {
   // New Data Analyst 3-Phase Engine State (100% Data Master Driven)
   const [analystRows, setAnalystRows] = useState<AnalystRow[]>([]);
   const [analystCoverage, setAnalystCoverage] = useState<AnalystCoverage | null>(null);
+  // Pemetaan manual hasil "Setujui" di laporan cakupan: kunci kota master (cityMatchKey)
+  // → nama kota PTEN. Baris master kota itu dipakai atas nama kota PTEN terpilih.
+  const [cityOverrides, setCityOverrides] = useState<Record<string, string>>({});
   // Full Master Kode Pos list (loaded once from Neon, cached in memory for pipeline runs)
   const kodePosListRef = useRef<KodePosRow[] | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
@@ -126,7 +129,7 @@ export const App: React.FC = () => {
       // Read local IndexedDB immediately in parallel so the UI is ready instantly
       // -----------------------------------------------------------------------
       try {
-        const [savedMaster, savedTarget, savedWilayah, savedPten, savedRoleMapping] = await Promise.all([
+        const [savedMaster, savedTarget, savedWilayah, savedPten, savedRoleMapping, savedCityOverrides] = await Promise.all([
           getItem<{ rows: MasterRow[]; fileName: string }>('master_data').catch(() => null),
           getItem<{
             rows: TargetRow[];
@@ -137,6 +140,7 @@ export const App: React.FC = () => {
           getItem<WilayahSetting[]>('wilayah_settings').catch(() => null),
           getItem<PTENRecord[]>('pten_master_data').catch(() => null),
           getItem<RoleMappingRecord[]>('role_mapping_data').catch(() => null),
+          getItem<Record<string, string>>('analyst_city_overrides').catch(() => null),
         ]);
 
         if (savedMaster && savedMaster.rows && savedMaster.rows.length > 0) {
@@ -171,6 +175,10 @@ export const App: React.FC = () => {
         if (savedRoleMapping && Array.isArray(savedRoleMapping) && savedRoleMapping.length > 0) {
           setRoleMappingList(savedRoleMapping);
           setRoleMappingCount(savedRoleMapping.length);
+        }
+
+        if (savedCityOverrides && typeof savedCityOverrides === 'object' && !Array.isArray(savedCityOverrides)) {
+          setCityOverrides(savedCityOverrides);
         }
 
         const savedKodePos = await getItem<any[]>('kodepos_master_data');
@@ -469,10 +477,21 @@ export const App: React.FC = () => {
       }
 
       let lastPhase: 1 | 2 | 3 = 1;
+      // ── Pemetaan manual (Setujui di laporan cakupan): baris master kota yang
+      //    dipetakan operator dipakai ATAS NAMA kota PTEN pilihan, sehingga ikut
+      //    join nama-kota deterministik seperti kota asli PTEN (bukan fuzzy). ──
+      const overrideKeys = Object.keys(cityOverrides);
+      const kodePosInput =
+        overrideKeys.length > 0
+          ? kodePosForPipeline.map((kp) => {
+              const ptenKota = cityOverrides[cityMatchKey(kp.kabupatenKota)];
+              return ptenKota ? { ...kp, kabupatenKota: ptenKota } : kp;
+            })
+          : kodePosForPipeline;
       const { rows: results, coverage } = await executeAnalystPipeline(
         masterRows,
         ptenList,
-        kodePosForPipeline,
+        kodePosInput,
         wilayahSettings,
         roleMappingList,
         (phase, pct, _processed, _total, msg) => {
@@ -545,6 +564,23 @@ export const App: React.FC = () => {
     setAnalystProgress(0);
     setAnalystMessage('');
     await setItem('analyst_results_data', []);
+  };
+
+  // Operator memetakan 1 kota master (dari tab "belum terpetakan") ke kota PTEN pilihan.
+  // Override disimpan permanen lalu pipeline dijalankan ulang supaya seluruh angka ikut berubah.
+  const handleApproveCityOverride = async (masterCity: string, ptenKota: string) => {
+    const next = { ...cityOverrides, [cityMatchKey(masterCity)]: ptenKota };
+    setCityOverrides(next);
+    await setItem('analyst_city_overrides', next);
+    await handleStartAnalystPipeline(false);
+  };
+
+  const handleRemoveCityOverride = async (masterKey: string) => {
+    const next = { ...cityOverrides };
+    delete next[masterKey];
+    setCityOverrides(next);
+    await setItem('analyst_city_overrides', next);
+    if (analystRows.length > 0) await handleStartAnalystPipeline(false);
   };
 
   const handleUpdateAnalystRow = (updated: AnalystRow) => {
@@ -928,6 +964,11 @@ export const App: React.FC = () => {
                   isProcessing={isAnalyzing}
                   wilayahSettings={wilayahSettings}
                   coverage={analystCoverage}
+                  ptenList={ptenList}
+                  kodePosRows={kodePosListRef.current || []}
+                  cityOverrides={cityOverrides}
+                  onApproveCityOverride={handleApproveCityOverride}
+                  onRemoveCityOverride={handleRemoveCityOverride}
                 />
               )}
             </div>

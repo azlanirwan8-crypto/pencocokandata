@@ -20,8 +20,13 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import type { AnalystRow, AnalystCoverage } from '../../utils/analystPipeline';
+import { cityMatchKey } from '../../utils/analystPipeline';
+import type { KodePosRow } from '../../utils/neonSync';
+import type { PTENRecord } from '../PTENData/PTENManager';
 import type { WilayahSetting } from '../../types';
 import { AnalystRowEditModal } from './AnalystRowEditModal';
+import { PtenCityPicker } from './PtenCityPicker';
+import { CityOverrideModal } from './CityOverrideModal';
 import { formatWilayahName } from '../../utils/normalizer';
 import { formatWilayahCode } from '../../utils/excel';
 import { exportAnalystExecutivePdf } from '../../utils/pdfExport';
@@ -38,6 +43,11 @@ interface AnalystResultsGridProps {
   isProcessing: boolean;
   wilayahSettings: WilayahSetting[];
   coverage?: AnalystCoverage | null;
+  ptenList?: PTENRecord[];
+  kodePosRows?: KodePosRow[];
+  cityOverrides?: Record<string, string>;
+  onApproveCityOverride?: (masterCity: string, ptenKota: string) => void;
+  onRemoveCityOverride?: (masterKey: string) => void;
 }
 
 export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
@@ -51,6 +61,11 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   isProcessing,
   wilayahSettings,
   coverage,
+  ptenList = [],
+  kodePosRows = [],
+  cityOverrides = {},
+  onApproveCityOverride,
+  onRemoveCityOverride,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'all' | 'fase1' | 'fase2' | 'fase3'>('fase1');
   const [selectedWilayah, setSelectedWilayah] = useState<string>('ALL');
@@ -68,6 +83,41 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   // Edit Modal
   const [editingRow, setEditingRow] = useState<AnalystRow | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
+
+  // Pemetaan kota manual (laporan cakupan): pilihan sementara per kota + modal konfirmasi
+  const [overrideDrafts, setOverrideDrafts] = useState<Record<string, string>>({});
+  const [overrideModal, setOverrideModal] = useState<{
+    masterCity: string;
+    masterRows: KodePosRow[];
+    ptenKota: string;
+    ptenKodePos: string[];
+  } | null>(null);
+
+  // Daftar nama kota unik di PTEN untuk dropdown pemetaan manual
+  const ptenKotaOptions = useMemo(() => {
+    const set = new Set<string>();
+    ptenList.forEach((p) => {
+      const k = String(p.kotaPten || '').trim();
+      if (k) set.add(k);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'id', { sensitivity: 'base' }));
+  }, [ptenList]);
+
+  // Baris master milik 1 kota (dipakai modal pratinjau — persis yang akan berpindah)
+  const masterRowsForCity = (cityRaw: string): KodePosRow[] => {
+    const key = cityMatchKey(cityRaw);
+    return kodePosRows.filter((r) => cityMatchKey(r.kabupatenKota) === key);
+  };
+
+  const openOverrideModal = (masterCity: string) => {
+    const ptenKota = overrideDrafts[cityMatchKey(masterCity)];
+    if (!ptenKota || !onApproveCityOverride) return;
+    const ptenKodePos = Array.from(
+      new Set(ptenList.filter((p) => p.kotaPten === ptenKota).map((p) => String(p.kodePosPten || '').trim()).filter(Boolean))
+    );
+    setOverrideModal({ masterCity, masterRows: masterRowsForCity(masterCity), ptenKota, ptenKodePos });
+  };
+
 
   // Success Notification
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
@@ -386,7 +436,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       {/* ────────────────────────────────────────────────────────────────────────── */}
       {/* 1b. LAPORAN CAKUPAN KODEPOS → FASE 1 (kenapa jumlah bisa ≠ master)        */}
       {/* ────────────────────────────────────────────────────────────────────────── */}
-      {coverage && coverage.unmappedCities.length > 0 && (
+      {coverage && (coverage.unmappedCities.length > 0 || Object.keys(cityOverrides).length > 0) && (
         <details
           style={{ background: '#fff8ec', border: '1px solid #f2d9a8', borderRadius: '6px', padding: '0.75rem 1rem' }}
           open
@@ -397,9 +447,10 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
             {(coverage.kodePosTotal - coverage.kodePosMapped).toLocaleString('id-ID')} baris tidak masuk)
           </summary>
           <p style={{ fontSize: '0.78rem', color: '#6b5836', margin: '0.5rem 0' }}>
-            Baris kodepos hanya masuk bila kotanya ada di data PTEN. Kota di daftar ini ada di master KodePos
-            tetapi tidak ditemukan di PTEN, jadi belum ikut dianalisa.
+            Baris kodepos hanya masuk bila kotanya ada di data PTEN. Pilih kota PTEN yang cocok lalu klik Setujui —
+            seluruh baris kota itu ikut dianalisa ulang.
           </p>
+          {coverage.unmappedCities.length > 0 && (
           <div style={{ maxHeight: '240px', overflowY: 'auto', border: '1px solid #f0e2c2', borderRadius: '4px' }}>
             <table className="modern-table" style={{ width: '100%', fontSize: '0.75rem' }}>
               <thead style={{ position: 'sticky', top: 0, background: '#fdf3e0' }}>
@@ -407,21 +458,90 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                   <th style={{ textAlign: 'left' }}>Kota / Kabupaten (di master KodePos)</th>
                   <th style={{ textAlign: 'center', width: '90px' }}>Kode Pos</th>
                   <th style={{ textAlign: 'left', width: '160px' }}>Provinsi</th>
-                  <th style={{ textAlign: 'right', width: '90px' }}>Baris</th>
+                  <th style={{ textAlign: 'right', width: '70px' }}>Baris</th>
+                  <th style={{ textAlign: 'left', minWidth: '320px' }}>Kota / Kabupaten (di PTEN)</th>
                 </tr>
               </thead>
               <tbody>
-                {coverage.unmappedCities.map((c) => (
-                  <tr key={c.city}>
-                    <td style={{ fontWeight: 600 }}>{c.city}</td>
-                    <td style={{ textAlign: 'center' }}>{c.sampleKodePos}</td>
-                    <td>{c.provinsi}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700 }}>{c.rows.toLocaleString('id-ID')}</td>
-                  </tr>
-                ))}
+                {coverage.unmappedCities.map((c) => {
+                  const ck = cityMatchKey(c.city);
+                  const draft = overrideDrafts[ck] || '';
+                  return (
+                    <tr key={c.city}>
+                      <td style={{ fontWeight: 600 }}>{c.city}</td>
+                      <td style={{ textAlign: 'center' }}>{c.sampleKodePos}</td>
+                      <td>{c.provinsi}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 700 }}>{c.rows.toLocaleString('id-ID')}</td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <PtenCityPicker
+                            options={ptenKotaOptions}
+                            value={draft}
+                            disabled={isProcessing || !onApproveCityOverride}
+                            onChange={(kota) => setOverrideDrafts((prev) => ({ ...prev, [ck]: kota }))}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => openOverrideModal(c.city)}
+                            disabled={isProcessing || !draft || !onApproveCityOverride}
+                            style={{
+                              flexShrink: 0,
+                              padding: '0.32rem 0.7rem',
+                              fontSize: '0.73rem',
+                              fontWeight: 700,
+                              border: 'none',
+                              borderRadius: '4px',
+                              background: draft ? '#0ab39c' : '#d5dce8',
+                              color: '#fff',
+                              cursor: draft && !isProcessing ? 'pointer' : 'not-allowed',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            Setujui
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
+          )}
+          {Object.keys(cityOverrides).length > 0 && (
+            <div style={{ marginTop: '0.55rem', display: 'flex', flexWrap: 'wrap', gap: '0.4rem', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#8a5a00' }}>Pemetaan aktif:</span>
+              {Object.entries(cityOverrides).map(([key, ptenKota]) => {
+                const masterName =
+                  kodePosRows.find((r) => cityMatchKey(r.kabupatenKota) === key)?.kabupatenKota || key;
+                return (
+                  <span
+                    key={key}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.3rem',
+                      fontSize: '0.72rem',
+                      background: '#e8f7f5',
+                      border: '1px solid #b7ebe4',
+                      color: '#0ab39c',
+                      borderRadius: '20px',
+                      padding: '0.15rem 0.6rem',
+                    }}
+                  >
+                    {masterName} → {ptenKota}
+                    {onRemoveCityOverride && (
+                      <X
+                        size={12}
+                        style={{ cursor: isProcessing ? 'not-allowed' : 'pointer' }}
+                        onClick={() => !isProcessing && onRemoveCityOverride(key)}
+                      />
+                    )}
+                  </span>
+                );
+              })}
+            </div>
+          )}
         </details>
       )}
 
@@ -1158,6 +1278,29 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
         }}
         wilayahSettings={wilayahSettings}
         phase={viewTab === 'all' ? 'final' : viewTab}
+      />
+
+      {/* Modal Setujui Pemetaan Kota Manual */}
+      <CityOverrideModal
+        isOpen={overrideModal !== null}
+        masterCity={overrideModal?.masterCity || ''}
+        masterRows={overrideModal?.masterRows || []}
+        ptenKota={overrideModal?.ptenKota || ''}
+        ptenKodePos={overrideModal?.ptenKodePos || []}
+        isProcessing={isProcessing}
+        onClose={() => setOverrideModal(null)}
+        onConfirm={() => {
+          if (!overrideModal || !onApproveCityOverride) return;
+          const { masterCity, ptenKota, masterRows } = overrideModal;
+          setOverrideModal(null);
+          setOverrideDrafts((prev) => {
+            const next = { ...prev };
+            delete next[cityMatchKey(masterCity)];
+            return next;
+          });
+          showToast(`${masterRows.length.toLocaleString('id-ID')} baris ${masterCity} dipetakan ke ${ptenKota} — menganalisa ulang…`);
+          onApproveCityOverride(masterCity, ptenKota);
+        }}
       />
     </div>
   );
