@@ -103,6 +103,20 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'id', { sensitivity: 'base' }));
   }, [ptenList]);
 
+  // Ringkasan 1-pass baris master per kota — baris TERSIPAH tidak boleh memfilter
+  // 83 ribu baris kodePosRows setiap render (penyebab lag search/pagination)
+  const cityRowSummary = useMemo(() => {
+    const m = new Map<string, { name: string; kodePos: string; provinsi: string; count: number }>();
+    kodePosRows.forEach((r) => {
+      const k = cityMatchKey(r.kabupatenKota);
+      if (!k) return;
+      const s = m.get(k);
+      if (s) s.count++;
+      else m.set(k, { name: r.kabupatenKota, kodePos: r.kodePos, provinsi: r.provinsi, count: 1 });
+    });
+    return m;
+  }, [kodePosRows]);
+
   // Baris master milik 1 kota (dipakai modal pratinjau — persis yang akan berpindah)
   const masterRowsForCity = (cityRaw: string): KodePosRow[] => {
     const key = cityMatchKey(cityRaw);
@@ -505,8 +519,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                   );
                 })}
                 {Object.entries(cityOverrides).map(([key, ptenKota]) => {
-                  const rowsKota = kodePosRows.filter((r) => cityMatchKey(r.kabupatenKota) === key);
-                  const masterName = rowsKota[0]?.kabupatenKota || key;
+                  const ringkas = cityRowSummary.get(key);
+                  const masterName = ringkas?.name || key;
                   const draft = overrideDrafts[key] || ptenKota;
                   return (
                     <tr key={`ov-${key}`} style={{ background: '#f0faf7' }}>
@@ -514,9 +528,9 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                         {masterName}
                         <span style={{ marginLeft: '0.4rem', fontSize: '0.66rem', fontWeight: 700, color: '#0ab39c' }}>TERSIPAH</span>
                       </td>
-                      <td style={{ textAlign: 'center' }}>{rowsKota[0]?.kodePos || ''}</td>
-                      <td>{rowsKota[0]?.provinsi || ''}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 700 }}>{rowsKota.length.toLocaleString('id-ID')}</td>
+                      <td style={{ textAlign: 'center' }}>{ringkas?.kodePos || ''}</td>
+                      <td>{ringkas?.provinsi || ''}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 700 }}>{(ringkas?.count || 0).toLocaleString('id-ID')}</td>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                           <PtenCityPicker
