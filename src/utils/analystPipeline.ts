@@ -1,4 +1,5 @@
-import type { MasterRow, WilayahSetting } from '../types';
+import type { MasterRow, TargetRow, WilayahSetting } from '../types';
+import { isAcehRegion, findKimBranch } from './recommender';
 import type { PTENRecord } from '../components/PTENData/PTENManager';
 import type { RoleMappingRecord } from '../components/RoleMapping/RoleMappingManager';
 import { getUnitCategory, getWondrRecommendation } from '../components/RoleMapping/RoleMappingManager';
@@ -765,6 +766,10 @@ export async function executeAnalystPipeline(
     cityRawName: string;
     resolvedWilayah: ReturnType<typeof extractWilayahFromBranchCode>;
     sandiCabang: string;
+    branchCode: string;
+    kodeCabang: string;
+    sandi: string;
+    cabang: string;
     namaOutlet: string;
     statusOutlet: string;
     alamat: string;
@@ -1191,18 +1196,31 @@ export async function executeAnalystPipeline(
     }
 
     // ── Fase 2: Wilayah & Master Cabang ──
-    const branchCode = String(raw['Branch Code'] || raw['Kode Cabang'] || '').trim();
+    // 🕌 ATURAN ACEH (flow lama, recommender.ts): SELURUH penempatan di Provinsi
+    // Aceh dilayani Cabang KIM — sumber field Fase 2 diganti ke baris KIM master.
+    const kimAceh = isAcehRegion({
+      Provinsi: matchedProvinsi || '',
+      'Dati II': finalKotaPten,
+      Wilayah: raw.Wilayah || '',
+    } as unknown as TargetRow)
+      ? findKimBranch(masterCabangRows)
+      : null;
+    const rawFase2 = kimAceh || raw;
+    const branchCode = String(rawFase2['Branch Code'] || rawFase2['Kode Cabang'] || '').trim();
+    const kodeCabang = String(rawFase2['Kode Cabang'] || rawFase2['Branch Code'] || '').trim();
+    const sandi = String(rawFase2.Sandi || rawFase2['Sandi Cabang'] || '');
+    const cabang = String(rawFase2.Cabang || rawFase2['Sandi Cabang'] || '');
     const resolvedWilayah = extractWilayahFromBranchCode(
       branchCode,
       wilayahSettings,
-      raw.Wilayah || formatWilayahName(finalKotaPten)
+      rawFase2.Wilayah || formatWilayahName(finalKotaPten)
     );
     const sandiCabang =
-      raw['Sandi Cabang'] ||
-      (raw.Sandi && raw.Cabang ? `${raw.Sandi} - ${raw.Cabang}` : raw.Cabang || raw.Sandi || `00${(i % 99) + 1}`);
-    const namaOutlet = raw['Nama Outlet'] || raw.Cabang || `BNI KCP ${finalKotaPten}`;
-    const statusOutlet = raw['Status Outlet'] || 'Aktif';
-    const alamat = raw.ALAMAT || `Jl. Protokol No. ${i + 1}, ${finalKotaPten}`;
+      rawFase2['Sandi Cabang'] ||
+      (rawFase2.Sandi && rawFase2.Cabang ? `${rawFase2.Sandi} - ${rawFase2.Cabang}` : rawFase2.Cabang || rawFase2.Sandi || `00${(i % 99) + 1}`);
+    const namaOutlet = rawFase2['Nama Outlet'] || rawFase2.Cabang || `BNI KCP ${finalKotaPten}`;
+    const statusOutlet = rawFase2['Status Outlet'] || 'Aktif';
+    const alamat = rawFase2.ALAMAT || `Jl. Protokol No. ${i + 1}, ${finalKotaPten}`;
 
     // ── Fase 3: Mapping Role & 3 Role Lengkap ──
     let matchedRole: RoleMappingRecord | null = null;
@@ -1257,6 +1275,7 @@ export async function executeAnalystPipeline(
       placementStatus, placementMethod,
       cityKey: ptenCleanCity, cityRawName: finalKotaPten,
       resolvedWilayah, sandiCabang, namaOutlet, statusOutlet, alamat,
+      branchCode, kodeCabang, sandi, cabang,
       matchedRole, highestRoleScore, chosenAlgorithm,
       organisasiTujuan, tipeUnit, roleCabsal, roleCabapv1, roleCabapv2,
       is3RoleLengkap, alurWondr, flowDescription: flowDesc, confidenceScore, statusAnalisa,
@@ -1396,7 +1415,6 @@ export async function executeAnalystPipeline(
   });
 
   for (let i = 0; i < itemsToProcess.length; i++) {
-    const raw = itemsToProcess[i];
     const meta = rowMetaCache[i];
     const prevRow = previousRows?.[i];
 
@@ -1459,10 +1477,10 @@ export async function executeAnalystPipeline(
         // Fase 2
         wilayah: meta.resolvedWilayah.wilayahName !== '-' ? meta.resolvedWilayah.wilayahName : 'Wilayah 01',
         sandiCabang: String(meta.sandiCabang),
-        sandi: String(raw.Sandi || raw['Sandi Cabang'] || ''),
-        cabang: String(raw.Cabang || raw['Sandi Cabang'] || ''),
-        branchCode: String(raw['Branch Code'] || raw['Kode Cabang'] || '').trim(),
-        kodeCabang: String(raw['Kode Cabang'] || raw['Branch Code'] || '').trim(),
+        sandi: meta.sandi,
+        cabang: meta.cabang,
+        branchCode: meta.branchCode,
+        kodeCabang: meta.kodeCabang,
         namaOutlet: meta.namaOutlet,
         statusOutlet: meta.statusOutlet,
         alamat: meta.alamat,
