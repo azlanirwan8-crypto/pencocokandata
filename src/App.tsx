@@ -16,6 +16,7 @@ import { AnalystCanvas } from './components/WorkingEngine/AnalystCanvas';
 import { AnalystResultsGrid } from './components/WorkingEngine/AnalystResultsGrid';
 import { FinalDataManager } from './components/WorkingEngine/FinalDataManager';
 import { executeAnalystPipeline, cityMatchKey, makeFinalKey, type AnalystRow, type AnalystCoverage } from './utils/analystPipeline';
+import { getIslandFromProvinsi } from './utils/roleRecommender';
 import type { ActiveTab } from './components/Sidebar';
 
 import type { MasterRow, TargetRow, MatchingStats, WilayahStat, WilayahSetting } from './types';
@@ -96,6 +97,8 @@ export const App: React.FC = () => {
   const [cityOverrides, setCityOverrides] = useState<Record<string, string>>({});
   // Full Master Kode Pos list (loaded once from Neon, cached in memory for pipeline runs)
   const kodePosListRef = useRef<KodePosRow[] | null>(null);
+  // Cerminan reaktif dari kodePosListRef agar Dashboard bisa menghitung cakupan kode pos.
+  const [kodePosMasterRows, setKodePosMasterRows] = useState<KodePosRow[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [analystProgress, setAnalystProgress] = useState<number>(0);
   const [analystMessage, setAnalystMessage] = useState<string>('');
@@ -191,6 +194,7 @@ export const App: React.FC = () => {
           // supaya Analisa tidak mengunduh ulang 83 ribu baris dari cloud.
           if (savedKodePos.length > DEFAULT_KODEPOS_DATA.length) {
             kodePosListRef.current = savedKodePos as KodePosRow[];
+            setKodePosMasterRows(savedKodePos as KodePosRow[]);
           }
         } else {
           setKodePosCount(DEFAULT_KODEPOS_DATA.length);
@@ -456,6 +460,58 @@ export const App: React.FC = () => {
       });
   }, [dashboardFilteredRows, dashboardWilayahFilter]);
 
+  // ── Metrik Dashboard berbasis DATA FINAL (real, bukan dummy) ──
+  const finalMetrics = useMemo(() => {
+    const finalCount = finalRows.length;
+    const normKp = (v: string) => String(v || '').replace(/\D/g, '').slice(0, 5);
+    const distinctKodePos = new Set(finalRows.map((r) => normKp(r.kodePosPten)).filter(Boolean)).size;
+
+    // Kartu "belum dikerjakan": cocokkan SELURUH Master Kode Pos dengan Data Final
+    // (kunci kode pos + kelurahan). Bila master penuh belum termuat, pakai selisih jumlah.
+    const fullMaster = kodePosMasterRows.length > DEFAULT_KODEPOS_DATA.length ? kodePosMasterRows : null;
+    const processedKeys = new Set(finalRows.map((r) => makeFinalKey(r.kodePosPten, r.kelurahan)));
+    const totalKodePos = fullMaster ? fullMaster.length : kodePosCount;
+    const belumDikerjakan = fullMaster
+      ? fullMaster.reduce((n, kp) => (processedKeys.has(makeFinalKey(kp.kodePos, kp.kelurahan)) ? n : n + 1), 0)
+      : Math.max(0, totalKodePos - finalCount);
+
+    // Kartu anomali: penempatan final yang nyebrang PULAU (dilarang), KECUALI Aceh → KIM.
+    const outletIdx = new Map<string, MasterRow>();
+    const kodeIdx = new Map<string, MasterRow>();
+    for (const m of masterRows) {
+      const no = String(m['Nama Outlet'] || '').trim().toUpperCase();
+      if (no && !outletIdx.has(no)) outletIdx.set(no, m);
+      const kc = String(m['Kode Cabang'] || m['Branch Code'] || '').trim();
+      if (kc && !kodeIdx.has(kc)) kodeIdx.set(kc, m);
+    }
+    const isAceh = (s: string) => /ACEH|NANGGROE|\bNAD\b/.test(String(s || '').toUpperCase());
+    let anomali = 0;
+    for (const r of finalRows) {
+      if (isAceh(`${r.provinsi} ${r.kotaPten} ${r.kotaPtenMax15} ${r.kelurahan} ${r.kecamatan}`)) continue;
+      const branch =
+        outletIdx.get(String(r.namaOutlet || '').trim().toUpperCase()) ||
+        kodeIdx.get(String(r.kodeCabang || r.branchCode || '').trim());
+      if (!branch) continue;
+      const rowIsland = getIslandFromProvinsi(r.provinsi, r.kotaPtenMax15 || r.kotaPten, `${r.kelurahan} ${r.kecamatan}`);
+      const branchIsland = getIslandFromProvinsi(branch.Provinsi, branch['Dati II'], `${branch.Kelurahan} ${branch.Kecamatan}`);
+      if (rowIsland !== 'Lainnya' && branchIsland !== 'Lainnya' && rowIsland !== branchIsland) anomali++;
+    }
+
+    // Kartu "kode pos dengan cabang terbanyak" di Data Final.
+    const byKode = new Map<string, { count: number; kota: string }>();
+    for (const r of finalRows) {
+      const kp = normKp(r.kodePosPten);
+      if (!kp) continue;
+      const e = byKode.get(kp);
+      if (e) e.count++;
+      else byKode.set(kp, { count: 1, kota: r.kotaPtenMax15 || r.kotaPten || r.groupKota || '-' });
+    }
+    let top = { kodePos: '-', count: 0, kota: '-' };
+    for (const [kp, v] of byKode) if (v.count > top.count) top = { kodePos: kp, count: v.count, kota: v.kota };
+
+    return { finalCount, distinctKodePos, totalKodePos, belumDikerjakan, anomali, top };
+  }, [finalRows, kodePosMasterRows, kodePosCount, masterRows]);
+
   // Execution Trigger for New Data Analyst Engine (3-Phase Pipeline)
   // `overrides` dipakai saat re-run langsung setelah Setujui/Batalkan — state
   // cityOverrides belum ter-update di render ini, jadi kirim nilainya eksplisit.
@@ -486,6 +542,7 @@ export const App: React.FC = () => {
               : (DEFAULT_KODEPOS_DATA as unknown as KodePosRow[]);
         }
         kodePosListRef.current = kodePosForPipeline;
+        setKodePosMasterRows(kodePosForPipeline);
       }
 
       let lastPhase: 1 | 2 | 3 = 1;
@@ -949,6 +1006,7 @@ export const App: React.FC = () => {
 
               <MetricCards
                 stats={dashboardStats}
+                finalMetrics={finalMetrics}
                 masterCount={masterRows.length}
                 multiCabangCount={masterHealth.multiOutletCount}
               />
