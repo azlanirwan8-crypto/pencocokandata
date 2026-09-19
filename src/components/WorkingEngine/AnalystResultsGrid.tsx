@@ -1188,7 +1188,6 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                   <th style={{ width: '95px', textAlign: 'center' }}>Branch Code</th>
                   <th style={{ width: '85px', textAlign: 'center' }}>Kode Cabang</th>
                   <th style={{ minWidth: '180px' }}>Nama Outlet Master</th>
-                  <th style={{ width: '80px', textAlign: 'center' }}>Status</th>
                   <th style={{ minWidth: '220px' }}>ALAMAT Cabang</th>
                   <th style={{ width: '95px', textAlign: 'center' }}>Aksi Review</th>
                 </tr>
@@ -1533,9 +1532,6 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                           <td className="code-cell" style={{ textAlign: 'center' }}>{r.branchCode || '-'}</td>
                           <td className="code-cell" style={{ textAlign: 'center' }}>{r.kodeCabang || '-'}</td>
                           <td style={{ fontWeight: 700, color: '#405189' }}>{r.namaOutlet}</td>
-                          <td style={{ textAlign: 'center' }}>
-                            <span className="badge badge-match">{r.statusOutlet}</span>
-                          </td>
                           <td title={r.alamat}>{r.alamat}</td>
                         </>
                       )}
