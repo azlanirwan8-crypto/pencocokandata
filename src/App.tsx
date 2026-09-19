@@ -15,7 +15,7 @@ import { KodePosManager } from './components/KodePosData/KodePosManager';
 import { AnalystCanvas } from './components/WorkingEngine/AnalystCanvas';
 import { AnalystResultsGrid } from './components/WorkingEngine/AnalystResultsGrid';
 import { FinalDataManager } from './components/WorkingEngine/FinalDataManager';
-import { executeAnalystPipeline, cityMatchKey, type AnalystRow, type AnalystCoverage } from './utils/analystPipeline';
+import { executeAnalystPipeline, cityMatchKey, makeFinalKey, type AnalystRow, type AnalystCoverage } from './utils/analystPipeline';
 import type { ActiveTab } from './components/Sidebar';
 
 import type { MasterRow, TargetRow, MatchingStats, WilayahStat, WilayahSetting } from './types';
@@ -537,7 +537,9 @@ export const App: React.FC = () => {
           lastPhase = phase;
         },
         reRunAnomaliesOnly,
-        analystRows
+        analystRows,
+        // Analisis inkremental: kelurahan yang sudah ada di Final Data tidak diulang.
+        new Set(finalRows.map((fr) => makeFinalKey(fr.kodePosPten, fr.kelurahan)))
       );
 
       setAnalystRows(results);
@@ -649,6 +651,30 @@ export const App: React.FC = () => {
     setFinalRows([]);
     setItem('analyst_final_data', []).catch(() => {});
     setActiveTab('working');
+  };
+
+  // "Revisi" satu baris Final Data: keluarkan dari Final → kembali ke antrean Fase 1.
+  // Baris ini tidak lagi di-exclude, jadi Analisa berikutnya memprosesnya dari awal.
+  const handleReviseFinalRow = (rowId: string) => {
+    const target = finalRows.find((r) => r.id === rowId);
+    if (!target) return;
+    const remainingFinal = finalRows.filter((r) => r.id !== rowId);
+    setFinalRows(remainingFinal);
+    setItem('analyst_final_data', remainingFinal).catch(() => {});
+    // Kembalikan sebagai kandidat Fase 1 (belum disetujui) ke antrean Data Analyst.
+    const revived: AnalystRow = {
+      ...target,
+      fase1Approved: false,
+      fase2Approved: false,
+      fase3Approved: false,
+      isFinalApproved: false,
+    };
+    const byId = new Map<string, AnalystRow>();
+    for (const r of analystRows) byId.set(r.id, r);
+    byId.set(revived.id, revived);
+    const merged = Array.from(byId.values());
+    setAnalystRows(merged);
+    setItem('analyst_results_data', merged).catch(() => {});
   };
 
   const handleApproveAnalystFase = (fase: 1 | 2 | 3) => {
@@ -1024,7 +1050,7 @@ export const App: React.FC = () => {
 
           {/* MENU FINAL DATA (hasil analisa yang telah disetujui) */}
           {activeTab === 'final' && (
-            <FinalDataManager rows={finalRows} onReturnAll={handleReturnFinalToAnalyst} />
+            <FinalDataManager rows={finalRows} onReturnAll={handleReturnFinalToAnalyst} onReturnRow={handleReviseFinalRow} />
           )}
 
           {/* MENU MASTER: SETTING WILAYAH */}

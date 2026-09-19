@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useDeferredValue } from 'react';
-import { ClipboardCheck, Search, FileSpreadsheet, Undo2 } from 'lucide-react';
+import { ClipboardCheck, Search, FileSpreadsheet, Undo2, RotateCcw } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import type { AnalystRow } from '../../utils/analystPipeline';
 import { formatWilayahCode, applyStandardSheetStyle } from '../../utils/excel';
@@ -7,13 +7,14 @@ import { formatWilayahCode, applyStandardSheetStyle } from '../../utils/excel';
 interface FinalDataManagerProps {
   rows: AnalystRow[];
   onReturnAll: () => void;
+  onReturnRow: (rowId: string) => void;
 }
 
 const PAGE_SIZE = 25;
 
 // Final Data: hasil analisa 3 fase yang sudah disetujui operator.
 // Baris dipindah dari Data Analyst ke sini (IndexedDB `analyst_final_data`).
-export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onReturnAll }) => {
+export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onReturnAll, onReturnRow }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const deferredSearch = useDeferredValue(searchTerm);
   const [wilayahFilter, setWilayahFilter] = useState('ALL');
@@ -53,8 +54,7 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
     const columns = [
       'No', 'Wilayah', 'Sandi Cabang', 'Branch Code', 'Kode Cabang', 'Nama Outlet', 'Status Outlet',
       'ALAMAT', 'KODE POS', 'Kelurahan', 'Kecamatan', 'Dati II', 'Provinsi',
-      'ORGANISASI TUJUAN', 'Tipe Unit', 'QRS_CABSAL', 'QRS_CABAPV1', 'QRS_CABAPV2', 'Grand Total',
-      'Alur Wondr', '3 Role Lengkap', 'Status',
+      'ORGANISASI TUJUAN', 'Tipe Unit', '3 Role Lengkap', 'Status',
     ];
     const data = filtered.map((r, i) => ({
       No: i + 1,
@@ -72,12 +72,7 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
       Provinsi: r.provinsi,
       'ORGANISASI TUJUAN': r.organisasiTujuan,
       'Tipe Unit': r.tipeUnit,
-      QRS_CABSAL: r.roleCabsal,
-      QRS_CABAPV1: r.roleCabapv1,
-      QRS_CABAPV2: r.roleCabapv2,
-      'Grand Total': r.roleGrandTotal,
-      'Alur Wondr': r.alurWondr,
-      '3 Role Lengkap': r.is3RoleLengkap ? 'YA' : 'TIDAK',
+      '3 Role Lengkap': r.is3RoleLengkap ? 'LENGKAP' : `${r.roleGrandTotal}/3 BELUM`,
       Status: r.isFinalApproved ? 'FINAL' : r.statusAnalisa,
     }));
     const wb = XLSX.utils.book_new();
@@ -152,7 +147,7 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
         </div>
 
         <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', maxHeight: '580px', overflow: 'auto' }}>
-          <table className="modern-table" style={{ width: '100%', minWidth: '1900px', fontSize: '0.76rem' }}>
+          <table className="modern-table" style={{ width: '100%', minWidth: '1650px', fontSize: '0.76rem' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
               <tr>
                 <th style={{ width: '45px', textAlign: 'center' }}>No</th>
@@ -170,18 +165,14 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
                 <th style={{ minWidth: '130px' }}>Provinsi</th>
                 <th style={{ minWidth: '180px' }}>Organisasi Tujuan</th>
                 <th style={{ width: '70px', textAlign: 'center' }}>Tipe Unit</th>
-                <th style={{ width: '55px', textAlign: 'center' }}>Sales</th>
-                <th style={{ width: '70px', textAlign: 'center' }}>Verifikator</th>
-                <th style={{ width: '70px', textAlign: 'center' }}>Penyetuju</th>
-                <th style={{ minWidth: '150px' }}>Alur Wondr</th>
-                <th style={{ width: '60px', textAlign: 'center' }}>Pegawai</th>
-                <th style={{ width: '70px', textAlign: 'center' }}>3 Role</th>
+                <th style={{ width: '90px', textAlign: 'center' }} title="Cek cabang tujuan 3 role lengkap (Sales+Verifikator+Penyetuju)">3 Role</th>
+                <th style={{ width: '90px', textAlign: 'center' }}>Aksi</th>
               </tr>
             </thead>
             <tbody>
               {tampil.length === 0 ? (
                 <tr>
-                  <td colSpan={21} style={{ textAlign: 'center', padding: '2rem', color: '#878a99' }}>
+                  <td colSpan={17} style={{ textAlign: 'center', padding: '2rem', color: '#878a99' }}>
                     {rows.length === 0
                       ? 'Belum ada Final Data — setujui seluruh fase di menu Data Analyst lalu klik "Saya Setuju (Masuk ke Final Analisa)".'
                       : 'Tidak ada baris yang cocok dengan pencarian/filter.'}
@@ -209,13 +200,23 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
                     <td style={{ textAlign: 'center' }}>
                       <span className={`badge ${r.tipeUnit === 'KC' ? 'badge-match' : 'badge-level2'}`}>{r.tipeUnit}</span>
                     </td>
-                    <td style={{ textAlign: 'center', color: r.roleCabsal === 1 ? '#0ab39c' : '#f06548', fontWeight: 700 }}>{r.roleCabsal === 1 ? '✓' : '-'}</td>
-                    <td style={{ textAlign: 'center', color: r.roleCabapv1 === 1 ? '#0ab39c' : '#f06548', fontWeight: 700 }}>{r.roleCabapv1 === 1 ? '✓' : '-'}</td>
-                    <td style={{ textAlign: 'center', color: r.roleCabapv2 === 1 ? '#0ab39c' : '#f06548', fontWeight: 700 }}>{r.roleCabapv2 === 1 ? '✓' : '-'}</td>
-                    <td>{r.alurWondr}</td>
-                    <td style={{ textAlign: 'center' }}>{r.roleGrandTotal} Org</td>
-                    <td style={{ textAlign: 'center', fontWeight: 700, color: r.is3RoleLengkap ? '#0ab39c' : '#f06548' }}>
-                      {r.roleGrandTotal}/3
+                    <td style={{ textAlign: 'center' }}>
+                      <span className={`badge ${r.is3RoleLengkap ? 'badge-match' : 'badge-diff'}`}>
+                        {r.is3RoleLengkap ? 'LENGKAP' : `${r.roleGrandTotal}/3`}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        onClick={() => {
+                          if (window.confirm(`Revisi baris ini? Data akan keluar dari Final Data dan kembali ke Fase 1 untuk diproses ulang.`)) onReturnRow(r.id);
+                        }}
+                        title="Kembalikan ke Fase 1 untuk diproses ulang"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.7rem', padding: '0.25rem 0.5rem', color: '#f06548', borderColor: 'rgba(240,101,72,0.4)' }}
+                      >
+                        <RotateCcw size={12} /> Revisi
+                      </button>
                     </td>
                   </tr>
                 ))

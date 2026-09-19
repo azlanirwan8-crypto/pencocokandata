@@ -65,10 +65,17 @@ export interface AnalystRow {
   editedManually?: boolean;
 }
 
+// Kunci identitas baris Final Data: kode pos PTEN + nama kelurahan ternormalisasi.
+// Dipakai analisis inkremental agar kelurahan yang sudah final tidak diproses ulang.
+export function makeFinalKey(kodePosPten: string, kelurahan: string): string {
+  const kp = String(kodePosPten || '').replace(/\D/g, '').trim();
+  const kel = String(kelurahan || '').trim().toUpperCase().replace(/\s+/g, ' ');
+  return `${kp}|${kel}`;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 🔬 5 TEORI ANALISA PATEN ANTI-TYPO & ANTI-BEDA KATA
 // ─────────────────────────────────────────────────────────────────────────────
-
 // 1. 🔤 CANONICAL THESAURUS (Standarisasi Singkatan & Akronim Perbankan/Wilayah)
 const THESAURUS_MAP: Record<string, string> = {
   'KAB': 'KABUPATEN',
@@ -648,7 +655,11 @@ export async function executeAnalystPipeline(
   roleMappingList: RoleMappingRecord[],
   onProgress?: PipelineProgressCallback,
   reRunOnlyAnomalies = false,
-  previousRows?: AnalystRow[]
+  previousRows?: AnalystRow[],
+  // 🎯 Analisis inkremental: kelurahan yang sudah ada di Final Data dilewati.
+  // Kunci = `${kodePosPten}|${cityMatchKey(kelurahan)}`. Final Data itu FINAL,
+  // jadi hanya kode pos / kelurahan BARU yang diprosse Fase 1→2→3.
+  excludeFinalKeys?: Set<string>
 ): Promise<{ rows: AnalystRow[]; coverage: AnalystCoverage }> {
   const startTime = performance.now();
 
@@ -1475,6 +1486,11 @@ export async function executeAnalystPipeline(
       const kelurahan = kpEntry.kelurahan || meta.finalKotaPten;
       const kecamatan = kpEntry.kecamatan || meta.finalKotaPten;
       const provinsi = kpEntry.provinsi || meta.matchedProvinsi;
+
+      // Analisis inkremental: lewati kelurahan yang SUDAH final (jangan diulang dari awal)
+      if (excludeFinalKeys && excludeFinalKeys.has(makeFinalKey(meta.finalKodePosPten, kelurahan))) {
+        return;
+      }
 
       results.push({
         id: `analyst-${i + 1}-${seq + 1}-${Date.now()}`,
