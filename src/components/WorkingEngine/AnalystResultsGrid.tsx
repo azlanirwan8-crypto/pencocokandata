@@ -44,6 +44,17 @@ import { formatWilayahCode, applyStandardSheetStyle } from '../../utils/excel';
 import { exportAnalystExecutivePdf } from '../../utils/pdfExport';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
 
+// Posisi antrean kerja satu baris: baris HANYA tampil di tab fase yang belum disetujui.
+// Fase 1 = menunggu setujui PTEN; Fase 2 = menunggu wilayah/cabang; Fase 3 = menunggu role;
+// 4 = seluruh fase selesai → tab Data Final. Baris "TIDAK_ANALISA" menetap di Fase 1 (manual).
+function stageOf(r: AnalystRow): 1 | 2 | 3 | 4 {
+  if (r.kategori === 'TIDAK_ANALISA') return 1;
+  if (!r.fase1Approved) return 1;
+  if (!r.fase2Approved) return 2;
+  if (!r.fase3Approved) return 3;
+  return 4;
+}
+
 interface AnalystResultsGridProps {
   rows: AnalystRow[];
   onUpdateRow: (updatedRow: AnalystRow) => void;
@@ -387,29 +398,40 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     };
   }, [rows]);
 
-  // ── Sequential Phase Flow: Fase 1 → unlock Fase 2 → unlock Fase 3 → Data Final ──
+  // ── Sequential Phase Flow: tiap tab = antrean kerja fase yang BELUM disetujui ──
+  // Baris otomatis "hilang" dari tab fase-N setelah disetujui (pindah ke fase berikutnya).
+  // Tab hanya bisa diklik bila ada baris di antreannya — kembali ke fase sebelumnya
+  // hanya terbuka bila ada hasil REVISI, maju hanya terbuka bila fase sebelumnya tuntas.
   const phaseState = useMemo(() => {
     const analysed = rows.filter((r) => r.kategori !== 'TIDAK_ANALISA');
-    const total = analysed.length;
-    const f1 = total > 0 && analysed.every((r) => r.fase1Approved);
-    const f2 = total > 0 && analysed.every((r) => r.fase2Approved);
-    const f3 = total > 0 && analysed.every((r) => r.fase3Approved);
-    const step: 1 | 2 | 3 | 4 = !f1 ? 1 : !f2 ? 2 : !f3 ? 3 : 4;
+    const f1 = analysed.length > 0 && analysed.every((r) => r.fase1Approved);
+    const f2 = analysed.length > 0 && analysed.every((r) => r.fase2Approved);
+    const f3 = analysed.length > 0 && analysed.every((r) => r.fase3Approved);
+    const queue: Record<'fase1' | 'fase2' | 'fase3' | 'all', number> = { fase1: 0, fase2: 0, fase3: 0, all: 0 };
+    rows.forEach((r) => {
+      const s = stageOf(r);
+      if (s === 1) queue.fase1++;
+      else if (s === 2) queue.fase2++;
+      else if (s === 3) queue.fase3++;
+      else queue.all++;
+    });
+    const step: 1 | 2 | 3 | 4 = queue.fase1 > 0 ? 1 : queue.fase2 > 0 ? 2 : queue.fase3 > 0 ? 3 : 4;
     return {
       fase1Done: f1,
       fase2Done: f2,
       fase3Done: f3,
+      queue,
       step,
       locked: {
-        all: step < 4,
-        fase1: false,
-        fase2: step < 2,
-        fase3: step < 3,
+        fase1: queue.fase1 === 0,
+        fase2: queue.fase2 === 0,
+        fase3: queue.fase3 === 0,
+        all: queue.all === 0,
       } as Record<'all' | 'fase1' | 'fase2' | 'fase3', boolean>,
     };
   }, [rows]);
 
-  // Keep the visible tab in sync with the current step when previous tabs get locked
+  // Tab aktif mengikuti fase yang sedang punya antrean kerja
   const viewTab = phaseState.locked[activeSubTab]
     ? (['fase1', 'fase2', 'fase3', 'all'][phaseState.step - 1] as 'all' | 'fase1' | 'fase2' | 'fase3')
     : activeSubTab;
@@ -418,6 +440,10 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   const filteredRows = useMemo(() => {
     const q = deferredSearch.trim().toLowerCase();
     return rows.filter((r) => {
+      // Antrean per-fase: baris hanya tampil di tab fase yang belum ia setujui.
+      const wantStage = viewTab === 'fase1' ? 1 : viewTab === 'fase2' ? 2 : viewTab === 'fase3' ? 3 : 4;
+      if (stageOf(r) !== wantStage) return false;
+
       // Baris yang belum teranalisa hanya tampil di inner tab "Analisa Manual" (Fase 1)
       if (viewTab !== 'fase1') {
         if (r.kategori === 'TIDAK_ANALISA') return false;
@@ -917,10 +943,10 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem', borderBottom: '1px solid #e9ebec', paddingBottom: '0.65rem' }}>
           <div className="nav-tabs">
             {([
-              { key: 'fase1', label: '📍 1. Review Fase 1 (PTEN & Kode Pos)', done: phaseState.fase1Done },
-              { key: 'fase2', label: '🏢 2. Review Fase 2 (Kanwil & Master Cabang)', done: phaseState.fase2Done },
-              { key: 'fase3', label: '👥 3. Review Fase 3 (Mapping Role & Wondr)', done: phaseState.fase3Done },
-              { key: 'all', label: '📑 4. Data Final (Semua Atribut)', done: stats.isAllApproved },
+              { key: 'fase1', label: '📍 1. Review Fase 1 (PTEN & Kode Pos)', done: phaseState.fase1Done, n: phaseState.queue.fase1 },
+              { key: 'fase2', label: '🏢 2. Review Fase 2 (Kanwil & Master Cabang)', done: phaseState.fase2Done, n: phaseState.queue.fase2 },
+              { key: 'fase3', label: '👥 3. Review Fase 3 (Mapping Role & Wondr)', done: phaseState.fase3Done, n: phaseState.queue.fase3 },
+              { key: 'all', label: '📑 4. Data Final (Semua Atribut)', done: stats.isAllApproved, n: phaseState.queue.all },
             ] as const).map((tab) => {
               const locked = phaseState.locked[tab.key];
               const active = viewTab === tab.key;
@@ -931,12 +957,26 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                   className={`nav-tab-btn ${active ? 'active' : ''}`}
                   onClick={() => !locked && setActiveSubTab(tab.key)}
                   disabled={locked}
-                  title={locked ? 'Terkunci — setujui fase sebelumnya terlebih dahulu' : tab.label}
+                  title={locked ? 'Tidak ada data di fase ini — gunakan "Revisi" untuk mengirim baris kembali' : tab.label}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', opacity: locked ? 0.55 : 1, cursor: locked ? 'not-allowed' : 'pointer' }}
                 >
                   {tab.done && <Check size={13} color="#0ab39c" />}
                   {locked && <Lock size={12} />}
                   <span>{tab.label}</span>
+                  <span
+                    style={{
+                      marginLeft: '0.15rem',
+                      minWidth: '20px',
+                      padding: '0.02rem 0.4rem',
+                      borderRadius: '999px',
+                      fontSize: '0.68rem',
+                      fontWeight: 700,
+                      background: tab.n > 0 ? 'rgba(240, 101, 72, 0.14)' : 'rgba(10, 179, 156, 0.14)',
+                      color: tab.n > 0 ? '#f06548' : '#0ab39c',
+                    }}
+                  >
+                    {tab.n.toLocaleString('id-ID')}
+                  </span>
                 </button>
               );
             })}
@@ -1744,6 +1784,36 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                               }}
                             >
                               <Edit size={12} />
+                              <span>Edit</span>
+                            </button>
+                          )}
+                          {viewTab !== 'fase1' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!window.confirm('Revisi baris ini? Baris akan dikembalikan ke fase sebelumnya untuk diproses ulang.')) return;
+                                if (viewTab === 'fase2') { onUpdateRow({ ...r, fase1Approved: false }); showToast(`Baris #${r.no} direvisi → kembali ke Fase 1.`, 'info'); }
+                                else if (viewTab === 'fase3') { onUpdateRow({ ...r, fase2Approved: false }); showToast(`Baris #${r.no} direvisi → kembali ke Fase 2.`, 'info'); }
+                                else { onUpdateRow({ ...r, fase3Approved: false }); showToast(`Baris #${r.no} direvisi → kembali ke Fase 3.`, 'info'); }
+                              }}
+                              title="Kembalikan baris ini ke fase sebelumnya"
+                              style={{
+                                background: 'rgba(240, 101, 72, 0.1)',
+                                border: '1px solid rgba(240, 101, 72, 0.35)',
+                                color: '#f06548',
+                                borderRadius: '4px',
+                                padding: '0.22rem 0.55rem',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '0.25rem',
+                                fontSize: '0.72rem',
+                                fontWeight: 700,
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              <RotateCcw size={12} />
                               <span>Revisi</span>
                             </button>
                           )}
