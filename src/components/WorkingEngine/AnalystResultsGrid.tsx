@@ -18,6 +18,9 @@ import {
   ChevronsRight,
   Lock,
   Info,
+  Sparkles,
+  AlertTriangle,
+  ExternalLink,
 } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import type { AnalystRow, AnalystCoverage } from '../../utils/analystPipeline';
@@ -32,7 +35,7 @@ import { AnalystRowEditModal } from './AnalystRowEditModal';
 import { CandidateDetailModal } from './CandidateDetailModal';
 import { PtenCityPicker } from './PtenCityPicker';
 import { CityOverrideModal } from './CityOverrideModal';
-import { formatWilayahName } from '../../utils/normalizer';
+import { formatWilayahName, cleanKelurahan, cleanKecamatan } from '../../utils/normalizer';
 import { formatWilayahCode } from '../../utils/excel';
 import { exportAnalystExecutivePdf } from '../../utils/pdfExport';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
@@ -1159,10 +1162,27 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                 </>
               )}
 
-              {/* TAB 3: FASE 2 WILAYAH & CABANG */}
+              {/* TAB 3: FASE 2 WILAYAH & CABANG (kandidat kiri sticky, gaya tab "Rekomendasi Data" lama) */}
               {viewTab === 'fase2' && (
                 <tr>
-                  <th style={{ width: '40px', textAlign: 'center' }}>No</th>
+                  <th style={{ width: '40px', textAlign: 'center', position: 'sticky', left: 0, background: '#f3f6f9', zIndex: 12, borderRight: '1px solid #e9ebec' }}>No</th>
+                  <th
+                    style={{
+                      width: '420px',
+                      minWidth: '420px',
+                      maxWidth: '420px',
+                      textAlign: 'left',
+                      background: '#fff9f0',
+                      color: '#d97706',
+                      position: 'sticky',
+                      left: '40px',
+                      zIndex: 12,
+                      boxShadow: '3px 0 6px -2px rgba(0,0,0,0.06)',
+                      borderRight: '2px solid #f7b84b',
+                    }}
+                  >
+                    Kandidat Rekomendasi Master
+                  </th>
                   <th style={{ width: '85px', textAlign: 'center' }}>Kanwil</th>
                   <th style={{ width: '90px', textAlign: 'center' }}>Sandi Cabang</th>
                   <th style={{ width: '95px', textAlign: 'center' }}>Branch Code</th>
@@ -1170,7 +1190,6 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                   <th style={{ minWidth: '180px' }}>Nama Outlet Master</th>
                   <th style={{ width: '80px', textAlign: 'center' }}>Status</th>
                   <th style={{ minWidth: '220px' }}>ALAMAT Cabang</th>
-                  <th style={{ minWidth: '240px', textAlign: 'center' }}>📍 Rekomendasi 3 Outlet Terdekat</th>
                   <th style={{ width: '95px', textAlign: 'center' }}>Aksi Review</th>
                 </tr>
               )}
@@ -1285,7 +1304,228 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                       {/* TAB 3: FASE 2 WILAYAH & CABANG */}
                       {viewTab === 'fase2' && (
                         <>
-                          <td style={{ textAlign: 'center', color: '#878a99' }}>{displayIdx}</td>
+                          <td style={{ textAlign: 'center', color: '#878a99', position: 'sticky', left: 0, background: '#fff', zIndex: 5, borderRight: '1px solid #e9ebec' }}>{displayIdx}</td>
+                          {(() => {
+                            const entry = fase2Recs.get(cityMatchKey(r.groupKota));
+                            const cands = entry?.rec?.candidates || [];
+                            const tdStyle: React.CSSProperties = {
+                              position: 'sticky',
+                              left: '40px',
+                              zIndex: 5,
+                              width: '420px',
+                              minWidth: '420px',
+                              maxWidth: '420px',
+                              background: r.fase2Approved ? '#f0fdf4' : '#fffdfa',
+                              padding: '0.45rem 0.55rem',
+                              verticalAlign: 'top',
+                              boxShadow: '3px 0 6px -2px rgba(0,0,0,0.06)',
+                              borderRight: '2px solid rgba(247,184,75,0.45)',
+                            };
+                            if (!entry || !cands.length)
+                              return (
+                                <td style={tdStyle}>
+                                  <span style={{ fontSize: '0.72rem', color: '#adb5bd' }}>Tidak ada kandidat (Master Cabang kosong)</span>
+                                </td>
+                              );
+                            const rec = entry.rec!;
+                            const audit = rec.userPrefilledAudit;
+                            const activeRank = fase2Choice[r.id] || (audit && audit.matchedRank && audit.matchedRank <= 3 ? audit.matchedRank : 1);
+                            const activeCand = cands.find((c) => c.rank === activeRank) || cands[0];
+                            const m = activeCand.master;
+                            const isTop1 = activeCand.rank === 1;
+                            const badgeBg = isTop1 ? 'rgba(10,179,156,0.12)' : activeCand.rank === 2 ? 'rgba(247,184,75,0.15)' : 'rgba(53,119,241,0.1)';
+                            const badgeColor = isTop1 ? '#0ab39c' : activeCand.rank === 2 ? '#d97706' : '#3577f1';
+                            const candWilayah = extractWilayahFromBranchCode(String(m['Branch Code'] || m['Kode Cabang'] || '').trim(), wilayahSettings, r.wilayah);
+                            const isKelMatched = !!(r.kelurahan && m.Kelurahan && cleanKelurahan(r.kelurahan) === cleanKelurahan(m.Kelurahan));
+                            const isKecMatched = !!(r.kecamatan && m.Kecamatan && cleanKecamatan(r.kecamatan) === cleanKecamatan(m.Kecamatan));
+                            return (
+                              <td style={tdStyle}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                  {audit && audit.hasPrefilled && (
+                                    <div
+                                      title={`Di data terisi: "${audit.prefilledText}". ${audit.message}`}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.35rem',
+                                        padding: '0.2rem 0.45rem',
+                                        borderRadius: '4px',
+                                        fontSize: '0.68rem',
+                                        fontWeight: 600,
+                                        background:
+                                          audit.status === 'match_top1' ? 'rgba(10,179,156,0.08)'
+                                          : audit.status === 'match_top2' || audit.status === 'match_top3' ? 'rgba(247,184,75,0.12)'
+                                          : 'rgba(53,119,241,0.08)',
+                                        color:
+                                          audit.status === 'match_top1' ? '#07796a'
+                                          : audit.status === 'match_top2' || audit.status === 'match_top3' ? '#925807'
+                                          : '#2563eb',
+                                        border: `1px solid ${
+                                          audit.status === 'match_top1' ? 'rgba(10,179,156,0.28)'
+                                          : audit.status === 'match_top2' || audit.status === 'match_top3' ? 'rgba(247,184,75,0.35)'
+                                          : 'rgba(53,119,241,0.25)'}`,
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                      }}
+                                    >
+                                      {audit.status === 'match_top1' ? (
+                                        <CheckCircle2 size={12} color="#0ab39c" style={{ flexShrink: 0 }} />
+                                      ) : audit.status === 'match_top2' || audit.status === 'match_top3' ? (
+                                        <AlertTriangle size={12} color="#d97706" style={{ flexShrink: 0 }} />
+                                      ) : (
+                                        <Info size={12} color="#3577f1" style={{ flexShrink: 0 }} />
+                                      )}
+                                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        Di data: <strong>"{audit.prefilledText}"</strong> → {audit.message}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {cands.length > 1 && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'nowrap', overflowX: 'auto', paddingBottom: '0.1rem' }}>
+                                      <span style={{ fontSize: '0.68rem', color: '#878a99', fontWeight: 600, flexShrink: 0, whiteSpace: 'nowrap' }}>Opsi:</span>
+                                      {cands.map((cand) => {
+                                        const isSelected = cand.rank === activeCand.rank;
+                                        const pillBg = cand.rank === 1 ? '#0ab39c' : cand.rank === 2 ? '#d97706' : '#3577f1';
+                                        const isUserChoice = audit?.matchedRank === cand.rank;
+                                        return (
+                                          <button
+                                            key={`pill-${r.id}-${cand.rank}`}
+                                            type="button"
+                                            onClick={() => setFase2Choice((prev) => ({ ...prev, [r.id]: cand.rank }))}
+                                            title={`Klik untuk melihat Pilihan ${cand.rank} (${cand.score}%)${isUserChoice ? ' - Ini cabang yang terisi di data' : ''}`}
+                                            style={{
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              gap: '0.25rem',
+                                              padding: '0.15rem 0.45rem',
+                                              borderRadius: '9999px',
+                                              fontSize: '0.7rem',
+                                              fontWeight: isSelected ? 700 : 500,
+                                              background: isSelected ? pillBg : '#f3f6f9',
+                                              color: isSelected ? '#ffffff' : '#495057',
+                                              border: isSelected ? `1px solid ${pillBg}` : isUserChoice ? '1px dashed #d97706' : '1px solid #e9ebec',
+                                              cursor: 'pointer',
+                                              flexShrink: 0,
+                                              whiteSpace: 'nowrap',
+                                            }}
+                                          >
+                                            <span>{cand.rank === 1 ? 'Pilihan 1' : `Pilihan ${cand.rank}`}</span>
+                                            {isUserChoice && (
+                                              <span style={{ fontSize: '0.58rem', padding: '0.02rem 0.25rem', borderRadius: '3px', background: isSelected ? 'rgba(255,255,255,0.3)' : 'rgba(217,119,6,0.15)', color: isSelected ? '#ffffff' : '#925807', fontWeight: 700 }}>
+                                                Pilihan Anda
+                                              </span>
+                                            )}
+                                            <span style={{ fontSize: '0.65rem', padding: '0.05rem 0.3rem', borderRadius: '9999px', background: isSelected ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.06)', color: isSelected ? '#ffffff' : '#6c757d', fontWeight: 700 }}>
+                                              {cand.score}%
+                                            </span>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                  <div
+                                    style={{
+                                      border: isTop1 ? '1px solid rgba(10,179,156,0.35)' : '1px solid #e9ebec',
+                                      borderRadius: '6px',
+                                      padding: '0.45rem 0.6rem',
+                                      background: isTop1 ? '#ffffff' : '#fafafa',
+                                      boxShadow: isTop1 ? '0 1px 2px rgba(10,179,156,0.08)' : 'none',
+                                      overflow: 'hidden',
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.35rem', marginBottom: '0.3rem', flexWrap: 'nowrap' }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                                        <span style={{ padding: '0.1rem 0.38rem', borderRadius: '3px', fontSize: '0.67rem', fontWeight: 700, background: badgeBg, color: badgeColor }}>
+                                          {isTop1 ? 'Pilihan 1 (Utama)' : `Pilihan ${activeCand.rank} (Alternatif)`}
+                                        </span>
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.15rem', fontSize: '0.67rem', fontWeight: 600, color: badgeColor }}>
+                                          <Sparkles size={10} /> Skor {activeCand.score}%
+                                        </span>
+                                        {activeCand.formattedDistance && (
+                                          <span
+                                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.15rem', fontSize: '0.67rem', fontWeight: 600, color: '#0d9488', background: 'rgba(13,148,136,0.08)', padding: '0.08rem 0.32rem', borderRadius: '3px' }}
+                                            title={`Estimasi jarak fisik: ${activeCand.formattedDistance} (${activeCand.distanceBasis || 'Jarak darat'})`}
+                                          >
+                                            <MapPin size={9} /> {activeCand.formattedDistance}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', flexShrink: 0 }}>
+                                        {activeCand.googleMapsUrl && (
+                                          <a
+                                            href={activeCand.googleMapsUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            title="Buka rute navigasi & cek jarak real di Google Maps"
+                                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', height: '18px', padding: '0 0.35rem', fontSize: '0.67rem', fontWeight: 600, color: '#2563eb', background: 'rgba(37,99,235,0.08)', border: '1px solid rgba(37,99,235,0.25)', borderRadius: '3px', textDecoration: 'none' }}
+                                          >
+                                            <ExternalLink size={10} /> Maps
+                                          </a>
+                                        )}
+                                        <button
+                                          type="button"
+                                          title="Lihat alasan penilaian skor & detail wilayah"
+                                          onClick={() => setFase2Detail({ row: r, target: entry.target, rec, chosen: activeCand })}
+                                          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '18px', height: '18px', borderRadius: '3px', border: '1px solid #d1d5db', background: '#f8fafc', color: '#64748b', cursor: 'pointer', padding: 0 }}
+                                        >
+                                          <Info size={10} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem', marginBottom: '0.1rem' }}>
+                                      <div style={{ fontSize: '0.81rem', fontWeight: 600, color: '#212529', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {m['Sandi Cabang'] || m.Cabang || m.Sandi || '-'}
+                                        {m['Nama Outlet'] && (
+                                          <span style={{ fontSize: '0.73rem', color: '#405189', fontWeight: 500, marginLeft: '0.35rem' }}>• {m['Nama Outlet']}</span>
+                                        )}
+                                      </div>
+                                      <button
+                                        type="button"
+                                        className="btn btn-outline btn-sm"
+                                        onClick={() => applyFase2Candidate(r, m)}
+                                        disabled={isProcessing}
+                                        title="Pilih dan setujui cabang master ini"
+                                        style={{
+                                          fontSize: '0.69rem',
+                                          padding: '0.16rem 0.52rem',
+                                          color: badgeColor,
+                                          borderColor: isTop1 ? 'rgba(10,179,156,0.45)' : activeCand.rank === 2 ? 'rgba(217,119,6,0.45)' : 'rgba(53,119,241,0.45)',
+                                          background: isTop1 ? 'rgba(10,179,156,0.08)' : activeCand.rank === 2 ? 'rgba(217,119,6,0.08)' : 'rgba(53,119,241,0.08)',
+                                          fontWeight: 600,
+                                          whiteSpace: 'nowrap',
+                                          flexShrink: 0,
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '0.2rem',
+                                        }}
+                                      >
+                                        <Check size={11} /> Gunakan Cabang Ini
+                                      </button>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap', margin: '0.12rem 0 0.22rem' }}>
+                                      <span className="code-cell" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.69rem', background: '#f3f6f9', color: '#405189', padding: '0.08rem 0.4rem', borderRadius: '3px', border: '1px solid #e9ebec', fontWeight: 600 }} title={`Kode Branch: ${candWilayah.branchCode || '-'}`}>
+                                        <Building2 size={10} /> Branch: <strong>{candWilayah.branchCode || '-'}</strong>
+                                      </span>
+                                      <span className="badge badge-match" style={{ fontSize: '0.69rem', padding: '0.08rem 0.45rem', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }} title={`Wilayah hasil setting: ${candWilayah.wilayahName}`}>
+                                        <MapPin size={9} /> {candWilayah.wilayahName}
+                                      </span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.69rem', color: '#495057', background: '#f8fafc', padding: '0.18rem 0.45rem', borderRadius: '4px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+                                      <span>Kel: <strong style={{ color: isKelMatched ? '#059669' : '#1e293b' }}>{m.Kelurahan || '-'}</strong></span>
+                                      {isKelMatched && <span style={{ fontSize: '0.6rem', padding: '0.02rem 0.25rem', borderRadius: '3px', background: 'rgba(10,179,156,0.12)', color: '#059669', fontWeight: 700 }} title="Kelurahan sama persis">✓ Kelurahan Sama</span>}
+                                      <span style={{ color: '#cbd5e1' }}>•</span>
+                                      <span>Kec: <strong style={{ color: isKecMatched ? '#2563eb' : '#1e293b' }}>{m.Kecamatan || '-'}</strong></span>
+                                      {isKecMatched && <span style={{ fontSize: '0.6rem', padding: '0.02rem 0.25rem', borderRadius: '3px', background: 'rgba(37,99,235,0.1)', color: '#2563eb', fontWeight: 700 }} title="Kecamatan sama persis">✓ Kecamatan Sama</span>}
+                                      <span style={{ color: '#cbd5e1' }}>•</span>
+                                      <span>{m['Dati II'] || '-'}</span>
+                                    </div>
+                                    <div style={{ fontSize: '0.68rem', color: '#6b7280', marginTop: '0.25rem' }}>{activeCand.reason}</div>
+                                  </div>
+                                </div>
+                              </td>
+                            );
+                          })()}
                           <td style={{ textAlign: 'center' }}>
                             <span className="badge badge-level1">{r.wilayah}</span>
                           </td>
@@ -1297,79 +1537,6 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                             <span className="badge badge-match">{r.statusOutlet}</span>
                           </td>
                           <td title={r.alamat}>{r.alamat}</td>
-                          {(() => {
-                            const entry = fase2Recs.get(cityMatchKey(r.groupKota));
-                            const cands = entry?.rec?.candidates || [];
-                            if (!cands.length || !entry) return <td style={{ textAlign: 'center', color: '#adb5bd' }}>—</td>;
-                            const chosenRank = fase2Choice[r.id] || entry.rec!.userPrefilledAudit?.matchedRank || 1;
-                            return (
-                              <td>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.18rem' }}>
-                                  {cands.map((c) => {
-                                    const active = chosenRank === c.rank;
-                                    const color = c.rank === 1 ? '#0ab39c' : c.rank === 2 ? '#d97706' : '#3577f1';
-                                    return (
-                                      <button
-                                        key={c.rank}
-                                        type="button"
-                                        title={`${c.reason || ''}${c.distanceBasis ? ` · dasar jarak: ${c.distanceBasis}` : ''}`}
-                                        onClick={() => setFase2Choice((p) => ({ ...p, [r.id]: c.rank }))}
-                                        style={{
-                                          display: 'flex',
-                                          gap: '0.35rem',
-                                          alignItems: 'center',
-                                          justifyContent: 'space-between',
-                                          padding: '0.15rem 0.4rem',
-                                          fontSize: '0.68rem',
-                                          borderRadius: '4px',
-                                          cursor: 'pointer',
-                                          border: active ? `1px solid ${color}` : '1px dashed #d5dce8',
-                                          background: active ? `${color}18` : '#fff',
-                                          color: active ? color : '#495057',
-                                          fontWeight: active ? 700 : 500,
-                                          textAlign: 'left',
-                                        }}
-                                      >
-                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px' }}>
-                                          #{c.rank} {c.master['Nama Outlet'] || c.master.Cabang || c.master['Sandi Cabang']}
-                                        </span>
-                                        <span style={{ whiteSpace: 'nowrap' }}>
-                                          {c.score}% · {c.formattedDistance || '-'}
-                                        </span>
-                                      </button>
-                                    );
-                                  })}
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setFase2Detail({
-                                        row: r,
-                                        target: entry.target,
-                                        rec: entry.rec!,
-                                        chosen: cands.find((c) => c.rank === chosenRank) || cands[0],
-                                      })
-                                    }
-                                    style={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      gap: '0.25rem',
-                                      padding: '0.15rem 0.4rem',
-                                      fontSize: '0.68rem',
-                                      fontWeight: 700,
-                                      border: '1px solid rgba(64, 81, 137, 0.3)',
-                                      borderRadius: '4px',
-                                      background: 'rgba(64, 81, 137, 0.08)',
-                                      color: '#405189',
-                                      cursor: 'pointer',
-                                    }}
-                                  >
-                                    <Info size={11} /> Detail &amp; Rute Maps
-                                  </button>
-                                </div>
-                              </td>
-                            );
-                          })()}
                         </>
                       )}
 
