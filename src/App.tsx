@@ -795,6 +795,20 @@ export const App: React.FC = () => {
     setItem('analyst_results_data', merged).catch(() => {});
   };
 
+  // "Setujui" pada tab Perlu Analisa Manual: barisnya dinyatakan beres, tetapi fase
+  // ini belum diterima — ia pindah ke tab Berhasil Dianalisa pada fase yang sama.
+  const handleBersihkanManualAnalyst = (rowIds: string[]) => {
+    if (rowIds.length === 0) return;
+    const ids = new Set(rowIds);
+    setAnalystRows((prev) => {
+      const next = prev.map((r) =>
+        ids.has(r.id) ? { ...r, perluManual: false, kategori: 'DIANALISA' as const } : r
+      );
+      setItemDebounced('analyst_results_data', next);
+      return next;
+    });
+  };
+
   const handleApproveAnalystFase = (fase: 1 | 2 | 3) => {
     setAnalystRows((prev) => {
       const next = prev.map((r) => {
@@ -1159,6 +1173,7 @@ export const App: React.FC = () => {
                   onApproveSingleRow={handleApproveSingleAnalystRow}
                   onApproveAllFinal={handleApproveAllAnalystFinal}
                   onApproveFase={handleApproveAnalystFase}
+                  onBersihkanManual={handleBersihkanManualAnalyst}
                   onReRunAll={() => handleStartAnalystPipeline(false)}
                   onReRunAnomaliesOnly={() => handleStartAnalystPipeline(true)}
                   isProcessing={isAnalyzing}

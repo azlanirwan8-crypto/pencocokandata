@@ -73,6 +73,52 @@ export interface AnalystRow {
   statusAnalisa: 'EXACT_MATCH' | 'HIGH_CONFIDENCE' | 'PERLU_REVIEW' | 'ANOMALI' | 'MENUNGGU';
   isFinalApproved: boolean;
   editedManually?: boolean;
+  /**
+   * Operator menarik baris ini ke tab "Perlu Analisa Manual" pada fase yang sedang
+   * berjalan. Beda dengan `kategori: 'TIDAK_ANALISA'` (mesin memang tidak menemukan
+   * kotanya): di sini datanya ada, hanya operator belum mau menyetujuinya.
+   */
+  perluManual?: boolean;
+}
+
+/**
+ * Terjemahan awam untuk kartu Status PTEN: label pendek + alasan satu baris.
+ * `placementMethod` diisi istilah teknis engine — operator tidak perlu tahu itu.
+ */
+export function penjelasanFase1(r: {
+  statusPten?: string;
+  placementMethod?: string;
+  kotaPten?: string;
+}): { label: string; alasan: string; nada: 'ok' | 'waspada' | 'buruk' } {
+  const metode = String(r.placementMethod || '');
+  const belumAda = !r.kotaPten && (r.statusPten === 'UNCHECKED' || !r.statusPten);
+  if (belumAda) {
+    return { label: 'KOTA BELUM ADA DI PTEN', alasan: 'nama kota ini tidak ada di daftar PTEN — isi kotanya manual', nada: 'buruk' };
+  }
+  const padan: Array<[RegExp, string]> = [
+    [/pemekaran/i, 'kota hasil pemekaran — pakainya kota induknya'],
+    [/saring blok/i, 'nama kota sama, kode pos disaring ke blok PTEN'],
+    [/Join nama kota/i, 'nama kota + rentang kode pos sama dengan PTEN'],
+    [/kode pos PTEN kosong/i, 'nama kota cocok, PTEN tidak menyimpan kode pos'],
+    [/bukan wilayah kota ini/i, 'kode pos ini di luar rentang kota tersebut'],
+    [/Konflik kode pos/i, 'kode pos ini sebenarnya milik kota lain'],
+    [/KodePos persis ada di PTEN/i, 'kode pos persis ada di PTEN'],
+    [/sudah diklaim kota lain/i, 'blok kode pos ini sudah dipakai kota lain'],
+    [/kecamatan/i, 'blok kode pos + nama kecamatan cocok'],
+    [/tunggal/i, 'hanya satu kota yang memakai blok kode pos ini'],
+    [/nama tak cocok/i, 'blok kode pos dipakai beberapa kota, namanya tidak cocok'],
+    [/mirip/i, 'blok kode pos dikenali, nama kota hanya mirip'],
+    [/tidak ada di master kodepos/i, 'blok kode pos ini tidak ada di master kodepos'],
+    [/tanpa data kodepos/i, 'tidak ada data kode pos untuk kota ini'],
+  ];
+  const ketemu = padan.find(([re]) => re.test(metode));
+  const alasan = ketemu ? ketemu[1] : metode || 'nama kota dipakai apa adanya';
+  if (r.statusPten === 'SAME') return { label: 'KODE POS SAMA', alasan, nada: 'ok' };
+  if (r.statusPten === 'PTEN FOUND') return { label: 'KOTA DITEMUKAN', alasan, nada: 'ok' };
+  if (r.statusPten === 'DIFFERENT') {
+    return { label: 'KODE POS BEDA', alasan: `${alasan} — yang disimpan kode pos PTEN`, nada: 'waspada' };
+  }
+  return { label: 'PERLU DICEK', alasan, nada: 'waspada' };
 }
 
 // Kunci identitas baris Final Data: kode pos PTEN + nama kelurahan ternormalisasi.

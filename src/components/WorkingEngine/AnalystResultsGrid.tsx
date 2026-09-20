@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect, useDeferredValue } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect, useDeferredValue } from 'react';
 import {
   CheckCircle2,
   RotateCcw,
@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import type { AnalystRow, AnalystCoverage } from '../../utils/analystPipeline';
-import { cityMatchKey, matchRoleForOutlet } from '../../utils/analystPipeline';
+import { cityMatchKey, matchRoleForOutlet, penjelasanFase1 } from '../../utils/analystPipeline';
 import type { KodePosRow } from '../../utils/neonSync';
 import type { PTENRecord } from '../PTENData/PTENManager';
 import type { MasterRow, TargetRow, WilayahSetting } from '../../types';
@@ -55,12 +55,45 @@ function stageOf(r: AnalystRow): 1 | 2 | 3 | 4 {
   return 4;
 }
 
+/** Kolom tabel yang bisa diurutkan lewat klik header. */
+type SortKolom =
+  | 'no' | 'kelurahan' | 'kecamatan' | 'provinsi' | 'kotaPten' | 'statusPten'
+  | 'kodePosPten' | 'namaOutlet' | 'wilayah' | 'organisasiTujuan';
+
+const PENGAMBIL_SORT: Record<SortKolom, (r: AnalystRow) => string | number> = {
+  no: (r) => r.no,
+  kelurahan: (r) => r.kelurahan || '',
+  kecamatan: (r) => r.kecamatan || '',
+  provinsi: (r) => r.provinsi || '',
+  kotaPten: (r) => r.kotaPten || r.groupKota || '',
+  statusPten: (r) => `${r.statusPten || ''}|${r.placementMethod || ''}`,
+  kodePosPten: (r) => r.kodePosPten || '',
+  namaOutlet: (r) => r.namaOutlet || '',
+  wilayah: (r) => r.wilayah || '',
+  organisasiTujuan: (r) => r.organisasiTujuan || '',
+};
+
+/** Sort selalu mengembalikan salinan — `rows` adalah state yang tidak boleh diubah. */
+function terapkanSort(rows: AnalystRow[], kolom: SortKolom | null, arah: 'asc' | 'desc'): AnalystRow[] {
+  if (!kolom) return rows;
+  const ambil = PENGAMBIL_SORT[kolom];
+  const tanda = arah === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const x = ambil(a);
+    const y = ambil(b);
+    if (typeof x === 'number' && typeof y === 'number') return (x - y) * tanda || a.no - b.no;
+    return String(x).localeCompare(String(y), 'id') * tanda || a.no - b.no;
+  });
+}
+
 interface AnalystResultsGridProps {
   rows: AnalystRow[];
   onUpdateRow: (updatedRow: AnalystRow) => void;
   onApproveSingleRow: (rowId: string) => void;
   onApproveAllFinal: () => void;
   onApproveFase: (fase: 1 | 2 | 3) => void;
+  /** "Setujui semua" pada tab manual: baris dianggap bersih, tetap di fase yang sama. */
+  onBersihkanManual: (rowIds: string[]) => void;
   onReRunAll: () => void;
   onReRunAnomaliesOnly: () => void;
   isProcessing: boolean;
@@ -81,6 +114,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   onApproveSingleRow,
   onApproveAllFinal,
   onApproveFase,
+  onBersihkanManual,
   onReRunAll,
   onReRunAnomaliesOnly,
   isProcessing,
@@ -100,11 +134,12 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   // Pencarian 83 ribu baris: biarkan input langsung, saring di nilai tertunda
   const deferredSearch = useDeferredValue(searchTerm);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ANOMALI' | 'EXACT_MATCH' | 'HIGH_CONFIDENCE' | 'PENEMPATAN_REVIEW'>('ALL');
-  // Inner tab pada Fase 1: data yang teranalisa vs yang perlu analisa manual
-  const [fase1Inner, setFase1Inner] = useState<'DIANALISA' | 'TIDAK_ANALISA'>('DIANALISA');
-  // Inner tab pada Fase 2: outlet tervalidasi otomatis (cabang fill-in masuk Top-3
-  // rekomendasi jarak terdekat) vs yang butuh validasi manual operator
-  const [fase2Inner, setFase2Inner] = useState<'VALID' | 'MANUAL'>('VALID');
+  // Inner tab pada tiap fase: hasil mesin yang siap disetujui vs yang masih butuh
+  // kerja operator. Satu state untuk semua fase — hanya labelnya yang berbeda.
+  const [innerTab, setInnerTab] = useState<'BERES' | 'MANUAL'>('BERES');
+  // Urutan kolom — dikerjakan lokal karena seluruh baris fase ini sudah ada di memori.
+  const [sortKolom, setSortKolom] = useState<SortKolom | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   // Pilihan kandidat aktif per baris (rank 1-3) + modal detail kandidat
   const [fase2Choice, setFase2Choice] = useState<Record<string, number>>({});
   const [fase2Detail, setFase2Detail] = useState<{
@@ -228,18 +263,6 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     });
     return s;
   }, [fase2Recs]);
-  const [fase2Counts, fase2ValidCount] = useMemo(() => {
-    let valid = 0;
-    let total = 0;
-    rows.forEach((r) => {
-      if (r.kategori === 'TIDAK_ANALISA') return;
-      total++;
-      if (fase2ValidCities.has(cityMatchKey(r.groupKota))) valid++;
-    });
-    return [{ total, valid } as const, valid];
-  }, [rows, fase2ValidCities]);
-  const fase2ManualCount = fase2Counts.total - fase2ValidCount;
-
   const applyFase2Candidate = (r: AnalystRow, master: MasterRow) => {
     const branchCode = String(master['Branch Code'] || master['Kode Cabang'] || '').trim();
     const resolved = extractWilayahFromBranchCode(branchCode, wilayahSettings, r.wilayah);
@@ -441,25 +464,31 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     ? (['fase1', 'fase2', 'fase3', 'all'][phaseState.step - 1] as 'all' | 'fase1' | 'fase2' | 'fase3')
     : activeSubTab;
 
+  const stageTab: 1 | 2 | 3 | 4 = viewTab === 'fase1' ? 1 : viewTab === 'fase2' ? 2 : viewTab === 'fase3' ? 3 : 4;
+
+  /**
+   * Masih butuh kerja operator pada fase ini? Mesin menyerah (kota tidak ada di PTEN),
+   * cabang tidak masuk rekomendasi (Fase 2), nilai rendah (Fase 3) — atau operator
+   * sendiri yang menarik barisnya kembali lewat tombol Revisi.
+   */
+  const butuhManual = useCallback(
+    (r: AnalystRow, stage: 1 | 2 | 3 | 4): boolean => {
+      if (r.perluManual) return true;
+      if (stage === 1) return r.kategori === 'TIDAK_ANALISA';
+      if (stage === 2) return !fase2ValidCities.has(cityMatchKey(r.groupKota));
+      if (stage === 3) return r.statusAnalisa === 'PERLU_REVIEW' || r.statusAnalisa === 'ANOMALI';
+      return false;
+    },
+    [fase2ValidCities]
+  );
+
   // Filtered rows
   const filteredRows = useMemo(() => {
     const q = deferredSearch.trim().toLowerCase();
-    return rows.filter((r) => {
+    const hasil = rows.filter((r) => {
       // Antrean per-fase: baris hanya tampil di tab fase yang belum ia setujui.
-      const wantStage = viewTab === 'fase1' ? 1 : viewTab === 'fase2' ? 2 : viewTab === 'fase3' ? 3 : 4;
-      if (stageOf(r) !== wantStage) return false;
-
-      // Baris yang belum teranalisa hanya tampil di inner tab "Analisa Manual" (Fase 1)
-      if (viewTab !== 'fase1') {
-        if (r.kategori === 'TIDAK_ANALISA') return false;
-      } else if (r.kategori === 'TIDAK_ANALISA' && fase1Inner !== 'TIDAK_ANALISA') return false;
-      else if (r.kategori !== 'TIDAK_ANALISA' && fase1Inner === 'TIDAK_ANALISA') return false;
-
-      // Fase 2: pisahkan outlet tervalidasi otomatis vs yang butuh validasi manual
-      if (viewTab === 'fase2') {
-        const valid = fase2ValidCities.has(cityMatchKey(r.groupKota));
-        if (fase2Inner === 'VALID' ? !valid : valid) return false;
-      }
+      if (stageOf(r) !== stageTab) return false;
+      if (butuhManual(r, stageTab) !== (innerTab === 'MANUAL')) return false;
 
       if (r.kategori !== 'TIDAK_ANALISA' && selectedWilayah !== 'ALL' && r.wilayah !== selectedWilayah) return false;
       if (statusFilter === 'ANOMALI' && r.statusAnalisa !== 'ANOMALI' && r.statusAnalisa !== 'PERLU_REVIEW') return false;
@@ -486,7 +515,53 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       }
       return true;
     });
-  }, [rows, selectedWilayah, statusFilter, deferredSearch, viewTab, fase1Inner, fase2Inner, fase2ValidCities]);
+    return terapkanSort(hasil, sortKolom, sortDir);
+  }, [rows, selectedWilayah, statusFilter, deferredSearch, stageTab, innerTab, butuhManual, sortKolom, sortDir]);
+
+  // Jumlah per inner tab pada fase yang sedang dibuka (dipakai label tombol)
+  const hitunganInner = useMemo(() => {
+    const queueKey = stageTab === 1 ? 'fase1' : stageTab === 2 ? 'fase2' : stageTab === 3 ? 'fase3' : 'all';
+    let manual = 0;
+    rows.forEach((r) => {
+      if (stageOf(r) === stageTab && butuhManual(r, stageTab)) manual++;
+    });
+    return { manual, beres: Math.max(0, phaseState.queue[queueKey] - manual) };
+  }, [rows, stageTab, butuhManual, phaseState]);
+
+  const toggleSort = (kolom: SortKolom) => {
+    if (sortKolom === kolom) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else {
+      setSortKolom(kolom);
+      setSortDir('asc');
+    }
+    setPage(1);
+  };
+
+  /** Header yang bisa diklik: ⇅ belum dipilih, ▲/▼ sedang mengurutkan kolom ini. */
+  const thSort = (
+    kolom: SortKolom,
+    label: string,
+    gaya?: React.CSSProperties,
+    attrs?: { rowSpan?: number; colSpan?: number }
+  ) => {
+    const aktif = sortKolom === kolom;
+    return (
+      <th
+        {...attrs}
+        style={{ ...gaya, cursor: 'pointer', userSelect: 'none' }}
+        onClick={() => toggleSort(kolom)}
+        aria-sort={aktif ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+        title={`Urutkan berdasar ${label}`}
+      >
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.28rem' }}>
+          {label}
+          <span style={{ fontSize: '0.66rem', color: aktif ? '#405189' : '#adb5bd' }}>
+            {aktif ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
+          </span>
+        </span>
+      </th>
+    );
+  };
 
   // Pagination calculation
   const totalPages = pageSize === 'ALL' ? 1 : Math.max(1, Math.ceil(filteredRows.length / pageSize));
@@ -505,7 +580,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
 
   useEffect(() => {
     tableScrollRef.current?.scrollTo({ top: 0 });
-  }, [page, pageSize, selectedWilayah, statusFilter, viewTab, fase1Inner, fase2Inner, deferredSearch]);
+  }, [page, pageSize, selectedWilayah, statusFilter, viewTab, innerTab, sortKolom, sortDir, deferredSearch]);
 
   // Export Multi-Sheet per Wilayah (W01 - W17)
   const handleExportExcel = () => {
@@ -1078,85 +1153,84 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
         {/* ────────────────────────────────────────────────────────────────────────── */}
         {/* 4. DATA TABLES PER SUB-TAB                                                */}
         {/* ────────────────────────────────────────────────────────────────────────── */}
-        {/* Inner tab khusus Fase 1: hasil analisa vs data yang tidak bisa dianalisa */}
-        {viewTab === 'fase1' && (
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-            {([
-              { key: 'DIANALISA', label: `✅ Berhasil Dianalisa (${stats.total.toLocaleString('id-ID')})`, color: '#0ab39c' },
-              { key: 'TIDAK_ANALISA', label: `⚠️ Perlu Analisa Manual (${stats.unanalysed.toLocaleString('id-ID')})`, color: '#f0ad4e' },
-            ] as const).map((t) => {
-              const active = fase1Inner === t.key;
-              return (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => {
-                    setFase1Inner(t.key);
-                    setPage(1);
-                  }}
-                  style={{
-                    background: active ? t.color : '#ffffff',
-                    color: active ? '#ffffff' : '#495057',
-                    border: `1px solid ${active ? t.color : '#d5dde3'}`,
-                    borderRadius: '6px',
-                    padding: '0.4rem 0.9rem',
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {t.label}
-                </button>
-              );
-            })}
-            {fase1Inner === 'TIDAK_ANALISA' && (
-              <span style={{ alignSelf: 'center', fontSize: '0.76rem', color: '#878a99' }}>
-                Baris KodePos ini kotanya tidak ada di data PTEN — isi Kota PTEN &amp; Kode Pos manual lewat tombol Revisi.
-              </span>
-            )}
-          </div>
-        )}
+        {/* Inner tab seragam untuk semua fase: siap setujui vs masih perlu kerja */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {([
+            {
+              key: 'BERES' as const,
+              label: `${stageTab === 1 ? '✅ Berhasil Dianalisa' : stageTab === 2 ? '✅ Outlet Tervalidasi' : stageTab === 3 ? '✅ Role Terpasang Rapi' : '✅ Siap Final'} (${hitunganInner.beres.toLocaleString('id-ID')})`,
+              color: '#0ab39c',
+            },
+            {
+              key: 'MANUAL' as const,
+              label: `${stageTab === 1 ? '⚠️ Perlu Analisa Manual' : stageTab === 2 ? '✋ Perlu Validasi Manual' : stageTab === 3 ? '⚠️ Perlu Review Role' : '✋ Ditandai Manual'} (${hitunganInner.manual.toLocaleString('id-ID')})`,
+              color: '#f0ad4e',
+            },
+          ]).map((t) => {
+            const active = innerTab === t.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => {
+                  setInnerTab(t.key);
+                  setPage(1);
+                }}
+                style={{
+                  background: active ? t.color : '#ffffff',
+                  color: active ? '#ffffff' : '#495057',
+                  border: `1px solid ${active ? t.color : '#d5dde3'}`,
+                  borderRadius: '6px',
+                  padding: '0.4rem 0.9rem',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {t.label}
+              </button>
+            );
+          })}
 
-        {/* Inner tab khusus Fase 2: outlet tervalidasi jarak vs validasi manual */}
-        {viewTab === 'fase2' && (
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-            {([
-              { key: 'VALID', label: `✅ Sudah Tervalidasi (${fase2ValidCount.toLocaleString('id-ID')})`, color: '#0ab39c' },
-              { key: 'MANUAL', label: `✋ Validasi Manual (${fase2ManualCount.toLocaleString('id-ID')})`, color: '#f0ad4e' },
-            ] as const).map((t) => {
-              const active = fase2Inner === t.key;
-              return (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => {
-                    setFase2Inner(t.key);
-                    setPage(1);
-                  }}
-                  style={{
-                    background: active ? t.color : '#ffffff',
-                    color: active ? '#ffffff' : '#495057',
-                    border: `1px solid ${active ? t.color : '#d5dde3'}`,
-                    borderRadius: '6px',
-                    padding: '0.4rem 0.9rem',
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {t.label}
-                </button>
-              );
-            })}
-            {fase2Inner === 'MANUAL' && (
-              <span style={{ alignSelf: 'center', fontSize: '0.76rem', color: '#878a99' }}>
-                Cabang terisi tidak masuk 3 outlet terdekat — pilih kandidat di kolom Rekomendasi lalu "Gunakan Cabang Ini", atau Revisi manual.
+          {innerTab === 'MANUAL' && (
+            <>
+              <button
+                type="button"
+                className="btn btn-sm"
+                disabled={isProcessing || filteredRows.length === 0}
+                onClick={() => {
+                  const ids = filteredRows.map((r) => r.id);
+                  onBersihkanManual(ids);
+                  setInnerTab('BERES');
+                  setPage(1);
+                  showToast(`${ids.length.toLocaleString('id-ID')} baris ditandai selesai — cek di tab sebelah kiri, lalu "Setujui Fase".`, 'info');
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                  background: 'rgba(10, 179, 156, 0.12)',
+                  border: '1px solid rgba(10, 179, 156, 0.35)',
+                  color: '#0ab39c',
+                  fontWeight: 700,
+                  fontSize: '0.76rem',
+                  whiteSpace: 'nowrap',
+                }}
+                title="Semua baris yang tampil di tab ini dianggap sudah benar dan pindah ke tab Berhasil Dianalisa. Fase ini belum disetujui — masih bisa direvisi."
+              >
+                <Check size={13} />
+                <span>Setujui semua ({filteredRows.length.toLocaleString('id-ID')})</span>
+              </button>
+              <span style={{ fontSize: '0.76rem', color: '#878a99' }}>
+                {stageTab === 1 && 'Kotanya tidak ada di data PTEN — isi Kota PTEN & Kode Pos lewat tombol Edit, atau setujui apa adanya.'}
+                {stageTab === 2 && 'Cabang tidak masuk 3 rekomendasi terdekat — pilih kandidat di kolom Rekomendasi, atau setujui apa adanya.'}
+                {stageTab === 3 && 'Skor kecocokan role rendah — ganti kandidat mapping, atau setujui apa adanya.'}
+                {stageTab === 4 && 'Baris yang Anda tarik kembali dari Final Data. Setujui untuk mengirimnya lagi ke penyetujuan akhir.'}
               </span>
-            )}
-          </div>
-        )}
+            </>
+          )}
+        </div>
 
         <div ref={tableScrollRef} className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', maxHeight: '600px', overflow: 'auto' }}>
           <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
@@ -1164,15 +1238,15 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
               {/* TAB 1: ALL COLUMNS */}
               {viewTab === 'all' && (
                 <tr>
-                  <th style={{ width: '40px', textAlign: 'center' }}>No</th>
-                  <th style={{ width: '70px', textAlign: 'center' }}>Wilayah</th>
+                  {thSort('no', 'No', { width: '40px', textAlign: 'center' })}
+                  {thSort('wilayah', 'Wilayah', { width: '70px', textAlign: 'center' })}
                   <th style={{ width: '85px', textAlign: 'center' }}>Sandi</th>
                   <th style={{ width: '90px', textAlign: 'center' }}>Branch Code</th>
-                  <th style={{ minWidth: '160px' }}>Nama Outlet</th>
-                  <th style={{ width: '110px' }}>Kota PTEN</th>
-                  <th style={{ width: '75px', textAlign: 'center' }}>Kode Pos</th>
-                  <th>Kelurahan / Kec.</th>
-                  <th style={{ minWidth: '180px' }}>ORGANISASI TUJUAN</th>
+                  {thSort('namaOutlet', 'Nama Outlet', { minWidth: '160px' })}
+                  {thSort('kotaPten', 'Kota PTEN', { width: '110px' })}
+                  {thSort('kodePosPten', 'Kode Pos', { width: '75px', textAlign: 'center' })}
+                  {thSort('kelurahan', 'Kelurahan / Kec.')}
+                  {thSort('organisasiTujuan', 'ORGANISASI TUJUAN', { minWidth: '180px' })}
                   <th style={{ width: '75px', textAlign: 'center' }}>Tipe Unit</th>
                   <th style={{ width: '85px', textAlign: 'center' }}>3 Role</th>
                   <th style={{ width: '80px', textAlign: 'center' }}>Status</th>
@@ -1184,24 +1258,24 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
               {viewTab === 'fase1' && (
                 <>
                   <tr>
-                    <th rowSpan={2} style={{ width: '40px', textAlign: 'center', verticalAlign: 'middle' }}>No</th>
+                    {thSort('no', 'No', { width: '40px', textAlign: 'center', verticalAlign: 'middle' }, { rowSpan: 2 })}
                     <th colSpan={3} style={{ textAlign: 'center', background: '#eff6fb', color: '#299cdb', borderLeft: '2px solid #d5e7f2' }}>
                       📮 DATA POS (Kelurahan &amp; Wilayah Administrasi)
                     </th>
                     <th colSpan={3} style={{ textAlign: 'center', background: '#eefaf6', color: '#0ab39c', borderLeft: '2px solid #b7ebe4' }}>
-                      {fase1Inner === 'TIDAK_ANALISA'
-                        ? '🛡️ DATA PTEN (belum terpetakan — isi manual lewat Revisi)'
+                      {innerTab === 'MANUAL'
+                        ? '🛡️ DATA PTEN (belum terpetakan — isi manual lewat Edit)'
                         : '🛡️ DATA PTEN (Kota / Provinsi / Kode Pos)'}
                     </th>
                     <th rowSpan={2} style={{ width: '165px', textAlign: 'center', verticalAlign: 'middle' }}>Aksi Review</th>
                   </tr>
                   <tr>
-                    <th style={{ minWidth: '140px', borderLeft: '2px solid #d5e7f2' }}>Kelurahan</th>
-                    <th style={{ minWidth: '140px' }}>Kecamatan</th>
-                    <th style={{ minWidth: '130px' }}>Provinsi</th>
-                    <th style={{ minWidth: '150px', borderLeft: '2px solid #b7ebe4' }}>Kota / Kabupaten</th>
-                    <th style={{ width: '100px', textAlign: 'center' }}>Kode Pos</th>
-                    <th style={{ minWidth: '170px', textAlign: 'center' }}>Status PTEN</th>
+                    {thSort('kelurahan', 'Kelurahan', { minWidth: '140px', borderLeft: '2px solid #d5e7f2' })}
+                    {thSort('kecamatan', 'Kecamatan', { minWidth: '140px' })}
+                    {thSort('provinsi', 'Provinsi', { minWidth: '130px' })}
+                    {thSort('kotaPten', 'Kota / Kabupaten', { minWidth: '150px', borderLeft: '2px solid #b7ebe4' })}
+                    {thSort('kodePosPten', 'Kode Pos', { width: '100px', textAlign: 'center' })}
+                    {thSort('statusPten', 'Status PTEN', { minWidth: '170px', textAlign: 'center' })}
                   </tr>
                 </>
               )}
@@ -1209,7 +1283,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
               {/* TAB 3: FASE 2 WILAYAH & CABANG (kandidat kiri sticky, gaya tab "Rekomendasi Data" lama) */}
               {viewTab === 'fase2' && (
                 <tr>
-                  <th style={{ width: '40px', textAlign: 'center', position: 'sticky', left: 0, background: '#f3f6f9', zIndex: 12, borderRight: '1px solid #e9ebec' }}>No</th>
+                  {thSort('no', 'No', { width: '40px', textAlign: 'center', position: 'sticky', left: 0, background: '#f3f6f9', zIndex: 12, borderRight: '1px solid #e9ebec' })}
                   <th
                     style={{
                       width: '420px',
@@ -1227,11 +1301,11 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                   >
                     Kandidat Rekomendasi Master
                   </th>
-                  <th style={{ width: '85px', textAlign: 'center' }}>Kanwil</th>
+                  {thSort('wilayah', 'Kanwil', { width: '85px', textAlign: 'center' })}
                   <th style={{ width: '90px', textAlign: 'center' }}>Sandi Cabang</th>
                   <th style={{ width: '95px', textAlign: 'center' }}>Branch Code</th>
                   <th style={{ width: '85px', textAlign: 'center' }}>Kode Cabang</th>
-                  <th style={{ minWidth: '180px' }}>Nama Outlet Master</th>
+                  {thSort('namaOutlet', 'Nama Outlet Master', { minWidth: '180px' })}
                   <th style={{ minWidth: '150px' }} title="Wajib dari kolom PTEN &quot;KOTA/KABUPATEN MAX 15 DIGIT&quot;">Kota / Kab (MAX 15 Digit)</th>
                   <th style={{ minWidth: '220px' }}>ALAMAT Cabang</th>
                   <th style={{ width: '95px', textAlign: 'center' }}>Aksi Review</th>
@@ -1241,8 +1315,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
               {/* TAB 4: FASE 3 MAPPING ROLE & WONDR */}
               {viewTab === 'fase3' && (
                 <tr>
-                  <th style={{ width: '40px', textAlign: 'center' }}>No</th>
-                  <th style={{ minWidth: '180px' }}>Nama Outlet</th>
+                  {thSort('no', 'No', { width: '40px', textAlign: 'center' })}
+                  {thSort('namaOutlet', 'Nama Outlet', { minWidth: '180px' })}
                   {roleMappingList.length > 0 && (
                     <th
                       style={{
@@ -1260,7 +1334,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                       </div>
                     </th>
                   )}
-                  <th style={{ minWidth: '220px' }}>ORGANISASI TUJUAN</th>
+                  {thSort('organisasiTujuan', 'ORGANISASI TUJUAN', { minWidth: '220px' })}
                   <th style={{ width: '80px', textAlign: 'center' }}>Tipe Unit</th>
                   <th style={{ width: '60px', textAlign: 'center' }}>Sales</th>
                   <th style={{ width: '70px', textAlign: 'center' }}>Verifikator</th>
@@ -1344,17 +1418,24 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                           {/* Satu kartu label: warna = status, teks kecil di bawahnya = alasannya */}
                           <td style={{ textAlign: 'center' }} title={r.placementMethod || ''}>
                             {(() => {
-                              const belumAda = !r.kotaPten && r.statusPten === 'UNCHECKED';
-                              const hijau = !belumAda && (r.statusPten === 'SAME' || r.statusPten === 'PTEN FOUND');
-                              const cls = belumAda ? 'badge-diff' : hijau ? 'badge-match' : 'badge-level2';
+                              const p = penjelasanFase1(r);
+                              const cls = p.nada === 'ok' ? 'badge-match' : p.nada === 'waspada' ? 'badge-level2' : 'badge-diff';
                               return (
                                 <>
-                                  <span className={`badge ${cls}`}>{belumAda ? 'TIDAK ADA DI PTEN' : r.statusPten}</span>
-                                  {r.placementMethod && (
-                                    <div style={{ fontSize: '0.62rem', color: '#878a99', marginTop: '2px', whiteSpace: 'normal' }}>
-                                      {r.placementMethod}
-                                    </div>
-                                  )}
+                                  <span className={`badge ${cls}`}>{p.label}</span>
+                                  <div
+                                    style={{
+                                      fontSize: '0.62rem',
+                                      color: '#878a99',
+                                      margin: '2px auto 0',
+                                      maxWidth: '190px',
+                                      whiteSpace: 'nowrap',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                    }}
+                                  >
+                                    {p.alasan}
+                                  </div>
                                 </>
                               );
                             })()}
@@ -1728,25 +1809,34 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                       <td style={{ textAlign: 'center' }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'nowrap', gap: '0.25rem', whiteSpace: 'nowrap' }}>
                           {(() => {
-                            const rowPhaseApproved =
+                            const diTabManual = innerTab === 'MANUAL';
+                            const sudahSetuju = !diTabManual && (
                               viewTab === 'fase1' ? r.fase1Approved :
                               viewTab === 'fase2' ? r.fase2Approved :
                               viewTab === 'fase3' ? r.fase3Approved :
-                              r.isFinalApproved;
+                              r.isFinalApproved
+                            );
                             return (
                               <button
                                 type="button"
                                 onClick={() => {
-                                  if (viewTab === 'fase1') { onUpdateRow({ ...r, fase1Approved: true }); showToast(`Fase 1 baris #${r.no} disetujui!`); }
+                                  // Tab manual: "setujui" = barisnya sudah beres, tapi fase
+                                  // ini belum diterima — ia pindah ke tab Berhasil Dianalisa.
+                                  if (diTabManual) {
+                                    onBersihkanManual([r.id]);
+                                    showToast(`Baris #${r.no} selesai — pindah ke tab Berhasil Dianalisa.`, 'info');
+                                  } else if (viewTab === 'fase1') { onUpdateRow({ ...r, fase1Approved: true }); showToast(`Fase 1 baris #${r.no} disetujui!`); }
                                   else if (viewTab === 'fase2') { onUpdateRow({ ...r, fase2Approved: true }); showToast(`Fase 2 baris #${r.no} disetujui!`); }
                                   else if (viewTab === 'fase3') { onUpdateRow({ ...r, fase3Approved: true }); showToast(`Fase 3 baris #${r.no} disetujui!`); }
                                   else { onApproveSingleRow(r.id); showToast(`Baris #${r.no} (${r.namaOutlet}) disetujui!`); }
                                 }}
-                                title={rowPhaseApproved ? 'Sudah disetujui' : 'Setujui Hasil Baris Ini (OK)'}
+                                title={diTabManual
+                                  ? 'Tandai baris ini sudah diperbaiki → pindah ke tab Berhasil Dianalisa'
+                                  : sudahSetuju ? 'Sudah disetujui' : 'Setujui hasil baris ini (OK)'}
                                 style={{
-                                  background: rowPhaseApproved ? '#0ab39c' : 'rgba(10, 179, 156, 0.1)',
+                                  background: sudahSetuju ? '#0ab39c' : 'rgba(10, 179, 156, 0.1)',
                                   border: '1px solid rgba(10, 179, 156, 0.3)',
-                                  color: rowPhaseApproved ? '#ffffff' : '#0ab39c',
+                                  color: sudahSetuju ? '#ffffff' : '#0ab39c',
                                   borderRadius: '4px',
                                   padding: viewTab === 'fase1' ? '0.22rem 0.55rem' : '0.22rem 0.4rem',
                                   cursor: 'pointer',
@@ -1792,16 +1882,15 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                               <span>Edit</span>
                             </button>
                           )}
-                          {viewTab !== 'fase1' && (
+                          {innerTab === 'BERES' && (
                             <button
                               type="button"
                               onClick={() => {
-                                if (!window.confirm('Revisi baris ini? Baris akan dikembalikan ke fase sebelumnya untuk diproses ulang.')) return;
-                                if (viewTab === 'fase2') { onUpdateRow({ ...r, fase1Approved: false }); showToast(`Baris #${r.no} direvisi → kembali ke Fase 1.`, 'info'); }
-                                else if (viewTab === 'fase3') { onUpdateRow({ ...r, fase2Approved: false }); showToast(`Baris #${r.no} direvisi → kembali ke Fase 2.`, 'info'); }
-                                else { onUpdateRow({ ...r, fase3Approved: false }); showToast(`Baris #${r.no} direvisi → kembali ke Fase 3.`, 'info'); }
+                                if (!window.confirm('Revisi baris ini? Baris dikembalikan ke tab Perlu Analisa Manual pada fase yang sama.')) return;
+                                onUpdateRow({ ...r, perluManual: true });
+                                showToast(`Baris #${r.no} dikembalikan ke tab Perlu Analisa Manual.`, 'info');
                               }}
-                              title="Kembalikan baris ini ke fase sebelumnya"
+                              title="Kembalikan baris ini ke tab Perlu Analisa Manual"
                               style={{
                                 background: 'rgba(240, 101, 72, 0.1)',
                                 border: '1px solid rgba(240, 101, 72, 0.35)',
