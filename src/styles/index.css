@@ -857,6 +857,15 @@ body {
   line-height: 1.35;
 }
 
+/* Tabel rujukan (Data KodePos): tiap sel wajib satu baris. Wadah tabel sudah
+   overflow-x: auto, jadi nama wilayah panjang menggeser tabel, bukan melipat. */
+.modern-table.table-one-line td,
+.modern-table.table-one-line th {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
 .modern-table tbody tr {
   transition: background-color 0.12s;
 }

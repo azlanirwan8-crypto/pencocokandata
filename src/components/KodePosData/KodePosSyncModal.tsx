@@ -124,7 +124,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
       )} titik desa kode pos-nya sama dengan dump Kemendagri.` +
       (cakupan.diLuarWilayah > 0 ? ` ${fmt(cakupan.diLuarWilayah)} titik di luar wilayah Indonesia.` : '') +
       (cakupan.tanpaTitik > 0
-        ? ` ${fmt(cakupan.tanpaTitik)} baris belum punya titik sendiri — "Isi Koordinat" masih bisa memakai geocoding.`
+        ? ` ${fmt(cakupan.tanpaTitik)} baris belum punya titik sendiri — kartu Titik Koordinat masih bisa mencari titik per kode pos.`
         : ' Tiap baris kelurahan punya titiknya sendiri, bukan satu titik untuk seluruh kode pos.');
 
   const toggleAll = () => {
@@ -423,7 +423,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                                   aria-label={`Buka Maps untuk kode pos ${r.kodePos}`}
                                   {...tipProps(
                                     r.latitude == null
-                                      ? 'Titik koordinat belum ada — jalankan "Isi Koordinat" di tabel Kode Pos'
+                                      ? 'Titik koordinat belum ada — pakai aksi di kartu Titik Koordinat pada tabel Kode Pos'
                                       : `Buka Maps/Google · ${geoLabel(r)}`
                                   )}
                                   style={{

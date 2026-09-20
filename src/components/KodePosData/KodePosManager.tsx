@@ -936,7 +936,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
 
         {/* Modern Table Container */}
         <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', overflowX: 'auto', maxHeight: '580px' }}>
-          <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
+          <table className="modern-table table-one-line" style={{ width: '100%', fontSize: '0.78rem' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
               <tr>
                 <th style={{ width: '45px', textAlign: 'center' }}>No</th>
@@ -1069,7 +1069,8 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                           (item.geoTerverifikasi || item.geoPresisi === 'PERKIRAAN WILAYAH') && (
                             <span
                               style={{
-                                display: 'block',
+                                display: 'inline-block',
+                                marginLeft: '0.35rem',
                                 fontSize: '0.78rem',
                                 fontWeight: 700,
                                 letterSpacing: '0.03em',
@@ -1093,7 +1094,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                             aria-label={`Buka Maps untuk kode pos ${item.kodePos}`}
                             {...tipProps(
                               item.latitude == null
-                                ? 'Titik koordinat belum ada — klik "Isi Koordinat"'
+                                ? 'Titik koordinat belum ada — pakai aksi di kartu Titik Koordinat'
                                 : `Buka Maps/Google · ${geoLabel(item)}`
                             )}
                             style={{
@@ -1599,7 +1600,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                       <MapPin size={26} color="#adb5bd" />
                       <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#5b5f6e' }}>Titik belum tersedia</div>
                       <div style={{ fontSize: '0.76rem', color: '#878a99' }}>
-                        Jalankan &quot;Isi Koordinat&quot; untuk menaruh lokasi baris ini di peta.
+                        Pakai aksi di kartu Titik Koordinat untuk menaruh lokasi baris ini di peta.
                       </div>
                     </div>
                   )}

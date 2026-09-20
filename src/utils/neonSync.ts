@@ -520,7 +520,7 @@ export function geoLabel(row: KodePosRow): string {
   if (row.latitude == null || row.longitude == null) {
     return row.geoSumber === 'TIDAK DITEMUKAN'
       ? 'Sudah dicari di Google / ESRI / OpenStreetMap, tidak ditemukan'
-      : 'Titik belum dicari — klik "Isi Koordinat"';
+      : 'Titik belum dicari — pakai aksi di kartu Titik Koordinat';
   }
   const sumber = row.geoTerverifikasi
     ? 'Google Geocoding API (terverifikasi)'
