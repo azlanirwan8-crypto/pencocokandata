@@ -1,6 +1,6 @@
 import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, X, CloudUpload, CheckCircle2, AlertCircle, ShieldCheck, ExternalLink } from 'lucide-react';
-import { runKodePosLiveSync, type KodePosSyncPlan, type SyncProgress } from '../../utils/kodePosSync';
+import { runKodePosLiveSync, importSemuaPatokan, type KodePosSyncPlan, type SyncProgress } from '../../utils/kodePosSync';
 import { saveKodePosToNeon, mapsUrlFor, geoLabel, type KodePosRow } from '../../utils/neonSync';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
 import { useGeoTooltip } from '../GeoTooltip';
@@ -131,6 +131,22 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
       await startCheck(msg);
     } catch (err: any) {
       setErrorMsg(err?.message || 'Gagal menyimpan ke Neon.');
+      setPhase('ready');
+    }
+  };
+
+  // Salin seluruh patokan yang belum ada, langsung di database (tanpa batas daftar contoh).
+  const handleImportAll = async () => {
+    setPhase('importing');
+    setStep('Menyalin seluruh patokan ke tabel kerja...');
+    try {
+      const { masuk, totalSetelah } = await importSemuaPatokan();
+      const msg = `${fmt(masuk)} baris patokan disalin ke tabel kerja — total ${fmt(totalSetelah)} baris.`;
+      setImportMsg(msg);
+      onImported?.();
+      await startCheck(msg);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Penyalinan patokan gagal.');
       setPhase('ready');
     }
   };
@@ -394,6 +410,19 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
           <button type="button" className="btn btn-outline btn-sm" onClick={onClose}>
             Tutup
           </button>
+          {plan?.listTruncated && (plan.missingTotal ?? 0) > 0 && (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => void handleImportAll()}
+              disabled={phase !== 'ready'}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+              title="Menyalin semua baris patokan yang belum ada, langsung di database — bukan hanya daftar contoh yang tampil di layar ini."
+            >
+              <CloudUpload size={13} />
+              {phase === 'importing' ? 'Menyalin...' : 'Isi Semua Patokan'}
+            </button>
+          )}
           <button
             type="button"
             className="btn btn-primary btn-sm"

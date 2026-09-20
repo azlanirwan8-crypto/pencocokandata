@@ -75,6 +75,10 @@ export interface KodePosSyncPlan {
   importable: boolean;
   /** Isi saat sumber resmi: kode wilayah + kode pos yang belum ada di Neon. */
   missingCodes: { kode: string; kodePos: string }[];
+  /** Jumlah kode pos patokan yang belum ada di Neon — bisa lebih besar dari daftar contoh. */
+  missingTotal?: number;
+  /** true bila `missingInCloud` cuma contoh terbatas (DIFF_CAP), bukan seluruhnya. */
+  listTruncated?: boolean;
 }
 
 export type SyncProgress = (step: string, pct: number) => void;
@@ -336,6 +340,8 @@ function planFromBaselineDiff(json: any, noteTambahan?: string): KodePosSyncPlan
     provincesAffected: provinces,
     importable: true,
     missingCodes: [],
+    missingTotal: json.missingCodesTotal ?? rows.length,
+    listTruncated: Boolean(json.truncated),
     note:
       (noteTambahan ? noteTambahan + ' ' : '') +
       (json.truncated
@@ -387,6 +393,16 @@ export async function runKodePosBaselineAudit(onProgress?: SyncProgress): Promis
     plan.note += ` Perhatian: patokan hanya ${Number(json.baselineRows || 0).toLocaleString('id-ID')} baris — di bawah ${PATOKAN_LANTAI_BARIS.toLocaleString('id-ID')} daftar resmi, kemungkinan sumber cadangan yang terpakai.`;
   }
   return plan;
+}
+
+/**
+ * Salin SELURUH baris patokan yang belum ada ke tabel kerja, langsung di database.
+ * Daftar contoh di modal terbatas beberapa ribu baris, jadi tombol ini yang mengisi penuh.
+ */
+export async function importSemuaPatokan(): Promise<{ masuk: number; totalSetelah: number }> {
+  const json = await fetchJson('/api/kodepos-baseline?view=import-missing', { method: 'POST' });
+  if (!json?.ok) throw new Error(json?.error || 'Penyalinan patokan ke tabel kerja gagal.');
+  return { masuk: Number(json.masuk || 0), totalSetelah: Number(json.totalSetelah || 0) };
 }
 
 /** Cicil penarikan baseline (server membatasi 5 halaman x 1000 baris tiap panggilan). */

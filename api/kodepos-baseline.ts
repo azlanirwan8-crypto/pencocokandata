@@ -7,6 +7,7 @@ import { neon } from '@neondatabase/serverless';
  * GET  ?view=diff   adukan kodepos_data dengan seluruh isi baseline
  * POST ?view=fetch  tarik satu tahap (maks. 5 halaman x 1000 baris) lalu upsert per kode
  *                   wilayah; klien mengulang sampai `done`
+ * POST ?view=import-missing  salin semua baris patokan yang belum ada ke kodepos_data
  * DELETE            kosongkan tabel baseline untuk mulai ulang
  *
  * Sumber dicoba berurutan; sumber yang benar-benar dipakai dicatat di kolom `sumber`:
@@ -467,13 +468,41 @@ export default async function handler(req: any, res: any) {
       });
     }
 
+    // ─────────────── POST import-missing ───────────────
+    // Salin SEMUA baris patokan yang belum ada ke tabel kerja, langsung di database.
+    // Jalur browser biasa terbatas DIFF_CAP baris contoh, jadi tidak bisa dipakai untuk
+    // mengisi puluhan ribu baris sekali jalan.
+    if (req.method === 'POST' && view === 'import-missing') {
+      const sebelum = await sql`SELECT COUNT(*)::int AS n FROM kodepos_data;`;
+      await sql`
+        INSERT INTO kodepos_data (kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, status)
+        SELECT b.kode_pos, b.kelurahan, b.kecamatan, b.kabupaten_kota, b.provinsi, 'AKTIF'
+        FROM kodepos_baseline b
+        WHERE b.kode_pos ~ '^[0-9]{5}$'
+          AND NOT EXISTS (
+            SELECT 1 FROM kodepos_data d
+            WHERE upper(btrim(d.kode_pos)) = upper(btrim(b.kode_pos))
+              AND lower(btrim(coalesce(d.kelurahan, ''))) = lower(btrim(coalesce(b.kelurahan, '')))
+          )
+        ON CONFLICT DO NOTHING;
+      `;
+      const sesudah = await sql`SELECT COUNT(*)::int AS n FROM kodepos_data;`;
+      const masuk = Number((sesudah?.[0] as any)?.n || 0) - Number((sebelum?.[0] as any)?.n || 0);
+      return res.status(200).json({
+        ok: true,
+        configured: true,
+        masuk,
+        totalSetelah: Number((sesudah?.[0] as any)?.n || 0),
+      });
+    }
+
     // ─────────────── RESET ───────────────
     if (req.method === 'DELETE') {
       await sql`DELETE FROM kodepos_baseline;`;
       return res.status(200).json({ ok: true, configured: true, message: 'Tabel baseline dikosongkan.' });
     }
 
-    return res.status(400).json({ ok: false, error: 'Gunakan ?view=meta|diff atau POST ?view=fetch.' });
+    return res.status(400).json({ ok: false, error: 'Gunakan ?view=meta|diff atau POST ?view=fetch|import-missing.' });
   } catch (error: any) {
     console.error('Kodepos baseline error:', error);
     const status = Number(error?.status) || 500;
