@@ -414,6 +414,10 @@ export interface KoordinatCakupan {
   kodePosTitik: number;
   diLuarWilayah: number;
   takTerkenalan: number;
+  /** Kode wilayah titik yang dikenali daftar patokan Kemendagri. */
+  kodeWilayahCocok: number;
+  /** ... dan kode pos sumbernya juga sama dengan kode pos Kemendagri. */
+  kodePosCocok: number;
   terakhir: string | null;
 }
 

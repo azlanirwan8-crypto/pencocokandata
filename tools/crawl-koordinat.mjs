@@ -11,6 +11,7 @@
  *
  * Opsional:
  *   --dry            hanya kumpulkan ke scratch/koordinat.csv, tidak mengirim
+ *   --csv berkas     dorong isi berkas hasil --dry tanpa mengambil ulang halaman
  *   --concurrency 8  --batch 2000  --start 0  --limit 0
  *   --resume         lanjut dari index tersimpan di scratch/koordinat.state.json
  */
@@ -105,6 +106,29 @@ async function postJson(url, body, tries = 4) {
 
 async function main() {
   const started = Date.now();
+
+  // Mode set ulang: dorong hasil crawl yang sudah tersimpan (--csv) tanpa mengambil ulang.
+  const csvPath = arg('csv', '');
+  if (csvPath) {
+    const teks = (await readFile(path.resolve(csvPath), 'utf8')).split(/\r?\n/);
+    const rows = [];
+    for (const baris of teks) {
+      const m = baris.match(/^(\d{2}\.\d{2}\.\d{2}\.\d{4}),(\d{5}),"([^"]*)",(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?),(\d*)$/);
+      if (!m) continue;
+      rows.push({ kode: m[1], kodePos: m[2], desa: m[3], lat: Number(m[4]), lng: Number(m[5]), elev: m[6] ? Number(m[6]) : null });
+    }
+    console.log(`${rows.length} baris koordinat dari ${csvPath}`);
+    let masuk = 0;
+    for (let i = 0; i < rows.length; i += BATCH) {
+      const json = await postJson(`${base}/api/kodepos-koordinat?view=ingest`, { rows: rows.slice(i, i + BATCH) });
+      masuk += json?.masuk ?? 0;
+      console.log(`  ${masuk} titik masuk`);
+    }
+    const r = await postJson(`${base}/api/kodepos-koordinat?view=salin-ke-data`, {});
+    console.log(`Salin ke tabel kerja: ${JSON.stringify(r)} · ${((Date.now() - started) / 1000).toFixed(1)} detik`);
+    return;
+  }
+
   console.log(`Ambil daftar URL kecamatan dari sitemap...`);
   const xml = await getText(SITEMAP);
   if (!xml) throw new Error('Sitemap tidak bisa diambil.');

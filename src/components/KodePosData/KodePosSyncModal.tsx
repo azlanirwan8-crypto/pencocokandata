@@ -108,6 +108,25 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
   const someChecked = shownRows.some((r) => selected.has(rowKey(r)));
   const checking = phase === 'checking';
 
+  const tipKoordinat = !cakupan
+    ? 'Endpoint /api/kodepos-koordinat belum tersedia di deployment ini.'
+    : `Titik per kode wilayah desa, sumber kodepos.co.id — ${fmt(cakupan.patokanTitik)} titik${
+        cakupan.terakhir
+          ? `, terakhir diperbarui ${new Date(cakupan.terakhir).toLocaleDateString('id-ID', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+            })}`
+          : ''
+      }.` +
+      ` Cross-check: ${fmt(cakupan.kodePosCocok)} dari ${fmt(
+        cakupan.kodeWilayahCocok
+      )} titik desa kode pos-nya sama dengan dump Kemendagri.` +
+      (cakupan.diLuarWilayah > 0 ? ` ${fmt(cakupan.diLuarWilayah)} titik di luar wilayah Indonesia.` : '') +
+      (cakupan.tanpaTitik > 0
+        ? ` ${fmt(cakupan.tanpaTitik)} baris belum punya titik sendiri — "Isi Koordinat" masih bisa memakai geocoding.`
+        : ' Tiap baris kelurahan punya titiknya sendiri, bukan satu titik untuk seluruh kode pos.');
+
   const toggleAll = () => {
     setSelected(allChecked ? new Set() : new Set(shownRows.map(rowKey)));
   };
@@ -262,27 +281,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                   value={cakupan ? fmt(cakupan.dataTitik) : '—'}
                   sub={cakupan ? `dari ${fmt(cakupan.dataTotal)} baris punya titik sendiri` : 'cakupan belum terbaca'}
                   color={!cakupan ? '#5b5f6e' : cakupan.tanpaTitik > 0 ? '#d68b0c' : '#0ab39c'}
-                  tip={
-                    cakupan
-                      ? `Titik diambil per kode wilayah desa (sumber: kodepos.co.id, ${fmt(
-                          cakupan.patokanTitik
-                        )} titik patokan${
-                          cakupan.terakhir
-                            ? `, terakhir diperbarui ${new Date(cakupan.terakhir).toLocaleDateString('id-ID', {
-                                day: '2-digit',
-                                month: 'short',
-                                year: 'numeric',
-                              })}`
-                            : ''
-                        }).${
-                          cakupan.diLuarWilayah > 0 ? ` ${fmt(cakupan.diLuarWilayah)} titik di luar wilayah Indonesia.` : ''
-                        }${
-                          cakupan.tanpaTitik > 0
-                            ? ` ${fmt(cakupan.tanpaTitik)} baris belum punya titik — gunakan "Isi Koordinat" untuk mengekarnya.`
-                            : ' Setiap baris kelurahan punya titiknya sendiri, bukan satu titik untuk seluruh kode pos.'
-                        }`
-                      : 'Endpoint /api/kodepos-koordinat belum tersedia di deployment ini.'
-                  }
+                  tip={tipKoordinat}
                 />
               </div>
               {importMsg && (

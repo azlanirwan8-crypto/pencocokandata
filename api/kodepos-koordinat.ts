@@ -95,7 +95,12 @@ export default async function handler(req: any, res: any) {
             WHERE latitude IS NOT NULL
               AND (latitude NOT BETWEEN -11 AND 41 OR longitude NOT BETWEEN 89 AND 145))   AS diLuarWilayah,
           (SELECT COUNT(*)::int FROM kodepos_koordinat k
-            WHERE NOT EXISTS (SELECT 1 FROM kodepos_baseline b WHERE b.kode_wilayah = k.kode_wilayah)) AS takTerkenalan;
+            WHERE NOT EXISTS (SELECT 1 FROM kodepos_baseline b WHERE b.kode_wilayah = k.kode_wilayah)) AS takTerkenalan,
+          (SELECT COUNT(*)::int FROM kodepos_koordinat k
+            JOIN kodepos_baseline b ON b.kode_wilayah = k.kode_wilayah)                                AS kodeWilayahCocok,
+          (SELECT COUNT(*)::int FROM kodepos_koordinat k
+            JOIN kodepos_baseline b ON b.kode_wilayah = k.kode_wilayah
+            WHERE upper(btrim(k.kode_pos)) = upper(btrim(b.kode_pos)))                                AS kodePosCocok;
       `);
       const s = r?.[0] || {};
       return res.status(200).json({
@@ -108,6 +113,8 @@ export default async function handler(req: any, res: any) {
         kodePosTitik: s.kodePosTitik ?? 0,
         diLuarWilayah: s.diLuarWilayah ?? 0,
         takTerkenalan: s.takTerkenalan ?? 0,
+        kodeWilayahCocok: s.kodeWilayahCocok ?? 0,
+        kodePosCocok: s.kodePosCocok ?? 0,
         terakhir: s.terakhir ?? null,
       });
     }
@@ -161,16 +168,19 @@ export default async function handler(req: any, res: any) {
             JOIN kodepos_baseline b ON b.kode_wilayah = k.kode_wilayah
           ) t
           ORDER BY kunci, kode_wilayah
+        ),
+        upd AS (
+          UPDATE kodepos_data d
+          SET latitude = src.latitude,
+              longitude = src.longitude,
+              sumber_koordinat = src.sumber,
+              diambil_pada = src.diambil_pada
+          FROM src
+          WHERE src.kunci = ${rowKey('d')}
+            AND (d.latitude IS DISTINCT FROM src.latitude OR d.longitude IS DISTINCT FROM src.longitude)
+          RETURNING 1
         )
-        UPDATE kodepos_data d
-        SET latitude = src.latitude,
-            longitude = src.longitude,
-            sumber_koordinat = src.sumber,
-            diambil_pada = src.diambil_pada
-        FROM src
-        WHERE src.kunci = ${rowKey('d')}
-          AND (d.latitude IS DISTINCT FROM src.latitude OR d.longitude IS DISTINCT FROM src.longitude)
-        RETURNING d.id;
+        SELECT COUNT(*)::int AS n FROM upd;
       `);
       const bolong = await sql.query(
         `SELECT COUNT(*)::int AS n FROM kodepos_data WHERE latitude IS NULL;`
@@ -178,7 +188,7 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({
         ok: true,
         configured: true,
-        disalin: (hasil || []).length,
+        disalin: hasil?.[0]?.n ?? 0,
         tanpaTitik: bolong?.[0]?.n ?? 0,
       });
     }
