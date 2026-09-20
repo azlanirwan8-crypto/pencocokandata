@@ -13,7 +13,7 @@ import { neon } from '@neondatabase/serverless';
  *
  * Table: kodepos_data (dedicated, dengan index). Titik koordinat per baris ada di kolom
  * latitude/longitude baru itu sendiri (diturunkan dari kodepos_koordinat oleh
- * /api/kodepos-koordinat?view=salin-ke-data); kodepos_geo tetap dipakai sebagai cache
+ * /api/kodepos-baseline?view=koordinat-salin); kodepos_geo tetap dipakai sebagai cache
  * geocoding per kode pos untuk baris yang belum punya titik sendiri.
  */
 

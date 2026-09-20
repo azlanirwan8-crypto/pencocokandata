@@ -136,11 +136,11 @@ async function main() {
     console.log(`${rows.length} baris koordinat dari ${csvPath}`);
     let masuk = 0;
     for (let i = 0; i < rows.length; i += BATCH) {
-      const json = await postJson(`${base}/api/kodepos-koordinat?view=ingest`, { rows: rows.slice(i, i + BATCH) });
+      const json = await postJson(`${base}/api/kodepos-baseline?view=koordinat-ingest`, { rows: rows.slice(i, i + BATCH) });
       masuk += json?.masuk ?? 0;
       console.log(`  ${masuk} titik masuk`);
     }
-    const r = await postJson(`${base}/api/kodepos-koordinat?view=salin-ke-data`, {});
+    const r = await postJson(`${base}/api/kodepos-baseline?view=koordinat-salin`, {});
     console.log(`Salin ke tabel kerja: ${JSON.stringify(r)} · ${((Date.now() - started) / 1000).toFixed(1)} detik`);
     return;
   }
@@ -187,7 +187,7 @@ async function main() {
       sent += rows.length;
       return;
     }
-    const json = await postJson(`${base}/api/kodepos-koordinat?view=ingest`, { rows });
+    const json = await postJson(`${base}/api/kodepos-baseline?view=koordinat-ingest`, { rows });
     sent += json?._masuk ?? rows.length;
     console.log(
       `  terkirim ${sent} koordinat (baris cocok: ${json?.cocok ?? '-'}, total halaman selesai ${pages})`
@@ -234,7 +234,7 @@ async function main() {
   out?.end();
 
   if (!DRY && seen.size) {
-    const r = await postJson(`${base}/api/kodepos-koordinat?view=salin-ke-data`, {});
+    const r = await postJson(`${base}/api/kodepos-baseline?view=koordinat-salin`, {});
     console.log(`Salin ke tabel kerja: ${JSON.stringify(r)}`);
   }
 

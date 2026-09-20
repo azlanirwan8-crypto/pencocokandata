@@ -109,7 +109,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
   const checking = phase === 'checking';
 
   const tipKoordinat = !cakupan
-    ? 'Endpoint /api/kodepos-koordinat belum tersedia di deployment ini.'
+    ? 'Endpoint ?view=koordinat belum tersedia di deployment ini.'
     : `Titik per kode wilayah desa, sumber kodepos.co.id — ${fmt(cakupan.patokanTitik)} titik${
         cakupan.terakhir
           ? `, terakhir diperbarui ${new Date(cakupan.terakhir).toLocaleDateString('id-ID', {

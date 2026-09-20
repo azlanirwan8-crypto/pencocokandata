@@ -423,7 +423,7 @@ export interface KoordinatCakupan {
 
 export async function cakupanKoordinat(): Promise<KoordinatCakupan | null> {
   try {
-    const json = await fetchJson('/api/kodepos-koordinat?view=progress');
+    const json = await fetchJson('/api/kodepos-baseline?view=koordinat');
     return json?.ok ? (json as KoordinatCakupan) : null;
   } catch (err) {
     console.warn('Cakupan koordinat tidak terbaca:', err);
@@ -437,7 +437,7 @@ export async function cakupanKoordinat(): Promise<KoordinatCakupan | null> {
  */
 export async function salinKoordinatPatokan(): Promise<{ disalin: number; tanpaTitik: number } | null> {
   try {
-    const json = await fetchJson('/api/kodepos-koordinat?view=salin-ke-data', { method: 'POST' });
+    const json = await fetchJson('/api/kodepos-baseline?view=koordinat-salin', { method: 'POST' });
     return json?.ok ? { disalin: Number(json.disalin || 0), tanpaTitik: Number(json.tanpaTitik || 0) } : null;
   } catch (err) {
     console.warn('Penyalinan koordinat ke tabel kerja dilewati:', err);
