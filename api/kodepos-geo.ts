@@ -394,16 +394,49 @@ export default async function handler(req: any, res: any) {
     if (req.method === 'GET' && view === 'points') {
       const provinsi = url.searchParams.get('provinsi');
       const params: any[] = [];
-      let where = 'WHERE latitude IS NOT NULL';
+      let filter = '';
       if (provinsi) {
         params.push(provinsi);
-        where += ` AND upper(btrim(provinsi)) = upper($${params.length})`;
+        filter = `WHERE upper(btrim(provinsi)) = upper($${params.length})`;
       }
-      const rows = await sql.query(
-        `SELECT kode_pos, latitude, longitude, sumber, presisi, terverifikasi_google
-         FROM kodepos_geo ${where} ORDER BY kode_pos;`,
-        params
-      );
+      // Prioritas 1: rata-rata titik desa per kode pos (kodepos_data punya koordinat sendiri).
+      // Prioritas 2: cache geocoding per kode pos di kodepos_geo.
+      const gabungan = `
+        WITH d AS (
+          SELECT upper(btrim(kode_pos)) AS kode_pos, AVG(latitude) AS latitude, AVG(longitude) AS longitude,
+                 COUNT(*)::int AS n, MIN(provinsi) AS provinsi
+          FROM kodepos_data
+          WHERE latitude IS NOT NULL AND kode_pos ~ '^[0-9]{5}$'
+          GROUP BY 1
+        ),
+        g AS (
+          SELECT upper(btrim(kode_pos)) AS kode_pos, latitude, longitude, sumber, presisi,
+                 terverifikasi_google, provinsi
+          FROM kodepos_geo WHERE latitude IS NOT NULL
+        ),
+        u AS (
+          SELECT kode_pos, latitude, longitude, 'desa' AS sumber, (n::text || ' titik desa') AS presisi,
+                 FALSE AS terverifikasi_google, provinsi, 1 AS prioritas FROM d
+          UNION ALL
+          SELECT kode_pos, latitude, longitude, sumber, presisi, terverifikasi_google, provinsi, 2 FROM g
+        )
+        SELECT DISTINCT ON (kode_pos) kode_pos, latitude, longitude, sumber, presisi, terverifikasi_google
+        FROM u ${filter}
+        ORDER BY kode_pos, prioritas;`;
+      let rows: any[];
+      try {
+        rows = (await sql.query(gabungan, params)) as any[];
+      } catch (err) {
+        // Kolom koordinat per baris belum ada di deployment ini — kembali ke kodepos_geo.
+        console.warn('Titik per desa belum terbaca, pakai kodepos_geo:', err);
+        let where = 'WHERE latitude IS NOT NULL';
+        if (provinsi) where += ` AND upper(btrim(provinsi)) = upper($1)`;
+        rows = (await sql.query(
+          `SELECT kode_pos, latitude, longitude, sumber, presisi, terverifikasi_google
+           FROM kodepos_geo ${where} ORDER BY kode_pos;`,
+          params
+        )) as any[];
+      }
       return res.status(200).json({
         ok: true,
         configured: true,

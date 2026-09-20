@@ -7,7 +7,7 @@ export interface GeoLocationResult {
   lat: number;
   lng: number;
   formattedAddress: string;
-  source: 'google' | 'esri' | 'osm' | 'locationiq' | 'cache';
+  source: 'google' | 'esri' | 'osm' | 'locationiq' | 'cache' | 'desa';
 }
 
 const STORAGE_KEY_GOOGLE_API = 'tools_matcher_google_maps_api_key';
@@ -16,7 +16,7 @@ const IDB_PREFIX = 'geo_cache_';
 // In-Memory ephemeral session cache (RAM only, 0 bytes in code/harddisk)
 const sessionCache = new Map<string, GeoLocationResult>();
 
-type TitikSimpanan = { lat: number; lng: number; sumber: 'google' | 'esri' | 'osm' };
+type TitikSimpanan = { lat: number; lng: number; sumber: 'google' | 'esri' | 'osm' | 'desa' };
 let titikKodePosJanji: Promise<Record<string, TitikSimpanan>> | null = null;
 
 /** Kode pos = angka 5 digit paling ujung query (bukan nomor jalan di tengah alamat). */
@@ -25,8 +25,9 @@ export function kodePosUjung(query: string): string | undefined {
 }
 
 /**
- * Titik kode pos yang sudah tersimpan di Neon (tabel kodepos_geo). Inilah sumber
- * lokasi peta dashboard: sekali muat per sesi, tidak menebak ulang lewat internet.
+ * Titik kode pos yang sudah tersimpan di Neon — prioritas rata-rata titik desa per kode
+ * pos (kodepos_data), sisanya cache geocoding (kodepos_geo). Inilah sumber lokasi peta
+ * dashboard: sekali muat per sesi, tidak menebak ulang lewat internet.
  */
 export function muatTitikKodePos(): Promise<Record<string, TitikSimpanan>> {
   if (!titikKodePosJanji) {
@@ -40,7 +41,7 @@ export function muatTitikKodePos(): Promise<Record<string, TitikSimpanan>> {
           const lng = Number(t?.lng);
           const sumber = t?.sumber;
           if (!kode || !Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-          if (sumber !== 'google' && sumber !== 'esri' && sumber !== 'osm') continue;
+          if (sumber !== 'google' && sumber !== 'esri' && sumber !== 'osm' && sumber !== 'desa') continue;
           out[kode] = { lat, lng, sumber };
         }
         return out;

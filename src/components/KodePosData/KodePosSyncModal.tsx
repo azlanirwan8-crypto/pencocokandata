@@ -1,6 +1,14 @@
 import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, X, CloudUpload, CheckCircle2, AlertCircle, ShieldCheck, ExternalLink } from 'lucide-react';
-import { runKodePosLiveSync, importSemuaPatokan, type KodePosSyncPlan, type SyncProgress } from '../../utils/kodePosSync';
+import {
+  runKodePosLiveSync,
+  importSemuaPatokan,
+  salinKoordinatPatokan,
+  cakupanKoordinat,
+  type KodePosSyncPlan,
+  type KoordinatCakupan,
+  type SyncProgress,
+} from '../../utils/kodePosSync';
 import { saveKodePosToNeon, mapsUrlFor, geoLabel, type KodePosRow } from '../../utils/neonSync';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
 import { useGeoTooltip } from '../GeoTooltip';
@@ -40,6 +48,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [cakupan, setCakupan] = useState<KoordinatCakupan | null>(null);
 
   const [search, setSearch] = useState('');
   const deferredSearch = useDeferredValue(search);
@@ -74,6 +83,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
       setPlan(result);
       setSelected(new Set(result.missingInCloud.map(rowKey)));
       setPhase('ready');
+      void cakupanKoordinat().then((c) => c && setCakupan(c));
     } catch (err: any) {
       setErrorMsg(err?.message || 'Pemeriksaan sinkronisasi gagal.');
       setPhase('ready');
@@ -135,13 +145,25 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
     }
   };
 
-  // Salin seluruh patokan yang belum ada, langsung di database (tanpa batas daftar contoh).
+  // Salin seluruh patokan yang belum ada, langsung di database (tanpa batas daftar contoh),
+  // lalu turunkan titik koordinat per desa ke baris kerja yang sama.
   const handleImportAll = async () => {
     setPhase('importing');
     setStep('Menyalin seluruh patokan ke tabel kerja...');
     try {
       const { masuk, totalSetelah } = await importSemuaPatokan();
-      const msg = `${fmt(masuk)} baris patokan disalin ke tabel kerja — total ${fmt(totalSetelah)} baris.`;
+      setStep('Menyalin titik koordinat per desa ke baris kerja...');
+      const titik = await salinKoordinatPatokan();
+      const bagian = [`${fmt(masuk)} baris patokan disalin ke tabel kerja`];
+      if (titik) {
+        bagian.push(
+          titik.disalin > 0
+            ? `${fmt(titik.disalin)} baris mendapat titik`
+            : 'titik sudah sesuai patokan'
+        );
+        if (titik.tanpaTitik > 0) bagian.push(`${fmt(titik.tanpaTitik)} baris masih tanpa titik`);
+      }
+      const msg = `${bagian.join(' · ')} — total ${fmt(totalSetelah)} baris.`;
       setImportMsg(msg);
       onImported?.();
       await startCheck(msg);
@@ -233,6 +255,34 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                   value={fmt(plan.provincesAffected.length)}
                   sub="provinsi yang punya selisih data"
                   color="#d68b0c"
+                />
+                <StatCard
+                  tipProps={tipProps}
+                  label="4. Titik koordinat"
+                  value={cakupan ? fmt(cakupan.dataTitik) : '—'}
+                  sub={cakupan ? `dari ${fmt(cakupan.dataTotal)} baris punya titik sendiri` : 'cakupan belum terbaca'}
+                  color={!cakupan ? '#5b5f6e' : cakupan.tanpaTitik > 0 ? '#d68b0c' : '#0ab39c'}
+                  tip={
+                    cakupan
+                      ? `Titik diambil per kode wilayah desa (sumber: kodepos.co.id, ${fmt(
+                          cakupan.patokanTitik
+                        )} titik patokan${
+                          cakupan.terakhir
+                            ? `, terakhir diperbarui ${new Date(cakupan.terakhir).toLocaleDateString('id-ID', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric',
+                              })}`
+                            : ''
+                        }).${
+                          cakupan.diLuarWilayah > 0 ? ` ${fmt(cakupan.diLuarWilayah)} titik di luar wilayah Indonesia.` : ''
+                        }${
+                          cakupan.tanpaTitik > 0
+                            ? ` ${fmt(cakupan.tanpaTitik)} baris belum punya titik — gunakan "Isi Koordinat" untuk mengekarnya.`
+                            : ' Setiap baris kelurahan punya titiknya sendiri, bukan satu titik untuk seluruh kode pos.'
+                        }`
+                      : 'Endpoint /api/kodepos-koordinat belum tersedia di deployment ini.'
+                  }
                 />
               </div>
               {importMsg && (
@@ -410,17 +460,18 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
           <button type="button" className="btn btn-outline btn-sm" onClick={onClose}>
             Tutup
           </button>
-          {plan?.listTruncated && (plan.missingTotal ?? 0) > 0 && (
+          {((plan?.listTruncated && (plan.missingTotal ?? 0) > 0) ||
+            (plan && (cakupan?.tanpaTitik ?? 0) > 0)) && (
             <button
               type="button"
               className="btn btn-primary btn-sm"
               onClick={() => void handleImportAll()}
               disabled={phase !== 'ready'}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-              title="Menyalin semua baris patokan yang belum ada, langsung di database — bukan hanya daftar contoh yang tampil di layar ini."
+              title="Menyalin semua baris patokan yang belum ada dan menurunkan titik koordinat per desa — bukan hanya daftar contoh yang tampil di layar ini."
             >
               <CloudUpload size={13} />
-              {phase === 'importing' ? 'Menyalin...' : 'Isi Semua Patokan'}
+              {phase === 'importing' ? 'Menyalin...' : 'Isi Semua Patokan + Titik'}
             </button>
           )}
           <button

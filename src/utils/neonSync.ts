@@ -523,7 +523,9 @@ export function geoLabel(row: KodePosRow): string {
       ? 'ESRI World Geocoder (belum diverifikasi Google)'
       : row.geoSumber === 'osm'
         ? 'OpenStreetMap (belum diverifikasi Google)'
-        : row.geoSumber || 'penyedia peta';
+        : row.geoSumber === 'kodepos.co.id'
+          ? 'titik desa kodepos.co.id (sumber data, belum dicek Google)'
+          : row.geoSumber || 'penyedia peta';
   return `Sumber: ${sumber}${row.geoPresisi ? ` · Presisi: ${row.geoPresisi}` : ''}`;
 }
 

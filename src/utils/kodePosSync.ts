@@ -405,6 +405,42 @@ export async function importSemuaPatokan(): Promise<{ masuk: number; totalSetela
   return { masuk: Number(json.masuk || 0), totalSetelah: Number(json.totalSetelah || 0) };
 }
 
+/** Cakupan titik koordinat per baris tabel kerja. */
+export interface KoordinatCakupan {
+  patokanTitik: number;
+  dataTotal: number;
+  dataTitik: number;
+  tanpaTitik: number;
+  kodePosTitik: number;
+  diLuarWilayah: number;
+  takTerkenalan: number;
+  terakhir: string | null;
+}
+
+export async function cakupanKoordinat(): Promise<KoordinatCakupan | null> {
+  try {
+    const json = await fetchJson('/api/kodepos-koordinat?view=progress');
+    return json?.ok ? (json as KoordinatCakupan) : null;
+  } catch (err) {
+    console.warn('Cakupan koordinat tidak terbaca:', err);
+    return null;
+  }
+}
+
+/**
+ * Turunkan titik per desa dari tabel patokan ke baris tabel kerja. Dipanggil setelah
+ * penyalinan patokan supaya baris baru langsung punya koordinatnya sendiri.
+ */
+export async function salinKoordinatPatokan(): Promise<{ disalin: number; tanpaTitik: number } | null> {
+  try {
+    const json = await fetchJson('/api/kodepos-koordinat?view=salin-ke-data', { method: 'POST' });
+    return json?.ok ? { disalin: Number(json.disalin || 0), tanpaTitik: Number(json.tanpaTitik || 0) } : null;
+  } catch (err) {
+    console.warn('Penyalinan koordinat ke tabel kerja dilewati:', err);
+    return null;
+  }
+}
+
 /** Cicil penarikan baseline (server membatasi 5 halaman x 1000 baris tiap panggilan). */
 export async function pullKodePosBaseline(
   onProgress?: SyncProgress

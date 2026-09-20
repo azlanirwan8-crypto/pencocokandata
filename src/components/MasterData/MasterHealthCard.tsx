@@ -11,8 +11,6 @@ export const MasterHealthCard: React.FC<MasterHealthCardProps> = ({ health }) =>
   const [page, setPage] = useState(1);
   const pageSize = 15;
 
-  if (health.totalRows === 0) return null;
-
   // Flatten all multi-outlet master rows
   const allDuplicateRows: { kodePos: string; row: MasterRow; indexInKp: number }[] = useMemo(() => {
     const list: { kodePos: string; row: MasterRow; indexInKp: number }[] = [];
@@ -55,6 +53,9 @@ export const MasterHealthCard: React.FC<MasterHealthCardProps> = ({ health }) =>
     const start = (page - 1) * pageSize;
     return filteredDuplicates.slice(start, start + pageSize);
   }, [filteredDuplicates, page, pageSize]);
+
+  // Return ada setelah semua hook: totalRows bisa berubah antar-render.
+  if (health.totalRows === 0) return null;
 
   return (
     <div style={{ marginTop: '0.5rem' }}>

@@ -11,7 +11,10 @@ import { neon } from '@neondatabase/serverless';
  * DELETE ?id=X                                  → hapus satu baris
  * DELETE ?all=1                                 → truncate semua
  *
- * Table: kodepos_data (dedicated, dengan index); titik koordinatnya di kodepos_geo
+ * Table: kodepos_data (dedicated, dengan index). Titik koordinat per baris ada di kolom
+ * latitude/longitude baru itu sendiri (diturunkan dari kodepos_koordinat oleh
+ * /api/kodepos-koordinat?view=salin-ke-data); kodepos_geo tetap dipakai sebagai cache
+ * geocoding per kode pos untuk baris yang belum punya titik sendiri.
  */
 
 // Bulk import (83k baris) & export bisa lama — naikkan batas serverless Vercel.
@@ -47,6 +50,22 @@ function mapRow(r: any) {
 
 /** Tabel geo pernah gagal dibaca — setelah itu halaman selalu jatuh ke query polos. */
 let geoTerganggu = false;
+
+/**
+ * Titik per baris (kodepos_data.latitude, hasil salinan patokan) lebih diutamakan
+ * daripada cache per kode pos di kodepos_geo — satu kode pos bisa menutup belasan desa.
+ */
+const GEO_PILIH = `
+  COALESCE(s.d_lat, g.latitude)  AS latitude,
+  COALESCE(s.d_lng, g.longitude) AS longitude,
+  CASE WHEN s.d_lat IS NOT NULL THEN COALESCE(NULLIF(s.d_sumber, ''), 'kodepos.co.id') ELSE g.sumber END AS geo_sumber,
+  CASE WHEN s.d_lat IS NOT NULL THEN 'titik desa' ELSE g.presisi END AS geo_presisi,
+  g.terverifikasi_google`;
+
+/** Kolom dalam CTE `s`: nama asli + titik baris dengan alias agar tidak bentrok dengan kodepos_geo. */
+const S_KOLOM = `id, kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, status,
+           latitude AS d_lat, longitude AS d_lng, sumber_koordinat AS d_sumber`;
+const S_AMBIL = `s.id, s.kode_pos, s.kelurahan, s.kecamatan, s.kabupaten_kota, s.provinsi, s.status`;
 
 /**
  * Baca dengan titik koordinat, tetapi jangan pernah membuat tabel kode pos mati
@@ -150,10 +169,18 @@ export default async function handler(req: any, res: any) {
               kabupaten_kota TEXT,
               provinsi       TEXT,
               status         VARCHAR(20)  DEFAULT 'AKTIF',
+              latitude       DOUBLE PRECISION,
+              longitude      DOUBLE PRECISION,
+              sumber_koordinat TEXT,
+              diambil_pada   TIMESTAMPTZ,
               created_at     TIMESTAMPTZ  DEFAULT NOW(),
               updated_at     TIMESTAMPTZ  DEFAULT NOW()
             );
           `;
+          await sql`ALTER TABLE kodepos_data ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;`;
+          await sql`ALTER TABLE kodepos_data ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;`;
+          await sql`ALTER TABLE kodepos_data ADD COLUMN IF NOT EXISTS sumber_koordinat TEXT;`;
+          await sql`ALTER TABLE kodepos_data ADD COLUMN IF NOT EXISTS diambil_pada TIMESTAMPTZ;`;
           await sql`CREATE INDEX IF NOT EXISTS idx_kodepos_kode       ON kodepos_data(kode_pos);`;
           await sql`CREATE INDEX IF NOT EXISTS idx_kodepos_provinsi   ON kodepos_data(provinsi);`;
           await sql`CREATE INDEX IF NOT EXISTS idx_kodepos_kabupaten  ON kodepos_data(kabupaten_kota);`;
@@ -254,11 +281,10 @@ export default async function handler(req: any, res: any) {
         const rows = await bacaDenganTitik(
           sql,
           `WITH s AS (
-             SELECT id, kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, status
+             SELECT ${S_KOLOM}
              FROM kodepos_data ${whereSql}
            )
-           SELECT s.*, g.latitude, g.longitude,
-                  g.sumber AS geo_sumber, g.presisi AS geo_presisi, g.terverifikasi_google
+           SELECT ${S_AMBIL}, ${GEO_PILIH}
            FROM s LEFT JOIN kodepos_geo g ON g.kode_pos = upper(btrim(s.kode_pos))
            ORDER BY s.id;`,
           `SELECT id, kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, status
@@ -314,11 +340,10 @@ export default async function handler(req: any, res: any) {
       const rows = await bacaDenganTitik(
         sql,
         `WITH s AS (
-           SELECT id, kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, status
+           SELECT ${S_KOLOM}
            FROM kodepos_data ${whereSql} ORDER BY id LIMIT $${limitIdx} OFFSET $${offsetIdx}
          )
-         SELECT s.*, g.latitude, g.longitude,
-                g.sumber AS geo_sumber, g.presisi AS geo_presisi, g.terverifikasi_google
+         SELECT ${S_AMBIL}, ${GEO_PILIH}
          FROM s LEFT JOIN kodepos_geo g ON g.kode_pos = upper(btrim(s.kode_pos))
          ORDER BY s.id;`,
         `SELECT id, kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, status
