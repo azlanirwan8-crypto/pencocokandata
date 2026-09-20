@@ -481,6 +481,8 @@ export async function runKodePosGeoBatch(opts: {
   jumlah?: number;
   provinsi?: string | null;
   apiKey?: string;
+  /** Sekalian kode pos yang pernah dicari tapi tidak ketemu. */
+  ulang?: boolean;
 }): Promise<KodePosGeoRunResult | null> {
   try {
     const res = await fetch('/api/kodepos-geo?view=run', {
@@ -491,6 +493,7 @@ export async function runKodePosGeoBatch(opts: {
         jumlah: opts.jumlah || 40,
         provinsi: opts.provinsi || undefined,
         apiKey: opts.apiKey || undefined,
+        ulang: opts.ulang || undefined,
       }),
     });
     const json = await res.json().catch(() => null);

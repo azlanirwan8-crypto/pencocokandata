@@ -21,7 +21,7 @@ export const maxDuration = 60;
 
 const BATCH_DEFAULT = 40;
 const BATCH_MAX = 80;
-const CONCURRENCY = 4;
+const CONCURRENCY = 6;
 const REQUEST_TIMEOUT = 9000;
 
 // Kotak pembatas Indonesia. Titik di luar ini pasti salah baca dari penyedia mana
@@ -216,6 +216,7 @@ function pendingSql(opts: {
   provinsi: string | null;
   limit: number | null;
   count?: boolean;
+  ulang?: boolean;
 }): { sql: string; params: any[] } {
   const params: any[] = [];
   let prov = '';
@@ -226,9 +227,12 @@ function pendingSql(opts: {
   const filterGeo =
     opts.mode === 'verifikasi'
       ? `WHERE g.kode_pos IS NOT NULL AND g.terverifikasi_google IS NOT TRUE AND g.latitude IS NOT NULL`
-      : // Sekalian coba ulang kode pos yang pernah dicari tapi tidak ketemu — tanpa ini,
-        // tombol "Isi Koordinat" tidak punya pekerjaan lagi setelah semua kode pos tercatat.
-        `WHERE g.kode_pos IS NULL OR g.latitude IS NULL`;
+      : // Hanya yang belum pernah dicari. Yang pernah gagal tetap bisa diulang lewat
+        // opsi `ulang` — kalau ikut default, ribuan kode pos gagal dicari ulang terus
+        // sementara tidak ada pekerjaan baru sama sekali.
+        opts.ulang
+        ? `WHERE g.kode_pos IS NULL OR g.latitude IS NULL`
+        : `WHERE g.kode_pos IS NULL`;
   let tail = '';
   if (!opts.count) {
     if (opts.limit !== null) {
@@ -260,8 +264,13 @@ function pendingSql(opts: {
   };
 }
 
-async function hitung(sql: any, mode: 'isi' | 'verifikasi', provinsi: string | null): Promise<number> {
-  const { sql: text, params } = pendingSql({ mode, provinsi, limit: null, count: true });
+async function hitung(
+  sql: any,
+  mode: 'isi' | 'verifikasi',
+  provinsi: string | null,
+  ulang = false,
+): Promise<number> {
+  const { sql: text, params } = pendingSql({ mode, provinsi, limit: null, count: true, ulang });
   const rows = await sql.query(text, params);
   return Number((rows?.[0] as any)?.n || 0);
 }
@@ -463,10 +472,11 @@ export default async function handler(req: any, res: any) {
     // ─────────────── POST run ───────────────
     if (req.method === 'POST' && view === 'run') {
       const mode: 'isi' | 'verifikasi' = body.mode === 'verifikasi' ? 'verifikasi' : 'isi';
+      const ulang = body.ulang === true && mode === 'isi';
       const limit = Math.min(BATCH_MAX, Math.max(1, Number(body.jumlah) || BATCH_DEFAULT));
       const provinsi = body.provinsi ? String(body.provinsi) : null;
 
-      const { sql: text, params } = pendingSql({ mode, provinsi, limit });
+      const { sql: text, params } = pendingSql({ mode, provinsi, limit, ulang });
       const kandidat = (await sql.query(text, params)) as KodePosRow[];
       if (kandidat.length === 0) {
         return res.status(200).json({
@@ -476,7 +486,7 @@ export default async function handler(req: any, res: any) {
           berhasil: 0,
           gagal: 0,
           googleTerhenti: false,
-          menunggu: await hitung(sql, mode, provinsi),
+          menunggu: await hitung(sql, mode, provinsi, ulang),
         });
       }
 
@@ -499,7 +509,7 @@ export default async function handler(req: any, res: any) {
       });
 
       const [menunggu, geo] = await Promise.all([
-        hitung(sql, mode, provinsi),
+        hitung(sql, mode, provinsi, ulang),
         ringkasanGeo(sql),
       ]);
       return res.status(200).json({

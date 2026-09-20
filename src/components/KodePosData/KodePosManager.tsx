@@ -248,7 +248,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     return () => window.removeEventListener('keydown', onKey);
   }, [modalMode]);
 
-  const jalankanGeo = async (mode: 'isi' | 'verifikasi') => {
+  const jalankanGeo = async (mode: 'isi' | 'verifikasi', ulang = false) => {
     if (geoRun.aktif) {
       geoStopRef.current = true;
       return;
@@ -265,6 +265,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
           jumlah: 40,
           provinsi: selectedProvinsi !== 'ALL' ? selectedProvinsi : null,
           apiKey: getStoredGoogleApiKey(),
+          ulang,
         });
         if (!hasil) {
           pesanAkhir = 'Server geocoding gagal menjawab. Coba lagi.';
@@ -278,7 +279,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
         const sisa = hasil.menunggu || 0;
         const keterangan =
           (mode === 'isi'
-            ? `${diproses.toLocaleString('id-ID')} kode pos dikerjakan · ${sisa.toLocaleString('id-ID')} belum punya titik`
+            ? `${diproses.toLocaleString('id-ID')} kode pos dikerjakan · ${sisa.toLocaleString('id-ID')} belum pernah dicari`
             : `${diproses.toLocaleString('id-ID')} titik dicek ke Google · ${sisa.toLocaleString('id-ID')} masih belum terverifikasi`) +
           (hasil.googleTerhenti ? ' · kuota Google habis, titik diisi ESRI' : '');
         setGeoRun({
@@ -673,9 +674,12 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               borderColor: 'rgba(10, 179, 156, 0.35)',
             }}
             {...tipProps(
-              `Coba ${geoStats?.menunggu.toLocaleString('id-ID') ?? 'kode pos'} yang belum punya titik lewat Google/ESRI/OpenStreetMap (termasuk yang pernah gagal dicari). ` +
+              `Cari titik untuk ${geoStats?.menunggu.toLocaleString('id-ID') ?? 'kode pos'} yang belum pernah dicari lewat Google/ESRI/OpenStreetMap. ` +
                 `Titik itu dipakai baris yang tidak punya titik desa sendiri — sisa ${(stats.total - stats.totalBerTitik).toLocaleString('id-ID')} baris tanpa titik di tabel. ` +
-                (kunciGoogle ? 'Google Geocoding dipakai lebih dulu.' : 'Kunci Google belum dipasang, jadi ESRI/OpenStreetMap yang bekerja.')
+                (kunciGoogle ? 'Google Geocoding dipakai lebih dulu.' : 'Kunci Google belum dipasang, jadi ESRI/OpenStreetMap yang bekerja.') +
+                (geoStats && geoStats.geo.gagal > 0
+                  ? ` Yang sudah dicari tapi tidak ketemu (${geoStats.geo.gagal.toLocaleString('id-ID')}) tidak diulang otomatis — lihat kartu Titik Koordinat.`
+                  : '')
             )}
           >
             <Navigation size={13} />
@@ -940,6 +944,27 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
             {geoRun.aktif
               ? `mengerjakan ${geoRun.diproses.toLocaleString('id-ID')} kode pos · ${geoRun.persen}%`
               : `${(stats.total - stats.totalBerTitik).toLocaleString('id-ID')} baris belum ada titik`}
+            {!geoRun.aktif && (geoStats?.geo.gagal ?? 0) > 0 && (
+              <button
+                type="button"
+                onClick={() => void jalankanGeo('isi', true)}
+                style={{
+                  marginLeft: '0.4rem',
+                  padding: 0,
+                  border: 0,
+                  background: 'none',
+                  font: 'inherit',
+                  color: '#0a7b6c',
+                  textDecoration: 'underline',
+                  cursor: 'pointer',
+                }}
+                {...tipProps(
+                  `Cari ulang ${geoStats!.geo.gagal.toLocaleString('id-ID')} kode pos yang terakhir dicari tidak ketemu. Sumber peta bisa berubah, tapi sebagian besar memang tidak punya titik per kode pos.`
+                )}
+              >
+                coba ulang {geoStats!.geo.gagal.toLocaleString('id-ID')}
+              </button>
+            )}
           </div>
           {geoRun.aktif && (
             <div style={{ marginTop: '0.5rem', height: '5px', background: 'rgba(10, 179, 156, 0.15)', borderRadius: '4px', overflow: 'hidden' }}>
