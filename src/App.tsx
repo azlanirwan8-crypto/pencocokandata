@@ -40,6 +40,7 @@ import {
   loadWilayahFromNeon,
   saveWilayahToNeon,
   fetchKodePosExport,
+  fetchKodePosStats,
   type KodePosRow,
 } from './utils/neonSync';
 import { NeonDatabaseModal } from './components/NeonDatabaseModal';
@@ -85,7 +86,7 @@ export const App: React.FC = () => {
   const [roleMappingList, setRoleMappingList] = useState<RoleMappingRecord[]>(DEFAULT_ROLE_MAPPING_DATA);
   const [ptenCount, setPtenCount] = useState<number>(DEFAULT_PTEN_DATA.length);
   const [roleMappingCount, setRoleMappingCount] = useState<number>(DEFAULT_ROLE_MAPPING_DATA.length);
-  const [kodePosCount, setKodePosCount] = useState<number>(DEFAULT_KODEPOS_DATA.length);
+  const [kodePosCount, setKodePosCount] = useState<number>(0);
 
   // New Data Analyst 3-Phase Engine State (100% Data Master Driven)
   const [analystRows, setAnalystRows] = useState<AnalystRow[]>([]);
@@ -189,7 +190,6 @@ export const App: React.FC = () => {
 
         const savedKodePos = await getItem<any[]>('kodepos_master_data');
         if (savedKodePos && Array.isArray(savedKodePos) && savedKodePos.length > 0) {
-          setKodePosCount(savedKodePos.length);
           // Simpan di cache pipeline hanya bila ini master penuh (bukan seed bawaan ~140 baris),
           // supaya Analisa tidak mengunduh ulang 83 ribu baris dari cloud.
           if (savedKodePos.length > DEFAULT_KODEPOS_DATA.length) {
@@ -197,7 +197,6 @@ export const App: React.FC = () => {
             setKodePosMasterRows(savedKodePos as KodePosRow[]);
           }
         } else {
-          setKodePosCount(DEFAULT_KODEPOS_DATA.length);
           setItem('kodepos_master_data', DEFAULT_KODEPOS_DATA);
         }
 
@@ -230,16 +229,22 @@ export const App: React.FC = () => {
       (async () => {
         try {
           // Check Neon status & load data in parallel
-          const [neonCheck, neonMaster, neonTarget, neonWilayah] = await Promise.allSettled([
+          const [neonCheck, neonMaster, neonTarget, neonWilayah, neonKodePosStats] = await Promise.allSettled([
             checkNeonStatus(),
             loadMasterFromNeon(),
             loadTargetFromNeon(),
             loadWilayahFromNeon(),
+            fetchKodePosStats(),
           ]);
 
           if (neonCheck.status === 'fulfilled' && neonCheck.value.connected) {
             setIsNeonConnected(true);
             setLastSyncedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
+          }
+
+          // Badge menu Kode Pos = jumlah baris asli di database, bukan seed bawaan.
+          if (neonKodePosStats.status === 'fulfilled' && neonKodePosStats.value) {
+            setKodePosCount(neonKodePosStats.value.total);
           }
 
           if (neonMaster.status === 'fulfilled' && neonMaster.value && neonMaster.value.rows.length > 0) {
