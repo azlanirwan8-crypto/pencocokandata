@@ -285,7 +285,7 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
             </div>
             <div>
               <span style={{ fontSize: '0.84rem', fontWeight: 700, color: '#212529', whiteSpace: 'nowrap' }}>
-                11 Sinyal Pencocokan + 2 Penjaga Identitas
+                12 Sinyal Pencocokan + 2 Penjaga Identitas
               </span>
               <span style={{ fontSize: '0.72rem', color: '#878a99', marginLeft: '0.5rem' }}>
                 (ensemble multi-algoritma · terukur 96,3% akurasi pada 27 pasangan berlabel; Levenshtein saja 63%)
@@ -329,7 +329,20 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
                 >
                   {s.no}. {s.emoji} {s.judul}
                 </div>
-                <div style={{ fontSize: '0.7rem', color: '#64748b', lineHeight: 1.35 }}>{s.deskripsi}</div>
+                <div
+                  style={{
+                    fontSize: '0.7rem',
+                    color: '#64748b',
+                    lineHeight: 1.35,
+                    display: '-webkit-box',
+                    WebkitLineClamp: 3,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                  }}
+                  title={s.deskripsi}
+                >
+                  {s.deskripsi}
+                </div>
               </div>
             ))}
           </div>
@@ -356,11 +369,20 @@ const SINYAL_PENCOCOKAN: { no: number; emoji: string; judul: string; warna: stri
   { no: 13, emoji: '🛡️', judul: 'Penjaga Identitas (2 aturan)', warna: '#f06548', deskripsi: 'Angka beda → nilai dipotong 0,60 (KCP 001 ≠ KCP 002). Penanda wilayah beda → 0,70 (TANGERANG ≠ TANGERANG SELATAN).' },
 ];
 
-const FASE_META: { phase: 1 | 2 | 3; judul: string; deskripsi: string; aksen: string; gradien: string; Ikon: typeof MapPin }[] = [
+const FASE_META: {
+  phase: 1 | 2 | 3;
+  judul: string;
+  deskripsi: string;
+  detail: string;
+  aksen: string;
+  gradien: string;
+  Ikon: typeof MapPin;
+}[] = [
   {
     phase: 1,
     judul: 'PTEN & Master Kode Pos',
-    deskripsi: 'Cocokkan Kota PTEN ke Kode Pos, ekstrak Kelurahan & Kecamatan, serta grouping per Kota PTEN.',
+    deskripsi: 'Kota PTEN → Kode Pos, Kelurahan, Kecamatan',
+    detail: 'Cocokkan Kota PTEN ke Kode Pos, ekstrak Kelurahan & Kecamatan, serta grouping per Kota PTEN.',
     aksen: '#299cdb',
     gradien: 'linear-gradient(90deg, #299cdb, #5bbfee)',
     Ikon: MapPin,
@@ -368,7 +390,8 @@ const FASE_META: { phase: 1 | 2 | 3; judul: string; deskripsi: string; aksen: st
   {
     phase: 2,
     judul: 'Wilayah & Master Cabang',
-    deskripsi: 'Validasi Kanwil (W01-W17) & tarik identitas resmi: Sandi, Nama Outlet, Branch Code, Kode Cabang.',
+    deskripsi: 'Validasi Kanwil W01-W17 + identitas cabang',
+    detail: 'Validasi Kanwil (W01-W17) & tarik identitas resmi: Sandi, Nama Outlet, Branch Code, Kode Cabang.',
     aksen: '#405189',
     gradien: 'linear-gradient(90deg, #405189, #3577f1)',
     Ikon: Building2,
@@ -376,7 +399,8 @@ const FASE_META: { phase: 1 | 2 | 3; judul: string; deskripsi: string; aksen: st
   {
     phase: 3,
     judul: 'Mapping Role 3 Role',
-    deskripsi: 'Tentukan Organisasi Tujuan, Tipe Unit (KC/KCP), verifikasi 3 role lengkap, dan alur Wondr.',
+    deskripsi: 'Organisasi Tujuan, Tipe Unit, alur Wondr',
+    detail: 'Tentukan Organisasi Tujuan, Tipe Unit (KC/KCP), verifikasi 3 role lengkap, dan alur Wondr.',
     aksen: '#7048e8',
     gradien: 'linear-gradient(90deg, #7048e8, #9a7bff)',
     Ikon: Users,
@@ -412,7 +436,7 @@ const KartuFase: React.FC<KartuFaseProps> = ({
   pesanLangkah,
   adaHasil,
 }) => {
-  const { phase, judul, deskripsi, aksen, gradien, Ikon } = definisi;
+  const { phase, judul, deskripsi, detail, aksen, gradien, Ikon } = definisi;
   const terkunci = !berjalan && !disetujui && !faseSebelumnyaSetuju;
   const pct = berjalan ? persenJalan : persenReview;
   const status = berjalan
@@ -467,7 +491,18 @@ const KartuFase: React.FC<KartuFaseProps> = ({
       >
         {judul}
       </div>
-      <div style={{ fontSize: '0.72rem', color: '#878a99', lineHeight: 1.35, marginBottom: showBar ? '0.6rem' : 0 }}>
+      <div
+        style={{
+          fontSize: '0.72rem',
+          color: '#878a99',
+          lineHeight: 1.35,
+          marginBottom: showBar ? '0.6rem' : 0,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+        title={detail}
+      >
         {deskripsi}
       </div>
       {showBar && (
