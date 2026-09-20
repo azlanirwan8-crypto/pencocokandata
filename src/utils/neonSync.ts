@@ -520,16 +520,11 @@ export function geoLabel(row: KodePosRow): string {
   const sumber = row.geoTerverifikasi
     ? 'Google Geocoding API (terverifikasi)'
     : row.geoSumber === 'esri'
-      ? 'ESRI World Geocoder — BELUM VALID, belum diverifikasi Google'
+      ? 'ESRI World Geocoder (belum diverifikasi Google)'
       : row.geoSumber === 'osm'
-        ? 'OpenStreetMap — BELUM VALID, belum diverifikasi Google'
+        ? 'OpenStreetMap (belum diverifikasi Google)'
         : row.geoSumber || 'penyedia peta';
   return `Sumber: ${sumber}${row.geoPresisi ? ` · Presisi: ${row.geoPresisi}` : ''}`;
-}
-
-/** Titik ada tetapi bukan hasil Google: tidak boleh keluar sebagai koordinat final. */
-export function geoBelumValid(row: KodePosRow): boolean {
-  return (row.latitude != null || row.longitude != null) && !row.geoTerverifikasi;
 }
 
 export interface KodePosPageQuery {

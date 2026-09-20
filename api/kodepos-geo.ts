@@ -12,9 +12,10 @@ import { neon } from '@neondatabase/serverless';
  * kodepos_data + kodepos_baseline, jadi baris patokan yang belum diimpor pun sudah
  * punya titik dan tabel Sinkronisasi tampil sama dengan tabel induk.
  *
- * Titik baru hanya diterima dari Google Geocoding API. ESRI / OpenStreetMap tidak
- * lagi dipakai sebagai fallback; titik lama bersumber itu tetap tersimpan tetapi
- * ditandai belum terverifikasi Google oleh antarmuka.
+ * Titik dicari berjenjang: Google Geocoding API bila kunci tersedia, lalu ESRI
+ * World Geocoder, lalu OpenStreetMap. Hasil selain Google disimpan dengan
+ * terverifikasi_google = FALSE sehingga antarmuka bisa menandainya belum
+ * dikonfirmasi Google — bukan berarti titiknya salah.
  */
 export const maxDuration = 60;
 
@@ -148,6 +149,60 @@ async function dariGoogle(row: KodePosRow, apiKey: string): Promise<Titik | 'lim
       alamat: String(result?.formatted_address || ''),
       terverifikasi: true,
     };
+  }
+  return null;
+}
+
+async function dariEsri(row: KodePosRow): Promise<Titik | null> {
+  const dicari = buildQuery(row);
+  let data: any;
+  try {
+    data = await fetchJson(
+      `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates` +
+        `?f=json&singleLine=${encodeURIComponent(dicari)}&maxLocations=3&countryCode=IDN`
+    );
+  } catch {
+    return null;
+  }
+
+  const candidates: any[] = data?.candidates || [];
+  if (candidates.length === 0) return null;
+  const tepat = candidates.filter((c) => cocokKodePos(String(c?.address || ''), row.kode_pos));
+  const pool = tepat.length > 0 ? tepat : candidates;
+  const best = pool.sort((a, b) => Number(b?.score || 0) - Number(a?.score || 0))[0];
+  const lat = Number(best?.location?.y);
+  const lng = Number(best?.location?.x);
+  if (!diIndonesia(lat, lng)) return null;
+  // Tanpa kode pos di alamatnya, hasil ESRI hanya berguna bila skor sangat tinggi.
+  if (tepat.length === 0 && Number(best?.score || 0) < 96) return null;
+  return {
+    lat,
+    lng,
+    sumber: 'esri',
+    presisi: tepat.length > 0 ? 'PUSAT KODE POS' : 'PERKIRAAN WILAYAH',
+    alamat: String(best?.address || ''),
+    terverifikasi: false,
+  };
+}
+
+async function dariOsm(row: KodePosRow): Promise<Titik | null> {
+  const dicari = buildQuery(row);
+  let data: any;
+  try {
+    data = await fetchJson(`https://photon.komoot.io/api/?q=${encodeURIComponent(dicari)}&limit=3`);
+  } catch {
+    return null;
+  }
+  for (const feat of data?.features || []) {
+    const lng = Number(feat?.geometry?.coordinates?.[0]);
+    const lat = Number(feat?.geometry?.coordinates?.[1]);
+    if (!diIndonesia(lat, lng)) continue;
+    const props = feat?.properties || {};
+    const alamat = [props.postcode, props.name, props.district, props.city, props.state]
+      .filter(Boolean)
+      .join(', ');
+    if (!cocokKodePos(alamat, row.kode_pos)) continue;
+    return { lat, lng, sumber: 'osm', presisi: 'PUSAT KODE POS', alamat, terverifikasi: false };
   }
   return null;
 }
@@ -376,15 +431,6 @@ export default async function handler(req: any, res: any) {
       const limit = Math.min(BATCH_MAX, Math.max(1, Number(body.jumlah) || BATCH_DEFAULT));
       const provinsi = body.provinsi ? String(body.provinsi) : null;
 
-      // Koordinat kode pos wajib hasil Google: tanpa kunci, jangan isi dari ESRI/OpenStreetMap.
-      if (!googleKey) {
-        return res.status(400).json({
-          ok: false,
-          configured: true,
-          error: 'Kunci Google Geocoding belum dipasang, jadi titik tidak bisa diisi. Pasang kunci lebih dulu.',
-        });
-      }
-
       const { sql: text, params } = pendingSql({ mode, provinsi, limit });
       const kandidat = (await sql.query(text, params)) as KodePosRow[];
       if (kandidat.length === 0) {
@@ -404,24 +450,17 @@ export default async function handler(req: any, res: any) {
       let gagal = 0;
 
       await mapLimit(kandidat, CONCURRENCY, async (row) => {
-        if (googleTerhenti) {
-          gagal++;
-          return;
+        let titik: Titik | null = null;
+        if (googleKey && !googleTerhenti) {
+          const hasil = await dariGoogle(row, googleKey);
+          if (hasil === 'limit') googleTerhenti = true;
+          else if (hasil) titik = hasil;
         }
-        const hasil = await dariGoogle(row, googleKey);
-        if (hasil === 'limit') {
-          googleTerhenti = true;
-          gagal++;
-          return;
-        }
-        if (!hasil) {
-          // Mode verifikasi: titik lama jangan dihapus hanya karena Google tidak menemukan.
-          if (mode === 'isi') await simpanTitik(sql, row, null);
-          gagal++;
-          return;
-        }
-        await simpanTitik(sql, row, hasil);
-        berhasil++;
+        if (!titik) titik = await dariEsri(row);
+        if (!titik) titik = await dariOsm(row);
+        if (titik) berhasil++;
+        else gagal++;
+        await simpanTitik(sql, row, titik);
       });
 
       const [menunggu, geo] = await Promise.all([
