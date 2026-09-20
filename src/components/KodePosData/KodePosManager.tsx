@@ -673,11 +673,9 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               borderColor: 'rgba(10, 179, 156, 0.35)',
             }}
             {...tipProps(
-              `Cadangan titik per kode pos (tabel kodepos_geo) lewat Google/ESRI/OpenStreetMap — dipakai hanya oleh baris yang belum punya titik desa sendiri. ` +
-                `Sisa sekarang ${(stats.total - stats.totalBerTitik).toLocaleString('id-ID')} baris. ` +
-                (kunciGoogle
-                  ? 'Google Geocoding dipakai lebih dulu.'
-                  : 'Kunci Google belum dipasang, jadi titik diisi ESRI/OpenStreetMap dan ditandai di tooltip kolom koordinat.')
+              `Coba ${geoStats?.menunggu.toLocaleString('id-ID') ?? 'kode pos'} yang belum punya titik lewat Google/ESRI/OpenStreetMap (termasuk yang pernah gagal dicari). ` +
+                `Titik itu dipakai baris yang tidak punya titik desa sendiri — sisa ${(stats.total - stats.totalBerTitik).toLocaleString('id-ID')} baris tanpa titik di tabel. ` +
+                (kunciGoogle ? 'Google Geocoding dipakai lebih dulu.' : 'Kunci Google belum dipasang, jadi ESRI/OpenStreetMap yang bekerja.')
             )}
           >
             <Navigation size={13} />

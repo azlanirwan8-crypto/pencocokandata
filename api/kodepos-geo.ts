@@ -226,7 +226,9 @@ function pendingSql(opts: {
   const filterGeo =
     opts.mode === 'verifikasi'
       ? `WHERE g.kode_pos IS NOT NULL AND g.terverifikasi_google IS NOT TRUE AND g.latitude IS NOT NULL`
-      : `WHERE g.kode_pos IS NULL`;
+      : // Sekalian coba ulang kode pos yang pernah dicari tapi tidak ketemu — tanpa ini,
+        // tombol "Isi Koordinat" tidak punya pekerjaan lagi setelah semua kode pos tercatat.
+        `WHERE g.kode_pos IS NULL OR g.latitude IS NULL`;
   let tail = '';
   if (!opts.count) {
     if (opts.limit !== null) {
