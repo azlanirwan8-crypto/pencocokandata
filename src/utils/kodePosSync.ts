@@ -347,16 +347,21 @@ function planFromBaselineDiff(json: any, noteTambahan?: string): KodePosSyncPlan
 }
 
 /**
- * Patokan tersimpan di database sendiri (tabel kodepos_baseline). Pemeriksaan sync tidak
- * menyentuh situs pihak ketiga saat dijalankan — hanya saat baseline ditarik ulang.
+ * Patokan tersimpan di database sendiri (tabel kodepos_baseline). Kalau belum ada, pemeriksaan
+ * ini menariknya sendiri dari sumber resmi — pengguna cukup menekan Sync Data satu kali.
  */
 export async function runKodePosBaselineAudit(onProgress?: SyncProgress): Promise<KodePosSyncPlan> {
   onProgress?.('Membandingkan database dengan patokan tersimpan...', 40);
-  const json = await fetchJson('/api/kodepos-baseline?view=diff');
-  onProgress?.('Selesai', 100);
+  let json = await fetchJson('/api/kodepos-baseline?view=diff');
   if (!json.ready) {
-    throw new Error('Patokan belum tersimpan di database. Klik "Ambil data dari kodepos.id" atau "Tarik dari data pemerintah" terlebih dahulu.');
+    onProgress?.('Patokan belum ada — menarik dari dump resmi Kemendagri...', 8);
+    await pullKodePosBaseline(onProgress);
+    json = await fetchJson('/api/kodepos-baseline?view=diff');
+    if (!json.ready) {
+      throw new Error('Patokan masih kosong setelah ditarik dari sumber resmi. Coba lagi.');
+    }
   }
+  onProgress?.('Selesai', 100);
   return planFromBaselineDiff(json);
 }
 
