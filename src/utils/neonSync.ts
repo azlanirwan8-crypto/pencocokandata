@@ -456,6 +456,7 @@ export interface KodePosGeoRunResult {
   gagal: number;
   googleTerhenti: boolean;
   menunggu: number;
+  error?: string;
 }
 
 /** Ambil ringkasan titik koordinat kode pos dari Neon. */
@@ -492,9 +493,12 @@ export async function runKodePosGeoBatch(opts: {
         apiKey: opts.apiKey || undefined,
       }),
     });
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json?.ok ? (json as KodePosGeoRunResult) : null;
+    const json = await res.json().catch(() => null);
+    if (json?.ok) return json as KodePosGeoRunResult;
+    if (json?.error) {
+      return { diproses: 0, berhasil: 0, gagal: 0, googleTerhenti: false, menunggu: 0, error: String(json.error) };
+    }
+    return null;
   } catch (err) {
     console.warn('Neon kodepos geo run error:', err);
     return null;
@@ -516,11 +520,16 @@ export function geoLabel(row: KodePosRow): string {
   const sumber = row.geoTerverifikasi
     ? 'Google Geocoding API (terverifikasi)'
     : row.geoSumber === 'esri'
-      ? 'ESRI World Geocoder (belum dicek Google)'
+      ? 'ESRI World Geocoder — BELUM VALID, belum diverifikasi Google'
       : row.geoSumber === 'osm'
-        ? 'OpenStreetMap (belum dicek Google)'
+        ? 'OpenStreetMap — BELUM VALID, belum diverifikasi Google'
         : row.geoSumber || 'penyedia peta';
   return `Sumber: ${sumber}${row.geoPresisi ? ` · Presisi: ${row.geoPresisi}` : ''}`;
+}
+
+/** Titik ada tetapi bukan hasil Google: tidak boleh keluar sebagai koordinat final. */
+export function geoBelumValid(row: KodePosRow): boolean {
+  return (row.latitude != null || row.longitude != null) && !row.geoTerverifikasi;
 }
 
 export interface KodePosPageQuery {

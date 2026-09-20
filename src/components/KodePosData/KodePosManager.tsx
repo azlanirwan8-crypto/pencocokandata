@@ -41,6 +41,7 @@ import {
   runKodePosGeoBatch,
   mapsUrlFor,
   geoLabel,
+  geoBelumValid,
   type KodePosRow,
   type KodePosStats,
   type KodePosGeoStats,
@@ -245,6 +246,11 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
       geoStopRef.current = true;
       return;
     }
+    // Titik kode pos wajib hasil Google: tanpa kunci, arahkan ke dialog kunci.
+    if (!kunciGoogle) {
+      setShowApiKeyModal(true);
+      return;
+    }
     geoStopRef.current = false;
     setGeoRun({ aktif: true, mode, pesan: 'Menghubungi penyedia peta...', persen: 0, diproses: 0, sisa: 0 });
     let diproses = 0;
@@ -262,13 +268,17 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
           pesanAkhir = 'Server geocoding gagal menjawab. Coba lagi.';
           break;
         }
+        if (hasil.error) {
+          pesanAkhir = hasil.error;
+          break;
+        }
         diproses += hasil.diproses;
         const sisa = hasil.menunggu || 0;
         const keterangan =
           (mode === 'isi'
             ? `${diproses.toLocaleString('id-ID')} kode pos dikerjakan · ${sisa.toLocaleString('id-ID')} belum punya titik`
             : `${diproses.toLocaleString('id-ID')} titik dicek ke Google · ${sisa.toLocaleString('id-ID')} masih belum terverifikasi`) +
-          (hasil.googleTerhenti ? ' · kuota Google habis, titik diisi ESRI' : '');
+          (hasil.googleTerhenti ? ' · kuota Google habis, sisa baris dilewati (titik lama tidak diubah)' : '');
         setGeoRun({
           aktif: true,
           mode,
@@ -526,6 +536,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
       setTimeout(() => setErrorMsg(null), 4000);
       return;
     }
+    const belumValid = exportRows.filter(geoBelumValid).length;
     const ws = XLSX.utils.json_to_sheet(
       exportRows.map((r, idx) => ({
         'NO': idx + 1,
@@ -535,14 +546,23 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
         'KABUPATEN / KOTA': r.kabupatenKota,
         'PROVINSI': r.provinsi,
         'STATUS': r.status || 'AKTIF',
-        'LATITUDE': r.latitude ?? '',
-        'LONGITUDE': r.longitude ?? '',
-        'SUMBER KOORDINAT': r.latitude == null ? '' : geoLabel(r).replace('Sumber: ', ''),
+        'LATITUDE': geoBelumValid(r) ? '' : (r.latitude ?? ''),
+        'LONGITUDE': geoBelumValid(r) ? '' : (r.longitude ?? ''),
+        'SUMBER KOORDINAT':
+          r.latitude == null
+            ? ''
+            : geoBelumValid(r)
+              ? 'BELUM VALID — bukan hasil Google, koordinat tidak diekspor'
+              : geoLabel(r).replace('Sumber: ', ''),
       }))
     );
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Master_Kode_Pos');
     XLSX.writeFile(wb, `Master_Kode_Pos_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    if (belumValid > 0) {
+      setErrorMsg(`${belumValid.toLocaleString('id-ID')} baris diekspor tanpa koordinat karena belum diverifikasi Google.`);
+      setTimeout(() => setErrorMsg(null), 6000);
+    }
   };
 
   // Copy to clipboard helper
@@ -665,8 +685,8 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                 ? `Cari titik koordinat untuk ${geoStats.menunggu.toLocaleString('id-ID')} kode pos yang belum punya lokasi. `
                 : 'Cari titik koordinat kode pos yang belum punya lokasi. ') +
               (kunciGoogle
-                ? 'Google Geocoding dipakai lebih dulu.'
-                : 'Kunci Google belum dipasang, jadi titik diisi ESRI/OpenStreetMap (kolom sumber menandai itu).')
+                ? 'Titik dicari lewat Google Geocoding API.'
+                : 'Kunci Google belum dipasang — klik ini membuka dialog kunci, karena titik dari ESRI/OpenStreetMap tidak diterima lagi.')
             )}
           >
             <Navigation size={13} />
@@ -1241,10 +1261,10 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                               fontSize: '0.78rem',
                               fontWeight: 700,
                               letterSpacing: '0.03em',
-                              color: item.geoTerverifikasi ? '#0ab39c' : item.geoPresisi === 'PERKIRAAN WILAYAH' ? '#b45309' : '#5b5f6e',
+                              color: item.geoTerverifikasi ? '#0ab39c' : '#b91c1c',
                             }}
                           >
-                            {item.geoTerverifikasi ? 'GOOGLE' : item.geoPresisi === 'PERKIRAAN WILAYAH' ? 'PERKIRAAN' : (item.geoSumber || '').toUpperCase()}
+                            {item.geoTerverifikasi ? 'GOOGLE' : 'BELUM VALID'}
                           </span>
                         )}
                       </td>
@@ -1666,7 +1686,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                     style={{
                       fontSize: '0.72rem',
                       fontWeight: detailItem.geoTerverifikasi ? 600 : 700,
-                      color: detailItem.geoTerverifikasi ? '#0a7b6c' : '#b45309',
+                      color: detailItem.geoTerverifikasi ? '#0a7b6c' : '#b91c1c',
                       marginTop: '0.15rem',
                     }}
                   >
