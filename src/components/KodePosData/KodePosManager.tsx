@@ -27,9 +27,9 @@ import {
   Navigation,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { DEFAULT_KODEPOS_DATA } from './defaultKodePosData';
 import {
   saveKodePosToNeon,
+  clearKodePosFromNeon,
   fetchKodePosPage,
   fetchKodePosStats,
   fetchKodePosOptions,
@@ -350,19 +350,19 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     }
   };
 
-  // Handle Reset to Default
+  // Handle Kosongkan Data Kode Pos
   const handleConfirmReset = async () => {
-    const ok = await saveKodePosToNeon(DEFAULT_KODEPOS_DATA, 'replace');
+    const ok = await clearKodePosFromNeon();
     setShowResetConfirm(false);
     if (ok) {
       setSelectedProvinsi('ALL');
       setSelectedKota('ALL');
       setSearchTerm('');
-      setSuccessMsg('Data Kode Pos berhasil dikembalikan ke data standar bawaan!');
+      setSuccessMsg('Seluruh data Kode Pos dikosongkan. Titik koordinat & daftar baseline tetap.');
       refreshAfterMutation();
       setTimeout(() => setSuccessMsg(null), 4000);
     } else {
-      setErrorMsg('Gagal mereset data Kode Pos ke database.');
+      setErrorMsg('Gagal mengosongkan data Kode Pos di database.');
       setTimeout(() => setErrorMsg(null), 4000);
     }
   };
@@ -713,10 +713,10 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
             className="btn btn-outline btn-sm"
             onClick={() => setShowResetConfirm(true)}
             style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#f06548', borderColor: 'rgba(240, 101, 72, 0.3)' }}
-            title="Kembalikan ke data Kode Pos bawaan"
+            title="Kosongkan seluruh baris Kode Pos. Titik koordinat dan daftar baseline tetap."
           >
-            <RefreshCw size={13} />
-            <span>Reset Standar</span>
+            <Trash2 size={13} />
+            <span>Kosongkan Data</span>
           </button>
 
           <button
@@ -1799,8 +1799,8 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
           <div className="modal-container" style={{ maxWidth: '440px' }}>
             <div className="modal-header">
               <h4 className="modal-title">
-                <RefreshCw size={16} color="#f06548" />
-                Kembalikan ke Data Bawaan?
+                <Trash2 size={16} color="#f06548" />
+                Kosongkan Semua Data Kode Pos?
               </h4>
               <button
                 type="button"
@@ -1826,11 +1826,12 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                   flexShrink: 0,
                 }}
               >
-                <RefreshCw size={24} />
+                <Trash2 size={24} />
               </div>
-              <p style={{ fontSize: '0.82rem', color: '#878a99', margin: 0, lineHeight: 1.5 }}>
-                Semua data tambahan / modifikasi kode pos saat ini akan digantikan kembali dengan daftar standar{' '}
-                <strong>{DEFAULT_KODEPOS_DATA.length} Kode Pos</strong> bawaan sistem.
+              <p style={{ fontSize: '0.82rem', color: '#5b5f6e', margin: 0, lineHeight: 1.5 }}>
+                Seluruh baris wilayah di tabel Kode Pos akan <strong>dikosongkan (0 baris)</strong>, bukan diganti dengan
+                daftar bawaan. Titik koordinat dan daftar baseline dari kodepos.id tetap tersimpan, jadi isi lagi datanya
+                cukup lewat <strong>Sync Data</strong> atau impor Excel.
               </p>
             </div>
 
@@ -1847,7 +1848,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                 className="btn btn-danger btn-sm"
                 onClick={handleConfirmReset}
               >
-                Ya, Reset Standar
+                Ya, Kosongkan Semua
               </button>
             </div>
           </div>
