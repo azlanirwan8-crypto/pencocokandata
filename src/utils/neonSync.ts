@@ -438,6 +438,8 @@ export interface KodePosRow {
 export interface KodePosGeoStats {
   googleSiap: boolean;
   menunggu: number;
+  /** Termasuk `menunggu`, ditambah yang pernah gagal dan sudah lewat jeda coba ulang. */
+  menungguUlang: number;
   perluVerifikasi: number;
   geo: {
     tercatat: number;

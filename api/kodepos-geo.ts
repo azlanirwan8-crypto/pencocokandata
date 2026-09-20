@@ -227,13 +227,17 @@ function pendingSql(opts: {
   const filterGeo =
     opts.mode === 'verifikasi'
       ? `WHERE g.kode_pos IS NOT NULL AND g.terverifikasi_google IS NOT TRUE AND g.latitude IS NOT NULL`
-      : // Hanya yang belum pernah dicari. Yang pernah gagal tetap bisa diulang lewat
-        // opsi `ulang` — kalau ikut default, ribuan kode pos gagal dicari ulang terus
-        // sementara tidak ada pekerjaan baru sama sekali.
+      : // Hanya yang belum pernah dicari. Yang pernah gagal ikut hanya lewat opsi
+        // `ulang`, dan dibatasi 12 jam sejak percobaan terakhir — `diambil_pada` juga
+        // ditulis saat gagal, jadi tanpa batas itu antrean retry tidak pernah berkurang
+        // dan setiap reload mengulang kode pos yang persis sama dari awal.
         opts.ulang
-        ? `WHERE g.kode_pos IS NULL OR g.latitude IS NULL`
+        ? `WHERE g.kode_pos IS NULL OR (g.latitude IS NULL AND (g.diambil_pada IS NULL OR g.diambil_pada < NOW() - INTERVAL '12 hours'))`
         : `WHERE g.kode_pos IS NULL`;
   let tail = '';
+  // Retry dijalankan dari yang paling lama tidak dicoba, supaya satu putaran penuh
+  // dan urutan kerjanya tidak berubah-ubah antar batch.
+  const urutan = opts.ulang && !opts.count ? 'ORDER BY dicoba_pada NULLS FIRST' : '';
   if (!opts.count) {
     if (opts.limit !== null) {
       params.push(opts.limit);
@@ -257,9 +261,10 @@ function pendingSql(opts: {
         ORDER BY kode_pos, id
       ),
       p AS (
-        SELECT k.* FROM k LEFT JOIN kodepos_geo g ON g.kode_pos = k.kode_pos ${filterGeo}
+        SELECT k.*, g.diambil_pada AS dicoba_pada
+        FROM k LEFT JOIN kodepos_geo g ON g.kode_pos = k.kode_pos ${filterGeo}
       )
-      ${select} FROM p ${tail};`,
+      ${select} FROM p ${urutan} ${tail};`,
     params,
   };
 }
@@ -386,9 +391,10 @@ export default async function handler(req: any, res: any) {
 
     // ─────────────── GET stats ───────────────
     if (req.method === 'GET' && view === 'stats') {
-      const [geo, menunggu, perluVerifikasi] = await Promise.all([
+      const [geo, menunggu, menungguUlang, perluVerifikasi] = await Promise.all([
         ringkasanGeo(sql),
         hitung(sql, 'isi', null),
+        hitung(sql, 'isi', null, true),
         hitung(sql, 'verifikasi', null),
       ]);
       return res.status(200).json({
@@ -397,6 +403,7 @@ export default async function handler(req: any, res: any) {
         googleSiap: Boolean(googleKey),
         geo,
         menunggu,
+        menungguUlang,
         perluVerifikasi,
       });
     }

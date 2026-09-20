@@ -235,9 +235,10 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
   // Satu-satunya aksi titik koordinat: kerjakan antrean baru, kalau tidak ada
   // baru tawarkan mengulang yang pernah gagal.
   const geoAntrean = geoStats?.menunggu ?? 0;
+  const geoAntreanUlang = geoStats?.menungguUlang ?? 0;
   const geoGagal = geoStats?.geo.gagal ?? 0;
-  const geoUlang = geoAntrean === 0 && geoGagal > 0;
-  const geoTersedia = geoAntrean > 0 || geoGagal > 0;
+  const geoUlang = geoAntrean === 0;
+  const geoTersedia = geoAntrean > 0 || geoAntreanUlang > 0;
   const gayaTautanGeo: React.CSSProperties = {
     marginLeft: '0.4rem',
     padding: 0,
@@ -268,6 +269,25 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     setGeoRun({ aktif: true, pesan: 'Menghubungi penyedia peta...', persen: 0, diproses: 0, sisa: 0 });
     let diproses = 0;
     let pesanAkhir = '';
+
+    // Patokan antrean disimpan di localStorage supaya persen tidak kembali ke 0
+    // saat halaman di-reload: selama sisa masih mengecil, patokan lama dipakai terus.
+    const kunciPatokan = `kodepos_geo_antrean_${ulang ? 'ulang' : 'baru'}`;
+    const bacaPatokan = (): { total: number; sisa: number } | null => {
+      try {
+        const v = JSON.parse(localStorage.getItem(kunciPatokan) || 'null');
+        return v && Number.isFinite(v.total) && Number.isFinite(v.sisa) ? v : null;
+      } catch {
+        return null;
+      }
+    };
+    const simpanPatokan = (total: number, sisa: number) => {
+      try {
+        localStorage.setItem(kunciPatokan, JSON.stringify({ total, sisa }));
+      } catch {}
+    };
+    let patokan = 0;
+
     try {
       // Serverless Vercel mati setelah 60 detik, jadi tahap kecil diulang terus.
       while (!geoStopRef.current) {
@@ -288,17 +308,27 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
         }
         diproses += hasil.diproses;
         const sisa = hasil.menunggu || 0;
+        if (!patokan) {
+          const tersimpan = bacaPatokan();
+          patokan =
+            tersimpan && tersimpan.total >= sisa && sisa <= tersimpan.sisa
+              ? tersimpan.total
+              : diproses + sisa;
+        }
+        simpanPatokan(patokan, sisa);
+        const persen = Math.max(0, Math.min(99, Math.round(((patokan - sisa) / Math.max(patokan, 1)) * 100)));
         const keterangan =
-          `${diproses.toLocaleString('id-ID')} kode pos dikerjakan · ${sisa.toLocaleString('id-ID')} ${ulang ? 'belum diulang' : 'belum pernah dicari'}` +
+          `${diproses.toLocaleString('id-ID')} kode pos dikerjakan · sisa ${sisa.toLocaleString('id-ID')}` +
           (hasil.googleTerhenti ? ' · kuota Google habis, titik diisi ESRI' : '');
-        setGeoRun({
-          aktif: true,
-          pesan: keterangan,
-          persen: Math.min(99, Math.round((diproses / Math.max(diproses + sisa, 1)) * 100)),
-          diproses,
-          sisa,
-        });
-        if (hasil.diproses === 0 || sisa === 0) break;
+        setGeoRun({ aktif: true, pesan: keterangan, persen, diproses, sisa });
+        if (hasil.diproses === 0 || sisa === 0) {
+          if (sisa === 0) {
+            try {
+              localStorage.removeItem(kunciPatokan);
+            } catch {}
+          }
+          break;
+        }
       }
     } finally {
       geoStopRef.current = false;
@@ -730,7 +760,9 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
           <div className="metric-footer">
             {geoRun.aktif ? (
               <>
-                {`mengerjakan ${geoRun.diproses.toLocaleString('id-ID')} kode pos · ${geoRun.persen}%`}
+                {geoRun.diproses === 0
+                  ? 'menyiapkan antrean...'
+                  : `sisa ${geoRun.sisa.toLocaleString('id-ID')} kode pos · ${geoRun.persen}%`}
                 <button type="button" onClick={() => void jalankanGeo()} style={gayaTautanGeo}>
                   hentikan
                 </button>
@@ -745,12 +777,12 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                     style={gayaTautanGeo}
                     {...tipProps(
                       geoUlang
-                        ? `Cari ulang ${geoGagal.toLocaleString('id-ID')} kode pos yang terakhir dicari tidak ketemu lewat ${kunciGoogle ? 'Google, lalu ' : ''}ESRI/OpenStreetMap. Sumber peta bisa berubah, tapi sebagian besar memang tidak punya titik per kode pos.`
+                        ? `Cari ulang ${geoAntreanUlang.toLocaleString('id-ID')} dari ${geoGagal.toLocaleString('id-ID')} kode pos yang terakhir dicari tidak ketemu (jeda 12 jam sejak percobaan terakhir) lewat ${kunciGoogle ? 'Google, lalu ' : ''}ESRI/OpenStreetMap. Sebagian besar memang tidak punya titik per kode pos.`
                         : `Cari titik untuk ${geoAntrean.toLocaleString('id-ID')} kode pos yang belum pernah dicari lewat ${kunciGoogle ? 'Google, lalu ' : ''}ESRI/OpenStreetMap. Hasilnya dipakai baris yang tidak punya titik desa sendiri.`
                     )}
                   >
                     {geoUlang
-                      ? `coba ulang ${geoGagal.toLocaleString('id-ID')}`
+                      ? `coba ulang ${geoAntreanUlang.toLocaleString('id-ID')}`
                       : `isi ${geoAntrean.toLocaleString('id-ID')} kode pos`}
                   </button>
                 )}
