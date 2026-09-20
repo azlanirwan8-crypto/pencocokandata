@@ -1224,23 +1224,21 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                         }}
                       >
                         {item.longitude == null ? '—' : item.longitude.toFixed(6)}
-                        {item.latitude != null && item.longitude != null && (
-                          <span
-                            style={{
-                              display: 'block',
-                              fontSize: '0.78rem',
-                              fontWeight: 700,
-                              letterSpacing: '0.03em',
-                              color: item.geoTerverifikasi ? '#0ab39c' : '#b45309',
-                            }}
-                          >
-                            {item.geoTerverifikasi
-                              ? 'GOOGLE'
-                              : item.geoPresisi === 'PERKIRAAN WILAYAH'
-                                ? 'PERKIRAAN'
-                                : (item.geoSumber || '').toUpperCase()}
-                          </span>
-                        )}
+                        {item.latitude != null &&
+                          item.longitude != null &&
+                          (item.geoTerverifikasi || item.geoPresisi === 'PERKIRAAN WILAYAH') && (
+                            <span
+                              style={{
+                                display: 'block',
+                                fontSize: '0.78rem',
+                                fontWeight: 700,
+                                letterSpacing: '0.03em',
+                                color: item.geoTerverifikasi ? '#0ab39c' : '#b45309',
+                              }}
+                            >
+                              {item.geoTerverifikasi ? 'GOOGLE' : 'PERKIRAAN'}
+                            </span>
+                          )}
                       </td>
 
                       {/* Actions */}
