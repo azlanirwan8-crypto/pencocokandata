@@ -43,24 +43,40 @@ const LIMIT = Math.max(0, Number(arg('limit', 0)));
 const STATE = path.resolve('scratch/koordinat.state.json');
 const OUT = path.resolve('scratch/koordinat.csv');
 
-/** Baris tabel: No | desa | kode pos | kode wilayah | "lat, lng" | elevasi | zona. */
-const ROW_RE =
-  /<tr[^>]*>\s*<td[^>]*>\d+<\/td>\s*<td[^>]*>(?:<a[^>]*>)?([^<]+)(?:<\/a>)?<\/td>\s*<td[^>]*>(?:<a[^>]*>)?(\d{5})(?:<\/a>)?<\/td>\s*<td[^>]*>(\d{2}\.\d{2}\.\d{2}\.\d{4})<\/td>\s*<td[^>]*>(-?\d{1,2}\.\d+),\s*(-?\d{1,3}\.\d+)<\/td>(?:\s*<td[^>]*>(\d+)\s*m<\/td>)?/g;
+/**
+ * Satu-satunya daftar lengkap per halaman: payload Next.js di dalam self.__next_f.
+ * Tabel HTML-nya dipotong 25 desa (terukur: 214 kecamatan kehilangan 2.865 desa).
+ */
+const DESA_RE =
+  /"nama":"((?:[^"\\]|\\.)*)","slug":"[^"]*","kodePos":"(\d{5})","kodeKemendagri":"(\d{2}\.\d{2}\.\d{2}\.\d{4})","lat":(-?\d+(?:\.\d+)?),"lng":(-?\d+(?:\.\d+)?)(?:,"elevasi":(-?\d+(?:\.\d+)?))?/g;
+
+function unescapePayload(html) {
+  let teks = '';
+  for (const m of html.matchAll(/self\.__next_f\.push\(\[1,("(?:[^"\\]|\\.)*")\]\)/g)) {
+    try {
+      teks += JSON.parse(m[1]);
+    } catch {
+      /* chunk tidak lengkap — lewati */
+    }
+  }
+  return teks;
+}
 
 function parsePage(html) {
   const rows = [];
-  for (const m of html.matchAll(ROW_RE)) {
+  for (const m of unescapePayload(html).matchAll(DESA_RE)) {
     const lat = Number(m[4]);
     const lng = Number(m[5]);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
     if (lat < -11 || lat > 41 || lng < 89 || lng > 145) continue;
+    const elev = Number(m[6]);
     rows.push({
       kode: m[3],
       kodePos: m[2],
-      desa: m[1].trim(),
+      desa: JSON.parse(`"${m[1]}"`),
       lat,
       lng,
-      elev: m[6] ? Number(m[6]) : null,
+      elev: Number.isFinite(elev) ? Math.round(elev) : null,
     });
   }
   return rows;
@@ -113,9 +129,9 @@ async function main() {
     const teks = (await readFile(path.resolve(csvPath), 'utf8')).split(/\r?\n/);
     const rows = [];
     for (const baris of teks) {
-      const m = baris.match(/^(\d{2}\.\d{2}\.\d{2}\.\d{4}),(\d{5}),"([^"]*)",(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?),(\d*)$/);
+      const m = baris.match(/^(\d{2}\.\d{2}\.\d{2}\.\d{4}),(\d{5}),"([^"]*)",(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?),(-?\d*)$/);
       if (!m) continue;
-      rows.push({ kode: m[1], kodePos: m[2], desa: m[3], lat: Number(m[4]), lng: Number(m[5]), elev: m[6] ? Number(m[6]) : null });
+      rows.push({ kode: m[1], kodePos: m[2], desa: m[3], lat: Number(m[4]), lng: Number(m[5]), elev: m[6] === '' ? null : Number(m[6]) });
     }
     console.log(`${rows.length} baris koordinat dari ${csvPath}`);
     let masuk = 0;
