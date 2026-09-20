@@ -190,7 +190,7 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
                     <td className="code-cell" style={{ textAlign: 'center' }}>{r.kodeCabang || '-'}</td>
                     <td style={{ fontWeight: 600, color: '#405189' }}>{r.namaOutlet}</td>
                     <td style={{ textAlign: 'center' }}>{r.statusOutlet || '-'}</td>
-                    <td style={{ whiteSpace: 'normal', maxWidth: '260px' }}>{r.alamat || '-'}</td>
+                    <td style={{ maxWidth: '260px' }} title={r.alamat || ''}>{r.alamat || '-'}</td>
                     <td className="code-cell" style={{ textAlign: 'center', color: '#0ab39c', fontWeight: 700 }}>{r.kodePosPten}</td>
                     <td>{r.kelurahan}</td>
                     <td>{r.kecamatan}</td>

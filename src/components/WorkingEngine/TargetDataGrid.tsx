@@ -2180,16 +2180,16 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                       <td className="code-cell" style={{ color: '#f06548', fontWeight: 700, paddingTop: '0.55rem' }}>
                         {r['KODE POS']}
                       </td>
-                      <td style={{ paddingTop: '0.55rem', whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                      <td style={{ paddingTop: '0.55rem' }}>
                         {r.Kecamatan || '-'}
                       </td>
-                      <td style={{ paddingTop: '0.55rem', whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                      <td style={{ paddingTop: '0.55rem' }}>
                         {r.Kelurahan || '-'}
                       </td>
-                      <td style={{ paddingTop: '0.55rem', whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                      <td style={{ paddingTop: '0.55rem' }}>
                         {r['Dati II'] || '-'}
                       </td>
-                      <td style={{ paddingTop: '0.55rem', whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                      <td style={{ paddingTop: '0.55rem' }}>
                         {r.Provinsi || '-'}
                       </td>
                       <td style={{ paddingTop: '0.55rem', whiteSpace: 'nowrap' }}>
@@ -2725,7 +2725,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                         </td>
                       )}
                       {!hiddenCols.has('ALAMAT') && (
-                        <td style={{ minWidth: '240px', maxWidth: '380px', whiteSpace: 'normal', wordBreak: 'break-word', verticalAlign: 'middle', lineHeight: 1.4 }} title={r.ALAMAT}>
+                        <td style={{ minWidth: '240px', maxWidth: '380px', verticalAlign: 'middle', lineHeight: 1.4 }} title={r.ALAMAT}>
                           {r.ALAMAT || <span style={{ color: '#878a99' }}>-</span>}
                         </td>
                       )}

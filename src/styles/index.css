@@ -849,21 +849,14 @@ body {
   border-bottom: 1px solid var(--border-subtle);
   color: #495057;
   background-color: #ffffff;
-  white-space: normal;
-  overflow-wrap: break-word;
-  word-break: break-word;
+  /* Satu baris per sel di semua tabel: nilai panjang menggeser tabel
+     (wadah tabel overflow-x auto), tidak dilipat jadi dua baris. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   vertical-align: top;
   font-size: 0.74rem;
   line-height: 1.35;
-}
-
-/* Tabel rujukan (Data KodePos): tiap sel wajib satu baris. Wadah tabel sudah
-   overflow-x: auto, jadi nama wilayah panjang menggeser tabel, bukan melipat. */
-.modern-table.table-one-line td,
-.modern-table.table-one-line th {
-  white-space: nowrap;
-  overflow-wrap: normal;
-  word-break: normal;
 }
 
 .modern-table tbody tr {

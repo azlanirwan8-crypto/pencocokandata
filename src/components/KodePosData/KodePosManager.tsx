@@ -936,7 +936,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
 
         {/* Modern Table Container */}
         <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', overflowX: 'auto', maxHeight: '580px' }}>
-          <table className="modern-table table-one-line" style={{ width: '100%', fontSize: '0.78rem' }}>
+          <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
               <tr>
                 <th style={{ width: '45px', textAlign: 'center' }}>No</th>
