@@ -1777,15 +1777,6 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                           ? 'belum ada'
                           : `${detailItem.latitude.toFixed(7)}, ${detailItem.longitude.toFixed(7)}`}
                       </div>
-                      <div
-                        style={{
-                          fontSize: '0.72rem',
-                          color: detailItem.geoTerverifikasi ? '#0a7b6c' : '#b45309',
-                          marginTop: '0.1rem',
-                        }}
-                      >
-                        {geoLabel(detailItem)}
-                      </div>
                     </div>
                     <button
                       type="button"
