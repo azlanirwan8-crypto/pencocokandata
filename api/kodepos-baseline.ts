@@ -543,36 +543,37 @@ export default async function handler(req: any, res: any) {
     if (req.method === 'GET' && view === 'koordinat') {
       const r = await sql.query(`
         SELECT
-          (SELECT COUNT(*)::int FROM kodepos_koordinat)                                    AS patokanTitik,
+          (SELECT COUNT(*)::int FROM kodepos_koordinat)                                    AS patokan_titik,
           (SELECT MAX(diambil_pada) FROM kodepos_koordinat)                                AS terakhir,
-          (SELECT COUNT(*)::int FROM kodepos_data)                                         AS dataTotal,
-          (SELECT COUNT(*)::int FROM kodepos_data WHERE latitude IS NOT NULL)              AS dataTitik,
+          (SELECT COUNT(*)::int FROM kodepos_data)                                         AS data_total,
+          (SELECT COUNT(*)::int FROM kodepos_data WHERE latitude IS NOT NULL)              AS data_titik,
           (SELECT COUNT(DISTINCT upper(btrim(kode_pos)))::int FROM kodepos_data
-            WHERE latitude IS NOT NULL)                                                    AS kodePosTitik,
+            WHERE latitude IS NOT NULL)                                                    AS kode_pos_titik,
           (SELECT COUNT(*)::int FROM kodepos_data
             WHERE latitude IS NOT NULL
-              AND (latitude NOT BETWEEN -11 AND 41 OR longitude NOT BETWEEN 89 AND 145))   AS diLuarWilayah,
+              AND (latitude NOT BETWEEN -11 AND 41 OR longitude NOT BETWEEN 89 AND 145))   AS di_luar_wilayah,
           (SELECT COUNT(*)::int FROM kodepos_koordinat k
-            WHERE NOT EXISTS (SELECT 1 FROM kodepos_baseline b WHERE b.kode_wilayah = k.kode_wilayah)) AS takTerkenalan,
+            WHERE NOT EXISTS (SELECT 1 FROM kodepos_baseline b WHERE b.kode_wilayah = k.kode_wilayah)) AS tak_terkenalan,
           (SELECT COUNT(*)::int FROM kodepos_koordinat k
-            JOIN kodepos_baseline b ON b.kode_wilayah = k.kode_wilayah)                                AS kodeWilayahCocok,
+            JOIN kodepos_baseline b ON b.kode_wilayah = k.kode_wilayah)                                AS kode_wilayah_cocok,
           (SELECT COUNT(*)::int FROM kodepos_koordinat k
             JOIN kodepos_baseline b ON b.kode_wilayah = k.kode_wilayah
-            WHERE upper(btrim(k.kode_pos)) = upper(btrim(b.kode_pos)))                                AS kodePosCocok;
+            WHERE upper(btrim(k.kode_pos)) = upper(btrim(b.kode_pos)))                                AS kode_pos_cocok;
       `);
+      // Alias Postgres dilipat ke huruf kecil, jadi baca namanya apa adanya.
       const s = (r?.[0] as any) || {};
       return res.status(200).json({
         ok: true,
         configured: true,
-        patokanTitik: s.patokanTitik ?? 0,
-        dataTotal: s.dataTotal ?? 0,
-        dataTitik: s.dataTitik ?? 0,
-        tanpaTitik: (s.dataTotal ?? 0) - (s.dataTitik ?? 0),
-        kodePosTitik: s.kodePosTitik ?? 0,
-        diLuarWilayah: s.diLuarWilayah ?? 0,
-        takTerkenalan: s.takTerkenalan ?? 0,
-        kodeWilayahCocok: s.kodeWilayahCocok ?? 0,
-        kodePosCocok: s.kodePosCocok ?? 0,
+        patokanTitik: s.patokan_titik ?? 0,
+        dataTotal: s.data_total ?? 0,
+        dataTitik: s.data_titik ?? 0,
+        tanpaTitik: (s.data_total ?? 0) - (s.data_titik ?? 0),
+        kodePosTitik: s.kode_pos_titik ?? 0,
+        diLuarWilayah: s.di_luar_wilayah ?? 0,
+        takTerkenalan: s.tak_terkenalan ?? 0,
+        kodeWilayahCocok: s.kode_wilayah_cocok ?? 0,
+        kodePosCocok: s.kode_pos_cocok ?? 0,
         terakhir: s.terakhir ?? null,
       });
     }
