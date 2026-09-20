@@ -346,15 +346,35 @@ function planFromBaselineDiff(json: any, noteTambahan?: string): KodePosSyncPlan
   };
 }
 
+/** Lantai baris patokan: dump resmi Kemendagri memuat 83.762 desa (diukur 2026-09-20). */
+const PATOKAN_LANTAI_BARIS = 83_000;
+const PATOKAN_MAKS_UMUR_HARI = 30;
+
+/** Alasan penarikan ulang, atau null bila patokan sudah layak dipakai. */
+function alasanTarikPatokan(json: any): string | null {
+  if (!json?.ready) return 'Patokan belum ada';
+  const baris = Number(json.baselineRows || 0);
+  if (baris < PATOKAN_LANTAI_BARIS) {
+    return `Patokan baru ${baris.toLocaleString('id-ID')} baris, di bawah ${PATOKAN_LANTAI_BARIS.toLocaleString('id-ID')} daftar resmi`;
+  }
+  const diambil = new Date(json.takenAt || 0).getTime();
+  if (!diambil || Date.now() - diambil > PATOKAN_MAKS_UMUR_HARI * 86_400_000) {
+    return `Patokan sudah lebih dari ${PATOKAN_MAKS_UMUR_HARI} hari`;
+  }
+  return null;
+}
+
 /**
- * Patokan tersimpan di database sendiri (tabel kodepos_baseline). Kalau belum ada, pemeriksaan
- * ini menariknya sendiri dari sumber resmi — pengguna cukup menekan Sync Data satu kali.
+ * Patokan tersimpan di database sendiri (tabel kodepos_baseline). Kalau belum ada, kurang
+ * lengkap, atau sudah usang, pemeriksaan ini menariknya sendiri dari sumber resmi —
+ * pengguna cukup menekan Sync Data satu kali.
  */
 export async function runKodePosBaselineAudit(onProgress?: SyncProgress): Promise<KodePosSyncPlan> {
   onProgress?.('Membandingkan database dengan patokan tersimpan...', 40);
   let json = await fetchJson('/api/kodepos-baseline?view=diff');
-  if (!json.ready) {
-    onProgress?.('Patokan belum ada — menarik dari dump resmi Kemendagri...', 8);
+  const alasan = alasanTarikPatokan(json);
+  if (alasan) {
+    onProgress?.(`${alasan} — menarik dari dump resmi Kemendagri...`, 8);
     await pullKodePosBaseline(onProgress);
     json = await fetchJson('/api/kodepos-baseline?view=diff');
     if (!json.ready) {
@@ -362,7 +382,11 @@ export async function runKodePosBaselineAudit(onProgress?: SyncProgress): Promis
     }
   }
   onProgress?.('Selesai', 100);
-  return planFromBaselineDiff(json);
+  const plan = planFromBaselineDiff(json);
+  if (Number(json.baselineRows || 0) < PATOKAN_LANTAI_BARIS) {
+    plan.note += ` Perhatian: patokan hanya ${Number(json.baselineRows || 0).toLocaleString('id-ID')} baris — di bawah ${PATOKAN_LANTAI_BARIS.toLocaleString('id-ID')} daftar resmi, kemungkinan sumber cadangan yang terpakai.`;
+  }
+  return plan;
 }
 
 /** Cicil penarikan baseline (server membatasi 5 halaman x 1000 baris tiap panggilan). */

@@ -444,12 +444,22 @@ export default async function handler(req: any, res: any) {
       const nextStart = start + consumed * PAGE_SIZE;
       const done = exhausted || (total > 0 && nextStart >= total);
 
+      // Tarikan selesai -> buang versi lama. Diff membaca seluruh tabel tanpa filter versi,
+      // jadi baris sumber lama yang tertinggal akan muncul sebagai desa ganda di atas yang baru.
+      let dibuang = 0;
+      if (done && upserted > 0) {
+        const sisa = await sql`SELECT COUNT(*)::int AS n FROM kodepos_baseline WHERE versi <> ${vers};`;
+        await sql`DELETE FROM kodepos_baseline WHERE versi <> ${vers};`;
+        dibuang = Number((sisa?.[0] as any)?.n || 0);
+      }
+
       return res.status(200).json({
         ok: true,
         configured: true,
         versi: vers,
         upserted,
         total,
+        dibuang,
         nextStart: done ? null : nextStart,
         done,
         sumber: source.label,
