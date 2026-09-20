@@ -10,6 +10,7 @@ import {
   ChevronUp,
   Award,
 } from 'lucide-react';
+import { SINYAL_PENCOCOKAN } from '../../utils/analystPipeline';
 
 interface AnalystCanvasProps {
   isAnalyzing: boolean;
@@ -37,6 +38,12 @@ interface AnalystCanvasProps {
   faseBerikutnya?: 1 | 2 | 3;
   /** Fase ini sudah dieksekusi tapi belum disetujui: tombol utama dikunci. */
   terkunciMenungguPersetujuan?: boolean;
+  /** Jumlah baris hasil analisa yang tertangkap tiap sinyal (nomor kartu 1..13). */
+  temuanSinyal?: Record<number, number>;
+  /** Buka modal detail temuan satu sinyal. */
+  onLihatTemuan?: (no: number) => void;
+  /** Ada hasil analisa lama yang belum menyimpan bitmask sinyal (sebelum fitur ini dibuat). */
+  bitmaskBelumAda?: boolean;
 }
 
 export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
@@ -53,6 +60,9 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
   phaseApproval = { pct: { 1: 0, 2: 0, 3: 0 }, selesai: { 1: false, 2: false, 3: false } },
   faseBerikutnya = 1,
   terkunciMenungguPersetujuan = false,
+  temuanSinyal = {},
+  onLihatTemuan,
+  bitmaskBelumAda = false,
 }) => {
   const [showTheories, setShowTheories] = useState<boolean>(true);
 
@@ -307,7 +317,7 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
                 12 Sinyal Pencocokan + 2 Penjaga Identitas
               </span>
               <span style={{ fontSize: '0.72rem', color: '#878a99', marginLeft: '0.5rem' }}>
-                (ensemble multi-algoritma · terukur 96,3% akurasi pada 27 pasangan berlabel; Levenshtein saja 63%)
+                (ensemble multi-algoritma · klik kartu untuk melihat temuannya · terukur 96,3% akurasi pada 27 pasangan berlabel; Levenshtein saja 63%)
               </span>
             </div>
           </div>
@@ -329,24 +339,54 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
               gap: '0.65rem',
             }}
           >
-            {SINYAL_PENCOCOKAN.map((s) => (
+            {bitmaskBelumAda && (
               <div
-                key={s.judul}
-                style={{ background: '#f8fafc', padding: '0.65rem 0.8rem', borderRadius: '6px', border: '1px solid #edf2f7' }}
+                style={{
+                  gridColumn: '1 / -1',
+                  fontSize: '0.72rem',
+                  color: '#f06548',
+                  background: '#fff5f3',
+                  border: '1px solid #ffe3dc',
+                  borderRadius: '6px',
+                  padding: '0.4rem 0.6rem',
+                }}
               >
-                <div
-                  style={{
-                    fontSize: '0.76rem',
-                    fontWeight: 700,
-                    color: s.warna,
-                    marginBottom: '0.2rem',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                  title={s.judul}
-                >
-                  {s.no}. {s.emoji} {s.judul}
+                Hasil analisa tersimpan ini dibuat sebelum catatan per-sinyal ada, jadi semua kartu bernilai 0.
+                Jalankan ulang analisa supaya jumlah temuan terisi.
+              </div>
+            )}
+            {SINYAL_PENCOCOKAN.map((s) => {
+              const temuan = temuanSinyal[s.no] || 0;
+              return (
+              <button
+                key={s.no}
+                type="button"
+                onClick={() => onLihatTemuan?.(s.no)}
+                className="sinyal-card"
+                style={{ background: '#f8fafc', padding: '0.65rem 0.8rem', borderRadius: '6px', border: '1px solid #edf2f7', textAlign: 'left', cursor: 'pointer' }}
+                title={temuan > 0 ? `Lihat ${temuan} temuan sinyal ini` : 'Sinyal ini belum menangkap temuan pada analisa berjalan'}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
+                  <span
+                    style={{
+                      flex: '1 1 auto',
+                      minWidth: 0,
+                      fontSize: '0.76rem',
+                      fontWeight: 700,
+                      color: s.warna,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {s.no}. {s.emoji} {s.judul}
+                  </span>
+                  <span
+                    className={`sinyal-count ${temuan > 0 ? 'sinyal-count-aktif' : ''}`}
+                    style={{ flex: '0 0 auto' }}
+                  >
+                    {temuan}
+                  </span>
                 </div>
                 <div
                   style={{
@@ -358,35 +398,18 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
                     WebkitBoxOrient: 'vertical',
                     overflow: 'hidden',
                   }}
-                  title={s.deskripsi}
                 >
                   {s.deskripsi}
                 </div>
-              </div>
-            ))}
+              </button>
+              );
+            })}
           </div>
         )}
       </div>
     </div>
   );
 };
-
-/** Isi kartu "sinyal pencocokan" — harus tetap sama dengan analystPipeline.ts. */
-const SINYAL_PENCOCOKAN: { no: number; emoji: string; judul: string; warna: string; deskripsi: string }[] = [
-  { no: 1, emoji: '🔤', judul: 'Canonical Thesaurus', warna: '#405189', deskripsi: 'Standarisasi singkatan otomatis: KAB → KABUPATEN, KCP → KANTOR CABANG PEMBANTU, KCB → KANTOR CABANG, BO → BRANCH OFFICE, JABAR → JAWA BARAT.' },
-  { no: 2, emoji: '🧹', judul: 'Pembuang Token Administratif', warna: '#405189', deskripsi: 'KOTA / KABUPATEN / KEC / KEL / DESA dibuang dari kunci, jadi "TEGALSARI" == "KEC. TEGALSARI".' },
-  { no: 3, emoji: '🔄', judul: 'Token Set & Jaccard', warna: '#0ab39c', deskripsi: 'Anti-kata terbalik: "KOTA MEDAN BALAI KOTA" dihitung sama dengan "BALAI KOTA MEDAN".' },
-  { no: 4, emoji: '🎯', judul: 'Jaro-Winkler', warna: '#f7b84b', deskripsi: 'Kemiripan huruf dengan bobot awalan: PEKALONAGN → PEKALONGAN, MAKASAR → MAKASSAR.' },
-  { no: 5, emoji: '✏️', judul: 'Damerau-Levenshtein (OSA)', warna: '#f7b84b', deskripsi: 'Sisipan, hapus, ganti, dan tukar huruf berdampingan dihitung sebagai satu kesalahan.' },
-  { no: 6, emoji: '📊', judul: 'Tri-gram Cosine', warna: '#6366f1', deskripsi: 'Vektor potongan tiga huruf: tahan pada nama outlet panjang dan beda spasi/tanda strip.' },
-  { no: 7, emoji: '🧬', judul: 'Longest Common Subsequence', warna: '#6366f1', deskripsi: 'Ketahanan terhadap sisipan kata alamat di tengah nama.' },
-  { no: 8, emoji: '🎨', judul: 'Ratcliff-Obershelp (Gestalt)', warna: '#6366f1', deskripsi: 'Kemiripan sebagaimana dinilai manusia, bukan sekadar hitung beda huruf.' },
-  { no: 9, emoji: '🔊', judul: 'Fonetik Indonesia', warna: '#299cdb', deskripsi: 'Ejaan lama/baru disatukan: DJ→J, TJ→C, SJ→S, CH/KH→K, OE→U, huruf kembar dilipat.' },
-  { no: 10, emoji: '🧱', judul: 'Token Containment', warna: '#299cdb', deskripsi: 'Nama pendek ⊆ nama panjang untuk hierarki wilayah, dengan lantai 4 huruf agar tidak asal klaim.' },
-  { no: 11, emoji: '🗺️', judul: 'Geo-Hierarchy & Pemekaran', warna: '#299cdb', deskripsi: 'Batas Provinsi/Dati II dikunci; induk-anak pemekaran (BANGGAI → BANGGAI KEPULAUAN) dikenali.' },
-  { no: 12, emoji: '🔠', judul: 'Initialism Match', warna: '#0ab39c', deskripsi: '"JP" ↔ "JAKARTA PUSAT", "KCP" ↔ "KANTOR CABANG PEMBANTU".' },
-  { no: 13, emoji: '🛡️', judul: 'Penjaga Identitas (2 aturan)', warna: '#f06548', deskripsi: 'Angka beda → nilai dipotong 0,60 (KCP 001 ≠ KCP 002). Penanda wilayah beda → 0,70 (TANGERANG ≠ TANGERANG SELATAN).' },
-];
 
 const FASE_META: {
   phase: 1 | 2 | 3;

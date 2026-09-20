@@ -15,7 +15,8 @@ import { KodePosManager } from './components/KodePosData/KodePosManager';
 import { AnalystCanvas } from './components/WorkingEngine/AnalystCanvas';
 import { AnalystResultsGrid } from './components/WorkingEngine/AnalystResultsGrid';
 import { FinalDataManager } from './components/WorkingEngine/FinalDataManager';
-import { executeAnalystPipeline, cityMatchKey, makeFinalKey, type AnalystRow, type AnalystCoverage } from './utils/analystPipeline';
+import { executeAnalystPipeline, cityMatchKey, makeFinalKey, hitungBit, bitTemuanBaris, type AnalystRow, type AnalystCoverage } from './utils/analystPipeline';
+import { SinyalTemuanModal } from './components/WorkingEngine/SinyalTemuanModal';
 import { detectFinalAnomalies } from './utils/finalAnomaly';
 import type { ActiveTab } from './components/Sidebar';
 
@@ -96,6 +97,8 @@ export const App: React.FC = () => {
   // Pemetaan manual hasil "Setujui" di laporan cakupan: kunci kota master (cityMatchKey)
   // → nama kota PTEN. Baris master kota itu dipakai atas nama kota PTEN terpilih.
   const [cityOverrides, setCityOverrides] = useState<Record<string, string>>({});
+  // Kartu sinyal yang sedang dibuka detail temuannya (nomor 1..13, null = tertutup).
+  const [sinyalDibuka, setSinyalDibuka] = useState<number | null>(null);
   // Full Master Kode Pos list (loaded once from Neon, cached in memory for pipeline runs)
   const kodePosListRef = useRef<KodePosRow[] | null>(null);
   // Cerminan reaktif dari kodePosListRef agar Dashboard bisa menghitung cakupan kode pos.
@@ -678,6 +681,18 @@ export const App: React.FC = () => {
         : analystRows.some((r) => r.statusAnalisa !== 'MENUNGGU');
   const tombolAnalisaTerkunci = !isAnalyzing && faseSudahDikerjakan;
 
+  // Jumlah temuan per sinyal (kartu 1..13) — dihitung dari bitmask yang ditulis engine
+  // saat analisa, bukan dari tebakan, jadi angkanya bisa dibuktikan barisnya.
+  const temuanSinyal = useMemo(() => {
+    const out: Record<number, number> = {};
+    for (const r of analystRows) {
+      const bit = bitTemuanBaris(r);
+      if (!bit) continue;
+      for (const no of hitungBit(bit)) out[no] = (out[no] || 0) + 1;
+    }
+    return out;
+  }, [analystRows]);
+
   const handleResetAnalyst = async () => {
     cancelPendingWrite('analyst_results_data');
     setAnalystRows([]);
@@ -1128,7 +1143,14 @@ export const App: React.FC = () => {
                 phaseApproval={phaseApproval}
                 faseBerikutnya={faseBerikutnya}
                 terkunciMenungguPersetujuan={tombolAnalisaTerkunci}
+                temuanSinyal={temuanSinyal}
+                onLihatTemuan={setSinyalDibuka}
+                bitmaskBelumAda={analystRows.length > 0 && Object.keys(temuanSinyal).length === 0}
               />
+
+              {sinyalDibuka !== null && (
+                <SinyalTemuanModal key={sinyalDibuka} no={sinyalDibuka} rows={analystRows} onClose={() => setSinyalDibuka(null)} />
+              )}
 
               {analystRows.length > 0 && (
                 <AnalystResultsGrid

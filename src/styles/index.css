@@ -984,6 +984,41 @@ body {
   animation: qdrRise 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* Kartu sinyal: bisa diklik untuk membuka detail temuan mesin tersebut. */
+.sinyal-card {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.sinyal-card:hover {
+  border-color: #c3cede;
+  box-shadow: 0 2px 8px rgba(64, 81, 137, 0.1);
+  transform: translateY(-1px);
+}
+
+.sinyal-card:focus-visible {
+  outline: 2px solid #405189;
+  outline-offset: 1px;
+}
+
+.sinyal-count {
+  display: inline-block;
+  min-width: 26px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #eef1f6;
+  color: #878a99;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.sinyal-count-aktif {
+  background: #405189;
+  color: #ffffff;
+}
+
 .btn-primary {
   background-color: #405189;
   border-color: #405189;
