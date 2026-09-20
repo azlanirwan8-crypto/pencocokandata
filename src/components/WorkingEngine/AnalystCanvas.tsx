@@ -33,6 +33,8 @@ interface AnalystCanvasProps {
     pct: { 1: number; 2: number; 3: number };
     selesai: { 1: boolean; 2: boolean; 3: boolean };
   };
+  /** Fase pertama yang belum disetujui penuh — yang dijalankan tombol utama. */
+  faseBerikutnya?: 1 | 2 | 3;
 }
 
 export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
@@ -47,6 +49,7 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
   currentActivePhase = 0,
   completedPhases = new Set(),
   phaseApproval = { pct: { 1: 0, 2: 0, 3: 0 }, selesai: { 1: false, 2: false, 3: false } },
+  faseBerikutnya = 1,
 }) => {
   const [showTheories, setShowTheories] = useState<boolean>(true);
 
@@ -231,12 +234,14 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
               {isAnalyzing ? (
                 <>
                   <div className="spinner-border spinner-border-sm" role="status" style={{ width: '14px', height: '14px' }} />
-                  <span>Sedang Menganalisa ({progressPercent}%)...</span>
+                  <span>
+                    Sedang Memproses Fase {faseBerikutnya} ({progressPercent}%)...
+                  </span>
                 </>
               ) : (
                 <>
                   <Play size={15} />
-                  <span>{hasExistingResults ? 'Jalankan Ulang Analisa Master' : 'Jalankan Analisa Data Master'}</span>
+                  <span>{hasExistingResults ? `Lanjut Fase ${faseBerikutnya}` : `Jalankan Fase ${faseBerikutnya}`}</span>
                 </>
               )}
             </button>

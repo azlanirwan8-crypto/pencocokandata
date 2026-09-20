@@ -371,7 +371,9 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     analysed.forEach((r) => {
       if (r.statusAnalisa === 'EXACT_MATCH') exact++;
       else if (r.statusAnalisa === 'HIGH_CONFIDENCE') highConf++;
-      else anomalies++;
+      // 'MENUNGGU' = fase 3 belum dijalankan sama sekali — bukan temuan salah,
+      // jadi tidak boleh ikut menghitung antrean "Ulangi yang Salah Saja".
+      else if (r.statusAnalisa !== 'MENUNGGU') anomalies++;
 
       if (r.placementStatus === 'VERIFIED') placementVerified++;
       else placementReview++;
@@ -380,7 +382,10 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       if (r.is3RoleLengkap) role3Complete++;
     });
 
-    const accuracyRate = total > 0 ? (((exact + highConf) / total) * 100).toFixed(1) : '100';
+    // Akurasi hanya dihitung dari baris yang sudah dinilai mesin (Fase 3). Sebelum
+    // Fase 3 jalan, penyebutnya 0 — bukan 0% dari seluruh baris.
+    const dinilai = exact + highConf + anomalies;
+    const accuracyRate = dinilai > 0 ? (((exact + highConf) / dinilai) * 100).toFixed(1) : '0';
     const isAllApproved = total > 0 && approved === total;
 
     return {

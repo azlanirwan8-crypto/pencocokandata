@@ -510,13 +510,20 @@ export const App: React.FC = () => {
   // Execution Trigger for New Data Analyst Engine (3-Phase Pipeline)
   // `overrides` dipakai saat re-run langsung setelah Setujui/Batalkan — state
   // cityOverrides belum ter-update di render ini, jadi kirim nilainya eksplisit.
-  const handleStartAnalystPipeline = async (reRunAnomaliesOnly = false, overrides?: Record<string, string>) => {
+  // `sampaiFase` default: fase pertama yang belum disetujui penuh (alur bertahap).
+  const handleStartAnalystPipeline = async (
+    reRunAnomaliesOnly = false,
+    overrides?: Record<string, string>,
+    sampaiFase?: 1 | 2 | 3
+  ) => {
+    const targetFase = sampaiFase ?? faseBerikutnya;
+    const lama = analystRows;
     setIsAnalyzing(true);
     setAnalystProgress(10);
-    setAnalystMessage('Menyiapkan 5 Data Master & indeks memori O(1)...');
+    setAnalystMessage(`Menyiapkan 5 Data Master & indeks memori O(1)... (Fase ${targetFase})`);
     // Reset per-phase progress
     setPhaseProgress({ 1: 0, 2: 0, 3: 0 });
-    setCurrentActivePhase(1);
+    setCurrentActivePhase(targetFase);
     setCompletedPhases(new Set());
 
     try {
@@ -591,19 +598,41 @@ export const App: React.FC = () => {
         reRunAnomaliesOnly,
         analystRows,
         // Analisis inkremental: kelurahan yang sudah ada di Final Data tidak diulang.
-        new Set(finalRows.map((fr) => makeFinalKey(fr.kodePosPten, fr.kelurahan)))
+        new Set(finalRows.map((fr) => makeFinalKey(fr.kodePosPten, fr.kelurahan))),
+        targetFase
       );
 
-      setAnalystRows(results);
+      // Persetujuan fase sebelumnya ikut dipindah ke baris hasil baru — kunci baris
+      // = kode pos PTEN + kelurahan (sama seperti kunci Final Data).
+      const persetujuanLama = new Map<string, AnalystRow>();
+      lama.forEach((r) => persetujuanLama.set(makeFinalKey(r.kodePosPten, r.kelurahan), r));
+      const hasil = results.map((r) => {
+        const l = persetujuanLama.get(makeFinalKey(r.kodePosPten, r.kelurahan));
+        if (!l) return r;
+        return {
+          ...r,
+          fase1Approved: r.fase1Approved || l.fase1Approved,
+          fase2Approved: r.fase2Approved || l.fase2Approved,
+          fase3Approved: r.fase3Approved || l.fase3Approved,
+          isFinalApproved: r.isFinalApproved || (l.isFinalApproved && r.statusAnalisa === 'EXACT_MATCH'),
+        };
+      });
+
+      setAnalystRows(hasil);
       setAnalystCoverage(coverage);
       setIsAnalyzing(false);
       setAnalystProgress(100);
-      setAnalystMessage('Analisa 3 Fase Berhasil Selesai!');
-      // Mark all phases complete
-      setPhaseProgress({ 1: 100, 2: 100, 3: 100 });
-      setCompletedPhases(new Set([1, 2, 3]));
+      setAnalystMessage(`Fase ${targetFase} selesai — tunggu persetujuan sebelum lanjut.`);
+      // Hanya fase yang benar-benar dikerjakan yang boleh tampil penuh di kartu.
+      setPhaseProgress((prev) => {
+        const next = { ...prev };
+        for (let p = 1; p <= targetFase; p++) next[p as 1 | 2 | 3] = 100;
+        for (let p = targetFase + 1; p <= 3; p++) next[p as 1 | 2 | 3] = 0;
+        return next;
+      });
+      setCompletedPhases(new Set([1, 2, 3].filter((p) => p <= targetFase)));
       setCurrentActivePhase(0);
-      setItem('analyst_results_data', results).catch(() => {});
+      setItem('analyst_results_data', hasil).catch(() => {});
     } catch (err: any) {
       setIsAnalyzing(false);
       setCurrentActivePhase(0);
@@ -635,6 +664,10 @@ export const App: React.FC = () => {
       },
     };
   }, [analystRows]);
+
+  // Alur bertahap: fase pertama yang belum disetujui penuh adalah fase yang berikutnya
+  // dikerjakan — tombol, kartu, dan engine memakai angka yang sama.
+  const faseBerikutnya: 1 | 2 | 3 = !phaseApproval.selesai[1] ? 1 : !phaseApproval.selesai[2] ? 2 : 3;
 
   const handleResetAnalyst = async () => {
     cancelPendingWrite('analyst_results_data');
@@ -1084,6 +1117,7 @@ export const App: React.FC = () => {
                 currentActivePhase={currentActivePhase}
                 completedPhases={completedPhases}
                 phaseApproval={phaseApproval}
+                faseBerikutnya={faseBerikutnya}
               />
 
               {analystRows.length > 0 && (

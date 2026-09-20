@@ -60,7 +60,7 @@ export interface AnalystRow {
   // Overall Status
   confidenceScore: number; // 0 - 100%
   matchingAlgorithm: string;
-  statusAnalisa: 'EXACT_MATCH' | 'HIGH_CONFIDENCE' | 'PERLU_REVIEW' | 'ANOMALI';
+  statusAnalisa: 'EXACT_MATCH' | 'HIGH_CONFIDENCE' | 'PERLU_REVIEW' | 'ANOMALI' | 'MENUNGGU';
   isFinalApproved: boolean;
   editedManually?: boolean;
 }
@@ -634,7 +634,7 @@ export function matchRoleForOutlet(namaOutlet: string, cityKey: string, roleMapp
   const alurWondr = wondr?.tier || (is3RoleLengkap ? 'Tier 1: Full Approval KC' : 'Tier 2: Dual Approval KCP via KC');
   const flowDescription = wondr?.desc || (is3RoleLengkap ? 'Semua role lengkap (Sales, Verifikator, Penyetuju) berada pada 1 unit mandiri.' : 'Role Verifikator/Penyetuju dialihkan ke KC Pengampu dalam 1 pulau.');
   const confidenceScore = Math.min(100, Math.round(highestRoleScore * 100));
-  let statusAnalisa: 'EXACT_MATCH' | 'HIGH_CONFIDENCE' | 'PERLU_REVIEW' | 'ANOMALI' = 'EXACT_MATCH';
+  let statusAnalisa: 'EXACT_MATCH' | 'HIGH_CONFIDENCE' | 'PERLU_REVIEW' | 'ANOMALI' | 'MENUNGGU' = 'EXACT_MATCH';
   if (confidenceScore >= 90) statusAnalisa = 'EXACT_MATCH';
   else if (confidenceScore >= 75) statusAnalisa = 'HIGH_CONFIDENCE';
   else if (confidenceScore >= 60) statusAnalisa = 'PERLU_REVIEW';
@@ -684,9 +684,16 @@ export async function executeAnalystPipeline(
   // 🎯 Analisis inkremental: kelurahan yang sudah ada di Final Data dilewati.
   // Kunci = `${kodePosPten}|${cityMatchKey(kelurahan)}`. Final Data itu FINAL,
   // jadi hanya kode pos / kelurahan BARU yang diprosse Fase 1→2→3.
-  excludeFinalKeys?: Set<string>
+  excludeFinalKeys?: Set<string>,
+  // 🚦 Alur bertahap: 1 = hanya Fase 1 yang dihitung & ditampilkan, lalu berhenti
+  // untuk direview; 2 menambah Fase 2; 3 (default) menyelesaikan semuanya.
+  sampaiFase: 1 | 2 | 3 = 3
 ): Promise<{ rows: AnalystRow[]; coverage: AnalystCoverage }> {
   const startTime = performance.now();
+  // 🚦 Alur bertahap: fase di atas `sampaiFase` tidak dihitung (Fase 3 = bagian termahal)
+  // dan field-nya dibiarkan kosong supaya kartu/gridfase berikutnya tetap "belum jalan".
+  const fase3Jalan = sampaiFase >= 3;
+  const fase2Jalan = sampaiFase >= 2;
 
   // 1. Persiapkan Index Master untuk O(1) Quick Lookup
   // Kota di-key dengan cityMatchKey → "JAKARTA PUSAT" dan "KOTA ADMINISTRASI JAKARTA
@@ -833,7 +840,7 @@ export async function executeAnalystPipeline(
     alurWondr: string;
     flowDescription: string;
     confidenceScore: number;
-    statusAnalisa: 'EXACT_MATCH' | 'HIGH_CONFIDENCE' | 'PERLU_REVIEW' | 'ANOMALI';
+    statusAnalisa: 'EXACT_MATCH' | 'HIGH_CONFIDENCE' | 'PERLU_REVIEW' | 'ANOMALI' | 'MENUNGGU';
     // Jaring pengaman baris sisa: catatan per kota master yang dilampirkan ke item ini
     safetyNetByCity?: Map<string, string>;
     // true bila baris sintetis fallback diganti baris asli hasil penampung
@@ -1279,51 +1286,59 @@ export async function executeAnalystPipeline(
     const alamat = rawFase2.ALAMAT || `Jl. Protokol No. ${i + 1}, ${finalKotaPten}`;
 
     // ── Fase 3: Mapping Role & 3 Role Lengkap ──
+    // Hanya dihitung saat giliran Fase 3 — inilah bagian termahal (setiap nama outlet
+    // diadu ke seluruh daftar role), jadi "Jalankan Fase 1" tidak ikut membayarnya.
     let matchedRole: RoleMappingRecord | null = null;
     let highestRoleScore = 0;
     let chosenAlgorithm = 'Direct Master Join';
     const outletNameToMatch = cleanAndStandardizeText(namaOutlet);
-    const cachedRoleMatch = roleMatchCache.get(outletNameToMatch);
-    if (cachedRoleMatch) {
-      matchedRole = cachedRoleMatch.role;
-      highestRoleScore = cachedRoleMatch.score;
-      chosenAlgorithm = cachedRoleMatch.algorithm;
-    } else {
-      for (const { record: roleItem, orgClean } of preCleanedRoles) {
-        const { score, algorithm } = calculateUnifiedPrecisionScore(outletNameToMatch, orgClean);
-        if (score > highestRoleScore && score >= 0.75) {
-          highestRoleScore = score;
-          matchedRole = roleItem;
-          chosenAlgorithm = algorithm;
+    if (sampaiFase >= 3) {
+      const cachedRoleMatch = roleMatchCache.get(outletNameToMatch);
+      if (cachedRoleMatch) {
+        matchedRole = cachedRoleMatch.role;
+        highestRoleScore = cachedRoleMatch.score;
+        chosenAlgorithm = cachedRoleMatch.algorithm;
+      } else {
+        for (const { record: roleItem, orgClean } of preCleanedRoles) {
+          const { score, algorithm } = calculateUnifiedPrecisionScore(outletNameToMatch, orgClean);
+          if (score > highestRoleScore && score >= 0.75) {
+            highestRoleScore = score;
+            matchedRole = roleItem;
+            chosenAlgorithm = algorithm;
+          }
         }
-      }
-      if (!matchedRole && completeRoleList.length > 0) {
-        const cityKeywords = ptenCleanCity.split(/\s+/).filter(w => w.length > 2);
-        for (const keyword of cityKeywords) {
-          const found = preCleanedRoles.find(({ orgClean }) => orgClean.includes(keyword.toUpperCase()) || orgClean.includes(keyword));
-          if (found) { matchedRole = found.record; highestRoleScore = 0.85; chosenAlgorithm = 'Geographic City Keyword Match'; break; }
+        if (!matchedRole && completeRoleList.length > 0) {
+          const cityKeywords = ptenCleanCity.split(/\s+/).filter(w => w.length > 2);
+          for (const keyword of cityKeywords) {
+            const found = preCleanedRoles.find(({ orgClean }) => orgClean.includes(keyword.toUpperCase()) || orgClean.includes(keyword));
+            if (found) { matchedRole = found.record; highestRoleScore = 0.85; chosenAlgorithm = 'Geographic City Keyword Match'; break; }
+          }
+          if (!matchedRole) { matchedRole = completeRoleList[0]; highestRoleScore = 0.70; chosenAlgorithm = 'Default Fallback (Cabang 3 Role Lengkap)'; }
         }
-        if (!matchedRole) { matchedRole = completeRoleList[0]; highestRoleScore = 0.70; chosenAlgorithm = 'Default Fallback (Cabang 3 Role Lengkap)'; }
+        roleMatchCache.set(outletNameToMatch, { role: matchedRole, score: highestRoleScore, algorithm: chosenAlgorithm });
       }
-      roleMatchCache.set(outletNameToMatch, { role: matchedRole, score: highestRoleScore, algorithm: chosenAlgorithm });
     }
 
-    const organisasiTujuan = matchedRole?.organisasiTujuan || `${namaOutlet.toUpperCase()} BRANCH OFFICE`;
+    const organisasiTujuan = fase3Jalan ? (matchedRole?.organisasiTujuan || `${namaOutlet.toUpperCase()} BRANCH OFFICE`) : '';
     const isKc = matchedRole ? getUnitCategory(matchedRole.organisasiTujuan) === 'KC' : true;
     const tipeUnit: 'KC' | 'KCP' | 'OUTLET' = isKc ? 'KC' : 'KCP';
-    const roleCabsal = matchedRole ? matchedRole.qrsCabsal : 1;
-    const roleCabapv1 = matchedRole ? matchedRole.qrsCabapv1 : isKc ? 1 : 0;
-    const roleCabapv2 = matchedRole ? matchedRole.qrsCabapv2 : 1;
-    const is3RoleLengkap = roleCabsal === 1 && roleCabapv1 === 1 && roleCabapv2 === 1;
-    const wondr = matchedRole ? getWondrRecommendation(matchedRole) : null;
-    const alurWondr = wondr?.tier || (is3RoleLengkap ? 'Tier 1: Full Approval KC' : 'Tier 2: Dual Approval KCP via KC');
-    const flowDesc = wondr?.desc || (is3RoleLengkap ? 'Semua role lengkap (Sales, Verifikator, Penyetuju) berada pada 1 unit mandiri.' : 'Role Verifikator/Penyetuju dialihkan ke KC Pengampu dalam 1 pulau.');
-    const confidenceScore = Math.min(100, Math.round(highestRoleScore * 100));
-    let statusAnalisa: 'EXACT_MATCH' | 'HIGH_CONFIDENCE' | 'PERLU_REVIEW' | 'ANOMALI' = 'EXACT_MATCH';
-    if (confidenceScore >= 90) statusAnalisa = 'EXACT_MATCH';
-    else if (confidenceScore >= 75) statusAnalisa = 'HIGH_CONFIDENCE';
-    else if (confidenceScore >= 60) statusAnalisa = 'PERLU_REVIEW';
-    else statusAnalisa = 'ANOMALI';
+    const roleCabsal = fase3Jalan ? (matchedRole ? matchedRole.qrsCabsal : 1) : 0;
+    const roleCabapv1 = fase3Jalan ? (matchedRole ? matchedRole.qrsCabapv1 : isKc ? 1 : 0) : 0;
+    const roleCabapv2 = fase3Jalan ? (matchedRole ? matchedRole.qrsCabapv2 : 1) : 0;
+    const is3RoleLengkap = fase3Jalan && roleCabsal === 1 && roleCabapv1 === 1 && roleCabapv2 === 1;
+    const wondr = fase3Jalan && matchedRole ? getWondrRecommendation(matchedRole) : null;
+    const alurWondr = wondr?.tier || (fase3Jalan ? (is3RoleLengkap ? 'Tier 1: Full Approval KC' : 'Tier 2: Dual Approval KCP via KC') : '');
+    const flowDesc = wondr?.desc || (fase3Jalan
+      ? (is3RoleLengkap ? 'Semua role lengkap (Sales, Verifikator, Penyetuju) berada pada 1 unit mandiri.' : 'Role Verifikator/Penyetuju dialihkan ke KC Pengampu dalam 1 pulau.')
+      : '');
+    const confidenceScore = fase3Jalan ? Math.min(100, Math.round(highestRoleScore * 100)) : 0;
+    let statusAnalisa: 'EXACT_MATCH' | 'HIGH_CONFIDENCE' | 'PERLU_REVIEW' | 'ANOMALI' | 'MENUNGGU' = 'MENUNGGU';
+    if (fase3Jalan) {
+      if (confidenceScore >= 90) statusAnalisa = 'EXACT_MATCH';
+      else if (confidenceScore >= 75) statusAnalisa = 'HIGH_CONFIDENCE';
+      else if (confidenceScore >= 60) statusAnalisa = 'PERLU_REVIEW';
+      else statusAnalisa = 'ANOMALI';
+    }
 
     rowMetaCache.push({
       finalKotaPten, finalKodePosPten, statusPten,
@@ -1489,10 +1504,12 @@ export async function executeAnalystPipeline(
       });
     }
 
-    // Progress for Fase 2 (global 35% → 66%)
+    // Progress — hanya fase yang sedang dikerjakan yang melapor, supaya kartu fase
+    // berikutnya tetap kosong sampai gilirannya tiba.
     if (i % 50 === 0 && onProgress) {
       const pct = Math.round(35 + (i / total) * 31);
-      onProgress(2, pct, i + 1, total, `Fase 2: Validasi Wilayah & Cabang (${i + 1}/${total})...`);
+      const faseLapor = (fase2Jalan ? 2 : 1) as 1 | 2;
+      onProgress(faseLapor, pct, i + 1, total, `Fase ${faseLapor}: Validasi Wilayah & Cabang (${i + 1}/${total})...`);
     }
     if (i % 50 === 0) await tick();
 
@@ -1536,47 +1553,49 @@ export async function executeAnalystPipeline(
         allKelurahanCount,
         kelurahanSeq: seq + 1,
 
-        // Fase 2
-        wilayah: meta.resolvedWilayah.wilayahName !== '-' ? meta.resolvedWilayah.wilayahName : 'Wilayah 01',
-        kotaPtenMax15: meta.kotaPtenMax15,
-        sandiCabang: String(meta.sandiCabang),
-        sandi: meta.sandi,
-        cabang: meta.cabang,
-        branchCode: meta.branchCode,
-        kodeCabang: meta.kodeCabang,
-        namaOutlet: meta.namaOutlet,
-        statusOutlet: meta.statusOutlet,
-        alamat: meta.alamat,
+        // Fase 2 — kosong selama Fase 1 belum disetujui (alur bertahap)
+        wilayah: fase2Jalan ? (meta.resolvedWilayah.wilayahName !== '-' ? meta.resolvedWilayah.wilayahName : 'Wilayah 01') : '',
+        kotaPtenMax15: fase2Jalan ? meta.kotaPtenMax15 : '',
+        sandiCabang: fase2Jalan ? String(meta.sandiCabang) : '',
+        sandi: fase2Jalan ? meta.sandi : '',
+        cabang: fase2Jalan ? meta.cabang : '',
+        branchCode: fase2Jalan ? meta.branchCode : '',
+        kodeCabang: fase2Jalan ? meta.kodeCabang : '',
+        namaOutlet: fase2Jalan ? meta.namaOutlet : '',
+        statusOutlet: fase2Jalan ? meta.statusOutlet : '',
+        alamat: fase2Jalan ? meta.alamat : '',
         fase2Approved: false,
 
-        // Fase 3
-        organisasiTujuan: meta.organisasiTujuan,
-        tipeUnit: meta.tipeUnit,
-        is3RoleLengkap: meta.is3RoleLengkap,
-        roleCabsal: meta.roleCabsal,
-        roleCabapv1: meta.roleCabapv1,
-        roleCabapv2: meta.roleCabapv2,
-        roleGrandTotal: meta.matchedRole?.grandTotal || (meta.is3RoleLengkap ? 3 : 2),
-        alurWondr: meta.alurWondr,
-        flowDescription: meta.flowDescription,
+        // Fase 3 — kosong sampai Fase 2 disetujui
+        organisasiTujuan: fase3Jalan ? meta.organisasiTujuan : '',
+        tipeUnit: fase3Jalan ? meta.tipeUnit : 'OUTLET',
+        is3RoleLengkap: fase3Jalan ? meta.is3RoleLengkap : false,
+        roleCabsal: fase3Jalan ? meta.roleCabsal : 0,
+        roleCabapv1: fase3Jalan ? meta.roleCabapv1 : 0,
+        roleCabapv2: fase3Jalan ? meta.roleCabapv2 : 0,
+        roleGrandTotal: fase3Jalan ? (meta.matchedRole?.grandTotal || (meta.is3RoleLengkap ? 3 : 2)) : 0,
+        alurWondr: fase3Jalan ? meta.alurWondr : '',
+        flowDescription: fase3Jalan ? meta.flowDescription : '',
         fase3Approved: false,
 
         // Overall
-        confidenceScore: meta.confidenceScore,
-        matchingAlgorithm: meta.chosenAlgorithm,
-        statusAnalisa: meta.statusAnalisa,
-        isFinalApproved: meta.statusAnalisa === 'EXACT_MATCH',
+        confidenceScore: fase3Jalan ? meta.confidenceScore : 0,
+        matchingAlgorithm: fase3Jalan ? meta.chosenAlgorithm : '',
+        statusAnalisa: fase3Jalan ? meta.statusAnalisa : 'MENUNGGU',
+        isFinalApproved: fase3Jalan && meta.statusAnalisa === 'EXACT_MATCH',
       });
     });
   }
 
-  // Fase 3 progress notification
-  if (onProgress) onProgress(3, 70, total, total, 'Fase 3: Finalisasi Mapping Role & Wondr...');
+  // Progres tahap akhir — dilaporkan untuk fase yang memang sedang dijalankan.
+  const faseAkhir = sampaiFase as 1 | 2 | 3;
+  const labelFaseAkhir = `Fase ${sampaiFase}`;
+  if (onProgress) onProgress(faseAkhir, 70, total, total, `${labelFaseAkhir}: Finalisasi & menyusun hasil...`);
 
   // Small async yield to allow UI to breathe
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  if (onProgress) onProgress(3, 95, total, total, 'Fase 3: Menyusun hasil akhir...');
+  if (onProgress) onProgress(faseAkhir, 95, total, total, `${labelFaseAkhir}: Menyusun hasil akhir...`);
 
   // Small async yield again
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1668,7 +1687,7 @@ export async function executeAnalystPipeline(
   results.push(...unanalysedRows);
   const fmt = (n: number) => n.toLocaleString('id-ID');
   if (onProgress) {
-    onProgress(3, 100, total, total, `Analisa 3 Fase selesai dalam ${elapsed}ms. ${fmt(results.length)} baris dihasilkan. ` +
+    onProgress(faseAkhir, 100, total, total, `Fase ${sampaiFase} selesai dalam ${elapsed}ms. ${fmt(results.length)} baris dihasilkan. ` +
       `KodePos terpetakan ${fmt(mappedKodePos)}/${fmt(kodePosList.length)} — terbukti geocode ${fmt(verifiedRows)}` +
       `${reviewRow > 0 ? `, perlu review ${fmt(reviewRow)}` : ''}` +
       `${kodePosClaimCities > 0 ? `, ${kodePosClaimCities} kota ditarik lewat kode pos persis` : ''}` +
