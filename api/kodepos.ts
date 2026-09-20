@@ -226,7 +226,8 @@ export default async function handler(req: any, res: any) {
             COUNT(DISTINCT kabupaten_kota)::int                       AS kota,
             COUNT(DISTINCT kecamatan)::int                            AS kecamatan,
             COUNT(DISTINCT kelurahan)::int                            AS kelurahan,
-            COUNT(*) FILTER (WHERE upper(status) <> 'NON-AKTIF')::int AS aktif
+            COUNT(*) FILTER (WHERE upper(status) <> 'NON-AKTIF')::int AS aktif,
+            COUNT(*) FILTER (WHERE latitude IS NOT NULL)::int         AS ber_titik
           FROM kodepos_data;
         `;
         const row = (s && s[0]) || {};
@@ -240,6 +241,7 @@ export default async function handler(req: any, res: any) {
             totalKecamatan: row.kecamatan ?? 0,
             totalKelurahan: row.kelurahan ?? 0,
             totalAktif: row.aktif ?? 0,
+            totalBerTitik: row.ber_titik ?? 0,
           },
         });
       }

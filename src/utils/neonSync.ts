@@ -589,6 +589,8 @@ export interface KodePosStats {
   totalKecamatan: number;
   totalKelurahan: number;
   totalAktif: number;
+  /** Baris yang punya titiknya sendiri (kodepos_data.latitude terisi). */
+  totalBerTitik: number;
 }
 
 /**

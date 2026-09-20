@@ -70,6 +70,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     totalKecamatan: 0,
     totalKelurahan: 0,
     totalAktif: 0,
+    totalBerTitik: 0,
   });
   const [provinsiOptions, setProvinsiOptions] = useState<string[]>([]);
   const [kotaOptions, setKotaOptions] = useState<string[]>([]);
@@ -672,12 +673,10 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               borderColor: 'rgba(10, 179, 156, 0.35)',
             }}
             {...tipProps(
-              (geoStats?.menunggu
-                ? `Cari titik koordinat untuk ${geoStats.menunggu.toLocaleString('id-ID')} kode pos yang belum punya lokasi. `
-                : 'Cari titik koordinat kode pos yang belum punya lokasi. ') +
-              (kunciGoogle
-                ? 'Google Geocoding dipakai lebih dulu.'
-                : 'Kunci Google belum dipasang, jadi titik diisi ESRI/OpenStreetMap (kolom sumber menandai itu).')
+              `Cadangan titik per kode pos (tabel kodepos_geo) untuk ${(stats.total - stats.totalBerTitik).toLocaleString('id-ID')} baris yang belum punya titik desa sendiri. ` +
+                (kunciGoogle
+                  ? 'Google Geocoding dipakai lebih dulu.'
+                  : 'Kunci Google belum dipasang, jadi titik diisi ESRI/OpenStreetMap dan ditandai di tooltip kolom koordinat.')
             )}
           >
             <Navigation size={13} />
@@ -924,11 +923,11 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
           {...tipProps(
             geoRun.aktif
               ? geoRun.pesan
-              : geoStats
-                ? `${geoStats.geo.punya.toLocaleString('id-ID')} kode pos punya titik · ${geoStats.geo.google.toLocaleString('id-ID')} terverifikasi Google · ${geoStats.menunggu.toLocaleString('id-ID')} belum dicari` +
-                  (geoStats.geo.perkiraan ? ` · ${geoStats.geo.perkiraan.toLocaleString('id-ID')} hanya perkiraan wilayah` : '') +
-                  (geoStats.geo.gagal ? ` · ${geoStats.geo.gagal.toLocaleString('id-ID')} tidak ditemukan` : '')
-                : 'Titik koordinat kode pos diambil dari tabel kodepos_geo di Neon'
+              : `${stats.totalBerTitik.toLocaleString('id-ID')} dari ${stats.total.toLocaleString('id-ID')} baris punya titiknya sendiri — titik desa dari kodepos.co.id, bukan satu titik untuk seluruh kode pos.` +
+                ` ${(stats.total - stats.totalBerTitik).toLocaleString('id-ID')} baris belum punya titik.` +
+                (geoStats
+                  ? ` Cache per kode pos (kodepos_geo): ${geoStats.geo.punya.toLocaleString('id-ID')} titik, ${geoStats.geo.google.toLocaleString('id-ID')} terverifikasi Google.`
+                  : '')
           )}
         >
           <div className="metric-header">
@@ -937,17 +936,11 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               <Navigation size={14} />
             </div>
           </div>
-          <div className="metric-value">
-            {(geoRun.aktif ? geoRun.diproses : geoStats?.geo.punya || 0).toLocaleString('id-ID')}
-          </div>
+          <div className="metric-value">{stats.totalBerTitik.toLocaleString('id-ID')}</div>
           <div className="metric-footer">
             {geoRun.aktif
-              ? `${geoRun.sisa.toLocaleString('id-ID')} belum ada · ${geoRun.persen}%`
-              : geoRun.pesan
-                ? geoRun.pesan
-                : geoStats?.geo.google
-                  ? `${geoStats.geo.google.toLocaleString('id-ID')} dari Google`
-                  : `${(geoStats?.menunggu || 0).toLocaleString('id-ID')} belum ada`}
+              ? `mengerjakan ${geoRun.diproses.toLocaleString('id-ID')} kode pos · ${geoRun.persen}%`
+              : `${(stats.total - stats.totalBerTitik).toLocaleString('id-ID')} baris belum ada titik`}
           </div>
           {geoRun.aktif && (
             <div style={{ marginTop: '0.5rem', height: '5px', background: 'rgba(10, 179, 156, 0.15)', borderRadius: '4px', overflow: 'hidden' }}>
