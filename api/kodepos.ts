@@ -219,18 +219,33 @@ export default async function handler(req: any, res: any) {
 
       // stats agregat global (untuk KPI card)
       if (view === 'stats') {
-        const s = await sql`
-          SELECT
-            COUNT(*)::int                                             AS total,
-            COUNT(DISTINCT provinsi)::int                             AS provinsi,
-            COUNT(DISTINCT kabupaten_kota)::int                       AS kota,
-            COUNT(DISTINCT kecamatan)::int                            AS kecamatan,
-            COUNT(DISTINCT kelurahan)::int                            AS kelurahan,
-            COUNT(*) FILTER (WHERE upper(status) <> 'NON-AKTIF')::int AS aktif,
-            COUNT(*) FILTER (WHERE latitude IS NOT NULL)::int         AS ber_titik
-          FROM kodepos_data;
-        `;
-        const row = (s && s[0]) || {};
+        // ber_titik harus seluas bacaan tabel: titik milik baris sendiri ATAU cache
+        // per kode pos di kodepos_geo — kalau tidak, KPI dan kolom tidak cocok.
+        const AGREGAT = `
+          COUNT(*)::int AS total,
+          COUNT(DISTINCT d.provinsi)::int AS provinsi,
+          COUNT(DISTINCT d.kabupaten_kota)::int AS kota,
+          COUNT(DISTINCT d.kecamatan)::int AS kecamatan,
+          COUNT(DISTINCT d.kelurahan)::int AS kelurahan,
+          COUNT(*) FILTER (WHERE upper(d.status) <> 'NON-AKTIF')::int AS aktif,`;
+        let row: any = {};
+        try {
+          row =
+            ((await sql.query(
+              `SELECT ${AGREGAT}
+                 COUNT(*) FILTER (WHERE d.latitude IS NOT NULL OR g.latitude IS NOT NULL)::int AS ber_titik
+               FROM kodepos_data d
+               LEFT JOIN kodepos_geo g ON g.kode_pos = upper(btrim(d.kode_pos)) AND g.latitude IS NOT NULL;`
+            )) as any[])?.[0] || {};
+        } catch (err) {
+          console.warn('kodepos_geo ikut gagal dibaca saat stats:', err);
+          row =
+            ((await sql.query(
+              `SELECT ${AGREGAT}
+                 COUNT(*) FILTER (WHERE d.latitude IS NOT NULL)::int AS ber_titik
+               FROM kodepos_data d;`
+            )) as any[])?.[0] || {};
+        }
         return res.status(200).json({
           ok: true,
           configured: true,
