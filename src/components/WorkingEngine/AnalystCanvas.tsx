@@ -28,8 +28,11 @@ interface AnalystCanvasProps {
   phaseProgress?: { 1: number; 2: number; 3: number };
   currentActivePhase?: 0 | 1 | 2 | 3;
   completedPhases?: Set<number>;
-  /** Bagian baris yang sudah di-approve per fase (0-100) — dipakai saat tidak sedang jalan. */
-  phaseApproval?: { 1: number; 2: number; 3: number };
+  /** Persentase baris yang sudah di-approve per fase + status selesai ketat (tanpa pembulatan). */
+  phaseApproval?: {
+    pct: { 1: number; 2: number; 3: number };
+    selesai: { 1: boolean; 2: boolean; 3: boolean };
+  };
 }
 
 export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
@@ -43,7 +46,7 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
   phaseProgress = { 1: 0, 2: 0, 3: 0 },
   currentActivePhase = 0,
   completedPhases = new Set(),
-  phaseApproval = { 1: 0, 2: 0, 3: 0 },
+  phaseApproval = { pct: { 1: 0, 2: 0, 3: 0 }, selesai: { 1: false, 2: false, 3: false } },
 }) => {
   const [showTheories, setShowTheories] = useState<boolean>(true);
 
@@ -139,233 +142,21 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.75rem' }}>
-              {/* Card Fase 1 */}
-              {(() => {
-                const phase = 1;
-                const isActive = currentActivePhase === phase;
-                // Saat jalan: bar mengikuti eksekusi. Setelah jalan: bar mengikuti review.
-                const approved = phaseApproval[1];
-                const prevOk = true;
-                const isDone = isAnalyzing ? completedPhases.has(phase) : approved >= 100 && prevOk;
-                const pct = isAnalyzing ? phaseProgress[1] : approved;
-                const showBar = isAnalyzing || hasExistingResults;
-                return (
-                  <div
-                    style={{
-                      background: '#ffffff',
-                      border: `1px solid ${isActive ? '#299cdb' : isDone ? '#d1fae5' : '#e2e8f0'}`,
-                      borderRadius: '8px',
-                      padding: '0.75rem 0.9rem',
-                      boxShadow: isActive ? '0 0 0 3px rgba(41,156,219,0.15)' : '0 1px 3px rgba(0,0,0,0.03)',
-                      borderLeft: `4px solid ${isDone ? '#0ab39c' : '#299cdb'}`,
-                      transition: 'border-color 0.3s, box-shadow 0.3s',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
-                      <span style={{ fontSize: '0.74rem', fontWeight: 800, color: isDone ? '#0ab39c' : '#299cdb' }}>FASE 1</span>
-                      {isDone ? (
-                        <span style={{ fontSize: '0.78rem', color: '#0ab39c', fontWeight: 700 }}>✓ Selesai</span>
-                      ) : (
-                        <MapPin size={15} color="#299cdb" />
-                      )}
-                    </div>
-                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#212529', marginBottom: '0.2rem' }}>
-                      PTEN &amp; Master Kode Pos
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: '#878a99', lineHeight: 1.35, marginBottom: showBar ? '0.6rem' : 0 }}>
-                      Cocokkan Kota PTEN ke Kode Pos, ekstrak Kelurahan &amp; Kecamatan, serta grouping per Kota PTEN.
-                    </div>
-                    {showBar && (
-                      <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', fontWeight: 600, color: isDone ? '#0ab39c' : '#299cdb', marginBottom: '0.25rem' }}>
-                          <span
-                            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '68%' }}
-                            title={isActive ? stepText('Memproses...') : undefined}
-                          >
-                            {isDone
-                              ? 'Berhasil diselesaikan'
-                              : isActive
-                                ? stepText('Memproses...')
-                                : isAnalyzing
-                                  ? 'Menunggu...'
-                                  : prevOk
-                                    ? 'Menunggu review'
-                                    : `Menunggu review Fase ${phase - 1}`}
-                          </span>
-                          <span>{pct}%</span>
-                        </div>
-                        <div style={{ height: '5px', background: '#e9ebec', borderRadius: '4px', overflow: 'hidden' }}>
-                          <div
-                            style={{
-                              height: '100%',
-                              width: `${pct}%`,
-                              background: isDone
-                                ? 'linear-gradient(90deg, #0ab39c, #43c6ac)'
-                                : 'linear-gradient(90deg, #299cdb, #5bbfee)',
-                              transition: 'width 0.3s ease',
-                              borderRadius: '4px',
-                              animation: isActive && pct < 100 ? 'progress-shimmer 1.5s infinite' : 'none',
-                            }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {/* Card Fase 2 */}
-              {(() => {
-                const phase = 2;
-                const isActive = currentActivePhase === phase;
-                // Saat jalan: bar mengikuti eksekusi. Setelah jalan: bar mengikuti review.
-                const approved = phaseApproval[2];
-                const prevOk = phaseApproval[1] >= 100;
-                const isDone = isAnalyzing ? completedPhases.has(phase) : approved >= 100 && prevOk;
-                const pct = isAnalyzing ? phaseProgress[2] : approved;
-                const showBar = isAnalyzing || hasExistingResults;
-                return (
-                  <div
-                    style={{
-                      background: '#ffffff',
-                      border: `1px solid ${isActive ? '#405189' : isDone ? '#d1fae5' : '#e2e8f0'}`,
-                      borderRadius: '8px',
-                      padding: '0.75rem 0.9rem',
-                      boxShadow: isActive ? '0 0 0 3px rgba(64,81,137,0.15)' : '0 1px 3px rgba(0,0,0,0.03)',
-                      borderLeft: `4px solid ${isDone ? '#0ab39c' : '#405189'}`,
-                      transition: 'border-color 0.3s, box-shadow 0.3s',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
-                      <span style={{ fontSize: '0.74rem', fontWeight: 800, color: isDone ? '#0ab39c' : '#405189' }}>FASE 2</span>
-                      {isDone ? (
-                        <span style={{ fontSize: '0.78rem', color: '#0ab39c', fontWeight: 700 }}>✓ Selesai</span>
-                      ) : (
-                        <Building2 size={15} color="#405189" />
-                      )}
-                    </div>
-                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#212529', marginBottom: '0.2rem' }}>
-                      Wilayah &amp; Master Cabang
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: '#878a99', lineHeight: 1.35, marginBottom: showBar ? '0.6rem' : 0 }}>
-                      Validasi Kanwil (W01-W17) &amp; tarik identitas resmi: Sandi, Nama Outlet, Branch Code, Kode Cabang.
-                    </div>
-                    {showBar && (
-                      <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', fontWeight: 600, color: isDone ? '#0ab39c' : '#405189', marginBottom: '0.25rem' }}>
-                          <span
-                            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '68%' }}
-                            title={isActive ? stepText('Memproses...') : undefined}
-                          >
-                            {isDone
-                              ? 'Berhasil diselesaikan'
-                              : isActive
-                                ? stepText('Memproses...')
-                                : isAnalyzing
-                                  ? 'Menunggu...'
-                                  : prevOk
-                                    ? 'Menunggu review'
-                                    : `Menunggu review Fase ${phase - 1}`}
-                          </span>
-                          <span>{pct}%</span>
-                        </div>
-                        <div style={{ height: '5px', background: '#e9ebec', borderRadius: '4px', overflow: 'hidden' }}>
-                          <div
-                            style={{
-                              height: '100%',
-                              width: `${pct}%`,
-                              background: isDone
-                                ? 'linear-gradient(90deg, #0ab39c, #43c6ac)'
-                                : 'linear-gradient(90deg, #405189, #3577f1)',
-                              transition: 'width 0.3s ease',
-                              borderRadius: '4px',
-                              animation: isActive && pct < 100 ? 'progress-shimmer 1.5s infinite' : 'none',
-                            }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {/* Card Fase 3 */}
-              {(() => {
-                const phase = 3;
-                const isActive = currentActivePhase === phase;
-                // Saat jalan: bar mengikuti eksekusi. Setelah jalan: bar mengikuti review.
-                const approved = phaseApproval[3];
-                const prevOk = phaseApproval[2] >= 100;
-                const isDone = isAnalyzing ? completedPhases.has(phase) : approved >= 100 && prevOk;
-                const pct = isAnalyzing ? phaseProgress[3] : approved;
-                const showBar = isAnalyzing || hasExistingResults;
-                return (
-                  <div
-                    style={{
-                      background: '#ffffff',
-                      border: `1px solid ${isActive ? '#0ab39c' : isDone ? '#d1fae5' : '#e2e8f0'}`,
-                      borderRadius: '8px',
-                      padding: '0.75rem 0.9rem',
-                      boxShadow: isActive ? '0 0 0 3px rgba(10,179,156,0.15)' : '0 1px 3px rgba(0,0,0,0.03)',
-                      borderLeft: `4px solid #0ab39c`,
-                      transition: 'border-color 0.3s, box-shadow 0.3s',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
-                      <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#0ab39c' }}>FASE 3</span>
-                      {isDone ? (
-                        <span style={{ fontSize: '0.78rem', color: '#0ab39c', fontWeight: 700 }}>✓ Selesai</span>
-                      ) : (
-                        <Users size={15} color="#0ab39c" />
-                      )}
-                    </div>
-                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#212529', marginBottom: '0.2rem' }}>
-                      Mapping Role 3 Role
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: '#878a99', lineHeight: 1.35, marginBottom: showBar ? '0.6rem' : 0 }}>
-                      Tentukan Organisasi Tujuan, Tipe Unit (KC/KCP), verifikasi 3 role lengkap, dan alur Wondr.
-                    </div>
-                    {showBar && (
-                      <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', fontWeight: 600, color: '#0ab39c', marginBottom: '0.25rem' }}>
-                          <span
-                            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '68%' }}
-                            title={isActive ? stepText('Memproses...') : undefined}
-                          >
-                            {isDone
-                              ? 'Berhasil diselesaikan'
-                              : isActive
-                                ? stepText('Memproses...')
-                                : isAnalyzing
-                                  ? 'Menunggu...'
-                                  : prevOk
-                                    ? 'Menunggu review'
-                                    : `Menunggu review Fase ${phase - 1}`}
-                          </span>
-                          <span>{pct}%</span>
-                        </div>
-                        <div style={{ height: '5px', background: '#e9ebec', borderRadius: '4px', overflow: 'hidden' }}>
-                          <div
-                            style={{
-                              height: '100%',
-                              width: `${pct}%`,
-                              background: isDone
-                                ? 'linear-gradient(90deg, #0ab39c, #43c6ac)'
-                                : 'linear-gradient(90deg, #0ab39c, #43c6ac)',
-                              transition: 'width 0.3s ease',
-                              borderRadius: '4px',
-                              animation: isActive && pct < 100 ? 'progress-shimmer 1.5s infinite' : 'none',
-                            }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
+              {FASE_META.map((f) => (
+                <KartuFase
+                  key={f.phase}
+                  definisi={f}
+                  berjalan={isAnalyzing}
+                  aktif={currentActivePhase === f.phase}
+                  persenJalan={phaseProgress[f.phase]}
+                  dieksekusi={completedPhases.has(f.phase)}
+                  persenReview={phaseApproval.pct[f.phase]}
+                  disetujui={phaseApproval.selesai[f.phase]}
+                  faseSebelumnyaSetuju={f.phase === 1 || phaseApproval.selesai[(f.phase - 1) as 1 | 2]}
+                  pesanLangkah={stepText('Memproses...')}
+                  adaHasil={hasExistingResults}
+                />
+              ))}
             </div>
           </div>
         </div>
@@ -387,7 +178,7 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
         >
           {/* Data Master Readiness Badges */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6c757d' }}>Kesiapan Data:</span>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6c757d', whiteSpace: 'nowrap' }}>Kesiapan Data:</span>
             <span className="badge badge-match" style={{ fontSize: '0.72rem' }}>
               ✓ PTEN ({masterCounts.pten.toLocaleString('id-ID')})
             </span>
@@ -493,11 +284,11 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
               <Award size={15} />
             </div>
             <div>
-              <span style={{ fontSize: '0.84rem', fontWeight: 700, color: '#212529' }}>
-                5 Metode Teori Analisa Paten Anti-Typo & Anti-Salah Kata
+              <span style={{ fontSize: '0.84rem', fontWeight: 700, color: '#212529', whiteSpace: 'nowrap' }}>
+                11 Sinyal Pencocokan + 2 Penjaga Identitas
               </span>
               <span style={{ fontSize: '0.72rem', color: '#878a99', marginLeft: '0.5rem' }}>
-                (Standar Algoritma Pencocokan Presisi Tinggi Beyond Basic Fuzzy)
+                (ensemble multi-algoritma · terukur 96,3% akurasi pada 27 pasangan berlabel; Levenshtein saja 63%)
               </span>
             </div>
           </div>
@@ -509,67 +300,208 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
 
         {showTheories && (
           <div
+            className="teori-grid"
             style={{
               marginTop: '0.85rem',
               paddingTop: '0.75rem',
               borderTop: '1px solid #f1f3f5',
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(215px, 1fr))',
               gap: '0.65rem',
             }}
           >
-            {/* 1. Canonical Thesaurus */}
-            <div style={{ background: '#f8fafc', padding: '0.65rem 0.8rem', borderRadius: '6px', border: '1px solid #edf2f7' }}>
-              <div style={{ fontSize: '0.76rem', fontWeight: 700, color: '#405189', marginBottom: '0.2rem' }}>
-                1. 🔤 Canonical Thesaurus
+            {SINYAL_PENCOCOKAN.map((s) => (
+              <div
+                key={s.judul}
+                style={{ background: '#f8fafc', padding: '0.65rem 0.8rem', borderRadius: '6px', border: '1px solid #edf2f7' }}
+              >
+                <div
+                  style={{
+                    fontSize: '0.76rem',
+                    fontWeight: 700,
+                    color: s.warna,
+                    marginBottom: '0.2rem',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                  title={s.judul}
+                >
+                  {s.no}. {s.emoji} {s.judul}
+                </div>
+                <div style={{ fontSize: '0.7rem', color: '#64748b', lineHeight: 1.35 }}>{s.deskripsi}</div>
               </div>
-              <div style={{ fontSize: '0.7rem', color: '#64748b', lineHeight: 1.35 }}>
-                Standarisasi singkatan otomatis: KAB ➔ KABUPATEN, KCP ➔ KANTOR CABANG PEMBANTU, BO ➔ BRANCH OFFICE.
-              </div>
-            </div>
-
-            {/* 2. Token Set Jaccard */}
-            <div style={{ background: '#f8fafc', padding: '0.65rem 0.8rem', borderRadius: '6px', border: '1px solid #edf2f7' }}>
-              <div style={{ fontSize: '0.76rem', fontWeight: 700, color: '#0ab39c', marginBottom: '0.2rem' }}>
-                2. 🔄 Token Set & Jaccard
-              </div>
-              <div style={{ fontSize: '0.7rem', color: '#64748b', lineHeight: 1.35 }}>
-                Anti-kata terbalik: "KOTA MEDAN BALAI KOTA" dihitung 100% sama dengan "BALAI KOTA MEDAN KOTA".
-              </div>
-            </div>
-
-            {/* 3. Jaro-Winkler + Damerau */}
-            <div style={{ background: '#f8fafc', padding: '0.65rem 0.8rem', borderRadius: '6px', border: '1px solid #edf2f7' }}>
-              <div style={{ fontSize: '0.76rem', fontWeight: 700, color: '#f7b84b', marginBottom: '0.2rem' }}>
-                3. 🎯 Jaro-Winkler & Damerau
-              </div>
-              <div style={{ fontSize: '0.7rem', color: '#64748b', lineHeight: 1.35 }}>
-                Menangani typo huruf tertukar/kurang: PEKALONAGN ➔ PEKALONGAN, MAKASAR ➔ MAKASSAR.
-              </div>
-            </div>
-
-            {/* 4. Geo-Hierarchy Anchor */}
-            <div style={{ background: '#f8fafc', padding: '0.65rem 0.8rem', borderRadius: '6px', border: '1px solid #edf2f7' }}>
-              <div style={{ fontSize: '0.76rem', fontWeight: 700, color: '#299cdb', marginBottom: '0.2rem' }}>
-                4. 🗺️ Geo-Hierarchy Anchor
-              </div>
-              <div style={{ fontSize: '0.7rem', color: '#64748b', lineHeight: 1.35 }}>
-                Penguncian batas Provinsi & Dati II: mencegah cabang di Jawa dicocokkan ke Sumatera meskipun nama mirip.
-              </div>
-            </div>
-
-            {/* 5. N-Gram Vector Cosine */}
-            <div style={{ background: '#f8fafc', padding: '0.65rem 0.8rem', borderRadius: '6px', border: '1px solid #edf2f7' }}>
-              <div style={{ fontSize: '0.76rem', fontWeight: 700, color: '#6366f1', marginBottom: '0.2rem' }}>
-                5. 📊 N-Gram Vector Cosine
-              </div>
-              <div style={{ fontSize: '0.7rem', color: '#64748b', lineHeight: 1.35 }}>
-                Pencocokan kontekstual nama outlet panjang dan toleran terhadap perbedaan spasi atau tanda strip (-).
-              </div>
-            </div>
+            ))}
           </div>
         )}
       </div>
+    </div>
+  );
+};
+
+/** Isi kartu "sinyal pencocokan" — harus tetap sama dengan analystPipeline.ts. */
+const SINYAL_PENCOCOKAN: { no: number; emoji: string; judul: string; warna: string; deskripsi: string }[] = [
+  { no: 1, emoji: '🔤', judul: 'Canonical Thesaurus', warna: '#405189', deskripsi: 'Standarisasi singkatan otomatis: KAB → KABUPATEN, KCP → KANTOR CABANG PEMBANTU, KCB → KANTOR CABANG, BO → BRANCH OFFICE, JABAR → JAWA BARAT.' },
+  { no: 2, emoji: '🧹', judul: 'Pembuang Token Administratif', warna: '#405189', deskripsi: 'KOTA / KABUPATEN / KEC / KEL / DESA dibuang dari kunci, jadi "TEGALSARI" == "KEC. TEGALSARI".' },
+  { no: 3, emoji: '🔄', judul: 'Token Set & Jaccard', warna: '#0ab39c', deskripsi: 'Anti-kata terbalik: "KOTA MEDAN BALAI KOTA" dihitung sama dengan "BALAI KOTA MEDAN".' },
+  { no: 4, emoji: '🎯', judul: 'Jaro-Winkler', warna: '#f7b84b', deskripsi: 'Kemiripan huruf dengan bobot awalan: PEKALONAGN → PEKALONGAN, MAKASAR → MAKASSAR.' },
+  { no: 5, emoji: '✏️', judul: 'Damerau-Levenshtein (OSA)', warna: '#f7b84b', deskripsi: 'Sisipan, hapus, ganti, dan tukar huruf berdampingan dihitung sebagai satu kesalahan.' },
+  { no: 6, emoji: '📊', judul: 'Tri-gram Cosine', warna: '#6366f1', deskripsi: 'Vektor potongan tiga huruf: tahan pada nama outlet panjang dan beda spasi/tanda strip.' },
+  { no: 7, emoji: '🧬', judul: 'Longest Common Subsequence', warna: '#6366f1', deskripsi: 'Ketahanan terhadap sisipan kata alamat di tengah nama.' },
+  { no: 8, emoji: '🎨', judul: 'Ratcliff-Obershelp (Gestalt)', warna: '#6366f1', deskripsi: 'Kemiripan sebagaimana dinilai manusia, bukan sekadar hitung beda huruf.' },
+  { no: 9, emoji: '🔊', judul: 'Fonetik Indonesia', warna: '#299cdb', deskripsi: 'Ejaan lama/baru disatukan: DJ→J, TJ→C, SJ→S, CH/KH→K, OE→U, huruf kembar dilipat.' },
+  { no: 10, emoji: '🧱', judul: 'Token Containment', warna: '#299cdb', deskripsi: 'Nama pendek ⊆ nama panjang untuk hierarki wilayah, dengan lantai 4 huruf agar tidak asal klaim.' },
+  { no: 11, emoji: '🗺️', judul: 'Geo-Hierarchy & Pemekaran', warna: '#299cdb', deskripsi: 'Batas Provinsi/Dati II dikunci; induk-anak pemekaran (BANGGAI → BANGGAI KEPULAUAN) dikenali.' },
+  { no: 12, emoji: '🔠', judul: 'Initialism Match', warna: '#0ab39c', deskripsi: '"JP" ↔ "JAKARTA PUSAT", "KCP" ↔ "KANTOR CABANG PEMBANTU".' },
+  { no: 13, emoji: '🛡️', judul: 'Penjaga Identitas (2 aturan)', warna: '#f06548', deskripsi: 'Angka beda → nilai dipotong 0,60 (KCP 001 ≠ KCP 002). Penanda wilayah beda → 0,70 (TANGERANG ≠ TANGERANG SELATAN).' },
+];
+
+const FASE_META: { phase: 1 | 2 | 3; judul: string; deskripsi: string; aksen: string; gradien: string; Ikon: typeof MapPin }[] = [
+  {
+    phase: 1,
+    judul: 'PTEN & Master Kode Pos',
+    deskripsi: 'Cocokkan Kota PTEN ke Kode Pos, ekstrak Kelurahan & Kecamatan, serta grouping per Kota PTEN.',
+    aksen: '#299cdb',
+    gradien: 'linear-gradient(90deg, #299cdb, #5bbfee)',
+    Ikon: MapPin,
+  },
+  {
+    phase: 2,
+    judul: 'Wilayah & Master Cabang',
+    deskripsi: 'Validasi Kanwil (W01-W17) & tarik identitas resmi: Sandi, Nama Outlet, Branch Code, Kode Cabang.',
+    aksen: '#405189',
+    gradien: 'linear-gradient(90deg, #405189, #3577f1)',
+    Ikon: Building2,
+  },
+  {
+    phase: 3,
+    judul: 'Mapping Role 3 Role',
+    deskripsi: 'Tentukan Organisasi Tujuan, Tipe Unit (KC/KCP), verifikasi 3 role lengkap, dan alur Wondr.',
+    aksen: '#7048e8',
+    gradien: 'linear-gradient(90deg, #7048e8, #9a7bff)',
+    Ikon: Users,
+  },
+];
+
+interface KartuFaseProps {
+  definisi: (typeof FASE_META)[number];
+  berjalan: boolean;
+  aktif: boolean;
+  persenJalan: number;
+  dieksekusi: boolean;
+  persenReview: number;
+  disetujui: boolean;
+  faseSebelumnyaSetuju: boolean;
+  pesanLangkah: string;
+  adaHasil: boolean;
+}
+
+/**
+ * Satu kartu fase. "Disetujui" hanya muncul kalau seluruh baris fase itu benar-benar
+ * disetujui — hasil eksekusi mesin tidak lagi dihitung sebagai selesai.
+ */
+const KartuFase: React.FC<KartuFaseProps> = ({
+  definisi,
+  berjalan,
+  aktif,
+  persenJalan,
+  dieksekusi,
+  persenReview,
+  disetujui,
+  faseSebelumnyaSetuju,
+  pesanLangkah,
+  adaHasil,
+}) => {
+  const { phase, judul, deskripsi, aksen, gradien, Ikon } = definisi;
+  const terkunci = !berjalan && !disetujui && !faseSebelumnyaSetuju;
+  const pct = berjalan ? persenJalan : persenReview;
+  const status = berjalan
+    ? dieksekusi
+      ? 'Dieksekusi mesin'
+      : aktif
+        ? pesanLangkah
+        : 'Menunggu...'
+    : disetujui
+      ? 'Berhasil diselesaikan'
+      : terkunci
+        ? `Menunggu Fase ${phase - 1}`
+        : 'Menunggu review';
+  const warnaTeks = disetujui && !berjalan ? '#0ab39c' : terkunci ? '#878a99' : aksen;
+  const showBar = berjalan || adaHasil;
+
+  return (
+    <div
+      style={{
+        background: '#ffffff',
+        border: `1px solid ${aktif ? aksen : disetujui && !berjalan ? '#d1fae5' : '#e2e8f0'}`,
+        borderRadius: '8px',
+        padding: '0.75rem 0.9rem',
+        boxShadow: aktif ? `0 0 0 3px ${aksen}26` : '0 1px 3px rgba(0,0,0,0.03)',
+        borderLeft: `4px solid ${disetujui && !berjalan ? '#0ab39c' : terkunci ? '#ced4da' : aksen}`,
+        transition: 'border-color 0.3s, box-shadow 0.3s, opacity 0.3s',
+        opacity: terkunci ? 0.72 : 1,
+        overflow: 'hidden',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem', marginBottom: '0.35rem' }}>
+        <span style={{ fontSize: '0.74rem', fontWeight: 800, color: warnaTeks, whiteSpace: 'nowrap' }}>FASE {phase}</span>
+        {disetujui && !berjalan ? (
+          <span className="fase-chip-selesai" style={{ fontSize: '0.78rem', color: '#0ab39c', fontWeight: 700, whiteSpace: 'nowrap' }}>
+            ✓ Selesai
+          </span>
+        ) : (
+          <Ikon size={15} color={warnaTeks} />
+        )}
+      </div>
+      <div
+        style={{
+          fontSize: '0.82rem',
+          fontWeight: 700,
+          color: '#212529',
+          marginBottom: '0.2rem',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+        title={judul}
+      >
+        {judul}
+      </div>
+      <div style={{ fontSize: '0.72rem', color: '#878a99', lineHeight: 1.35, marginBottom: showBar ? '0.6rem' : 0 }}>
+        {deskripsi}
+      </div>
+      {showBar && (
+        <div>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: '0.5rem',
+              fontSize: '0.68rem',
+              fontWeight: 600,
+              color: warnaTeks,
+              marginBottom: '0.25rem',
+            }}
+          >
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '68%' }} title={status}>
+              {status}
+            </span>
+            <span style={{ whiteSpace: 'nowrap' }}>{pct}%</span>
+          </div>
+          <div style={{ height: '5px', background: '#e9ebec', borderRadius: '4px', overflow: 'hidden' }}>
+            <div
+              style={{
+                height: '100%',
+                width: `${pct}%`,
+                background: disetujui && !berjalan ? 'linear-gradient(90deg, #0ab39c, #43c6ac)' : gradien,
+                transition: 'width 0.3s ease, background 0.3s ease',
+                borderRadius: '4px',
+                animation: aktif && pct < 100 ? 'progress-shimmer 1.5s infinite' : 'none',
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

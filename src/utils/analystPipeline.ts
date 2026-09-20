@@ -93,6 +93,7 @@ const THESAURUS_MAP: Record<string, string> = {
   'JLN': 'JALAN',
   'JLN.': 'JALAN',
   'KC': 'KANTOR CABANG',
+  'KCB': 'KANTOR CABANG',
   'KCP': 'KANTOR CABANG PEMBANTU',
   'KK': 'KANTOR KAS',
   'BO': 'BRANCH OFFICE',
@@ -415,7 +416,9 @@ export function ratcliffObershelpSimilarity(strA: string, strB: string): number 
 // 9. 🔊 PHONETIC INDONESIAN KEY — ejaan lama/baru & variasi transkripsi
 // (DJ→J, TJ→C, SJ→S, KH/CH→K, SH→S, OE→U, AE→A, huruf ganda dilipatgandakan jadi satu)
 export function indoPhoneticKey(raw: string): string {
-  let s = expertNormalize(raw).replace(/[^A-Z ]/g, '');
+  // Angka HARUS ikut kunci: "KCP 001" vs "KCP 002" dan "JL RAYA 10" vs "JL RAYA 11"
+  // beda identitas unit, jadi tidak boleh collapse jadi kunci yang sama.
+  let s = expertNormalize(raw).replace(/[^A-Z0-9 ]/g, '');
   s = s
     .replace(/DJ/g, 'J')
     .replace(/TJ/g, 'C')
@@ -430,20 +433,25 @@ export function indoPhoneticKey(raw: string): string {
     .replace(/Q/g, 'K')
     .replace(/X/g, 'S')
     .replace(/Z/g, 'S');
-  // lipat huruf kembar: "SMM" -> "SM"
-  s = s.replace(/(.)\1+/g, '$1');
+  // lipat huruf kembar: "SMM" -> "SM" (hanya huruf, angka utuh)
+  s = s.replace(/([A-Z])\1+/g, '$1');
   return s.replace(/\s+/g, ' ').trim();
 }
 
 // 10. 🧱 TOKEN CONTAINMENT — hierarki nama wilayah (yang pendek ⊆ yang panjang)
+// Kata tambahan yang mengubah identitas (arah mata angin, pemekaran, singkatannya)
+// membatalkan containment: "TANGERANG" ⊄ "TANGERANG SELATAN", "ALAM SUTRA" ⊄ "ALAM SUTRA UTARA".
+const PENANDA_IDENTITAS = new Set<string>([...PEMEKARAN_TOKENS, ...Object.keys(CITY_ABBREV_MAP)]);
 export function tokenContainmentScore(strA: string, strB: string): number {
   const ta = expertNormalize(strA).split(' ').filter(Boolean);
   const tb = expertNormalize(strB).split(' ').filter(Boolean);
   if (!ta.length || !tb.length) return 0;
   const small = ta.length <= tb.length ? ta : tb;
-  const big = new Set(ta.length <= tb.length ? tb : ta);
+  const bigList = ta.length <= tb.length ? tb : ta;
+  const big = new Set(bigList);
   const longestSmall = Math.max(...small.map((t) => t.length));
   if (longestSmall < 4) return 0; // terlalu pendek — bukan bukti containment
+  if (bigList.some((t) => !small.includes(t) && PENANDA_IDENTITAS.has(t))) return 0;
   if (small.every((t) => big.has(t))) {
     return 0.85 + 0.1 * (small.length / (ta.length + tb.length - small.length));
   }
@@ -473,6 +481,23 @@ export function calculateUnifiedPrecisionScore(textA: string, textB: string): { 
 
   if (normA === normB && normA.length > 0) {
     return { score: 1.0, algorithm: 'Exact Canonical Match' };
+  }
+
+  // ── Penjaga semantik: kemiripan huruf tidak boleh menimpa identitas ──
+  // (1) Angka adalah identifier unit/kantor — "KCP 001" ≠ "KCP 002" walau 98% mirip.
+  const angkaA = (normA.match(/\d+/g) || []).sort().join(',');
+  const angkaB = (normB.match(/\d+/g) || []).sort().join(',');
+  if (angkaA !== angkaB) {
+    return { score: 0.6, algorithm: 'Identifier Guard (angka identitas berbeda)' };
+  }
+  // (2) Kata penanda wilayah di salah satu sisi = daerah berbeda (TANGERANG ≠
+  //     TANGERANG SELATAN, ALAM SUTRA ≠ ALAM SUTRA UTARA), betapapun miripnya huruf.
+  const tkA = new Set(normA.split(' ').filter(Boolean));
+  const tkB = new Set(normB.split(' ').filter(Boolean));
+  const adaPenanda = (dari: Set<string>, ke: Set<string>) =>
+    [...ke].some((t) => !dari.has(t) && PENANDA_IDENTITAS.has(t));
+  if (adaPenanda(tkA, tkB) || adaPenanda(tkB, tkA)) {
+    return { score: 0.7, algorithm: 'Region Marker Guard (penanda wilayah berbeda)' };
   }
 
   // ── Sinyal murah: dihitung selalu ──

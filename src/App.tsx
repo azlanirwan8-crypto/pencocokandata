@@ -614,17 +614,26 @@ export const App: React.FC = () => {
   // Kartu fase mengikuti status review: persen = bagian baris yang sudah di-approve fase itu.
   // Baris TIDAK_ANALISA dikecualikan dari penyebut — mereka menunggu pemetaan manual
   // (bukan bagian persetujuan), sama seperti phaseState di grid.
+  // `selesai` pakai kesamaan ketat (bukan pembulatan): dengan puluhan ribu baris,
+  // 1 baris belum di-approve masih terbulat jadi 100% dan kartu menampilkan "Selesai".
   const phaseApproval = useMemo(() => {
     const analysed = analystRows.filter((r) => r.kategori !== 'TIDAK_ANALISA');
     const total = analysed.length;
-    const share = (count: number) => (total ? Math.round((count / total) * 100) : 0);
     let a = 0, b = 0, c = 0;
     for (const r of analysed) {
       if (r.fase1Approved) a++;
       if (r.fase2Approved) b++;
       if (r.fase3Approved) c++;
     }
-    return { 1: share(a), 2: share(b), 3: share(c) } as { 1: number; 2: number; 3: number };
+    const pct = (n: number) => (total ? Math.floor((n / total) * 100) : 0);
+    return {
+      pct: { 1: pct(a), 2: pct(b), 3: pct(c) } as { 1: number; 2: number; 3: number },
+      selesai: { 1: total > 0 && a === total, 2: total > 0 && b === total, 3: total > 0 && c === total } as {
+        1: boolean;
+        2: boolean;
+        3: boolean;
+      },
+    };
   }, [analystRows]);
 
   const handleResetAnalyst = async () => {

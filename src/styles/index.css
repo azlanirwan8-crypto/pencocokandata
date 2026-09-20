@@ -943,6 +943,45 @@ body {
   border: 1px solid transparent;
   text-decoration: none;
   line-height: 1.25;
+  white-space: nowrap;
+}
+
+/* Spinner status (dipakai tombol "Sedang Menganalisa") — dulu kelas ini dipakai
+   tanpa pernah didefinisikan, jadi indikatornya tidak pernah muncul. */
+.spinner-border {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: qdrSpin 0.75s linear infinite;
+}
+.spinner-border-sm {
+  width: 0.875rem;
+  height: 0.875rem;
+  border-width: 1.6px;
+}
+@keyframes qdrSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes qdrPop {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fase-chip-selesai {
+  animation: qdrPop 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.teori-grid {
+  animation: qdrRise 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .btn-primary {
