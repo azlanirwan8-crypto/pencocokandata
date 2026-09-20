@@ -125,6 +125,43 @@ function buildFilterWhere(q: {
   return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
 }
 
+/**
+ * Bangun klausa ORDER BY dari `sort`/`dir` (whitelist — nama kolom tidak pernah
+ * diambil mentah dari permintaan). Titik koordinat dibaca dari kodepos_data atau,
+ * bila kosong, dari cache kodepos_geo per kode pos; urutan memakai aturan yang sama
+ * supaya halaman ke-N benar-benar lanjutan halaman ke-1.
+ */
+const KOLOM_URUT: Record<string, { dalam: string; luar: string; polos: string }> = {
+  kodePos: { dalam: 'kode_pos', luar: 's.kode_pos', polos: 'kode_pos' },
+  kelurahan: { dalam: 'kelurahan', luar: 's.kelurahan', polos: 'kelurahan' },
+  kecamatan: { dalam: 'kecamatan', luar: 's.kecamatan', polos: 'kecamatan' },
+  kabupatenKota: { dalam: 'kabupaten_kota', luar: 's.kabupaten_kota', polos: 'kabupaten_kota' },
+  provinsi: { dalam: 'provinsi', luar: 's.provinsi', polos: 'provinsi' },
+  latitude: {
+    dalam: `COALESCE(latitude, (SELECT g2.latitude FROM kodepos_geo g2 WHERE g2.kode_pos = upper(btrim(kodepos_data.kode_pos)) LIMIT 1))`,
+    luar: 'COALESCE(s.d_lat, g.latitude)',
+    polos: 'latitude',
+  },
+  longitude: {
+    dalam: `COALESCE(longitude, (SELECT g2.longitude FROM kodepos_geo g2 WHERE g2.kode_pos = upper(btrim(kodepos_data.kode_pos)) LIMIT 1))`,
+    luar: 'COALESCE(s.d_lng, g.longitude)',
+    polos: 'longitude',
+  },
+};
+
+function buildUrut(sort: string | null, dir: string | null) {
+  const k = KOLOM_URUT[sort || ''];
+  if (!k) {
+    return { dalam: 'ORDER BY id', luar: 'ORDER BY s.id', polos: 'ORDER BY id' };
+  }
+  const arah = (dir || 'asc').toLowerCase() === 'desc' ? 'DESC' : 'ASC';
+  return {
+    dalam: `ORDER BY ${k.dalam} ${arah} NULLS LAST, id`,
+    luar: `ORDER BY ${k.luar} ${arah} NULLS LAST, s.id`,
+    polos: `ORDER BY ${k.polos} ${arah} NULLS LAST, id`,
+  };
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -354,18 +391,19 @@ export default async function handler(req: any, res: any) {
 
       const limitIdx = params.length + 1;
       const offsetIdx = params.length + 2;
+      const urut = buildUrut(url.searchParams.get('sort'), url.searchParams.get('dir'));
       const rows = await bacaDenganTitik(
         sql,
         `WITH s AS (
            SELECT ${S_KOLOM}
-           FROM kodepos_data ${whereSql} ORDER BY id LIMIT $${limitIdx} OFFSET $${offsetIdx}
+           FROM kodepos_data ${whereSql} ${urut.dalam} LIMIT $${limitIdx} OFFSET $${offsetIdx}
          )
          SELECT ${S_AMBIL}, ${GEO_PILIH}
          FROM s LEFT JOIN kodepos_geo g ON g.kode_pos = upper(btrim(s.kode_pos))
-         ORDER BY s.id;`,
+         ${urut.luar};`,
         `SELECT id, kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, status
          FROM kodepos_data ${whereSql}
-         ORDER BY id
+         ${urut.polos}
          LIMIT $${limitIdx} OFFSET $${offsetIdx};`,
         [...params, pageSize, (page - 1) * pageSize]
       );
@@ -387,19 +425,34 @@ export default async function handler(req: any, res: any) {
       if (!id) return res.status(400).json({ ok: false, error: 'id wajib diisi untuk update.' });
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
       const row = body.row || body;
+      const set: string[] = [
+        'kode_pos=$1', 'kelurahan=$2', 'kecamatan=$3', 'kabupaten_kota=$4', 'provinsi=$5', 'status=$6',
+      ];
+      const vals: any[] = [
+        String(row.kodePos ?? ''),
+        String(row.kelurahan ?? ''),
+        String(row.kecamatan ?? ''),
+        String(row.kabupatenKota ?? ''),
+        String(row.provinsi ?? ''),
+        String(row.status ?? 'AKTIF'),
+      ];
+      // Titik koordinat hanya ditulis bila pengirimnya memang menyertakan kolom itu —
+      // formulir teks lama tidak boleh menghapus titik yang sudah ada.
+      if (row.latitude !== undefined || row.longitude !== undefined) {
+        const angka = (v: any) => {
+          if (v === null || v === '') return null;
+          const n = typeof v === 'number' ? v : parseFloat(String(v).replace(',', '.'));
+          return Number.isFinite(n) ? n : null;
+        };
+        const lat = angka(row.latitude ?? null);
+        const lng = angka(row.longitude ?? null);
+        vals.push(lat, lng);
+        set.push(`latitude=$${vals.length - 1}`, `longitude=$${vals.length}`, `sumber_koordinat=${lat === null ? 'NULL' : "'manual'"}`);
+      }
+      vals.push(id);
       await sql.query(
-        `UPDATE kodepos_data
-         SET kode_pos=$1, kelurahan=$2, kecamatan=$3, kabupaten_kota=$4, provinsi=$5, status=$6, updated_at=NOW()
-         WHERE id=$7;`,
-        [
-          String(row.kodePos ?? ''),
-          String(row.kelurahan ?? ''),
-          String(row.kecamatan ?? ''),
-          String(row.kabupatenKota ?? ''),
-          String(row.provinsi ?? ''),
-          String(row.status ?? 'AKTIF'),
-          id,
-        ]
+        `UPDATE kodepos_data SET ${set.join(', ')}, updated_at=NOW() WHERE id=$${vals.length};`,
+        vals
       );
       return res.status(200).json({ ok: true, configured: true, updated: 1 });
     }

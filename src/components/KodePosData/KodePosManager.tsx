@@ -38,6 +38,7 @@ import {
   mapsUrlFor,
   geoLabel,
   type KodePosRow,
+  type KodePosSortKolom,
   type KodePosStats,
   type KodePosGeoStats,
 } from '../../utils/neonSync';
@@ -85,6 +86,11 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
   const [page, setPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
 
+  // Urutan kolom dikerjakan di server: data datang per halaman, jadi sort lokal
+  // hanya akan mengurutkan 10 baris yang terlihat.
+  const [sortKolom, setSortKolom] = useState<KodePosSortKolom | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
   // Modals state
   const [modalMode, setModalMode] = useState<'edit' | 'detail' | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -112,6 +118,18 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     provinsi: '',
     status: 'AKTIF',
   });
+  // Titik koordinat diedit sebagai teks supaya angka bisa diketik sebagian.
+  const [formTitik, setFormTitik] = useState<{ lat: string; lng: string }>({ lat: '', lng: '' });
+
+  const bukaEdit = (item: KodePosRow) => {
+    setFormData({ ...item });
+    setFormTitik({
+      lat: item.latitude == null ? '' : String(item.latitude),
+      lng: item.longitude == null ? '' : String(item.longitude),
+    });
+    setEditingId(item.id ?? null);
+    setModalMode('edit');
+  };
 
 
   // Auto-dismiss the info banner after 20 seconds
@@ -168,6 +186,8 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
       search: debouncedSearch,
       provinsi: selectedProvinsi,
       kota: selectedKota,
+      sort: sortKolom ?? undefined,
+      dir: sortKolom ? sortDir : undefined,
     }).then((r) => {
       if (!alive) return;
       if (r) {
@@ -186,7 +206,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     return () => {
       alive = false;
     };
-  }, [page, pageSize, debouncedSearch, selectedProvinsi, selectedKota, reloadKey]);
+  }, [page, pageSize, debouncedSearch, selectedProvinsi, selectedKota, sortKolom, sortDir, reloadKey]);
 
   // Jaga page tetap valid bila totalPages menyusut
   useEffect(() => {
@@ -216,6 +236,35 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
   const refreshAfterMutation = () => {
     refreshStats();
     setReloadKey((k) => k + 1);
+  };
+
+  const toggleSort = (kolom: KodePosSortKolom) => {
+    if (sortKolom === kolom) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else {
+      setSortKolom(kolom);
+      setSortDir('asc');
+    }
+    setPage(1);
+  };
+
+  /** Header tabel yang bisa diklik: ⇅ belum dipilih, ▲/▼ sedang mengurutkan kolom ini. */
+  const thUrut = (kolom: KodePosSortKolom, label: string, gaya?: React.CSSProperties) => {
+    const aktif = sortKolom === kolom;
+    return (
+      <th
+        style={{ ...gaya, cursor: 'pointer', userSelect: 'none' }}
+        onClick={() => toggleSort(kolom)}
+        aria-sort={aktif ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+        title={`Urutkan berdasar ${label}`}
+      >
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.28rem' }}>
+          {label}
+          <span style={{ fontSize: '0.66rem', color: aktif ? '#405189' : '#adb5bd' }}>
+            {aktif ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
+          </span>
+        </span>
+      </th>
+    );
   };
 
   // ─────────────── Titik koordinat kode pos ───────────────
@@ -368,6 +417,22 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
       return;
     }
 
+    const angkaTitik = (s: string): number | null => {
+      const t = s.trim().replace(',', '.');
+      if (!t) return null;
+      const n = Number(t);
+      return Number.isFinite(n) ? n : null;
+    };
+    const lat = angkaTitik(formTitik.lat);
+    const lng = angkaTitik(formTitik.lng);
+    const tolak = (msg: string) => {
+      setErrorMsg(msg);
+      setTimeout(() => setErrorMsg(null), 5000);
+    };
+    if (formTitik.lat.trim() && (lat === null || lat < -90 || lat > 90)) return tolak('Latitude tidak valid — angka antara -90 dan 90.');
+    if (formTitik.lng.trim() && (lng === null || lng < -180 || lng > 180)) return tolak('Longitude tidak valid — angka antara -180 dan 180.');
+    if ((lat === null) !== (lng === null)) return tolak('Latitude & longitude harus diisi berdua, atau dikosongkan berdua.');
+
     const cleanRecord: KodePosRow = {
       kodePos: formData.kodePos.trim(),
       kelurahan: formData.kelurahan.trim(),
@@ -375,6 +440,8 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
       kabupatenKota: formData.kabupatenKota.trim(),
       provinsi: formData.provinsi.trim(),
       status: formData.status || 'AKTIF',
+      latitude: lat,
+      longitude: lng,
     };
 
     const ok = await updateKodePosRow(editingId, cleanRecord);
@@ -947,14 +1014,14 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
             <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
               <tr>
                 <th style={{ width: '45px', textAlign: 'center' }}>No</th>
-                <th style={{ width: '130px' }}>KODE POS</th>
-                <th>KELURAHAN / DESA</th>
-                <th>KECAMATAN</th>
-                <th>KOTA / KABUPATEN</th>
-                <th>PROVINSI</th>
-                <th style={{ width: '110px', textAlign: 'right' }} title="Titik koordinat kode pos di Neon">LATITUDE</th>
-                <th style={{ width: '110px', textAlign: 'right' }} title="Titik koordinat kode pos di Neon">LONGITUDE</th>
-                <th style={{ width: '140px', textAlign: 'center' }}>AKSI</th>
+                {thUrut('kodePos', 'KODE POS', { width: '130px' })}
+                {thUrut('kelurahan', 'KELURAHAN / DESA')}
+                {thUrut('kecamatan', 'KECAMATAN')}
+                {thUrut('kabupatenKota', 'KOTA / KABUPATEN')}
+                {thUrut('provinsi', 'PROVINSI')}
+                {thUrut('latitude', 'LATITUDE', { width: '110px', textAlign: 'right' })}
+                {thUrut('longitude', 'LONGITUDE', { width: '110px', textAlign: 'right' })}
+                <th style={{ width: '80px', textAlign: 'center' }}>AKSI</th>
               </tr>
             </thead>
             <tbody>
@@ -1051,22 +1118,22 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
 
                       {/* Latitude / Longitude */}
                       <td
-                        {...tipProps(geoLabel(item))}
                         style={{
                           textAlign: 'right',
                           fontFamily: 'monospace',
                           fontSize: '0.74rem',
+                          whiteSpace: 'nowrap',
                           color: item.latitude == null ? '#adb5bd' : '#495057',
                         }}
                       >
                         {item.latitude == null ? '—' : item.latitude.toFixed(6)}
                       </td>
                       <td
-                        {...tipProps(geoLabel(item))}
                         style={{
                           textAlign: 'right',
                           fontFamily: 'monospace',
                           fontSize: '0.74rem',
+                          whiteSpace: 'nowrap',
                           color: item.longitude == null ? '#adb5bd' : '#495057',
                         }}
                       >
@@ -1089,102 +1156,30 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                           )}
                       </td>
 
-                      {/* Actions */}
+                      {/* Aksi: satu tombol detail — edit & hapus ada di dalam dialognya */}
                       <td style={{ textAlign: 'center' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-                          <button
-                            type="button"
-                            disabled={item.latitude == null || item.longitude == null}
-                            onClick={() =>
-                              window.open(mapsUrlFor(item.latitude as number, item.longitude as number), '_blank', 'noopener,noreferrer')
-                            }
-                            aria-label={`Buka Maps untuk kode pos ${item.kodePos}`}
-                            {...tipProps(
-                              item.latitude == null
-                                ? 'Titik koordinat belum ada — pakai aksi di kartu Titik Koordinat'
-                                : `Buka Maps/Google · ${geoLabel(item)}`
-                            )}
-                            style={{
-                              background: 'rgba(10, 179, 156, 0.1)',
-                              border: '1px solid rgba(10, 179, 156, 0.28)',
-                              color: item.latitude == null ? '#adb5bd' : '#0ab39c',
-                              borderRadius: '4px',
-                              padding: '0.3rem 0.45rem',
-                              whiteSpace: 'nowrap',
-                              cursor: item.latitude == null ? 'not-allowed' : 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: '0.2rem',
-                              fontSize: '0.72rem',
-                              fontWeight: 700,
-                            }}
-                          >
-                            <ExternalLink size={11} />
-                            MAPS
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDetailItem(item);
-                              setModalMode('detail');
-                            }}
-                            title="Lihat Detail Kode Pos"
-                            style={{
-                              background: 'rgba(41, 156, 219, 0.1)',
-                              border: '1px solid rgba(41, 156, 219, 0.25)',
-                              color: '#299cdb',
-                              borderRadius: '4px',
-                              padding: '0.35rem',
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                          >
-                            <Eye size={12} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setFormData({ ...item });
-                              setEditingId(item.id ?? null);
-                              setModalMode('edit');
-                            }}
-                            title="Edit Data Kode Pos"
-                            style={{
-                              background: 'rgba(64, 81, 137, 0.1)',
-                              border: '1px solid rgba(64, 81, 137, 0.25)',
-                              color: '#405189',
-                              borderRadius: '4px',
-                              padding: '0.35rem',
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                          >
-                            <Edit size={12} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeleteTarget(item)}
-                            title="Hapus Data Kode Pos"
-                            style={{
-                              background: 'rgba(240, 101, 72, 0.1)',
-                              border: '1px solid rgba(240, 101, 72, 0.25)',
-                              color: '#f06548',
-                              borderRadius: '4px',
-                              padding: '0.35rem',
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDetailItem(item);
+                            setModalMode('detail');
+                          }}
+                          title="Lihat Detail Kode Pos"
+                          aria-label={`Lihat detail kode pos ${item.kodePos}`}
+                          style={{
+                            background: 'rgba(41, 156, 219, 0.1)',
+                            border: '1px solid rgba(41, 156, 219, 0.25)',
+                            color: '#299cdb',
+                            borderRadius: '4px',
+                            padding: '0.35rem',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <Eye size={12} />
+                        </button>
                       </td>
                     </tr>
                   );
@@ -1394,6 +1389,36 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                     <option value="NON-AKTIF">NON-AKTIF (Diabaikan)</option>
                   </select>
                 </div>
+
+                <div className="form-grid-2">
+                  <div className="form-field">
+                    <label className="form-label">Latitude</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="-6.1762629"
+                      className="form-control"
+                      style={{ fontFamily: 'monospace' }}
+                      value={formTitik.lat}
+                      onChange={(e) => setFormTitik((t) => ({ ...t, lat: e.target.value }))}
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label className="form-label">Longitude</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="106.8293243"
+                      className="form-control"
+                      style={{ fontFamily: 'monospace' }}
+                      value={formTitik.lng}
+                      onChange={(e) => setFormTitik((t) => ({ ...t, lng: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <p style={{ fontSize: '0.72rem', color: '#878a99', margin: '0.4rem 0 0' }}>
+                  Kosongkan keduanya bila titik ingin dihapus. Titik yang diketik tangan ditandai sebagai isian manual.
+                </p>
               </div>
 
               <div className="modal-footer">
@@ -1503,19 +1528,6 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                           </button>
                         </div>
                       </div>
-                      <span
-                        style={{
-                          fontSize: '0.66rem',
-                          fontWeight: 700,
-                          padding: '0.18rem 0.5rem',
-                          borderRadius: '999px',
-                          whiteSpace: 'nowrap',
-                          background: detailItem.status === 'NON-AKTIF' ? 'rgba(240, 101, 72, 0.12)' : 'rgba(10, 179, 156, 0.12)',
-                          color: detailItem.status === 'NON-AKTIF' ? '#f06548' : '#0ab39c',
-                        }}
-                      >
-                        {detailItem.status || 'AKTIF'}
-                      </span>
                     </div>
 
                     <div style={{ height: '1px', background: '#e9ecef', margin: '0.8rem 0' }} />
@@ -1665,6 +1677,48 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
             </div>
 
             <div className="modal-footer">
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', marginRight: 'auto' }}>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => detailItem && bukaEdit(detailItem)}
+                  disabled={detailItem?.id == null}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                    background: 'rgba(64, 81, 137, 0.1)',
+                    border: '1px solid rgba(64, 81, 137, 0.25)',
+                    color: '#405189',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <Edit size={12} />
+                  Edit Data
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => {
+                    if (!detailItem) return;
+                    setDeleteTarget(detailItem);
+                    setModalMode(null);
+                  }}
+                  disabled={detailItem?.id == null}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                    background: 'rgba(240, 101, 72, 0.1)',
+                    border: '1px solid rgba(240, 101, 72, 0.25)',
+                    color: '#f06548',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <Trash2 size={12} />
+                  Hapus
+                </button>
+              </div>
               <button
                 type="button"
                 className="btn btn-outline btn-sm"

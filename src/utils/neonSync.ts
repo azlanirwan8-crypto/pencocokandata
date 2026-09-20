@@ -530,7 +530,9 @@ export function geoLabel(row: KodePosRow): string {
         ? 'OpenStreetMap (belum diverifikasi Google)'
         : row.geoSumber === 'kodepos.co.id'
           ? 'titik desa kodepos.co.id (sumber data, belum dicek Google)'
-          : row.geoSumber || 'penyedia peta';
+          : row.geoSumber === 'manual'
+            ? 'diisi manual dari aplikasi'
+            : row.geoSumber || 'penyedia peta';
   return `Sumber: ${sumber}${row.geoPresisi ? ` · Presisi: ${row.geoPresisi}` : ''}`;
 }
 
@@ -541,7 +543,19 @@ export interface KodePosPageQuery {
   provinsi?: string;
   kota?: string;
   status?: string;
+  sort?: KodePosSortKolom;
+  dir?: 'asc' | 'desc';
 }
+
+/** Kolom tabel Kode Pos yang bisa diurutkan di server (sama dengan whitelist API). */
+export type KodePosSortKolom =
+  | 'kodePos'
+  | 'kelurahan'
+  | 'kecamatan'
+  | 'kabupatenKota'
+  | 'provinsi'
+  | 'latitude'
+  | 'longitude';
 
 function kodePosQuery(q: KodePosPageQuery): string {
   const p = new URLSearchParams();
@@ -551,6 +565,10 @@ function kodePosQuery(q: KodePosPageQuery): string {
   if (q.provinsi && q.provinsi !== 'ALL') p.set('provinsi', q.provinsi);
   if (q.kota && q.kota !== 'ALL') p.set('kota', q.kota);
   if (q.status && q.status !== 'ALL') p.set('status', q.status);
+  if (q.sort) {
+    p.set('sort', q.sort);
+    p.set('dir', q.dir === 'desc' ? 'desc' : 'asc');
+  }
   const s = p.toString();
   return s ? `?${s}` : '';
 }
