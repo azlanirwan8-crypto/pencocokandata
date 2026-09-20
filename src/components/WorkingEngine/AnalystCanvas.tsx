@@ -35,6 +35,8 @@ interface AnalystCanvasProps {
   };
   /** Fase pertama yang belum disetujui penuh — yang dijalankan tombol utama. */
   faseBerikutnya?: 1 | 2 | 3;
+  /** Fase ini sudah dieksekusi tapi belum disetujui: tombol utama dikunci. */
+  terkunciMenungguPersetujuan?: boolean;
 }
 
 export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
@@ -50,6 +52,7 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
   completedPhases = new Set(),
   phaseApproval = { pct: { 1: 0, 2: 0, 3: 0 }, selesai: { 1: false, 2: false, 3: false } },
   faseBerikutnya = 1,
+  terkunciMenungguPersetujuan = false,
 }) => {
   const [showTheories, setShowTheories] = useState<boolean>(true);
 
@@ -219,7 +222,12 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
               type="button"
               className="btn btn-primary"
               onClick={onStartAnalysis}
-              disabled={isAnalyzing}
+              disabled={isAnalyzing || terkunciMenungguPersetujuan}
+              title={
+                terkunciMenungguPersetujuan
+                  ? `Fase ${faseBerikutnya} sudah dikerjakan — setujui dulu di bawah sebelum lanjut`
+                  : `Mesin hanya mengerjakan Fase ${faseBerikutnya}, lalu berhenti untuk kamu review`
+              }
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -241,7 +249,13 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
               ) : (
                 <>
                   <Play size={15} />
-                  <span>{hasExistingResults ? `Lanjut Fase ${faseBerikutnya}` : `Jalankan Fase ${faseBerikutnya}`}</span>
+                  <span>
+                    {terkunciMenungguPersetujuan
+                      ? `Setujui Fase ${faseBerikutnya} dulu`
+                      : hasExistingResults
+                        ? `Lanjut Fase ${faseBerikutnya}`
+                        : `Jalankan Fase ${faseBerikutnya}`}
+                  </span>
                 </>
               )}
             </button>

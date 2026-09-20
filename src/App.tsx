@@ -668,6 +668,15 @@ export const App: React.FC = () => {
   // Alur bertahap: fase pertama yang belum disetujui penuh adalah fase yang berikutnya
   // dikerjakan — tombol, kartu, dan engine memakai angka yang sama.
   const faseBerikutnya: 1 | 2 | 3 = !phaseApproval.selesai[1] ? 1 : !phaseApproval.selesai[2] ? 2 : 3;
+  // Fase yang sudah dieksekusi mesin tapi belum disetujui operator: jalankan ulang tidak
+  // menambah apa-apa, jadi tombol utama dikunci sampai fase itu disetujui.
+  const faseSudahDikerjakan =
+    faseBerikutnya === 1
+      ? analystRows.length > 0
+      : faseBerikutnya === 2
+        ? analystRows.some((r) => Boolean(r.namaOutlet))
+        : analystRows.some((r) => r.statusAnalisa !== 'MENUNGGU');
+  const tombolAnalisaTerkunci = !isAnalyzing && faseSudahDikerjakan;
 
   const handleResetAnalyst = async () => {
     cancelPendingWrite('analyst_results_data');
@@ -1118,6 +1127,7 @@ export const App: React.FC = () => {
                 completedPhases={completedPhases}
                 phaseApproval={phaseApproval}
                 faseBerikutnya={faseBerikutnya}
+                terkunciMenungguPersetujuan={tombolAnalisaTerkunci}
               />
 
               {analystRows.length > 0 && (
