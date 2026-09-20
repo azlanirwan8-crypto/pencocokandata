@@ -646,26 +646,6 @@ export async function fetchKodePosExport(q: KodePosPageQuery): Promise<KodePosRo
 }
 
 /**
- * Tambah satu baris kode pos (append)
- */
-export async function createKodePosRow(row: KodePosRow): Promise<boolean> {
-  try {
-    const res = await fetchWithRetry(
-      '/api/kodepos',
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows: [row], mode: 'append' }) },
-      8000,
-      2
-    );
-    if (!res.ok) return false;
-    const json = await res.json();
-    return Boolean(json.ok);
-  } catch (err) {
-    console.warn('Neon kodepos create error:', err);
-    return false;
-  }
-}
-
-/**
  * Update satu baris kode pos berdasarkan id
  */
 export async function updateKodePosRow(id: number, row: KodePosRow): Promise<boolean> {

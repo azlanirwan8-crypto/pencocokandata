@@ -5,8 +5,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Download,
-  Upload,
-  Plus,
   Edit,
   Trash2,
   Eye,
@@ -28,13 +26,11 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import {
-  saveKodePosToNeon,
   clearKodePosFromNeon,
   fetchKodePosPage,
   fetchKodePosStats,
   fetchKodePosOptions,
   fetchKodePosExport,
-  createKodePosRow,
   updateKodePosRow,
   deleteKodePosRow,
   fetchKodePosGeoStats,
@@ -90,7 +86,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
   const [pageSize, setPageSize] = useState<number>(10);
 
   // Modals state
-  const [modalMode, setModalMode] = useState<'create' | 'edit' | 'detail' | null>(null);
+  const [modalMode, setModalMode] = useState<'edit' | 'detail' | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<KodePosRow | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
@@ -117,7 +113,6 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     status: 'AKTIF',
   });
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-dismiss the info banner after 20 seconds
   useEffect(() => {
@@ -323,9 +318,10 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     }
   };
 
-  // Handle Create / Update Form Submit
+  // Handle Update Form Submit
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (modalMode !== 'edit' || editingId === null) return;
     if (!formData.kodePos.trim()) {
       alert('Kode Pos wajib diisi!');
       return;
@@ -344,16 +340,8 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
       status: formData.status || 'AKTIF',
     };
 
-    let ok = false;
-    if (modalMode === 'create') {
-      ok = await createKodePosRow(cleanRecord);
-      if (ok) setSuccessMsg(`Berhasil menambahkan Kode Pos ${cleanRecord.kodePos} (${cleanRecord.kelurahan})!`);
-    } else if (modalMode === 'edit' && editingId !== null) {
-      ok = await updateKodePosRow(editingId, cleanRecord);
-      if (ok) setSuccessMsg(`Berhasil memperbarui data Kode Pos ${cleanRecord.kodePos}!`);
-    } else {
-      return;
-    }
+    const ok = await updateKodePosRow(editingId, cleanRecord);
+    if (ok) setSuccessMsg(`Berhasil memperbarui data Kode Pos ${cleanRecord.kodePos}!`);
 
     if (ok) {
       setModalMode(null);
@@ -397,157 +385,6 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
       setErrorMsg('Gagal mengosongkan data Kode Pos di database.');
       setTimeout(() => setErrorMsg(null), 4000);
     }
-  };
-
-  // Import from Excel
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      try {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
-        const wsName = wb.SheetNames[0];
-        const ws = wb.Sheets[wsName];
-        const rawJson: any[] = XLSX.utils.sheet_to_json(ws);
-
-        if (!rawJson || rawJson.length === 0) {
-          setErrorMsg('File Excel kosong atau format tidak sesuai.');
-          return;
-        }
-
-        const imported: KodePosRow[] = [];
-        const seenKeys = new Set<string>();
-
-        rawJson.forEach((row) => {
-          const kpRaw = String(
-            row['KODE POS'] ||
-            row['KODEPOS'] ||
-            row['Kode Pos'] ||
-            row['kodepos'] ||
-            row['kode_pos'] ||
-            row['POSTAL CODE'] ||
-            row['Postal Code'] ||
-            ''
-          ).trim();
-
-          const cleanKp = kpRaw.replace(/\D/g, '').padStart(5, '0').slice(-5);
-
-          const kelurahan = String(
-            row['KELURAHAN'] ||
-            row['Kelurahan'] ||
-            row['DESA'] ||
-            row['Desa'] ||
-            row['KELURAHAN / DESA'] ||
-            row['Kelurahan/Desa'] ||
-            row['kelurahan'] ||
-            ''
-          ).trim();
-
-          const kecamatan = String(
-            row['KECAMATAN'] ||
-            row['Kecamatan'] ||
-            row['kecamatan'] ||
-            ''
-          ).trim();
-
-          const kabKota = String(
-            row['KABUPATEN/KOTA'] ||
-            row['KABUPATEN / KOTA'] ||
-            row['KABUPATEN'] ||
-            row['Kabupaten'] ||
-            row['KOTA'] ||
-            row['Kota'] ||
-            row['Kota/Kabupaten'] ||
-            row['DATI II'] ||
-            row['Dati II'] ||
-            ''
-          ).trim();
-
-          const provinsi = String(
-            row['PROVINSI'] ||
-            row['Provinsi'] ||
-            row['provinsi'] ||
-            ''
-          ).trim();
-
-          const statusRaw = String(row['STATUS'] || row['Status'] || 'AKTIF').trim().toUpperCase();
-          const status: 'AKTIF' | 'NON-AKTIF' = statusRaw === 'NON-AKTIF' || statusRaw === 'NON AKTIF' ? 'NON-AKTIF' : 'AKTIF';
-
-          if (cleanKp && (kelurahan || kecamatan || kabKota)) {
-            const key = `${cleanKp}-${kelurahan}-${kecamatan}-${kabKota}`;
-            if (!seenKeys.has(key)) {
-              seenKeys.add(key);
-              imported.push({
-                kodePos: cleanKp,
-                kelurahan,
-                kecamatan,
-                kabupatenKota: kabKota,
-                provinsi,
-                status,
-              });
-            }
-          }
-        });
-
-        if (imported.length === 0) {
-          setErrorMsg('Tidak ditemukan kolom Kode Pos yang valid dalam berkas Excel!');
-          return;
-        }
-
-        const ok = await saveKodePosToNeon(imported, 'replace');
-        if (ok) {
-          setSuccessMsg(`Berhasil mengimpor ${imported.length.toLocaleString('id-ID')} data Kode Pos dari Excel!`);
-          refreshAfterMutation();
-          setTimeout(() => setSuccessMsg(null), 5000);
-        } else {
-          setErrorMsg('Gagal menyimpan hasil impor ke database.');
-          setTimeout(() => setErrorMsg(null), 5000);
-        }
-        if (fileInputRef.current) fileInputRef.current.value = '';
-      } catch (err: any) {
-        setErrorMsg(`Gagal memproses file Excel: ${err.message}`);
-        setTimeout(() => setErrorMsg(null), 5000);
-      }
-    };
-    reader.readAsBinaryString(file);
-  };
-
-  // Download Template Excel
-  const handleDownloadTemplate = () => {
-    const templateData = [
-      {
-        'KODE POS': '10110',
-        'KELURAHAN': 'Gambir',
-        'KECAMATAN': 'Gambir',
-        'KABUPATEN/KOTA': 'Kota Jakarta Pusat',
-        'PROVINSI': 'DKI Jakarta',
-        'STATUS': 'AKTIF',
-      },
-      {
-        'KODE POS': '40115',
-        'KELURAHAN': 'Braga',
-        'KECAMATAN': 'Sumur Bandung',
-        'KABUPATEN/KOTA': 'Kota Bandung',
-        'PROVINSI': 'Jawa Barat',
-        'STATUS': 'AKTIF',
-      },
-      {
-        'KODE POS': '60261',
-        'KELURAHAN': 'Embong Kaliasin',
-        'KECAMATAN': 'Genteng',
-        'KABUPATEN/KOTA': 'Kota Surabaya',
-        'PROVINSI': 'Jawa Timur',
-        'STATUS': 'AKTIF',
-      },
-    ];
-
-    const ws = XLSX.utils.json_to_sheet(templateData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Master_Kode_Pos');
-    XLSX.writeFile(wb, 'Template_Upload_Master_Kode_Pos.xlsx');
   };
 
   // Export to Excel (ambil semua baris yang cocok filter dari server)
@@ -645,24 +482,6 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
 
         {/* Action Buttons Toolbar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx, .xls, .csv"
-            onChange={handleFileUpload}
-            style={{ display: 'none' }}
-          />
-
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={() => fileInputRef.current?.click()}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-          >
-            <Upload size={14} />
-            <span>Impor Excel</span>
-          </button>
-
           <button
             type="button"
             className="btn btn-outline btn-sm"
@@ -688,43 +507,12 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
           <button
             type="button"
             className="btn btn-outline btn-sm"
-            onClick={handleDownloadTemplate}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-          >
-            <Download size={13} />
-            <span>Template Excel</span>
-          </button>
-
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
             onClick={() => setShowResetConfirm(true)}
             style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#f06548', borderColor: 'rgba(240, 101, 72, 0.3)' }}
             title="Kosongkan seluruh baris Kode Pos. Titik koordinat dan daftar baseline tetap."
           >
             <Trash2 size={13} />
             <span>Kosongkan Data</span>
-          </button>
-
-          <button
-            type="button"
-            className="btn btn-success btn-sm"
-            onClick={() => {
-              setFormData({
-                kodePos: '',
-                kelurahan: '',
-                kecamatan: '',
-                kabupatenKota: '',
-                provinsi: '',
-                status: 'AKTIF',
-              });
-              setEditingId(null);
-              setModalMode('create');
-            }}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-          >
-            <Plus size={14} />
-            <span>Tambah Data</span>
           </button>
         </div>
       </div>
@@ -1465,13 +1253,13 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
       </div>
 
       {/* 5. Modal: Create / Edit Form */}
-      {(modalMode === 'create' || modalMode === 'edit') && (
+      {modalMode === 'edit' && (
         <div className="modal-backdrop">
           <div className="modal-container" style={{ maxWidth: '520px' }}>
             <div className="modal-header">
               <h4 className="modal-title">
                 <Mail size={16} color="#405189" />
-                {modalMode === 'create' ? 'Tambah Data Kode Pos' : 'Edit Data Kode Pos'}
+                Edit Data Kode Pos
               </h4>
               <button
                 type="button"
@@ -1577,7 +1365,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                   Batal
                 </button>
                 <button type="submit" className="btn btn-primary btn-sm">
-                  {modalMode === 'create' ? 'Simpan Data' : 'Simpan Perubahan'}
+                  Simpan Perubahan
                 </button>
               </div>
             </form>
