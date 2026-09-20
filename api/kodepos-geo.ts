@@ -227,12 +227,11 @@ function pendingSql(opts: {
   const filterGeo =
     opts.mode === 'verifikasi'
       ? `WHERE g.kode_pos IS NOT NULL AND g.terverifikasi_google IS NOT TRUE AND g.latitude IS NOT NULL`
-      : // Hanya yang belum pernah dicari. Yang pernah gagal ikut hanya lewat opsi
-        // `ulang`, dan dibatasi 12 jam sejak percobaan terakhir — `diambil_pada` juga
-        // ditulis saat gagal, jadi tanpa batas itu antrean retry tidak pernah berkurang
-        // dan setiap reload mengulang kode pos yang persis sama dari awal.
+      : // `ulang` mencakup SEMUA baris tanpa titik: yang belum pernah dicari maupun yang
+        // pernah dicari tetapi gagal. Pengendali putaran ada di klien — setelah satu putaran
+        // penuh tanpa satu pun berhasil, sisanya dinyatakan tak bersumber dan berhenti sendiri.
         opts.ulang
-        ? `WHERE g.kode_pos IS NULL OR (g.latitude IS NULL AND (g.diambil_pada IS NULL OR g.diambil_pada < NOW() - INTERVAL '12 hours'))`
+        ? `WHERE g.kode_pos IS NULL OR g.latitude IS NULL`
         : `WHERE g.kode_pos IS NULL`;
   let tail = '';
   // Retry dijalankan dari yang paling lama tidak dicoba, supaya satu putaran penuh

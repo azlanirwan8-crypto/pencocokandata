@@ -233,12 +233,11 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
   const { tipProps, tooltipNode } = useGeoTooltip();
 
   // Satu-satunya aksi titik koordinat: kerjakan antrean baru, kalau tidak ada
-  // baru tawarkan mengulang yang pernah gagal.
+  // baru tawarkan mengulang SEMUA baris yang belum bertitik. Tombol tetap ada selama
+  // masih ada baris tanpa titik — baru hilang ketika jumlahnya benar-benar 0.
   const geoAntrean = geoStats?.menunggu ?? 0;
-  const geoAntreanUlang = geoStats?.menungguUlang ?? 0;
-  const geoGagal = geoStats?.geo.gagal ?? 0;
+  const geoBelumTitik = Math.max(0, stats.total - stats.totalBerTitik);
   const geoUlang = geoAntrean === 0;
-  const geoTersedia = geoAntrean > 0 || geoAntreanUlang > 0;
   const gayaTautanGeo: React.CSSProperties = {
     marginLeft: '0.4rem',
     padding: 0,
@@ -287,6 +286,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
       } catch {}
     };
     let patokan = 0;
+    let tanpaHasil = 0; // batch beruntun tanpa satu pun titik berhasil
 
     try {
       // Serverless Vercel mati setelah 60 detik, jadi tahap kecil diulang terus.
@@ -308,6 +308,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
         }
         diproses += hasil.diproses;
         const sisa = hasil.menunggu || 0;
+        tanpaHasil = hasil.berhasil > 0 ? 0 : tanpaHasil + 1;
         if (!patokan) {
           const tersimpan = bacaPatokan();
           patokan =
@@ -327,6 +328,12 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               localStorage.removeItem(kunciPatokan);
             } catch {}
           }
+          break;
+        }
+        // Antrean ulang tidak mengecil untuk baris yang memang tak bersumber — satu
+        // putaran penuh (sisa ÷ 40 batch) tanpa satu pun berhasil berhenti sendiri.
+        if (ulang && tanpaHasil * 40 >= Math.max(sisa, 1)) {
+          pesanAkhir = `Sisa ${sisa.toLocaleString('id-ID')} kode pos tidak ditemukan di Google/ESRI/OpenStreetMap — kemungkinan memang tidak punya titik per kode pos.`;
           break;
         }
       }
@@ -769,20 +776,20 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               </>
             ) : (
               <>
-                {`${(stats.total - stats.totalBerTitik).toLocaleString('id-ID')} baris belum ada titik`}
-                {geoTersedia && (
+                {`${geoBelumTitik.toLocaleString('id-ID')} baris belum ada titik`}
+                {geoBelumTitik > 0 && (
                   <button
                     type="button"
                     onClick={() => void jalankanGeo(geoUlang)}
                     style={gayaTautanGeo}
                     {...tipProps(
                       geoUlang
-                        ? `Cari ulang ${geoAntreanUlang.toLocaleString('id-ID')} dari ${geoGagal.toLocaleString('id-ID')} kode pos yang terakhir dicari tidak ketemu (jeda 12 jam sejak percobaan terakhir) lewat ${kunciGoogle ? 'Google, lalu ' : ''}ESRI/OpenStreetMap. Sebagian besar memang tidak punya titik per kode pos.`
+                        ? `Cari ulang ${geoBelumTitik.toLocaleString('id-ID')} kode pos yang belum punya titik lewat ${kunciGoogle ? 'Google, lalu ' : ''}ESRI/OpenStreetMap (termasuk kode pos patokan yang belum diimpor). Berhenti sendiri bila satu putaran penuh tidak menghasilkan apa pun — sebagian kode pos memang tidak punya titik di penyedia mana pun.`
                         : `Cari titik untuk ${geoAntrean.toLocaleString('id-ID')} kode pos yang belum pernah dicari lewat ${kunciGoogle ? 'Google, lalu ' : ''}ESRI/OpenStreetMap. Hasilnya dipakai baris yang tidak punya titik desa sendiri.`
                     )}
                   >
                     {geoUlang
-                      ? `coba ulang ${geoAntreanUlang.toLocaleString('id-ID')}`
+                      ? `coba ulang ${geoBelumTitik.toLocaleString('id-ID')}`
                       : `isi ${geoAntrean.toLocaleString('id-ID')} kode pos`}
                   </button>
                 )}
