@@ -237,6 +237,16 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
   const kunciGoogle = Boolean(getStoredGoogleApiKey()) || Boolean(geoStats?.googleSiap);
   const { tipProps, tooltipNode } = useGeoTooltip();
 
+  // Dialog detail ikut Tutup dengan Esc, seperti dialog Sync Data.
+  useEffect(() => {
+    if (modalMode !== 'detail') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setModalMode(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [modalMode]);
+
   const jalankanGeo = async (mode: 'isi' | 'verifikasi') => {
     if (geoRun.aktif) {
       geoStopRef.current = true;
@@ -1557,13 +1567,19 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
         </div>
       )}
 
-      {/* 6. Modal: Detail View */}
+      {/* 6. Modal: Detail View — info wilayah di kiri, peta di kanan */}
       {modalMode === 'detail' && detailItem && (
         <div className="modal-backdrop">
-          <div className="modal-container" style={{ maxWidth: '480px' }}>
+          <div
+            className="modal-container"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="kodepos-detail-title"
+            style={{ maxWidth: '880px' }}
+          >
             <div className="modal-header">
-              <h4 className="modal-title">
-                <Eye size={16} color="#405189" />
+              <h4 className="modal-title" id="kodepos-detail-title">
+                <MapPin size={16} color="#405189" />
                 Detail Referensi Kode Pos
               </h4>
               <button
@@ -1579,109 +1595,235 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
             <div className="modal-body">
               <div
                 style={{
-                  textAlign: 'center',
-                  padding: '0.85rem',
-                  background: 'rgba(64, 81, 137, 0.06)',
-                  borderRadius: '6px',
-                  border: '1px solid rgba(64, 81, 137, 0.15)',
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+                  gap: '0.9rem',
+                  alignItems: 'stretch',
                 }}
               >
-                <div style={{ fontSize: '0.72rem', color: '#878a99', fontWeight: 600 }}>KODE POS RESMI</div>
-                <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#405189', letterSpacing: '1px', fontFamily: 'monospace' }}>
-                  {detailItem.kodePos}
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem', fontSize: '0.8rem' }}>
-                <div style={{ background: '#f8f9fa', padding: '0.6rem 0.75rem', borderRadius: '5px' }}>
-                  <div style={{ fontSize: '0.7rem', color: '#878a99', fontWeight: 600 }}>KELURAHAN / DESA</div>
-                  <div style={{ fontWeight: 600, color: '#212529', marginTop: '0.15rem' }}>{detailItem.kelurahan || '-'}</div>
-                </div>
-                <div style={{ background: '#f8f9fa', padding: '0.6rem 0.75rem', borderRadius: '5px' }}>
-                  <div style={{ fontSize: '0.7rem', color: '#878a99', fontWeight: 600 }}>KECAMATAN</div>
-                  <div style={{ fontWeight: 600, color: '#212529', marginTop: '0.15rem' }}>{detailItem.kecamatan || '-'}</div>
-                </div>
-                <div style={{ background: '#f8f9fa', padding: '0.6rem 0.75rem', borderRadius: '5px' }}>
-                  <div style={{ fontSize: '0.7rem', color: '#878a99', fontWeight: 600 }}>KOTA / KABUPATEN</div>
-                  <div style={{ fontWeight: 600, color: '#212529', marginTop: '0.15rem' }}>{detailItem.kabupatenKota || '-'}</div>
-                </div>
-                <div style={{ background: '#f8f9fa', padding: '0.6rem 0.75rem', borderRadius: '5px' }}>
-                  <div style={{ fontSize: '0.7rem', color: '#878a99', fontWeight: 600 }}>PROVINSI</div>
-                  <div style={{ fontWeight: 600, color: '#212529', marginTop: '0.15rem' }}>{detailItem.provinsi || '-'}</div>
-                </div>
-              </div>
-
-              <div style={{ background: '#f8f9fa', padding: '0.6rem 0.75rem', borderRadius: '5px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem' }}>
-                <span style={{ fontSize: '0.72rem', color: '#878a99', fontWeight: 600 }}>STATUS OPERASIONAL</span>
-                <span
-                  style={{
-                    fontSize: '0.68rem',
-                    fontWeight: 700,
-                    padding: '0.15rem 0.45rem',
-                    borderRadius: '4px',
-                    background: detailItem.status === 'NON-AKTIF' ? 'rgba(240, 101, 72, 0.12)' : 'rgba(10, 179, 156, 0.12)',
-                    color: detailItem.status === 'NON-AKTIF' ? '#f06548' : '#0ab39c',
-                  }}
-                >
-                  {detailItem.status || 'AKTIF'}
-                </span>
-              </div>
-
-              <div
-                style={{
-                  background: '#f8f9fa',
-                  padding: '0.6rem 0.75rem',
-                  borderRadius: '5px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '0.6rem',
-                  fontSize: '0.8rem',
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: '0.72rem', color: '#5b5f6e', fontWeight: 600 }}>TITIK KOORDINAT</div>
-                  <div style={{ fontWeight: 700, color: '#212529', fontFamily: 'monospace', marginTop: '0.15rem' }}>
-                    {detailItem.latitude == null || detailItem.longitude == null
-                      ? 'belum ada'
-                      : `${detailItem.latitude.toFixed(6)}, ${detailItem.longitude.toFixed(6)}`}
-                  </div>
+                {/* Kolom kiri */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem', minWidth: 0 }}>
                   <div
                     style={{
-                      fontSize: '0.72rem',
-                      fontWeight: detailItem.geoTerverifikasi ? 600 : 700,
-                      color: detailItem.geoTerverifikasi ? '#0a7b6c' : '#b45309',
-                      marginTop: '0.15rem',
+                      background: '#f8f9fa',
+                      border: '1px solid #eef0f3',
+                      borderRadius: '10px',
+                      padding: '0.9rem 1rem',
                     }}
                   >
-                    {geoLabel(detailItem)}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        justifyContent: 'space-between',
+                        gap: '0.5rem',
+                      }}
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <Mail size={12} color="#878a99" />
+                          <span style={{ fontSize: '0.68rem', color: '#878a99', fontWeight: 700, letterSpacing: '0.04em' }}>
+                            KODE POS
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginTop: '0.1rem' }}>
+                          <span
+                            style={{
+                              fontSize: '1.85rem',
+                              fontWeight: 800,
+                              color: '#f06548',
+                              fontFamily: 'monospace',
+                              lineHeight: 1.1,
+                              wordBreak: 'break-all',
+                            }}
+                          >
+                            {detailItem.kodePos}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText(detailItem.kodePos, 'detail')}
+                            aria-label={`Salin kode pos ${detailItem.kodePos}`}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: copiedId === 'detail' ? '#0ab39c' : '#878a99',
+                              cursor: 'pointer',
+                              padding: '0.2rem',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                            }}
+                          >
+                            {copiedId === 'detail' ? <Check size={14} /> : <Copy size={14} />}
+                          </button>
+                        </div>
+                      </div>
+                      <span
+                        style={{
+                          fontSize: '0.66rem',
+                          fontWeight: 700,
+                          padding: '0.18rem 0.5rem',
+                          borderRadius: '999px',
+                          whiteSpace: 'nowrap',
+                          background: detailItem.status === 'NON-AKTIF' ? 'rgba(240, 101, 72, 0.12)' : 'rgba(10, 179, 156, 0.12)',
+                          color: detailItem.status === 'NON-AKTIF' ? '#f06548' : '#0ab39c',
+                        }}
+                      >
+                        {detailItem.status || 'AKTIF'}
+                      </span>
+                    </div>
+
+                    <div style={{ height: '1px', background: '#e9ecef', margin: '0.8rem 0' }} />
+
+                    <span style={{ fontSize: '0.68rem', color: '#878a99', fontWeight: 700, letterSpacing: '0.04em' }}>
+                      LOKASI
+                    </span>
+                    <div style={{ fontSize: '1rem', fontWeight: 700, color: '#212529', marginTop: '0.15rem' }}>
+                      {detailItem.kelurahan || '-'}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#5b5f6e', marginTop: '0.1rem' }}>
+                      {[detailItem.kabupatenKota, detailItem.provinsi].filter(Boolean).join(', ') || '-'}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
+                    {[
+                      { label: 'PROVINSI', icon: MapPin, value: detailItem.provinsi },
+                      { label: 'KOTA / KABUPATEN', icon: Building2, value: detailItem.kabupatenKota },
+                      { label: 'KECAMATAN', icon: Sparkles, value: detailItem.kecamatan },
+                      { label: 'KELURAHAN / DESA', icon: CheckCircle2, value: detailItem.kelurahan },
+                    ].map((kartu) => (
+                      <div
+                        key={kartu.label}
+                        style={{
+                          background: '#f8f9fa',
+                          border: '1px solid #eef0f3',
+                          borderRadius: '10px',
+                          padding: '0.65rem 0.8rem',
+                          minWidth: 0,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <kartu.icon size={12} color="#f06548" />
+                          <span style={{ fontSize: '0.66rem', color: '#878a99', fontWeight: 700, letterSpacing: '0.04em' }}>
+                            {kartu.label}
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '0.86rem',
+                            fontWeight: 600,
+                            color: '#212529',
+                            marginTop: '0.2rem',
+                            overflowWrap: 'anywhere',
+                          }}
+                        >
+                          {kartu.value || '-'}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  disabled={detailItem.latitude == null || detailItem.longitude == null}
-                  onClick={() =>
-                    window.open(
-                      mapsUrlFor(detailItem.latitude as number, detailItem.longitude as number),
-                      '_blank',
-                      'noopener,noreferrer'
-                    )
-                  }
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.3rem',
-                    background: 'rgba(10, 179, 156, 0.12)',
-                    border: '1px solid rgba(10, 179, 156, 0.3)',
-                    color: detailItem.latitude == null ? '#adb5bd' : '#0ab39c',
-                    cursor: detailItem.latitude == null ? 'not-allowed' : 'pointer',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  <ExternalLink size={12} />
-                  Buka Maps/Google
-                </button>
+
+                {/* Kolom kanan: peta + keterangan titik */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', minWidth: 0 }}>
+                  {detailItem.latitude != null && detailItem.longitude != null ? (
+                    <iframe
+                      title={`Peta lokasi ${detailItem.kelurahan || detailItem.kodePos}`}
+                      src={`https://maps.google.com/maps?q=${detailItem.latitude},${detailItem.longitude}&z=15&hl=id&output=embed`}
+                      loading="lazy"
+                      referrerPolicy="no-referrer-when-downgrade"
+                      style={{
+                        flex: 1,
+                        minHeight: '300px',
+                        width: '100%',
+                        border: '1px solid #eef0f3',
+                        borderRadius: '10px',
+                        background: '#f1f3f5',
+                      }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        flex: 1,
+                        minHeight: '300px',
+                        border: '1px dashed #d0d7de',
+                        borderRadius: '10px',
+                        background: '#f8f9fa',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.5rem',
+                        padding: '1rem',
+                        textAlign: 'center',
+                      }}
+                    >
+                      <MapPin size={26} color="#adb5bd" />
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#5b5f6e' }}>Titik belum tersedia</div>
+                      <div style={{ fontSize: '0.76rem', color: '#878a99' }}>
+                        Jalankan &quot;Isi Koordinat&quot; untuk menaruh lokasi baris ini di peta.
+                      </div>
+                    </div>
+                  )}
+
+                  <div
+                    style={{
+                      background: '#f8f9fa',
+                      border: '1px solid #eef0f3',
+                      borderRadius: '10px',
+                      padding: '0.65rem 0.8rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '0.6rem',
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '0.66rem', color: '#878a99', fontWeight: 700, letterSpacing: '0.04em' }}>
+                        TITIK KOORDINAT
+                      </div>
+                      <div style={{ fontWeight: 700, color: '#212529', fontFamily: 'monospace', fontSize: '0.84rem' }}>
+                        {detailItem.latitude == null || detailItem.longitude == null
+                          ? 'belum ada'
+                          : `${detailItem.latitude.toFixed(7)}, ${detailItem.longitude.toFixed(7)}`}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '0.72rem',
+                          color: detailItem.geoTerverifikasi ? '#0a7b6c' : '#b45309',
+                          marginTop: '0.1rem',
+                        }}
+                      >
+                        {geoLabel(detailItem)}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      disabled={detailItem.latitude == null || detailItem.longitude == null}
+                      onClick={() =>
+                        window.open(
+                          mapsUrlFor(detailItem.latitude as number, detailItem.longitude as number),
+                          '_blank',
+                          'noopener,noreferrer'
+                        )
+                      }
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.3rem',
+                        background: 'rgba(10, 179, 156, 0.12)',
+                        border: '1px solid rgba(10, 179, 156, 0.3)',
+                        color: detailItem.latitude == null ? '#adb5bd' : '#0ab39c',
+                        cursor: detailItem.latitude == null ? 'not-allowed' : 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <ExternalLink size={12} />
+                      Buka Maps
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
