@@ -64,6 +64,12 @@ export interface AnalystRow {
   sinyalBit?: number;
   /** Bit sinyal Fase 3 (pasangan nama outlet ⟷ organisasi tujuan). */
   sinyalRoleBit?: number;
+  /**
+   * Alasan baris ini masuk daftar temuan tiap sinyal, kunci = nomor sinyal 1..13.
+   * Hanya ada pada baris hasil analisa yang dijalankan setelah fitur catatan ini;
+   * baris lama memang undefined sampai analisa dijalankan ulang.
+   */
+  temuanCatatan?: Record<number, string[]>;
   statusAnalisa: 'EXACT_MATCH' | 'HIGH_CONFIDENCE' | 'PERLU_REVIEW' | 'ANOMALI' | 'MENUNGGU';
   isFinalApproved: boolean;
   editedManually?: boolean;
@@ -110,20 +116,24 @@ export const SINYAL_BIT = {
  * Daftar resmi 13 kartu sinyal di UI Data Analyst — satu sumber kebenaran untuk
  * nama, warna, dan penjelasannya. Nomor harus urut 1..13 sesuai BIT_URUT di bawah.
  */
-export const SINYAL_PENCOCOKAN: { no: number; emoji: string; judul: string; warna: string; deskripsi: string }[] = [
-  { no: 1, emoji: '🔤', judul: 'Canonical Thesaurus', warna: '#405189', deskripsi: 'Standarisasi singkatan otomatis: KAB → KABUPATEN, KCP → KANTOR CABANG PEMBANTU, KCB → KANTOR CABANG, BO → BRANCH OFFICE, JABAR → JAWA BARAT.' },
-  { no: 2, emoji: '🧹', judul: 'Pembuang Token Administratif', warna: '#405189', deskripsi: 'KOTA / KABUPATEN / KEC / KEL / DESA dibuang dari kunci, jadi "TEGALSARI" == "KEC. TEGALSARI".' },
-  { no: 3, emoji: '🔄', judul: 'Token Set & Jaccard', warna: '#0ab39c', deskripsi: 'Anti-kata terbalik: "KOTA MEDAN BALAI KOTA" dihitung sama dengan "BALAI KOTA MEDAN".' },
-  { no: 4, emoji: '🎯', judul: 'Jaro-Winkler', warna: '#f7b84b', deskripsi: 'Kemiripan huruf dengan bobot awalan: PEKALONAGN → PEKALONGAN, MAKASAR → MAKASSAR.' },
-  { no: 5, emoji: '✏️', judul: 'Damerau-Levenshtein (OSA)', warna: '#f7b84b', deskripsi: 'Sisipan, hapus, ganti, dan tukar huruf berdampingan dihitung sebagai satu kesalahan.' },
-  { no: 6, emoji: '📊', judul: 'Tri-gram Cosine', warna: '#6366f1', deskripsi: 'Vektor potongan tiga huruf: tahan pada nama outlet panjang dan beda spasi/tanda strip.' },
-  { no: 7, emoji: '🧬', judul: 'Longest Common Subsequence', warna: '#6366f1', deskripsi: 'Ketahanan terhadap sisipan kata alamat di tengah nama.' },
-  { no: 8, emoji: '🎨', judul: 'Ratcliff-Obershelp (Gestalt)', warna: '#6366f1', deskripsi: 'Kemiripan sebagaimana dinilai manusia, bukan sekadar hitung beda huruf.' },
-  { no: 9, emoji: '🔊', judul: 'Fonetik Indonesia', warna: '#299cdb', deskripsi: 'Ejaan lama/baru disatukan: DJ→J, TJ→C, SJ→S, CH/KH→K, OE→U, huruf kembar dilipat.' },
-  { no: 10, emoji: '🧱', judul: 'Token Containment', warna: '#299cdb', deskripsi: 'Nama pendek ⊆ nama panjang untuk hierarki wilayah, dengan lantai 4 huruf agar tidak asal klaim.' },
-  { no: 11, emoji: '🗺️', judul: 'Geo-Hierarchy & Pemekaran', warna: '#299cdb', deskripsi: 'Batas Provinsi/Dati II dikunci; induk-anak pemekaran (BANGGAI → BANGGAI KEPULAUAN) dikenali.' },
-  { no: 12, emoji: '🔠', judul: 'Initialism Match', warna: '#0ab39c', deskripsi: '"JP" ↔ "JAKARTA PUSAT", "KCP" ↔ "KANTOR CABANG PEMBANTU".' },
-  { no: 13, emoji: '🛡️', judul: 'Penjaga Identitas (2 aturan)', warna: '#f06548', deskripsi: 'Angka beda → nilai dipotong 0,60 (KCP 001 ≠ KCP 002). Penanda wilayah beda → 0,70 (TANGERANG ≠ TANGERANG SELATAN).' },
+export const SINYAL_PENCOCOKAN: {
+  no: number; emoji: string; judul: string; warna: string; deskripsi: string;
+  /** Penjelasan bahasa awam untuk modal temuan: apa sinyal ini & kenapa baris masuk daftarnya. */
+  penjelasan: string;
+}[] = [
+  { no: 1, emoji: '🔤', judul: 'Canonical Thesaurus', warna: '#405189', deskripsi: 'Standarisasi singkatan otomatis: KAB → KABUPATEN, KCP → KANTOR CABANG PEMBANTU, KCB → KANTOR CABANG, BO → BRANCH OFFICE, JABAR → JAWA BARAT.', penjelasan: 'Singkatan dibaca sebagai bentuk panjangnya: KAB dibaca KABUPATEN, KCP dibaca KANTOR CABANG PEMBANTU, BO dibaca BRANCH OFFICE. Baris masuk daftar ini karena namanya mengandung singkatan seperti itu.' },
+  { no: 2, emoji: '🧹', judul: 'Pembuang Token Administratif', warna: '#405189', deskripsi: 'KOTA / KABUPATEN / KEC / KEL / DESA dibuang dari kunci, jadi "TEGALSARI" == "KEC. TEGALSARI".', penjelasan: 'Kata KOTA / KABUPATEN / KEC / KEL / DESA dibuang dulu sebelum membandingkan, karena itu gelar administrasi, bukan nama asli daerahnya. Baris masuk daftar ini karena namanya mengandung kata semacam itu.' },
+  { no: 3, emoji: '🔄', judul: 'Token Set & Jaccard', warna: '#0ab39c', deskripsi: 'Anti-kata terbalik: "KOTA MEDAN BALAI KOTA" dihitung sama dengan "BALAI KOTA MEDAN".', penjelasan: 'Mengecek susunan kata: "KOTA MEDAN BALAI KOTA" dihitung sama dengan "BALAI KOTA MEDAN" walau urutannya terbalik. Baris masuk daftar ini karena kecocokannya terbukti lewat pengecek susunan kata.' },
+  { no: 4, emoji: '🎯', judul: 'Jaro-Winkler', warna: '#f7b84b', deskripsi: 'Kemiripan huruf dengan bobot awalan: PEKALONAGN → PEKALONGAN, MAKASAR → MAKASSAR.', penjelasan: 'Mengecek ejaan dan menangkap salah ketik: PEKALONAGN dianggap PEKALONGAN, MAKASAR dianggap MAKASSAR. Baris masuk daftar ini karena kecocokannya terbukti lewat kemiripan ejaan.' },
+  { no: 5, emoji: '✏️', judul: 'Damerau-Levenshtein (OSA)', warna: '#f7b84b', deskripsi: 'Sisipan, hapus, ganti, dan tukar huruf berdampingan dihitung sebagai satu kesalahan.', penjelasan: 'Mengecek huruf yang disisip, dihapus, diganti, atau tertukar posisinya. Baris masuk daftar ini karena kecocokannya terbukti lewat pengecek salah ketik ini.' },
+  { no: 6, emoji: '📊', judul: 'Tri-gram Cosine', warna: '#6366f1', deskripsi: 'Vektor potongan tiga huruf: tahan pada nama outlet panjang dan beda spasi/tanda strip.', penjelasan: 'Mengecek potongan tiga huruf — kuat untuk nama panjang dan perbedaan spasi/tanda baca. Baris masuk daftar ini karena kecocokannya terbukti lewat pengecek ini.' },
+  { no: 7, emoji: '🧬', judul: 'Longest Common Subsequence', warna: '#6366f1', deskripsi: 'Ketahanan terhadap sisipan kata alamat di tengah nama.', penjelasan: 'Mengecek urutan huruf dan tahan bila ada kata sisipan di tengah nama. Baris masuk daftar ini karena kecocokannya terbukti lewat pengecek ini.' },
+  { no: 8, emoji: '🎨', judul: 'Ratcliff-Obershelp (Gestalt)', warna: '#6366f1', deskripsi: 'Kemiripan sebagaimana dinilai manusia, bukan sekadar hitung beda huruf.', penjelasan: 'Menilai kemiripan dengan cara seperti manusia menilai, bukan sekadar menghitung beda huruf. Baris masuk daftar ini karena kecocokannya terbukti lewat penilaian ini.' },
+  { no: 9, emoji: '🔊', judul: 'Fonetik Indonesia', warna: '#299cdb', deskripsi: 'Ejaan lama/baru disatukan: DJ→J, TJ→C, SJ→S, CH/KH→K, OE→U, huruf kembar dilipat.', penjelasan: 'Mengenali ejaan lama & baru yang bunyinya sama: DJ dibaca J, TJ dibaca C, OE dibaca U, huruf kembar dilipat jadi satu. Baris masuk daftar ini karena namanya cocok lewat kemiripan bunyi.' },
+  { no: 10, emoji: '🧱', judul: 'Token Containment', warna: '#299cdb', deskripsi: 'Nama pendek ⊆ nama panjang untuk hierarki wilayah, dengan lantai 4 huruf agar tidak asal klaim.', penjelasan: 'Nama pendek yang ada di dalam nama panjang dianggap cocok: "PALEMBANG" cocok dengan "PALEMBANG BRANCH OFFICE". Baris masuk daftar ini karena nama pendeknya termuat di dalam nama panjang.' },
+  { no: 11, emoji: '🗺️', judul: 'Geo-Hierarchy & Pemekaran', warna: '#299cdb', deskripsi: 'Batas Provinsi/Dati II dikunci; induk-anak pemekaran (BANGGAI → BANGGAI KEPULAUAN) dikenali.', penjelasan: 'Pemetaan lewat peta wilayah: kota hasil pemekaran yang belum ada di data PTEN dipetakan ke kotanya yang lebih tua (induk). Baris masuk daftar ini karena pemetaannya lewat jalur wilayah.' },
+  { no: 12, emoji: '🔠', judul: 'Initialism Match', warna: '#0ab39c', deskripsi: '"JP" ↔ "JAKARTA PUSAT", "KCP" ↔ "KANTOR CABANG PEMBANTU".', penjelasan: 'Singkatan resmi dibaca kepanjangannya: JP dibaca JAKARTA PUSAT. Baris masuk daftar ini karena kecocokannya lewat bentuk singkatan.' },
+  { no: 13, emoji: '🛡️', judul: 'Penjaga Identitas (2 aturan)', warna: '#f06548', deskripsi: 'Angka beda → nilai dipotong 0,60 (KCP 001 ≠ KCP 002). Penanda wilayah beda → 0,70 (TANGERANG ≠ TANGERANG SELATAN).', penjelasan: 'Pengaman identitas: bila angkanya beda (KCP 001 vs KCP 002) atau penanda wilayahnya beda (TANGERANG vs TANGERANG SELATAN), pasangan yang hurufnya mirip pun nilainya dipangkas. Daftar ini justru bukti engine menolak asal tempel.' },
 ];
 
 /** Nama sinyal ke-n (1-based) sesuai kartu UI. */
@@ -143,6 +153,31 @@ export const hitungBit = (bitmask: number): number[] =>
 /** Semua bit yang menangkap baris ini: bukti Fase 1 (kota/wilayah) + Fase 3 (role). */
 export const bitTemuanBaris = (r: { sinyalBit?: number; sinyalRoleBit?: number }): number =>
   (r.sinyalBit || 0) | (r.sinyalRoleBit || 0);
+
+/** Maksimal catatan per sinyal yang disimpan ke satu baris hasil. */
+const CATATAN_MAX_PER_SINYAL = 3;
+
+/** Gabung catatan temuan dari beberapa sumber (Fase 1 + Fase 3) per sinyal. */
+export function gabungCatatanTemuan(
+  ...daftar: Array<Record<number, string[]> | undefined>
+): Record<number, string[]> | undefined {
+  const hasil: Record<number, string[]> = {};
+  let ada = false;
+  for (const d of daftar) {
+    if (!d) continue;
+    for (const [k, arr] of Object.entries(d)) {
+      const no = Number(k);
+      if (!Number.isFinite(no) || !Array.isArray(arr)) continue;
+      const tujuan = (hasil[no] = hasil[no] || []);
+      for (const teks of arr) {
+        if (tujuan.length >= CATATAN_MAX_PER_SINYAL) break;
+        if (teks && !tujuan.includes(teks)) tujuan.push(teks);
+      }
+      if (tujuan.length > 0) ada = true;
+    }
+  }
+  return ada ? hasil : undefined;
+}
 
 // 1. 🔤 CANONICAL THESAURUS (Standarisasi Singkatan & Akronim Perbankan/Wilayah)
 const THESAURUS_MAP: Record<string, string> = {
@@ -207,19 +242,23 @@ export function expertNormalize(raw: string): string {
     .filter((w) => w && !ADMIN_NOISE_TOKENS.has(w))
     .join(' ');
 }
-/** True bila ada singkatan yang benar-benar diganti thesaurus pada teks ini. */
-function kenaThesaurus(raw: string): boolean {
-  return String(raw || '')
+/** Pasangan [singkatan, bentuk baku] yang benar-benar muncul di teks ini (bukti temuan). */
+function pasanganThesaurus(raw: string): Array<[string, string]> {
+  const out: Array<[string, string]> = [];
+  String(raw || '')
     .toUpperCase()
     .replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, ' ')
     .split(' ')
-    .some((w) => Boolean(THESAURUS_MAP[w]));
+    .forEach((w) => {
+      if (w && THESAURUS_MAP[w]) out.push([w, THESAURUS_MAP[w]]);
+    });
+  return out;
 }
-/** True bila ada token administratif (KOTA/KAB/KEC/...) yang dibuang dari teks ini. */
-function buangTokenAdmin(raw: string): boolean {
+/** Token administratif (KOTA/KAB/KEC/...) yang dibuang dari teks ini (bukti temuan). */
+function tokenAdminDibuang(raw: string): string[] {
   return cleanAndStandardizeText(raw)
     .split(' ')
-    .some((w) => ADMIN_NOISE_TOKENS.has(w));
+    .filter((w) => w && ADMIN_NOISE_TOKENS.has(w));
 }
 // Singkatan arah/bagian yang hanya dipakai pada KUNCI KOTA (kolom MAX 15 DIGIT PTEN
 // memotong nama: BENGKULU SELATAN -> BENGKULU SEL, SERAM BAGIAN TIMUR -> SERAM BAG TIMUR).
@@ -554,27 +593,52 @@ export function initialismMatchScore(strA: string, strB: string): number {
   return Math.max(check(tokensA, tokensB), check(tokensB, tokensA));
 }
 
+/** Potong nama panjang supaya catatan temuan tetap ringkas & sel satu baris. */
+const singkatNama = (s: string, maks = 40): string => (s.length > maks ? `${s.slice(0, maks - 1)}…` : s);
+
+/** Tambah catatan alasan (maks beberapa per sinyal) — penyebab baris masuk daftar temuan. */
+function tambahCatatan(cat: Record<number, string[]>, no: number, teks: string) {
+  const arr = (cat[no] = cat[no] || []);
+  if (arr.length < CATATAN_MAX_PER_SINYAL && teks && !arr.includes(teks)) arr.push(teks);
+}
+
 // 🧠 MULTI-ENGINE EXPERT ENSEMBLE (12 sinyal + 2 penjaga: cascade pakar + consensus voting)
 // Panggilan bisa jutaan pasangan (outlet × role), jadi sinyal mahal (DP O(n·m))
 // hanya dijalankan bila sinyal murah menunjukkan pasangan ini "berpeluang".
 export function calculateUnifiedPrecisionScore(
   textA: string,
   textB: string
-): { score: number; algorithm: string; sinyal: number } {
+): { score: number; algorithm: string; sinyal: number; catatan: Record<number, string[]> } {
   const normA = expertNormalize(textA);
   const normB = expertNormalize(textB);
   // Bit sinyal yang ikut membuktikan pasangan ini. Ambang "ikut menangkap" = 0,75
   // untuk sinyal kontinu; containment/initialism/fonetik memakai ambang cascadernya.
   let sinyal = 0;
-  if (kenaThesaurus(textA) || kenaThesaurus(textB)) sinyal |= SINYAL_BIT.thesaurus;
-  if (buangTokenAdmin(textA) || buangTokenAdmin(textB)) sinyal |= SINYAL_BIT.tokenAdmin;
-  const cek = (v: number, bit: number) => {
-    if (v >= 0.75) sinyal |= bit;
+  // Alasan per sinyal (kunci = nomor kartu 1..13), dibawa bersama bit-nya supaya
+  // baris hasil bisa menjelaskan "kenapa saya masuk daftar ini" dalam bahasa awam.
+  const catatan: Record<number, string[]> = {};
+  const thA = pasanganThesaurus(textA);
+  const thB = pasanganThesaurus(textB);
+  if (thA.length > 0 || thB.length > 0) {
+    sinyal |= SINYAL_BIT.thesaurus;
+    for (const [dari, ke] of [...thA, ...thB]) tambahCatatan(catatan, 1, `"${dari}" dibaca "${ke}"`);
+  }
+  const tkA = tokenAdminDibuang(textA);
+  const tkB = tokenAdminDibuang(textB);
+  if (tkA.length > 0 || tkB.length > 0) {
+    sinyal |= SINYAL_BIT.tokenAdmin;
+    for (const t of [...tkA, ...tkB]) tambahCatatan(catatan, 2, `"${t}" dibuang — gelar administrasi, bukan nama asli`);
+  }
+  const cek = (v: number, bit: number, no: number, label: string) => {
+    if (v >= 0.75) {
+      sinyal |= bit;
+      tambahCatatan(catatan, no, `${label} ${Math.round(v * 100)}% pada "${singkatNama(normA, 30)}" vs "${singkatNama(normB, 30)}"`);
+    }
     return v;
   };
 
   if (normA === normB && normA.length > 0) {
-    return { score: 1.0, algorithm: 'Exact Canonical Match', sinyal };
+    return { score: 1.0, algorithm: 'Exact Canonical Match', sinyal, catatan };
   }
 
   // ── Penjaga semantik: kemiripan huruf tidak boleh menimpa identitas ──
@@ -582,52 +646,70 @@ export function calculateUnifiedPrecisionScore(
   const angkaA = (normA.match(/\d+/g) || []).sort().join(',');
   const angkaB = (normB.match(/\d+/g) || []).sort().join(',');
   if (angkaA !== angkaB) {
-    return { score: 0.6, algorithm: 'Identifier Guard (angka identitas berbeda)', sinyal: sinyal | SINYAL_BIT.penjaga };
+    tambahCatatan(catatan, 13, `mirip namun beda angka identitas (${angkaA || 'tanpa angka'} ≠ ${angkaB || 'tanpa angka'}) → nilai dipangkas`);
+    return { score: 0.6, algorithm: 'Identifier Guard (angka identitas berbeda)', sinyal: sinyal | SINYAL_BIT.penjaga, catatan };
   }
   // (2) Kata penanda wilayah di salah satu sisi = daerah berbeda (TANGERANG ≠
   //     TANGERANG SELATAN, ALAM SUTRA ≠ ALAM SUTRA UTARA), betapapun miripnya huruf.
-  const tkA = new Set(normA.split(' ').filter(Boolean));
-  const tkB = new Set(normB.split(' ').filter(Boolean));
-  const adaPenanda = (dari: Set<string>, ke: Set<string>) =>
-    [...ke].some((t) => !dari.has(t) && PENANDA_IDENTITAS.has(t));
-  if (adaPenanda(tkA, tkB) || adaPenanda(tkB, tkA)) {
-    return { score: 0.7, algorithm: 'Region Marker Guard (penanda wilayah berbeda)', sinyal: sinyal | SINYAL_BIT.penjaga };
+  const setA = new Set(normA.split(' ').filter(Boolean));
+  const setB = new Set(normB.split(' ').filter(Boolean));
+  const penandaDari = (dari: Set<string>, ke: Set<string>): string[] =>
+    [...ke].filter((t) => !dari.has(t) && PENANDA_IDENTITAS.has(t));
+  const penandaBed = [...penandaDari(setA, setB), ...penandaDari(setB, setA)];
+  if (penandaBed.length > 0) {
+    tambahCatatan(catatan, 13, `mirip namun penanda wilayah beda ("${penandaBed.slice(0, 2).join('", "')}") → nilai dipangkas`);
+    return { score: 0.7, algorithm: 'Region Marker Guard (penanda wilayah berbeda)', sinyal: sinyal | SINYAL_BIT.penjaga, catatan };
   }
 
   // ── Sinyal murah: dihitung selalu ──
-  const tokenJaccard = cek(calculateTokenSetJaccard(normA, normB), SINYAL_BIT.jaccard);
-  const jaro = cek(jaroWinklerDistance(normA, normB), SINYAL_BIT.jaro);
+  const tokenJaccard = cek(calculateTokenSetJaccard(normA, normB), SINYAL_BIT.jaccard, 3, 'susunan kata sama');
+  const jaro = cek(jaroWinklerDistance(normA, normB), SINYAL_BIT.jaro, 4, 'ejaan mirip');
   const containment = tokenContainmentScore(normA, normB);
-  if (containment >= 0.85) sinyal |= SINYAL_BIT.containment;
+  if (containment >= 0.85) {
+    sinyal |= SINYAL_BIT.containment;
+    const pendek = normA.length <= normB.length ? normA : normB;
+    const panjang = normA.length <= normB.length ? normB : normA;
+    tambahCatatan(catatan, 10, `"${singkatNama(pendek, 30)}" ada di dalam "${singkatNama(panjang, 30)}"`);
+  }
   const initials = initialismMatchScore(normA, normB);
-  if (initials >= 0.85) sinyal |= SINYAL_BIT.initialism;
+  if (initials >= 0.85) {
+    sinyal |= SINYAL_BIT.initialism;
+    const tokA = normA.split(' ').filter(Boolean);
+    const tokB = normB.split(' ').filter(Boolean);
+    const [abbr, panjang] = tokA.length === 1 && tokB.length > 1 ? [normA, normB]
+      : tokB.length === 1 && tokA.length > 1 ? [normB, normA] : [normA, normB];
+    tambahCatatan(catatan, 12, `"${abbr}" = singkatan dari "${singkatNama(panjang, 30)}"`);
+  }
   const keyA = indoPhoneticKey(normA);
   const keyB = indoPhoneticKey(normB);
   const phoneticHit = keyA.length >= 4 && keyA === keyB;
-  if (phoneticHit) sinyal |= SINYAL_BIT.fonetik;
+  if (phoneticHit) {
+    sinyal |= SINYAL_BIT.fonetik;
+    tambahCatatan(catatan, 9, `"${singkatNama(normA, 30)}" bunyinya sama dengan "${singkatNama(normB, 30)}"`);
+  }
 
   // ── Cascade pakar (sinyal paling meyakinkan menang) ──
   if (phoneticHit) {
-    return { score: Math.max(0.95, jaro), algorithm: 'Phonetic Indonesian Transcription Match', sinyal };
+    return { score: Math.max(0.95, jaro), algorithm: 'Phonetic Indonesian Transcription Match', sinyal, catatan };
   }
   if (containment >= 0.85) {
-    return { score: containment, algorithm: 'Token Containment (Hierarchical Region)', sinyal };
+    return { score: containment, algorithm: 'Token Containment (Hierarchical Region)', sinyal, catatan };
   }
   if (initials >= 0.85) {
-    return { score: initials, algorithm: 'Initialism / Acronym Expansion Match', sinyal };
+    return { score: initials, algorithm: 'Initialism / Acronym Expansion Match', sinyal, catatan };
   }
 
   // ── Fast-reject gate: pasangan jelas berbeda tidak layak dibayar DP mahal ──
   const cheapBest = Math.max(tokenJaccard, jaro);
   if (cheapBest < 0.55) {
-    return { score: 0.55 * tokenJaccard + 0.45 * jaro, algorithm: 'Fast Reject Gate (cheap signals only)', sinyal };
+    return { score: 0.55 * tokenJaccard + 0.45 * jaro, algorithm: 'Fast Reject Gate (cheap signals only)', sinyal, catatan };
   }
 
   // ── Sinyal mahal: baru dihitung saat ada peluang ──
-  const triGram = cek(triGramCosineSimilarity(normA, normB), SINYAL_BIT.trigram);
-  const damerau = cek(damerauLevenshteinSimilarity(normA, normB), SINYAL_BIT.damerau);
-  const lcs = cek(lcsRatio(normA, normB), SINYAL_BIT.lcs);
-  const gestalt = cek(ratcliffObershelpSimilarity(normA, normB), SINYAL_BIT.gestalt);
+  const triGram = cek(triGramCosineSimilarity(normA, normB), SINYAL_BIT.trigram, 6, 'potongan huruf');
+  const damerau = cek(damerauLevenshteinSimilarity(normA, normB), SINYAL_BIT.damerau, 5, 'huruf sisip/hapus/ganti');
+  const lcs = cek(lcsRatio(normA, normB), SINYAL_BIT.lcs, 7, 'urutan huruf');
+  const gestalt = cek(ratcliffObershelpSimilarity(normA, normB), SINYAL_BIT.gestalt, 8, 'kemiripan menyeluruh');
 
   const signals = [tokenJaccard, jaro, triGram, damerau, lcs, gestalt];
   const strongVotes = signals.filter((s) => s >= 0.85).length;
@@ -635,16 +717,16 @@ export function calculateUnifiedPrecisionScore(
 
   // Consensus: ≥3 dari 6 mesin pakar sepakat mirip → nilai terbaik + bonus kesepakatan
   if (strongVotes >= 3) {
-    return { score: Math.min(1, best + 0.04), algorithm: `Expert Ensemble Consensus (${strongVotes}/6 signals agree)`, sinyal };
+    return { score: Math.min(1, best + 0.04), algorithm: `Expert Ensemble Consensus (${strongVotes}/6 signals agree)`, sinyal, catatan };
   }
   if (strongVotes === 2 && best >= 0.9) {
-    return { score: best, algorithm: 'Expert Ensemble Dual Agreement', sinyal };
+    return { score: best, algorithm: 'Expert Ensemble Dual Agreement', sinyal, catatan };
   }
 
   // Hybrid berbobot 6 sinyal (fallback terukur)
   const hybrid =
     0.2 * tokenJaccard + 0.2 * jaro + 0.15 * triGram + 0.2 * damerau + 0.1 * lcs + 0.15 * gestalt;
-  return { score: hybrid, algorithm: 'Multi-Engine Weighted Hybrid (6-Signal)', sinyal };
+  return { score: hybrid, algorithm: 'Multi-Engine Weighted Hybrid (6-Signal)', sinyal, catatan };
 }
 
 // 🏙️ CITY-STRICT MATCHER — khusus pencocokan KOTA/KABUPATEN.
@@ -652,24 +734,39 @@ export function calculateUnifiedPrecisionScore(
 // mis. TANGERANG vs TANGERANG SELATAN). Hanya terima: exact canonical, fonetik,
 // atau kemiripan sangat tinggi multi-sinyal. Lebih baik kota masuk review
 // (fallback) daripada kelurahan salah tempel kota.
-export function calculateCityMatchScore(textA: string, textB: string): { score: number; algorithm: string; sinyal: number } {
+export function calculateCityMatchScore(textA: string, textB: string): { score: number; algorithm: string; sinyal: number; catatan: Record<number, string[]> } {
   const normA = expertNormalize(textA);
   const normB = expertNormalize(textB);
   let sinyal = 0;
-  if (kenaThesaurus(textA) || kenaThesaurus(textB)) sinyal |= SINYAL_BIT.thesaurus;
-  if (buangTokenAdmin(textA) || buangTokenAdmin(textB)) sinyal |= SINYAL_BIT.tokenAdmin;
-  const catat = (v: number, bit: number) => {
-    if (v >= 0.75) sinyal |= bit;
+  const catatan: Record<number, string[]> = {};
+  const thA = pasanganThesaurus(textA);
+  const thB = pasanganThesaurus(textB);
+  if (thA.length > 0 || thB.length > 0) {
+    sinyal |= SINYAL_BIT.thesaurus;
+    for (const [dari, ke] of [...thA, ...thB]) tambahCatatan(catatan, 1, `"${dari}" dibaca "${ke}"`);
+  }
+  const tkA = tokenAdminDibuang(textA);
+  const tkB = tokenAdminDibuang(textB);
+  if (tkA.length > 0 || tkB.length > 0) {
+    sinyal |= SINYAL_BIT.tokenAdmin;
+    for (const t of [...tkA, ...tkB]) tambahCatatan(catatan, 2, `"${t}" dibuang — gelar administrasi, bukan nama asli`);
+  }
+  const catat = (v: number, bit: number, no: number, label: string) => {
+    if (v >= 0.75) {
+      sinyal |= bit;
+      tambahCatatan(catatan, no, `${label} ${Math.round(v * 100)}% pada "${singkatNama(normA, 30)}" vs "${singkatNama(normB, 30)}"`);
+    }
     return v;
   };
   if (normA === normB && normA.length > 0) {
-    return { score: 1.0, algorithm: 'City Exact Canonical Match', sinyal };
+    return { score: 1.0, algorithm: 'City Exact Canonical Match', sinyal, catatan };
   }
   const keyA = indoPhoneticKey(normA).replace(/ /g, '');
   const keyB = indoPhoneticKey(normB).replace(/ /g, '');
   if (keyA.length >= 4 && keyA === keyB) {
     sinyal |= SINYAL_BIT.fonetik;
-    return { score: 0.96, algorithm: 'City Phonetic Match', sinyal };
+    tambahCatatan(catatan, 9, `"${singkatNama(normA, 30)}" bunyinya sama dengan "${singkatNama(normB, 30)}"`);
+    return { score: 0.96, algorithm: 'City Phonetic Match', sinyal, catatan };
   }
   // 📏 MASTER PTEN memakai kolom "KOTA/KABUPATEN MAX 15 DIGIT" → nama panjang
   // dipotong mentah di 15 karakter (MANDAILING NATAL -> MANDAILING NATA).
@@ -677,18 +774,18 @@ export function calculateCityMatchScore(textA: string, textB: string): { score: 
   // (BENGKULU SEL, SERAM BAG TIMUR) sudah diurai di cityMatchKey, bukan di sini.
   const [normS, normL] = normA.length <= normB.length ? [normA, normB] : [normB, normA];
   if (normS.length >= 15 && normL.length > normS.length && normL.startsWith(normS)) {
-    return { score: 0.97, algorithm: 'City PTEN 15-Char Truncation', sinyal };
+    return { score: 0.97, algorithm: 'City PTEN 15-Char Truncation', sinyal, catatan };
   }
-  const jaccard = catat(calculateTokenSetJaccard(normA, normB), SINYAL_BIT.jaccard);
-  const jaro = catat(jaroWinklerDistance(normA, normB), SINYAL_BIT.jaro);
-  const tri = catat(triGramCosineSimilarity(normA, normB), SINYAL_BIT.trigram);
-  const dam = catat(damerauLevenshteinSimilarity(normA, normB), SINYAL_BIT.damerau);
-  const gest = catat(ratcliffObershelpSimilarity(normA, normB), SINYAL_BIT.gestalt);
+  const jaccard = catat(calculateTokenSetJaccard(normA, normB), SINYAL_BIT.jaccard, 3, 'susunan kata sama');
+  const jaro = catat(jaroWinklerDistance(normA, normB), SINYAL_BIT.jaro, 4, 'ejaan mirip');
+  const tri = catat(triGramCosineSimilarity(normA, normB), SINYAL_BIT.trigram, 6, 'potongan huruf');
+  const dam = catat(damerauLevenshteinSimilarity(normA, normB), SINYAL_BIT.damerau, 5, 'huruf sisip/hapus/ganti');
+  const gest = catat(ratcliffObershelpSimilarity(normA, normB), SINYAL_BIT.gestalt, 8, 'kemiripan menyeluruh');
   const best = Math.max(jaccard, jaro, tri, dam, gest);
   if (best >= 0.9 && (jaccard >= 0.6 || jaro >= 0.93 || tri >= 0.9)) {
-    return { score: best, algorithm: 'City Strict Ensemble Match', sinyal };
+    return { score: best, algorithm: 'City Strict Ensemble Match', sinyal, catatan };
   }
-  return { score: 0.55 * jaccard + 0.45 * jaro, algorithm: 'City Strict Reject', sinyal };
+  return { score: 0.55 * jaccard + 0.45 * jaro, algorithm: 'City Strict Reject', sinyal, catatan };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -712,22 +809,37 @@ export function matchRoleForOutlet(namaOutlet: string, cityKey: string, roleMapp
   let highestRoleScore = 0;
   let chosenAlgorithm = 'Direct Master Join';
   let chosenSinyal = 0;
+  let chosenCatat: Record<number, string[]> = {};
   const outletNameToMatch = cleanAndStandardizeText(namaOutlet);
   for (const { record: roleItem, orgClean } of preCleanedRoles) {
-    const { score, algorithm, sinyal } = calculateUnifiedPrecisionScore(outletNameToMatch, orgClean);
-    if ((sinyal & SINYAL_BIT.penjaga) !== 0) chosenSinyal |= SINYAL_BIT.penjaga;
+    const { score, algorithm, sinyal, catatan } = calculateUnifiedPrecisionScore(outletNameToMatch, orgClean);
+    if ((sinyal & SINYAL_BIT.penjaga) !== 0) {
+      chosenSinyal |= SINYAL_BIT.penjaga;
+      const g = gabungCatatanTemuan(catatan);
+      if (g) for (const [k, arr] of Object.entries(g)) for (const t of arr) tambahCatatan(chosenCatat, Number(k), t);
+    }
     if (score > highestRoleScore && score >= 0.75) {
       highestRoleScore = score;
       matchedRole = roleItem;
       chosenAlgorithm = algorithm;
       chosenSinyal = sinyal | (chosenSinyal & SINYAL_BIT.penjaga);
+      const catatanPenjaga = chosenCatat[13];
+      chosenCatat = gabungCatatanTemuan(catatan) || {};
+      if (catatanPenjaga) for (const t of catatanPenjaga) tambahCatatan(chosenCatat, 13, t);
     }
   }
   if (!matchedRole && completeRoles.length > 0) {
     const cityKeywords = cityKey.split(/\s+/).filter((w) => w.length > 2);
     for (const keyword of cityKeywords) {
       const found = preCleanedRoles.find(({ orgClean }) => orgClean.includes(keyword.toUpperCase()) || orgClean.includes(keyword));
-      if (found) { matchedRole = found.record; highestRoleScore = 0.85; chosenAlgorithm = 'Geographic City Keyword Match'; chosenSinyal |= SINYAL_BIT.geo; break; }
+      if (found) {
+        matchedRole = found.record;
+        highestRoleScore = 0.85;
+        chosenAlgorithm = 'Geographic City Keyword Match';
+        chosenSinyal |= SINYAL_BIT.geo;
+        tambahCatatan(chosenCatat, 11, `nama outlet tidak cocok langsung → dipilih cabang yang mengandung kata kota "${keyword.toUpperCase()}"`);
+        break;
+      }
     }
     if (!matchedRole) { matchedRole = completeRoles[0]; highestRoleScore = 0.70; chosenAlgorithm = 'Default Fallback (Cabang 3 Role Lengkap)'; }
   }
@@ -752,6 +864,7 @@ export function matchRoleForOutlet(namaOutlet: string, cityKey: string, roleMapp
     roleGrandTotal: matchedRole?.grandTotal || (is3RoleLengkap ? 3 : 2),
     is3RoleLengkap, alurWondr, flowDescription, confidenceScore,
     matchingAlgorithm: chosenAlgorithm, sinyalRoleBit: chosenSinyal, statusAnalisa,
+    temuanCatatan: gabungCatatanTemuan(chosenCatat),
   };
 }
 
@@ -943,6 +1056,9 @@ export async function executeAnalystPipeline(
     citySinyalBit: number;
     /** Bit sinyal Fase 3 (pasangan outlet ⟷ organisasi tujuan). */
     roleSinyalBit: number;
+    /** Alasan awam per sinyal 1..13 untuk Fase 1 / Fase 3 — isi kolom "kenapa masuk daftar ini". */
+    cityCatatan?: Record<number, string[]>;
+    roleCatatan?: Record<number, string[]>;
     organisasiTujuan: string;
     tipeUnit: 'KC' | 'KCP' | 'OUTLET';
     roleCabsal: number;
@@ -1254,9 +1370,9 @@ export async function executeAnalystPipeline(
   // Non-blocking helpers: yield to browser event loop so progress bar can render
   const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
   // Memo caches — fuzzy matching is O(n*m) and expensive; identical inputs repeat heavily
-  const ptenFuzzyCache = new Map<string, { rec: PTENRecord | null; sinyal: number }>();
+  const ptenFuzzyCache = new Map<string, { rec: PTENRecord | null; sinyal: number; catatan: Record<number, string[]> }>();
   const kodePosCityCache = new Map<string, { rows: KodePosRow[]; status: 'VERIFIED' | 'REVIEW'; method: string }>();
-  const roleMatchCache = new Map<string, { role: RoleMappingRecord | null; score: number; algorithm: string; sinyal: number }>();
+  const roleMatchCache = new Map<string, { role: RoleMappingRecord | null; score: number; algorithm: string; sinyal: number; catatan: Record<number, string[]> }>();
   // 🎯 PATOKAN: pool pencocokan role = hanya cabang 3 role lengkap (Sales+Verifikator+Penyetuju).
   const completeRoleList = roleMappingList.filter(isRoleComplete);
   const preCleanedRoles = completeRoleList.map((r) => ({ record: r, orgClean: cleanAndStandardizeText(r.organisasiTujuan) }));
@@ -1275,9 +1391,20 @@ export async function executeAnalystPipeline(
     const cityRaw = String(raw['Dati II'] || raw.Kota || raw.Kelurahan || '').trim();
     const cityClean = cityMatchKey(cityRaw);
     const kpRaw = String(raw['KODE POS'] || '').trim();
-    // Sinyal yang ikut membuktikan penempatan wilayah baris ini (bitmask, lihat SINYAL_BIT).
-    let citySinyal = kenaThesaurus(cityRaw) ? SINYAL_BIT.thesaurus : 0;
-    if (buangTokenAdmin(cityRaw)) citySinyal |= SINYAL_BIT.tokenAdmin;
+    // Sinyal yang ikut membuktikan penempatan wilayah baris ini (bitmask, lihat SINYAL_BIT),
+    // plus catatan awam kenapa sinyal itu terpicu (untuk kolom "kenapa masuk daftar ini").
+    const cityCatat: Record<number, string[]> = {};
+    let citySinyal = 0;
+    const cityPairs = pasanganThesaurus(cityRaw);
+    if (cityPairs.length > 0) {
+      citySinyal |= SINYAL_BIT.thesaurus;
+      for (const [dari, ke] of cityPairs) tambahCatatan(cityCatat, 1, `"${dari}" dibaca "${ke}"`);
+    }
+    const cityTokens = tokenAdminDibuang(cityRaw);
+    if (cityTokens.length > 0) {
+      citySinyal |= SINYAL_BIT.tokenAdmin;
+      for (const t of cityTokens) tambahCatatan(cityCatat, 2, `"${t}" dibuang — gelar administrasi, bukan nama asli`);
+    }
 
     // ── Cari PTEN Match ──
     let matchedPtenRecord: PTENRecord | null = null;
@@ -1288,18 +1415,24 @@ export async function executeAnalystPipeline(
       const cachedCity = ptenFuzzyCache.get(cityClean)!;
       matchedPtenRecord = cachedCity.rec;
       citySinyal = cachedCity.sinyal;
+      const cc = gabungCatatanTemuan(cityCatat, cachedCity.catatan);
+      if (cc) Object.assign(cityCatat, cc);
     } else {
       let bestScore = 0;
       let bestCitySinyal = 0;
+      let bestCityCatat: Record<number, string[]> = {};
       for (const [ptenCityKey, candidates] of ptenCityMap.entries()) {
-        const { score, sinyal } = calculateCityMatchScore(cityClean, ptenCityKey);
+        const { score, sinyal, catatan } = calculateCityMatchScore(cityClean, ptenCityKey);
         if (score > bestScore && score >= 0.88) {
           bestScore = score;
           matchedPtenRecord = candidates[0];
           bestCitySinyal = sinyal;
+          bestCityCatat = catatan;
         }
       }
       citySinyal |= bestCitySinyal;
+      const mc = gabungCatatanTemuan(cityCatat, bestCityCatat);
+      if (mc) Object.assign(cityCatat, mc);
       // Anak pemekaran: nama kotanya tidak ada di PTEN sama sekali, tapi PTEN punya
       // induknya (BANGGAI LAUT ⟶ BANGGAI KEPULAUAN). Induk dipilih yang blok kode posnya
       // menaungi SELURUH blok anak dan paling umum di antara kandidat.
@@ -1320,11 +1453,12 @@ export async function executeAnalystPipeline(
             if (terpilih.length === 1) {
               matchedPtenRecord = ptenCityMap.get(terpilih[0].key)![0];
               citySinyal |= SINYAL_BIT.geo;
+              tambahCatatan(cityCatat, 11, `kota "${singkatNama(cityClean, 30)}" belum ada di PTEN → dipetakan ke induk "${singkatNama(terpilih[0].key, 30)}"`);
             }
           }
         }
       }
-      ptenFuzzyCache.set(cityClean, { rec: matchedPtenRecord, sinyal: citySinyal });
+      ptenFuzzyCache.set(cityClean, { rec: matchedPtenRecord, sinyal: citySinyal, catatan: cityCatat });
     }
 
     const finalKotaPten = matchedPtenRecord?.kotaPten || (cityRaw ? cityRaw.toUpperCase() : 'KOTA JAKARTA PUSAT');
@@ -1415,6 +1549,7 @@ export async function executeAnalystPipeline(
     let highestRoleScore = 0;
     let chosenAlgorithm = 'Direct Master Join';
     let chosenSinyal = 0;
+    let chosenCatat: Record<number, string[]> = {};
     const outletNameToMatch = cleanAndStandardizeText(namaOutlet);
     if (sampaiFase >= 3) {
       const cachedRoleMatch = roleMatchCache.get(outletNameToMatch);
@@ -1423,31 +1558,48 @@ export async function executeAnalystPipeline(
         highestRoleScore = cachedRoleMatch.score;
         chosenAlgorithm = cachedRoleMatch.algorithm;
         chosenSinyal = cachedRoleMatch.sinyal;
+        chosenCatat = gabungCatatanTemuan(cachedRoleMatch.catatan) || {};
       } else {
         // Penjaga identitas = temuan tersendiri: kandidat yang mirip hurufnya TAPI
         // beda identifier/penanda wilayah. Dicatat walau pasangan ini kalah skor,
         // supaya kartu sinyal 13 menghitung pencegahan, bukan hanya kemenangan.
         let guardTertangkap = false;
+        const guardCatat: Record<number, string[]> = {};
         for (const { record: roleItem, orgClean } of preCleanedRoles) {
-          const { score, algorithm, sinyal } = calculateUnifiedPrecisionScore(outletNameToMatch, orgClean);
-          if ((sinyal & SINYAL_BIT.penjaga) !== 0) guardTertangkap = true;
+          const { score, algorithm, sinyal, catatan } = calculateUnifiedPrecisionScore(outletNameToMatch, orgClean);
+          if ((sinyal & SINYAL_BIT.penjaga) !== 0) {
+            guardTertangkap = true;
+            const g = gabungCatatanTemuan(catatan);
+            if (g) for (const [k, arr] of Object.entries(g)) for (const t of arr) tambahCatatan(guardCatat, Number(k), t);
+          }
           if (score > highestRoleScore && score >= 0.75) {
             highestRoleScore = score;
             matchedRole = roleItem;
             chosenAlgorithm = algorithm;
             chosenSinyal = sinyal;
+            chosenCatat = gabungCatatanTemuan(catatan) || {};
           }
         }
-        if (guardTertangkap) chosenSinyal |= SINYAL_BIT.penjaga;
+        if (guardTertangkap) {
+          chosenSinyal |= SINYAL_BIT.penjaga;
+          chosenCatat = gabungCatatanTemuan(chosenCatat, guardCatat) || {};
+        }
         if (!matchedRole && completeRoleList.length > 0) {
           const cityKeywords = ptenCleanCity.split(/\s+/).filter(w => w.length > 2);
           for (const keyword of cityKeywords) {
             const found = preCleanedRoles.find(({ orgClean }) => orgClean.includes(keyword.toUpperCase()) || orgClean.includes(keyword));
-            if (found) { matchedRole = found.record; highestRoleScore = 0.85; chosenAlgorithm = 'Geographic City Keyword Match'; chosenSinyal |= SINYAL_BIT.geo; break; }
+            if (found) {
+              matchedRole = found.record;
+              highestRoleScore = 0.85;
+              chosenAlgorithm = 'Geographic City Keyword Match';
+              chosenSinyal |= SINYAL_BIT.geo;
+              tambahCatatan(chosenCatat, 11, `nama outlet tidak cocok langsung → dipilih cabang yang mengandung kata kota "${keyword.toUpperCase()}"`);
+              break;
+            }
           }
           if (!matchedRole) { matchedRole = completeRoleList[0]; highestRoleScore = 0.70; chosenAlgorithm = 'Default Fallback (Cabang 3 Role Lengkap)'; }
         }
-        roleMatchCache.set(outletNameToMatch, { role: matchedRole, score: highestRoleScore, algorithm: chosenAlgorithm, sinyal: chosenSinyal });
+        roleMatchCache.set(outletNameToMatch, { role: matchedRole, score: highestRoleScore, algorithm: chosenAlgorithm, sinyal: chosenSinyal, catatan: chosenCatat });
       }
     }
 
@@ -1485,6 +1637,13 @@ export async function executeAnalystPipeline(
       // turunan/pemekaran — bukti hirarki wilayah, bukan kemiripan nama.
       citySinyalBit: citySinyal | (placementMethod.includes('pemekaran') ? SINYAL_BIT.geo : 0),
       roleSinyalBit: fase3Jalan ? chosenSinyal : 0,
+      cityCatatan: (() => {
+        if (placementMethod.includes('pemekaran') && !cityCatat[11]) {
+          tambahCatatan(cityCatat, 11, `nama kota turunan/pemekaran → ditempatkan di wilayah induk lewat blok kode pos`);
+        }
+        return gabungCatatanTemuan(cityCatat);
+      })(),
+      roleCatatan: fase3Jalan ? gabungCatatanTemuan(chosenCatat) : undefined,
       organisasiTujuan, tipeUnit, roleCabsal, roleCabapv1, roleCabapv2,
       is3RoleLengkap, alurWondr, flowDescription: flowDesc, confidenceScore, statusAnalisa,
     });
@@ -1719,6 +1878,7 @@ export async function executeAnalystPipeline(
         matchingAlgorithm: fase3Jalan ? meta.chosenAlgorithm : '',
         sinyalBit: meta.citySinyalBit,
         sinyalRoleBit: fase3Jalan ? meta.roleSinyalBit : 0,
+        temuanCatatan: gabungCatatanTemuan(meta.cityCatatan, fase3Jalan ? meta.roleCatatan : undefined),
         statusAnalisa: fase3Jalan ? meta.statusAnalisa : 'MENUNGGU',
         isFinalApproved: fase3Jalan && meta.statusAnalisa === 'EXACT_MATCH',
       });

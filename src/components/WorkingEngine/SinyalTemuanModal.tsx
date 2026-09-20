@@ -9,10 +9,12 @@ interface Props {
 }
 
 const TABEL_BATAS_AWAL = 150;
+const SEL_POTONG: React.CSSProperties = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 };
 
 /**
- * Detail "temuan" satu sinyal pencocokan. Daftar barisnya berasal dari bitmask
- * `sinyalBit` yang ditulis engine saat analisa — jadi isinya bukti nyata, bukan reka ulang.
+ * Detail "temuan" satu sinyal pencocokan, ditulis untuk pembaca non-teknis:
+ * berapa banyak, dan kenapa tiap baris masuk daftar (catatan `temuanCatatan`
+ * yang dicatat engine saat pencocokan berjalan — bukan dihitung ulang setelahnya).
  */
 export const SinyalTemuanModal: React.FC<Props> = ({ no, rows, onClose }) => {
   const meta = SINYAL_PENCOCOKAN.find((s) => s.no === no);
@@ -29,14 +31,20 @@ export const SinyalTemuanModal: React.FC<Props> = ({ no, rows, onClose }) => {
 
   const bit = bitUntuk(no);
   const temuan = useMemo(() => (bit ? rows.filter((r) => bitTemuanBaris(r) & bit) : []), [rows, bit]);
+  const namaSinyal = useMemo(() => {
+    const m = new Map<number, string>();
+    SINYAL_PENCOCOKAN.forEach((s) => m.set(s.no, `${s.emoji} ${s.judul}`));
+    return m;
+  }, []);
   const termFilter = useMemo(() => {
     const q = cari.trim().toUpperCase();
     if (!q) return temuan;
     return temuan.filter((r) =>
-      `${r.kotaPten} ${r.kelurahan} ${r.namaOutlet} ${r.organisasiTujuan}`.toUpperCase().includes(q)
+      `${r.kotaPten} ${r.kelurahan} ${r.namaOutlet} ${r.temuanCatatan?.[no]?.join(' ') || ''}`.toUpperCase().includes(q)
     );
-  }, [temuan, cari]);
+  }, [temuan, cari, no]);
   const tampil = termFilter.slice(0, batas);
+  const adaAlasan = useMemo(() => temuan.some((r) => (r.temuanCatatan?.[no] || []).length > 0), [temuan, no]);
 
   if (!meta) return null;
 
@@ -44,7 +52,7 @@ export const SinyalTemuanModal: React.FC<Props> = ({ no, rows, onClose }) => {
     <div className="modal-backdrop" onClick={onClose}>
       <div
         className="modal-container"
-        style={{ maxWidth: '1020px' }}
+        style={{ maxWidth: '980px' }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -63,14 +71,38 @@ export const SinyalTemuanModal: React.FC<Props> = ({ no, rows, onClose }) => {
         </div>
 
         <div className="modal-body">
-          <p style={{ fontSize: '0.78rem', color: '#64748b', margin: '0 0 0.75rem', lineHeight: 1.45 }}>
-            {meta.deskripsi}
+          <p
+            style={{
+              fontSize: '0.84rem',
+              color: '#334155',
+              margin: '0 0 0.85rem',
+              lineHeight: 1.5,
+              background: '#f8fafc',
+              border: '1px solid #edf2f7',
+              borderLeft: `3px solid ${meta.warna}`,
+              borderRadius: '6px',
+              padding: '0.6rem 0.75rem',
+            }}
+          >
+            {meta.penjelasan}
           </p>
-          <p style={{ fontSize: '0.74rem', color: '#878a99', margin: '0 0 0.85rem' }}>
-            "Temuan" = baris hasil analisa yang benar-benar dibantu sinyal ini (dicatat engine saat pencocokan
-            berjalan, bukan dihitung ulang setelahnya). Kolom Fase 2/Fase 3 masih kosong bila fase itu belum
-            dijalankan.
-          </p>
+
+          {!adaAlasan && temuan.length > 0 && (
+            <div
+              style={{
+                fontSize: '0.75rem',
+                color: '#f06548',
+                background: '#fff5f3',
+                border: '1px solid #ffe3dc',
+                borderRadius: '6px',
+                padding: '0.45rem 0.65rem',
+                marginBottom: '0.75rem',
+              }}
+            >
+              Baris hasil analisa lama belum menyimpan alasannya. Jalankan ulang analisa supaya kolom
+              &quot;Kenapa masuk daftar ini&quot; terisi.
+            </div>
+          )}
 
           {temuan.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.7rem' }}>
@@ -80,7 +112,7 @@ export const SinyalTemuanModal: React.FC<Props> = ({ no, rows, onClose }) => {
                   type="search"
                   className="form-control"
                   style={{ paddingLeft: '28px', height: '32px', fontSize: '0.8rem' }}
-                  placeholder="Filter kota / kelurahan / outlet"
+                  placeholder="Cari kota / kelurahan / alasan"
                   value={cari}
                   onChange={(e) => setCari(e.target.value)}
                   aria-label="Filter temuan"
@@ -104,32 +136,31 @@ export const SinyalTemuanModal: React.FC<Props> = ({ no, rows, onClose }) => {
                 <thead>
                   <tr>
                     <th style={{ width: '52px' }}>No</th>
-                    <th>Kota PTEN (Fase 1)</th>
+                    <th style={{ width: '180px' }}>Kota (Fase 1)</th>
                     <th style={{ width: '84px' }}>Kode Pos</th>
-                    <th>Kelurahan</th>
-                    <th>Nama Outlet (Fase 2)</th>
-                    <th>Organisasi Tujuan (Fase 3)</th>
-                    <th style={{ width: '150px' }}>Algoritma terpilih</th>
-                    <th style={{ width: '58px' }}>Skor</th>
-                    <th style={{ width: '120px' }}>Sinyal lain</th>
+                    <th style={{ width: '160px' }}>Kelurahan</th>
+                    <th style={{ width: '190px' }}>Nama Outlet (Fase 2)</th>
+                    <th>Kenapa masuk daftar ini</th>
+                    <th style={{ width: '170px' }}>Sinyal lain yang membantu</th>
                   </tr>
                 </thead>
                 <tbody>
                   {tampil.map((r) => {
-                    const lain = hitungBit(bitTemuanBaris(r)).filter((n) => n !== no);
+                    const alasan = r.temuanCatatan?.[no] || [];
+                    const lain = hitungBit(bitTemuanBaris(r))
+                      .filter((n) => n !== no)
+                      .map((n) => namaSinyal.get(n) || `#${n}`);
                     return (
                       <tr key={r.id}>
                         <td>{r.no}</td>
-                        <td title={r.kotaPten}>{r.kotaPten}</td>
-                        <td>{r.kodePosPten}</td>
-                        <td title={r.kelurahan}>{r.kelurahan}</td>
-                        <td title={r.namaOutlet}>{r.namaOutlet || '-'}</td>
-                        <td title={r.organisasiTujuan}>{r.organisasiTujuan || '-'}</td>
-                        <td title={r.matchingAlgorithm}>{r.matchingAlgorithm || '-'}</td>
-                        <td>{r.confidenceScore ? `${r.confidenceScore}%` : '-'}</td>
-                        <td title={lain.map((n) => SINYAL_PENCOCOKAN.find((s) => s.no === n)?.judul || '').filter(Boolean).join(' · ')}>
-                          {lain.length > 0 ? lain.map((n) => `#${n}`).join(' ') : '-'}
+                        <td style={SEL_POTONG} title={r.kotaPten}>{r.kotaPten}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>{r.kodePosPten}</td>
+                        <td style={SEL_POTONG} title={r.kelurahan}>{r.kelurahan}</td>
+                        <td style={SEL_POTONG} title={r.namaOutlet}>{r.namaOutlet || '-'}</td>
+                        <td style={{ ...SEL_POTONG, maxWidth: '360px' }} title={alasan.join(' · ') || undefined}>
+                          {alasan.length > 0 ? alasan.join(' · ') : '-'}
                         </td>
+                        <td style={SEL_POTONG} title={lain.join(' · ')}>{lain.length > 0 ? lain.join(' · ') : '-'}</td>
                       </tr>
                     );
                   })}
