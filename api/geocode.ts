@@ -23,7 +23,7 @@ export default async function handler(req: any, res: any) {
     try {
       const googleUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(cleanQuery)}&key=${apiKey}&region=id&language=id`;
       const gRes = await fetch(googleUrl);
-      const gData = await gRes.json();
+      const gData: any = await gRes.json();
 
       if (gData.status === 'OK' && gData.results && gData.results.length > 0) {
         const topResult = gData.results[0];
@@ -45,7 +45,7 @@ export default async function handler(req: any, res: any) {
   try {
     const esriUrl = `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&singleLine=${encodeURIComponent(cleanQuery + ', Indonesia')}&maxLocations=1&countryCode=IDN`;
     const eRes = await fetch(esriUrl);
-    const eData = await eRes.json();
+    const eData: any = await eRes.json();
 
     if (eData.candidates && eData.candidates.length > 0) {
       const cand = eData.candidates[0];
@@ -65,7 +65,7 @@ export default async function handler(req: any, res: any) {
   try {
     const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(cleanQuery)}&limit=1`;
     const pRes = await fetch(photonUrl);
-    const pData = await pRes.json();
+    const pData: any = await pRes.json();
 
     if (pData.features && pData.features.length > 0) {
       const feat = pData.features[0];
