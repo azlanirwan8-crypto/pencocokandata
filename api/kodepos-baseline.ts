@@ -10,9 +10,14 @@ import { neon } from '@neondatabase/serverless';
  * DELETE            kosongkan tabel baseline untuk mulai ulang
  *
  * Sumber dicoba berurutan; sumber yang benar-benar dipakai dicatat di kolom `sumber`:
- *  1. Satu Data Indonesia (penerbit Kementerian PPN/Bappenas) — dataset "Kode Pos Desa
+ *  1. Dump resmi Kemendagri (dua berkas SQL di GitHub cahyadsn) — `wilayah.sql` memberi kode
+ *     wilayah 12 digit + nama semua level, `wilayah_kodepos.sql` memberi kode pos per kode
+ *     wilayah. Digabung pada kode wilayah, hasilnya 83.762 baris lengkap (terukur 2026-09-20).
+ *     https://raw.githubusercontent.com/cahyadsn/wilayah/master/db/wilayah.sql
+ *     https://raw.githubusercontent.com/cahyadsn/wilayah_kodepos/main/db/wilayah_kodepos.sql
+ *  2. Satu Data Indonesia (penerbit Kementerian PPN/Bappenas) — dataset "Kode Pos Desa
  *     Kelurahan di Indonesia", dilayani JabarCloud. https://data.go.id/dataset/dataset/kode-pos-desa-kelurahan-di-indonesia
- *  2. Mirror GitHub wilayah + kode pos (teguh02, asal-usul komunitas) — dipakai hanya bila
+ *  3. Mirror GitHub wilayah + kode pos (teguh02, asal-usul komunitas) — dipakai hanya bila
  *     portal pemerintah menolak (WAF-nya sering memblokir IP di luar Indonesia).
  */
 
@@ -24,6 +29,8 @@ const DIFF_CAP = 5000;
 
 const PEMDA_URL = 'https://data.jabarprov.go.id/api-backend/bigdata/dispusipda/kode_pos_kab_kota_indonesia';
 const CSV_URL = 'https://raw.githubusercontent.com/teguh02/Wilayah-Indonesia-Beserta-Kode-Pos/main/CSV/full.csv';
+const WILAYAH_URL = 'https://raw.githubusercontent.com/cahyadsn/wilayah/master/db/wilayah.sql';
+const KODEPOS_SQL_URL = 'https://raw.githubusercontent.com/cahyadsn/wilayah_kodepos/main/db/wilayah_kodepos.sql';
 
 /** Baris normal yang disimpan ke tabel baseline. */
 interface NormRow {
@@ -44,6 +51,51 @@ const BROWSER_HEADERS = {
 };
 
 const norm = (v: any) => String(v ?? '').trim();
+
+/** Dump SQL resmi di-cache per instance (1 jam): 83.762 baris hasil gabungan dua berkas. */
+let kemendagriCache: { at: number; rows: NormRow[] } | null = null;
+
+async function fetchText(url: string): Promise<string> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url.split('/').pop()} menolak (HTTP ${res.status}).`);
+  return res.text();
+}
+
+/**
+ * Sumber 1: dump resmi Kemendagri. `wilayah.sql` memetakan kode wilayah -> nama pada semua
+ * level (provinsi 2, kab/kota 5, kecamatan 8, desa 13 karakter), `wilayah_kodepos.sql`
+ * memetakan kode desa -> kode pos. Kuncinya sama-sama kode wilayah 12 digit.
+ */
+async function loadKemendagriPage(skip: number, size = PAGE_SIZE): Promise<{ rows: NormRow[]; total: number }> {
+  if (!kemendagriCache || Date.now() - kemendagriCache.at > 60 * 60 * 1000) {
+    const [wilayahText, kodePosText] = await Promise.all([fetchText(WILAYAH_URL), fetchText(KODEPOS_SQL_URL)]);
+
+    const nama = new Map<string, string>();
+    // Level 1-3 memakai segmen 2 digit (11 / 11.05 / 11.05.07); level 4 empat digit (11.05.07.2002).
+    for (const m of wilayahText.matchAll(/\('(\d{2}(?:\.\d{2,4}){0,3})','((?:[^']|'')*)'\)/g)) {
+      nama.set(m[1], m[2].replace(/''/g, "'").trim());
+    }
+
+    const rows: NormRow[] = [];
+    for (const m of kodePosText.matchAll(/\('(\d{2}\.\d{2}\.\d{2}\.\d{4})',\s*'(\d{5})'\)/g)) {
+      const kode = m[1];
+      rows.push({
+        kode_wilayah: kode,
+        kode_pos: m[2],
+        kelurahan: nama.get(kode) || '',
+        kecamatan: nama.get(kode.slice(0, 8)) || '',
+        kabupaten_kota: nama.get(kode.slice(0, 5)) || '',
+        provinsi: nama.get(kode.slice(0, 2)) || '',
+        tahun: '',
+      });
+    }
+
+    if (rows.length === 0) throw new Error('Dump Kemendagri tidak menghasilkan satu barispun.');
+    rows.sort((a, b) => a.kode_wilayah.localeCompare(b.kode_wilayah));
+    kemendagriCache = { at: Date.now(), rows };
+  }
+  return { rows: kemendagriCache.rows.slice(skip, skip + size), total: kemendagriCache.rows.length };
+}
 
 /** Sumber 1: portal pemerintah (JSON berpaginasi, ada nama wilayah + kode kemendagri). */
 async function loadPemdaPage(skip: number, size = PAGE_SIZE): Promise<{ rows: NormRow[]; total: number }> {
@@ -109,7 +161,7 @@ async function loadCsvPage(skip: number, size = PAGE_SIZE): Promise<{ rows: Norm
   return { rows: csvCache.rows.slice(skip, skip + size), total: csvCache.rows.length };
 }
 
-type SourceId = 'pemda' | 'cadangan';
+type SourceId = 'kemendagri' | 'pemda' | 'cadangan';
 
 interface BaselineSource {
   id: SourceId;
@@ -118,6 +170,7 @@ interface BaselineSource {
 }
 
 const SOURCES: BaselineSource[] = [
+  { id: 'kemendagri', label: 'Dump resmi Kemendagri (wilayah + kode pos)', load: loadKemendagriPage },
   { id: 'pemda', label: 'Satu Data Indonesia (Bappenas)', load: loadPemdaPage },
   { id: 'cadangan', label: 'Mirror GitHub (komunitas)', load: loadCsvPage },
 ];
