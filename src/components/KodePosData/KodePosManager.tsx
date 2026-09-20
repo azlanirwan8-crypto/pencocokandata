@@ -47,7 +47,6 @@ import {
 } from '../../utils/neonSync';
 import { getStoredGoogleApiKey } from '../../utils/onlineGeoCoder';
 import { KodePosSyncModal } from './KodePosSyncModal';
-import { GoogleApiKeyModal } from '../GoogleApiKeyModal';
 import { useGeoTooltip } from '../GeoTooltip';
 
 interface KodePosManagerProps {
@@ -95,8 +94,6 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
   const [deleteTarget, setDeleteTarget] = useState<KodePosRow | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
   const [showSyncModal, setShowSyncModal] = useState<boolean>(false);
-  const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
-  const [kunciGoogleTersimpan, setKunciGoogleTersimpan] = useState<boolean>(() => Boolean(getStoredGoogleApiKey()));
   const [detailItem, setDetailItem] = useState<KodePosRow | null>(null);
 
   // Titik koordinat (kodepos_geo di Neon)
@@ -236,8 +233,8 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     void refreshGeo();
   }, [refreshGeo, reloadKey]);
 
-  /** Kunci Google: menempel di browser (dialog kunci) atau terpasang di server Vercel. */
-  const kunciGoogle = kunciGoogleTersimpan || Boolean(geoStats?.googleSiap);
+  /** Kunci Google hanya bisa datang dari localStorage (dialog di peta) atau Vercel env. */
+  const kunciGoogle = Boolean(getStoredGoogleApiKey()) || Boolean(geoStats?.googleSiap);
   const { tipProps, tooltipNode } = useGeoTooltip();
 
   const jalankanGeo = async (mode: 'isi' | 'verifikasi') => {
@@ -675,27 +672,6 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
           >
             <Navigation size={13} />
             <span>{geoRun.aktif && geoRun.mode === 'isi' ? 'Hentikan' : 'Isi Koordinat'}</span>
-          </button>
-
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            onClick={() => (kunciGoogle ? void jalankanGeo('verifikasi') : setShowApiKeyModal(true))}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-            {...tipProps(
-              kunciGoogle
-                ? 'Cek ulang titik yang belum dikonfirmasi Google Geocoding API'
-                : 'Verifikasi koordinat butuh API key Google. Klik untuk memasang kunci, verifikasi langsung jalan setelah kunci tersimpan.'
-            )}
-          >
-            <CheckCircle2 size={13} />
-            <span>
-              {geoRun.aktif && geoRun.mode === 'verifikasi'
-                ? 'Hentikan'
-                : kunciGoogle
-                  ? 'Verifikasi Google'
-                  : 'Pasang Kunci Google'}
-            </span>
           </button>
 
           <button
@@ -1855,16 +1831,6 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
         </div>
       )}
 
-      {showApiKeyModal && (
-        <GoogleApiKeyModal
-          onClose={() => setShowApiKeyModal(false)}
-          onSaved={(kunci) => {
-            setKunciGoogleTersimpan(Boolean(kunci));
-            if (kunci) void jalankanGeo('verifikasi');
-            else void refreshGeo();
-          }}
-        />
-      )}
       {tooltipNode}
     </div>
   );
