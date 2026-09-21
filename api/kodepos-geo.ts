@@ -227,11 +227,13 @@ function pendingSql(opts: {
   const filterGeo =
     opts.mode === 'verifikasi'
       ? `WHERE g.kode_pos IS NOT NULL AND g.terverifikasi_google IS NOT TRUE AND g.latitude IS NOT NULL`
-      : // `ulang` mencakup SEMUA baris tanpa titik: yang belum pernah dicari maupun yang
-        // pernah dicari tetapi gagal. Pengendali putaran ada di klien — setelah satu putaran
-        // penuh tanpa satu pun berhasil, sisanya dinyatakan tak bersumber dan berhenti sendiri.
+      : // `ulang` = yang BELUM PERNAH dicari + yang pernah dicari tetapi penyedia peta
+        // belum pernah menjawab sama sekali (barisnya masih ada di `kodepos_geo` dengan
+        // `sumber` selain 'TIDAK DITEMUKAN'). Yang sudah ditandai 'TIDAK DITEMUKAN'
+        // sengaja tidak ditawarkan lagi: satu putaran penuh sudah pernah melewatinya dan
+        // tidak ada satu pun penyedia yang punya titiknya — itulah "tak bersumber".
         opts.ulang
-        ? `WHERE g.kode_pos IS NULL OR g.latitude IS NULL`
+        ? `WHERE g.kode_pos IS NULL OR (g.latitude IS NULL AND coalesce(upper(btrim(g.sumber)), '') <> 'TIDAK DITEMUKAN')`
         : `WHERE g.kode_pos IS NULL`;
   let tail = '';
   // Retry dijalankan dari yang paling lama tidak dicoba, supaya satu putaran penuh
@@ -284,6 +286,7 @@ async function ringkasanGeo(sql: any) {
     SELECT COUNT(*)::int AS tercatat,
            COUNT(*) FILTER (WHERE latitude IS NOT NULL)::int AS punya,
            COUNT(*) FILTER (WHERE latitude IS NULL)::int AS gagal,
+           COUNT(*) FILTER (WHERE latitude IS NULL AND upper(btrim(sumber)) = 'TIDAK DITEMUKAN')::int AS tak_bersumber,
            COUNT(*) FILTER (WHERE terverifikasi_google)::int AS google,
            COUNT(*) FILTER (WHERE latitude IS NOT NULL AND sumber = 'esri')::int AS esri,
            COUNT(*) FILTER (WHERE latitude IS NOT NULL AND sumber = 'osm')::int AS osm,
@@ -294,6 +297,7 @@ async function ringkasanGeo(sql: any) {
     tercatat: t.tercatat || 0,
     punya: t.punya || 0,
     gagal: t.gagal || 0,
+    takBersumber: t.tak_bersumber || 0,
     google: t.google || 0,
     esri: t.esri || 0,
     osm: t.osm || 0,

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Menu, Archive, Database, Save } from 'lucide-react';
+import { Menu, Archive, Database, Save, KeyRound } from 'lucide-react';
 import { flushPendingWrites } from '../utils/storage';
+import { getStoredGoogleApiKey } from '../utils/onlineGeoCoder';
 
 interface TopbarProps {
   isSidebarCollapsed: boolean;
@@ -21,6 +22,9 @@ export const Topbar: React.FC<TopbarProps> = ({
   onOpenNeonModal,
 }) => {
   const [savedTick, setSavedTick] = useState(false);
+  // Kunci Google menentukan sumber titik koordinat & lapisan peta — statusnya sering
+  // tidak terlihat padahal mengubah hasil, jadi tampil di baris atas.
+  const kunciGoogle = Boolean(getStoredGoogleApiKey());
 
   const handleSaveNow = async () => {
     await flushPendingWrites();
@@ -61,6 +65,21 @@ export const Topbar: React.FC<TopbarProps> = ({
             {isNeonConnected ? `Terhubung${lastSyncedAt ? ` · ${lastSyncedAt}` : ''}` : 'Offline'}
           </span>
         )}
+        <span
+          title={kunciGoogle
+            ? 'Kunci Google tersimpan di browser ini — pencarian titik memakai Google lebih dulu dan peta memakai lapisan Google.'
+            : 'Belum ada kunci Google di browser ini — titik dicari lewat ESRI/OpenStreetMap dan peta memakai OpenStreetMap. Isi kunci lewat menu Data Kode Pos.'}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+            fontSize: '0.72rem', fontWeight: 600, padding: '0.25rem 0.6rem', borderRadius: '9999px',
+            background: kunciGoogle ? 'rgba(53,119,241,0.1)' : 'rgba(134,142,150,0.12)',
+            color: kunciGoogle ? '#2b5fa8' : '#6c757d',
+            border: `1px solid ${kunciGoogle ? 'rgba(53,119,241,0.35)' : 'rgba(134,142,150,0.35)'}`,
+          }}
+        >
+          <KeyRound size={12} />
+          Google {kunciGoogle ? '✓' : '✗'}
+        </span>
         {onOpenNeonModal && (
           <button
             type="button"

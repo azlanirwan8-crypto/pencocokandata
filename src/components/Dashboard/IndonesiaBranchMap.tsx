@@ -154,6 +154,12 @@ export interface AnomalyItem {
 }
 
 
+// Lapisan dasar awal: Google hanya bila kunci API operator tersedia (tanpa kunci,
+// tile Google rawan rate-limit/CORS), selain itu OSM.
+function tileBawaan(): TileProvider {
+  return getStoredGoogleApiKey() ? 'google' : 'osm';
+}
+
 // Clean, lightweight tile layer factory supporting Google Maps, Satellite, Esri, and OSM
 function getMapTileLayer(provider: TileProvider, bounds: L.LatLngBounds): L.TileLayer {
   if (provider === 'google') {
@@ -223,7 +229,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   }, [selectedWilayah]);
 
   const [displayScope, setDisplayScope] = useState<DisplayScope>('ALL');
-  const [tileProvider, setTileProvider] = useState<TileProvider>('google');
+  // Tile Google butuh API key; tanpa kunci, lapisan dasar OSM yang aman dipanggil.
+  const [tileProvider, setTileProvider] = useState<TileProvider>(tileBawaan);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -463,6 +470,19 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     }
     return set;
   }, [masterRows]);
+
+  // Pin terpilih menyimpan snapshot baris (`selectedPin.branches`). Bila salah satu
+  // sumber data berganti, snapshot itu bisa menunjuk hasil lama → tutup drawer.
+  // Dilakukan di render (bukan `useEffect`) supaya tidak ada commit dengan data usang.
+  const [sumberPinSebelum, setSumberPinSebelum] = useState([masterRows, targetRows, finalRows]);
+  if (
+    sumberPinSebelum[0] !== masterRows ||
+    sumberPinSebelum[1] !== targetRows ||
+    sumberPinSebelum[2] !== finalRows
+  ) {
+    setSumberPinSebelum([masterRows, targetRows, finalRows]);
+    if (selectedPin) setSelectedPin(null);
+  }
 
   // 1. Group & Cluster master rows into pins using dynamic resolved coordinates & map selected Wilayah
   const allPins = useMemo(() => {
@@ -706,6 +726,16 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
   const [anomalyTypeFilter, setAnomalyTypeFilter] = useState<'ALL' | AnomalyType>('ALL');
 
+  // Esc menutup panel anomali, sama seperti dialog lain di aplikasi ini.
+  useEffect(() => {
+    if (!showAnomalyPanel) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowAnomalyPanel(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showAnomalyPanel]);
+
   // ── Anomali: SATU definisi (detectFinalAnomalies) — identik dgn kartu Dashboard ──
   const anomalyRows: AnomalyItem[] = useMemo(() => {
     if (!showAnomalyPanel) return [];
@@ -831,8 +861,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       // Fit Indonesia bounds on load
       map.fitBounds(indonesiaBounds, { padding: [20, 20] });
 
-      // Ultra-clean, fast tile layer (Default: Google Maps Roadmap)
-      const tileLayer = getMapTileLayer('google', indonesiaBounds).addTo(map);
+      // Ultra-clean, fast tile layer (Google bila kunci ada, selain itu OSM)
+      const tileLayer = getMapTileLayer(tileBawaan(), indonesiaBounds).addTo(map);
       tileLayerRef.current = tileLayer;
 
       // Add arcs layer first, then markers layer on top
@@ -866,6 +896,21 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       }
     };
   }, [indonesiaBounds]);
+
+  // ANI-1: titik pertama selama ini muncul tiba-tiba begitu cluster selesai dihitung.
+  // Layer pin dibiarkan memudar masuk sekali saja, lalu animasi dilepas supaya redraw
+  // berikutnya (filter/zoom) tidak ikut berkedip.
+  const pinFadeDoneRef = useRef(false);
+  useEffect(() => {
+    if (pinFadeDoneRef.current) return;
+    const pane = mapInstanceRef.current?.getPane('markersPane');
+    if (!pane) return;
+    pane.style.animation = 'qdrFade 0.45s ease both';
+    const selesai = () => { pane.style.animation = ''; };
+    pane.addEventListener('animationend', selesai, { once: true });
+    pinFadeDoneRef.current = true;
+    return () => pane.removeEventListener('animationend', selesai);
+  }, [filteredPins.length]);
 
   // 7. Handle Tile Provider Switch (Google Maps vs Google Satelit vs Esri vs OSM)
   const handleSwitchTile = (provider: TileProvider) => {
@@ -1071,7 +1116,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         const anomalyMarker = L.circleMarker([titik.lat, titik.lng], {
           pane: 'markersPane',
           renderer: canvasRenderer,
-          radius: 11,
+          radius: 3,
           fillColor: '#f06548',
           color: '#ffffff',
           weight: 3,
@@ -1082,6 +1127,17 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           { direction: 'top', className: 'bni-map-fast-tooltip' }
         );
         markersLayer.addLayer(anomalyMarker);
+        // Titik anomali membesar saat muncul, bukan langsung penuh. Canvas tidak
+        // mengambil animasi CSS, jadi radiusnya dijalankan per frame (~130 ms).
+        if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          let frame = 0;
+          const membesar = () => {
+            frame += 1;
+            anomalyMarker.setRadius(3 + 8 * Math.min(1, frame / 8));
+            if (frame < 8) requestAnimationFrame(membesar);
+          };
+          requestAnimationFrame(membesar);
+        }
       }
     }
     }, [filteredPins, selectedPin, showAllMatchMarkers, resolvedCoords, selectedAnomalyRow, titikKodePos, mapInteractionTick]);
@@ -1955,7 +2011,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       </div>
 
       {showAnomalyPanel && (
-        <div style={{ marginBottom: '0.65rem', padding: '0.75rem 0.95rem', border: '1px solid rgba(240,101,72,0.35)', borderRadius: '8px', background: '#fff8f6', color: '#7c2d12', fontSize: '0.74rem' }}>
+        <div className="bni-pop" style={{ marginBottom: '0.65rem', padding: '0.75rem 0.95rem', border: '1px solid rgba(240,101,72,0.35)', borderRadius: '8px', background: '#fff8f6', color: '#7c2d12', fontSize: '0.74rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.6rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <strong style={{ fontSize: '0.82rem', color: '#991b1b' }}>⚠️ Anomali Data Final</strong>
@@ -1991,6 +2047,15 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 </button>
               ))}
             </div>
+            <button
+              type="button"
+              onClick={() => setShowAnomalyPanel(false)}
+              aria-label="Tutup panel anomali"
+              title="Tutup (Esc)"
+              style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#9a3412', padding: '0.15rem', display: 'flex', flexShrink: 0 }}
+            >
+              <X size={16} />
+            </button>
           </div>
 
           {filteredAnomalyRows.length === 0 ? (
@@ -2050,11 +2115,18 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         }}
       >
         {/* Leaflet Hardware Canvas Map */}
-        <div className="bni-map-container" style={{ position: 'relative' }}>
+        <div
+          className="bni-map-container"
+          role="region"
+          aria-label={`Peta sebaran cabang dan outlet — ${allPins.length} titik, ${filteredPins.length} tampil`}
+          tabIndex={0}
+          style={{ position: 'relative' }}
+        >
           <div ref={mapContainerRef} style={{ width: '100%', height: '580px', borderRadius: '6px', cursor: 'default' }} />
 
           {/* Legenda bentuk penanda (bentuk = jenis, warna = status) + pengunci kamera */}
           <div
+            className="bni-pop"
             style={{
               position: 'absolute',
               left: '12px',
@@ -2187,6 +2259,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         {/* Selected Pin Side Drawer / Detail Card with Matched Data Correlation */}
         {selectedPin && currentBranch && (
           <div
+            className="bni-pop"
             style={{
               background: '#f8f9fa',
               border: '1px solid #e9ebec',
@@ -2906,6 +2979,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       {/* Floating Live Realtime Geocoding Progress Pill */}
       {isGeocoding && geocodingProgress && (
         <div
+          className="bni-pop"
           style={{
             position: 'fixed',
             bottom: '24px',
@@ -2931,13 +3005,13 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
               border: '2px solid #34d399',
               borderTopColor: 'transparent',
               borderRadius: '50%',
-              animation: 'spin 1s linear infinite',
+              animation: 'qdrSpin 1s linear infinite',
             }}
           />
           <div>
             <div style={{ fontWeight: 600 }}>
-              {googleApiKey ? '🗺️ Validasi Google Maps Realtime:' : '🌐 Validasi Geocoding Realtime:'}{' '}
-              {geocodingProgress.completed}/{geocodingProgress.total} ({geocodingProgress.percent}%)
+              Mencari titik {geocodingProgress.completed} dari {geocodingProgress.total}
+              {googleApiKey ? '' : ' (tanpa kunci Google)'}
             </div>
             {geocodingProgress.activeItem && (
               <div style={{ fontSize: '0.68rem', color: '#94a3b8', maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

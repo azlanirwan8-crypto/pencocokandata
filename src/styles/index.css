@@ -1828,6 +1828,11 @@ body {
 .bni-map-container {
   animation: qdrFade 0.5s ease both;
 }
+
+/* Panel melayang di atas peta (topbar, legenda, anomali, drawer): masuk lembut */
+.bni-pop {
+  animation: qdrScaleIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
 .bni-map-container .leaflet-control-zoom a {
   transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
 }

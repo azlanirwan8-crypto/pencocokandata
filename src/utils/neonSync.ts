@@ -566,6 +566,8 @@ export interface KodePosGeoStats {
     tercatat: number;
     punya: number;
     gagal: number;
+    /** Bagian `gagal` yang sudah ditandai 'TIDAK DITEMUKAN': tidak ditawarkan coba ulang lagi. */
+    takBersumber?: number;
     google: number;
     esri: number;
     osm: number;

@@ -294,6 +294,11 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
   // KODE POS. Keduanya ditampilkan terpisah supaya angka pada tombol tidak menyesatkan
   // (lihat dokumen perbaikan Bagian K).
   const geoKodePosGagal = geoStats?.geo?.gagal ?? 0;
+  // Yang masih layak dicari: antrean baru, atau kode pos gagal yang BELUM ditandai
+  // 'TIDAK DITEMUKAN' oleh server. Sisanya tidak ditawarkan lagi (K4).
+  const geoKodePosDicari = geoUlang ? (geoStats?.menungguUlang ?? 0) : geoAntrean;
+  // Server yang belum ter-deploy ulang belum mengirim `takBersumber`; selisihnya angka yang sama.
+  const geoTakBersumber = geoStats?.geo?.takBersumber ?? Math.max(0, geoKodePosGagal - (geoStats?.menungguUlang ?? 0));
   const gayaTautanGeo: React.CSSProperties = {
     marginLeft: '0.4rem',
     padding: 0,
@@ -843,6 +848,11 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
             </div>
           </div>
           <div className="metric-value">{stats.totalBerTitik.toLocaleString('id-ID')}</div>
+          {geoStats && (
+            <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#0f766e', marginTop: '-0.3rem', marginBottom: '0.15rem' }}>
+              {geoStats.geo.google.toLocaleString('id-ID')} terverifikasi Google
+            </div>
+          )}
           <div className="metric-footer">
             {geoRun.aktif ? (
               <>
@@ -858,21 +868,21 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                 {geoBelumTitik === 0
                   ? 'semua baris sudah punya titik'
                   : geoUlang
-                    ? `${geoBelumTitik.toLocaleString('id-ID')} baris tanpa titik — sudah dicoba, penyedia peta tidak menyediakannya`
+                    ? `${geoBelumTitik.toLocaleString('id-ID')} baris tanpa titik · ${geoTakBersumber.toLocaleString('id-ID')} kode pos tak bersumber`
                     : `${geoBelumTitik.toLocaleString('id-ID')} baris belum ada titik`}
-                {geoBelumTitik > 0 && (
+                {geoKodePosDicari > 0 && (
                   <button
                     type="button"
                     onClick={() => void jalankanGeo(geoUlang)}
                     style={gayaTautanGeo}
                     {...tipProps(
                       geoUlang
-                        ? `Cari ulang ${geoBelumTitik.toLocaleString('id-ID')} kode pos yang belum punya titik lewat ${kunciGoogle ? 'Google, lalu ' : ''}ESRI/OpenStreetMap (termasuk kode pos patokan yang belum diimpor). Berhenti sendiri bila satu putaran penuh tidak menghasilkan apa pun — sebagian kode pos memang tidak punya titik di penyedia mana pun.`
+                        ? `Cari ulang ${geoKodePosDicari.toLocaleString('id-ID')} kode pos yang pernah dicoba tetapi belum ketemu, lewat ${kunciGoogle ? 'Google, lalu ' : ''}ESRI/OpenStreetMap. Yang sudah ditandai tak bersumber (${geoTakBersumber.toLocaleString('id-ID')}) tidak diulang — tidak ada penyedia peta yang punya titiknya.`
                         : `Cari titik untuk ${geoAntrean.toLocaleString('id-ID')} kode pos yang belum pernah dicari lewat ${kunciGoogle ? 'Google, lalu ' : ''}ESRI/OpenStreetMap. Hasilnya dipakai baris yang tidak punya titik desa sendiri.`
                     )}
                   >
                     {geoUlang
-                      ? `coba ulang ${(geoKodePosGagal || geoBelumTitik).toLocaleString('id-ID')} kode pos`
+                      ? `coba ulang ${geoKodePosDicari.toLocaleString('id-ID')} kode pos`
                       : `isi ${geoAntrean.toLocaleString('id-ID')} kode pos`}
                   </button>
                 )}
