@@ -776,7 +776,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       {/* ────────────────────────────────────────────────────────────────────────── */}
       {/* 1b. LAPORAN CAKUPAN KODEPOS → FASE 1 (kenapa jumlah bisa ≠ master)        */}
       {/* ────────────────────────────────────────────────────────────────────────── */}
-      {coverage && (coverage.unmappedCities.length > 0 || Object.keys(cityOverrides).length > 0) && (
+      {coverage && coverage.unmappedCities.length > 0 && (
         <details
           style={{ background: '#fff8ec', border: '1px solid #f2d9a8', borderRadius: '6px', padding: '0.75rem 1rem' }}
           open
@@ -843,7 +843,11 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                     </tr>
                   );
                 })}
-                {Object.entries(cityOverrides).map(([key, ptenKota]) => {
+                {/* Override yang sudah bekerja (kotanya kini terpetakan) tidak ditampilkan lagi
+                    di sini — daftar ini khusus kota yang MASIH tidak ada padanannya di PTEN. */}
+                {Object.entries(cityOverrides)
+                  .filter(([key]) => coverage.unmappedCities.some((c) => cityMatchKey(c.city) === key))
+                  .map(([key, ptenKota]) => {
                   const ringkas = cityRowSummary.get(key);
                   const masterName = ringkas?.name || key;
                   const draft = overrideDrafts[key] || ptenKota;

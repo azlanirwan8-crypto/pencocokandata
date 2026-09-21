@@ -369,7 +369,7 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
                 12 Sinyal Pencocokan + 2 Penjaga Identitas
               </span>
               <span style={{ fontSize: '0.72rem', color: '#878a99', marginLeft: '0.5rem' }}>
-                (ensemble multi-algoritma · klik kartu untuk melihat temuannya · Fase 1 &amp; 2 memakai ensemble ini, Fase 3 memakai mesin nama+jarak+KC satu pulau · terukur 88,9% pada 72 pasangan berlabel di tests/uji-akurasi-nama.mjs; Levenshtein saja 77,8%)
+                (klik kartu untuk melihat temuannya)
               </span>
             </div>
           </div>
