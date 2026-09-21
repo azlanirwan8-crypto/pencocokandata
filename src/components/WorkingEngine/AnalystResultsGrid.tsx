@@ -195,8 +195,21 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'id', { sensitivity: 'base' }));
   }, [ptenList]);
 
-  // Ringkasan 1-pass baris master per kota — baris TERSIPAH tidak boleh memfilter
-  // 83 ribu baris kodePosRows setiap render (penyebab lag search/pagination)
+  // Nama kota ASLI dari Data KodePos, dipakai HANYA untuk tampilan kolom pembanding di
+  // tab Fase 1 (baris hasil analisa tidak menyimpannya). Kunci: kode pos + kelurahan.
+  const namaKotaKodePos = useMemo(() => {
+    const m = new Map<string, string>();
+    kodePosRows.forEach((r) => {
+      const kel = cleanKelurahan(r.kelurahan || '');
+      if (!m.has(`${r.kodePos}|${kel}`)) m.set(`${r.kodePos}|${kel}`, r.kabupatenKota || '');
+    });
+    return m;
+  }, [kodePosRows]);
+  const kotaKodePosDari = (r: AnalystRow) =>
+    namaKotaKodePos.get(`${r.kodePosKelurahan}|${cleanKelurahan(r.kelurahan || '')}`) ||
+    namaKotaKodePos.get(`${r.kodePosPten}|${cleanKelurahan(r.kelurahan || '')}`) ||
+    '';
+
   const cityRowSummary = useMemo(() => {
     const m = new Map<string, { name: string; kodePos: string; provinsi: string; count: number }>();
     kodePosRows.forEach((r) => {
@@ -1345,7 +1358,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                 <>
                   <tr>
                     {thSort('no', 'No', { width: '40px', textAlign: 'center', verticalAlign: 'middle' }, { rowSpan: 2 })}
-                    <th colSpan={4} style={{ textAlign: 'center', background: '#eff6fb', color: '#299cdb', borderLeft: '2px solid #d5e7f2' }}>
+                    <th colSpan={5} style={{ textAlign: 'center', background: '#eff6fb', color: '#299cdb', borderLeft: '2px solid #d5e7f2' }}>
                       📮 DATA POS (Kelurahan &amp; Wilayah Administrasi)
                     </th>
                     <th colSpan={3} style={{ textAlign: 'center', background: '#eefaf6', color: '#0ab39c', borderLeft: '2px solid #b7ebe4' }}>
@@ -1357,6 +1370,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                   </tr>
                   <tr>
                     {thSort('kelurahan', 'Kelurahan', { minWidth: '140px', borderLeft: '2px solid #d5e7f2' })}
+                    <th style={{ minWidth: '150px' }} title="Nama kota/kabupaten persis seperti tertulis di Data KodePos — hanya pembanding tampilan, tidak ikut disimpan di baris hasil">Kota/Kab (dari KodePos)</th>
                     {thSort('kecamatan', 'Kecamatan', { minWidth: '140px' })}
                     {thSort('provinsi', 'Provinsi', { minWidth: '130px' })}
                     {thSort('kodePosKelurahan', 'Kode Pos', { width: '90px', textAlign: 'center' })}
@@ -1507,6 +1521,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                         <>
                           <td style={{ textAlign: 'center', color: '#878a99' }}>{r.kelurahanSeq ?? displayIdx}</td>
                           <td style={{ fontWeight: 700, color: '#212529', borderLeft: '2px solid #d5e7f2' }}>{r.kelurahan}</td>
+                          <td style={{ color: kotaKodePosDari(r) && kotaKodePosDari(r) !== r.kotaPten ? '#b45309' : '#495057' }} title="Dari Data KodePos (tampilan saja)">{kotaKodePosDari(r) || '—'}</td>
                           <td>{r.kecamatan}</td>
                           <td>{r.provinsi}</td>
                           <td className="code-cell" style={{ textAlign: 'center', color: '#299cdb', fontWeight: 700 }}>
