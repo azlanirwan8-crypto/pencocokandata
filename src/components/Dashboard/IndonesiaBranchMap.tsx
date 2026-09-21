@@ -52,6 +52,7 @@ import { GoogleApiKeyModal } from '../GoogleApiKeyModal';
 import { cleanDati, cleanProvinsi } from '../../utils/normalizer';
 import { getUnitCategory } from '../RoleMapping/RoleMappingManager';
 import { useNotification } from '../Notification/NotificationContext';
+import { DialogPanel } from '../BaseModal';
 
 // ── Ikon penanda peta: bentuk = JENIS titik, warna = STATUS (agar user langsung tahu
 //    "ini KC / KCP / Kode Pos / Multi-Outlet" tanpa harus klik). ──
@@ -2603,8 +2604,10 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
       {/* MODAL RINCIAN DATA MATCHED UNTUK CABANG INI ("DATA INI SAYA BISA LIHAT DI MANA YA") */}
       {showMatchedModal && selectedPin && (
-        <div
-          style={{
+        <DialogPanel
+          onClose={() => setShowMatchedModal(false)}
+          backdropClassName=""
+          backdropStyle={{
             position: 'fixed',
             inset: 0,
             background: 'rgba(33, 37, 41, 0.55)',
@@ -2615,10 +2618,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
             zIndex: 9999,
             padding: '1rem',
           }}
-          onClick={() => setShowMatchedModal(false)}
-        >
-          <div
-            style={{
+          className=""
+          style={{
               background: '#ffffff',
               borderRadius: '8px',
               maxWidth: '820px',
@@ -2628,9 +2629,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
               flexDirection: 'column',
               boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
               border: '1px solid #e2e8f0',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
+          }}
+        >
             {/* Modal Header */}
             <div
               style={{
@@ -2900,8 +2900,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 Tutup
               </button>
             </div>
-          </div>
-        </div>
+        </DialogPanel>
       )}
 
       {/* Floating Live Realtime Geocoding Progress Pill */}

@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Sparkles, CheckCircle2 } from 'lucide-react';
+import { DialogPanel } from '../BaseModal';
 
 interface ProximityGuideModalProps {
   isOpen: boolean;
@@ -10,8 +11,11 @@ export const ProximityGuideModal: React.FC<ProximityGuideModalProps> = ({ isOpen
   if (!isOpen) return null;
 
   return (
-    <div
-      style={{
+    <DialogPanel
+      isOpen={isOpen}
+      onClose={onClose}
+      backdropClassName=""
+      backdropStyle={{
         position: 'fixed',
         inset: 0,
         zIndex: 1060,
@@ -22,11 +26,8 @@ export const ProximityGuideModal: React.FC<ProximityGuideModalProps> = ({ isOpen
         backdropFilter: 'blur(4px)',
         padding: '1rem',
       }}
-      onClick={onClose}
-    >
-      <div
-        className="glass-card"
-        style={{
+      className="glass-card"
+      style={{
           width: '100%',
           maxWidth: '640px',
           background: '#ffffff',
@@ -37,9 +38,8 @@ export const ProximityGuideModal: React.FC<ProximityGuideModalProps> = ({ isOpen
           maxHeight: '90vh',
           display: 'flex',
           flexDirection: 'column',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
+      }}
+    >
         {/* Modal Header */}
         <div
           style={{
@@ -316,7 +316,6 @@ export const ProximityGuideModal: React.FC<ProximityGuideModalProps> = ({ isOpen
             Saya Mengerti
           </button>
         </div>
-      </div>
-    </div>
+    </DialogPanel>
   );
 };

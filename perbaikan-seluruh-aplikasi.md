@@ -1,5 +1,5 @@
 # RENCANA PERBAIKAN SELURUH APLIKASI
-> **⚠️ STATUS 2026-09-21: BELUM SELESAI — 15 dari 67 item `SELESAI`, 52 `BELUM` (6 di antaranya tinggal dieksekusi, keputusannya sudah diambil).**
+> **⚠️ STATUS 2026-09-21: BELUM SELESAI — 17 dari 67 item `SELESAI`, 50 `BELUM` (5 di antaranya tinggal dieksekusi, keputusannya sudah diambil).**
 > Baca Bagian 0 sebelum mengerjakan apa pun. Titik lanjut: **A3** (BaseModal). Rincian & bukti verifikasi ada di sana.
 
 **Aplikasi:** Tools Data Matcher Cabang & Outlet v2.x — React + TypeScript + Vite; IndexedDB (lokal) + Neon Postgres (cloud via serverless `api/`).
@@ -14,13 +14,13 @@
 >
 > | Status | Jumlah | ID |
 > |---|---|---|
-> | ✅ `SELESAI` | **15** | A1, A2, A4, A5, F3-C1, F3-C2, F6-X4, G2, G4, G5, G6, G7, G8, G9, G10 |
-> | ⬜ `BELUM` | **52** | sisanya — termasuk 6 item yang dulu `SKIP`: keputusannya **sudah diambil 2026-09-21** (lihat Bagian 12), tinggal dieksekusi (B1, B2, B4, D1, D3, D6) |
+> | ✅ `SELESAI` | **17** | A1, A2, A3, A4, A5, B4, F3-C1, F3-C2, F6-X4, G2, G4, G5, G6, G7, G8, G9, G10 |
+> | ⬜ `BELUM` | **50** | sisanya — termasuk 5 item yang dulu `SKIP`: keputusannya **sudah diambil 2026-09-21** (lihat Bagian 12), tinggal dieksekusi (B1, B2, D1, D3, D6) |
 >
 > Belum termasuk item Bagian **H/I/J/K di Lampiran** (statusnya `BELUM`, ditandai langsung di barisnya; khusus Bagian K: K1–K3 sudah dikerjakan & build-verified 2026-09-21, K4–K5 `BELUM`).
 >
 > **Untuk AI berikutnya (Cline / lainnya):**
-> 1. Urutan sisa yang disepakati: **A3** (BaseModal) → **B4/D2/D3/D6** + B1/B2/D1 (kejujuran data) → **C2a–C2e + C3/C4** (Fase 2) → **A6–A10, E, F, G1/G3/G11/G12** (kebersihan & sisanya). **G9 sudah selesai** — jangan buat file `api/` baru apa pun (alasan + bukti: kotak 🚫 di Bagian G9).
+> 1. Urutan sisa yang disepakati: **D2/D3/D6** + B1/B2/D1 (kejujuran data) → **C2a–C2e + C3/C4** (Fase 2) → **A6–A10, E, F, G1/G3/G11/G12** (kebersihan & sisanya). **G9 sudah selesai** — jangan buat file `api/` baru apa pun (alasan + bukti: kotak 🚫 di Bagian G9).
 > 2. **Jangan kerjakan ulang** 13 item `SELESAI`; baca kolom "Catatan" untuk file yang sudah disentuh.
 > 3. Nomor baris di dokumen ini berasal dari audit statis dan **sudah bergeser** — cari teksnya, jangan percaya angka barisnya.
 > 4. Setelah satu item selesai: ganti statusnya di tabel + isi tanggal `YYYY-MM-DD` + file yang diubah, lalu commit dokumen ini bersama kodenya.
@@ -30,7 +30,7 @@
 >
 > **Bukti verifikasi terakhir (2026-09-21, batch G9):** `npx tsc -b --force` 0 error · `npm run build` ✓ · `npm run lint` 0 error / **82** warning (semuanya di file lain; `src/App.tsx` & `src/utils/neonSync.ts` = 0 warning) · `npx tsc -p api/tsconfig.json --noEmit` ✓ · `pilFinalDariCloud` diukur di browser dev lewat 7 kasus (baris cloud baru diterima; baris berkunci alami sama dengan `id` berbeda DITOLAK; duplikat internal cloud hanya 1 yang masuk; baris tanpa `id`/tanpa `kodePosPten` dibuang; kota kembar beda kota tetap dipulihkan) · helper cloud diukur dengan endpoint tiruan: 700 baris = 2 GET (500+200, tanpa celah) dan 3 POST (chunk 300, body maks 102 KB utk baris 146 B) · handler `api/target.ts` dijalankan terhadap `sql` palsu: GET kosong → `CREATE TABLE final_rows` + `total:0`; GET paging → `returned:500 offset:200 total:700`; POST upsert 701 baris → `written:700` (baris tanpa id dibuang) & **tidak ada** `DELETE`; POST `mode:'replace'` → ada `DELETE` lebih dulu; POST tanpa mode → upsert (aman); DELETE tanpa `key`/`all` → 400 dan nol query destruktif; DELETE `&key=` → 1 baris; DELETE `&all=1` → 705 baris; `view` tak dikenal pada POST/DELETE → 400 tanpa menyentuh `target_records`; jalur lama `GET/DELETE /api/target` (tanpa `view`) tetap meng tabel target.
 >
-> Catatan penting batch ini: `npm run build` memakai `tsc -b` **inkremental** — tanpa `--force` error di file yang tidak diubah bisa terlewat. Selalu verifikasi dengan `npx tsc -b --force`.
+> Catatan verifikasi: `npm run build` memakai `tsc -b` **inkremental** — tanpa `--force` error di file yang tidak diubah bisa terlewat. Selalu verifikasi dengan `npx tsc -b --force`.
 
 
 **Aturan untuk AI/developer:**
@@ -45,7 +45,7 @@
 |---|---|---|---|
 | A1 | SELESAI | 2026-09-21 | `src/components/Notification/NotificationProvider.tsx` (provider + kartu bertumpuk, portal ke body, auto-dismiss 4d/4d/8d, error manual) + `NotificationContext.ts` (hook `useNotification` — difile terpisah supaya `react(only-export-components)` bersih). 19 `alert()` diganti `notify()` di App, AnalystResultsGrid, PTEN/Cabang/KodePos/RoleMapping/Wilayah Manager, IndonesiaBranchMap; `showToast` grid dialirkan ke provider (banner lokal + `setTimeout` tanpa cleanup dihapus). Nol `alert()` tersisa di `src/`. Belum ada error-fatal yang perlu dipertahankan sebagai `alert()` |
 | A2 | SELESAI | 2026-09-21 | `SnapshotModal.tsx` — `window.confirm` restore diganti `ConfirmDialog` (pesan menyebut tanggal + jumlah baris Master/Target/Match/Wilayah + akibat). Sisanya hanya `TargetDataGrid.tsx:2572` (file mati, tidak di-import siapa pun → tunggu A10). Ikut diperbaiki: `ConfirmDialog` membungkus `message` dengan `<div>` bukan `<p>` (React melapor `div`/`ul` di dalam `p` = HTML invalid) |
-| A3 | BELUM | — | |
+| A3 | SELESAI | 2026-09-21 | `src/components/BaseModal.tsx` (`DialogPanel` = perilaku murni tanpa mengubah tampilan, `BaseModal` = + tata letak standar) + `src/components/useDialogBehavior.ts`. 31 dialog dibungkus. Bukti: `grep role="dialog" src` = 0 di luar BaseModal; `grep modal-backdrop` = 0 di luar BaseModal; `grep "Escape" src` = 0 handler lokal tersisa. Dialog persetujuan (`ConfirmDialog`) tidak lagi tertutup klik-luar |
 | A4 | SELESAI | 2026-09-21 | `analystPipeline.ts`: kelas `AnalisaDibatalkan` + param `pembatal?: { batal: boolean }` yang dicek di `tick()` (dipakai loop kota & loop baris) dan sekali sebelum return akhir. `App.tsx`: `pembatalAnalisaRef` + `handleBatalkanAnalisa` + `isCancelling`; catch khusus → progress 0, pesan "hasil tidak disimpan", notifikasi `info`. `AnalystCanvas.tsx`: tombol "Batalkan" hanya tampil saat `isAnalyzing` ("Membatalkan..." saat flag naik). Terukur di browser: `batal:true` → melempar `AnalisaDibatalkan`; `batal:false` → run selesai (1 baris). Tidak ada hasil setengah jadi karena `setAnalystRows` hanya dipanggil setelah pipeline kembali |
 | A5 | SELESAI | 2026-09-21 | Topbar.tsx — status koneksi + tombol Database + tombol Simpan (flushPendingWrites). Build & lint terverifikasi 2026-09-21 |
 | A6 | BELUM | — | |
@@ -56,7 +56,7 @@
 | B1 | BELUM | — | Keputusan diambil 2026-09-21 (Bagian 12) — menunggu eksekusi |
 | B2 | BELUM | — | Keputusan diambil 2026-09-21 (Bagian 12) — menunggu eksekusi |
 | B3 | BELUM | — | Verifikasi ekspor saja |
-| B4 | BELUM | — | Keputusan diambil 2026-09-21 (Bagian 12) — menunggu eksekusi |
+| B4 | SELESAI | 2026-09-21 | Opsi (a): semua karangan di `analystPipeline.ts` dihapus — fallback kota "KOTA JAKARTA PUSAT" & kode pos "10110" jadi kosong, label "Wilayah 01" jadi kosong, dan baris penanda "kota PTEN tanpa cabang di master" tidak lagi mengarang W-code (tabel modulo) / `CABANG x` / `KCP x` / `Jl. Protokol x` / `Status Outlet: Aktif`. Sisa karangan di mesin role dicatat sebagai bagian D2 |
 | C2a | BELUM | — | |
 | C2b | BELUM | — | |
 | C2c | BELUM | — | |
@@ -165,8 +165,10 @@
 **Lokasi:** `FinalDataManager.tsx:104,213`; `AnalystResultsGrid.tsx:1889`; `SnapshotModal.tsx:143`; `TargetDataGrid.tsx:2572` (file mati).
 **Eksekusi:** semua aksi destruktif → `ConfirmDialog` dengan pesan yang menyebut jumlah baris + akibat (contoh: “1.240 baris akan keluar dari Final Data dan kembali ke Data Analyst”). Aksi hanya jalan di `onConfirm`.
 
-### A3 — Modal aksesibilitas (BaseModal)
+### A3 — Modal aksesibilitas (BaseModal) ✅ SELESAI 2026-09-21
 **Masalah:** `role="dialog"`/`aria-modal`/Escape hanya di 4 file (`GoogleApiKeyModal`, `KodePosManager`, `KodePosSyncModal`, `SinyalTemuanModal`). `ConfirmDialog` belum punya role/Escape. Klik-luar hanya `SinyalTemuanModal.tsx:52` & `ConfirmDialog.tsx:45`. Tidak ada focus trap/pengembalian fokus.
+**Catatan eksekusi:** yang dibuat ternyata DUA lapis — `DialogPanel` (hanya perilaku: portal, role, Esc, fokus, Tab-trap, klik-luar) dipakai dialog yang markup-nya sudah jadi supaya tampilannya TIDAK berubah sama sekali, dan `BaseModal` (`DialogPanel` + header/body/footer `.modal-*`) untuk dialog baru. Nama dialog diambil otomatis dari `.modal-title`/`<h1..h6>` pertama di dalam panel (`aria-labelledby` dipasang sendiri), jadi tidak perlu menulis label dua kali.
+
 **Eksekusi:** (1) buat `src/components/BaseModal.tsx` — portal, overlay, `role="dialog"`, `aria-modal`, `aria-labelledby`, Escape, klik-luar opsional (`closableOnOutside`), fokus ke elemen pertama + kembali ke pemicu saat tutup; (2) bungkus semua modal: `ConfirmDialog`, `SnapshotModal`, `NeonDatabaseModal`, `TargetUploadModal`, `AnalystRowEditModal`, `CandidateDetailModal`, `CityOverrideModal`, `PtenCityPicker`, modal edit/detail/delete/reset di PTEN/Cabang/Wilayah/RoleMapping/KodePos. Dialog persetujuan data: `closableOnOutside=false`.
 
 ### A4 — Tombol Batalkan analisa
@@ -206,7 +208,7 @@
 | B1 | Kota/Kabupaten kembar nama menyatu jadi 1 grup | `ADMIN_NOISE_TOKENS:279–290` buang `KOTA/KABUPATEN`; `cityMatchKey:342–348`; PTEN tanpa prefix (`defaultPtenData.ts:792,1008` “BOGOR”) | Simpan jenis daerah (KOTA/KAB) terpisah saat membandingkan; minimal tambahkan peringatan “2 wilayah digabung” di laporan cakupan. **Perlu keputusan** |
 | B2 | Kode pos kelurahan tidak masuk hasil/ekspor (`KODE POS` = `KODE POS PTEN` sama) | `AnalystResultsGrid.tsx:616,622` (ekspor), `:194` (grid) | Tambah kolom “Kode Pos Kelurahan” (dari `KodePosRow.kodePos`), pisahkan dari `KODE POS PTEN`; jelaskan `CEK KODE POS + PTEN` sebagai pembanding tingkat kota. **Perlu keputusan** |
 | B3 | Baris `TIDAK_ANALISA` dinomori belakangan & tidak ikut approve otomatis (benar) | `:1969`, `:2030`, `App.tsx:815` | Pertahankan; pastikan ekspor menomori ulang |
-| B4 | Default palsu (**menunggu keputusan**) | `'KOTA JAKARTA PUSAT'` `:1510`; `'10110'` `:1511`; `'Wilayah 01'` `:1898`; tebakan W-code `:1028–1040`; identitas sintetis `:1584–1589` | Ganti kosong + status manual; jangan isi karangan |
+| B4 | ✅ SELESAI 2026-09-21 — default palsu (dihapus) | `'KOTA JAKARTA PUSAT'` `:1510`; `'10110'` `:1511`; `'Wilayah 01'` `:1898`; tebakan W-code `:1028–1040`; identitas sintetis `:1584–1589` | Ganti kosong + status manual; jangan isi karangan |
 
 ## BAGIAN C — FASE 2 (Wilayah & Cabang)
 
@@ -234,7 +236,7 @@ Kota **Bandung**: baris **Braga** (40111, Sumur Bandung) → P1 Asia Afrika 98% 
 | ID | Temuan | Lokasi | Perbaikan |
 |---|---|---|---|
 | D1 | Dua engine beda kriteria → hasil otomatis ≠ rekomendasi layar (contoh: fallback daftar pertama = AMBON, padahal layar menyarankan JAYAPURA di pulau sama) | `analystPipeline.ts:1591–1660` vs `roleRecommender.ts:60–471` | **Perlu keputusan**: jadikan engine layar sebagai engine resmi Fase 3 (disarankan) |
-| D2 | Fallback arbitrer `completeRoleList[0]` (skor 0,70) | `analystPipeline.ts:1646` | Ganti dengan kandidat terdekat satu pulau, atau kosongkan + lempar manual |
+| D2 | Fallback arbitrer `completeRoleList[0]` (skor 0,70) | `analystPipeline.ts:1682` (juga `:916` di jalur lama) | BELUM. Yang masih harus dikosongkan (sisa B4 di mesin role): `organisasiTujuan` karangan `<NAMA OUTLET> BRANCH OFFICE` (`:1688`), `roleCabsal/roleCabapv1/roleCabapv2` dipaksa `1` saat tidak ada kandidat (`:1691-1693`) sehingga `is3RoleLengkap` & label Tier ikut diklaim, dan `isKc` default `true` (`:1689`). Ganti dengan kandidat terdekat satu pulau, atau kosongkan + lempar manual |
 | D3 | Auto-final dari EXACT_MATCH tanpa melihat F1/F2 | `:1929` | Auto-final hanya bila `placementStatus==='VERIFIED'` dan bukan hasil fallback |
 | D4 | Dua kosakata Alur Wondr | `getWondrRecommendation` (`RoleMappingManager.tsx:283–312`) vs label generik pipeline `:1660, 900` | Satukan kosakata di satu fungsi |
 | D5 | Pulau `'Lainnya'` membuat strict-1-pulau longgar | `roleRecommender.ts:334–336` | Bila pulau tak teridentifikasi → paksa REVIEW, jangan anggap sama pulau |
@@ -609,6 +611,8 @@ Lalu uji manual minimal: (1) edit & hapus 1 baris di menu Data Cabang → refres
 | 7 | `src/components/KodePosData/KodePosManager.tsx` | Perbaikan tipe `geoStats?.gagal` → `geoStats?.geo?.gagal` (sisa patch sesi 1 yang belum di-commit; membuat `tsc -b --force` gagal TS2339) | K2 | ✅ 2026-09-21 |
 | 8 | `src/App.tsx` | `handleReturnFinalToAnalyst` reset semua fase (disamakan dengan Revisi per baris) — keputusan Bagian 12 G7 opsi (a) | G7 | ✅ 2026-09-21 |
 | 9 | `src/components/WorkingEngine/AnalystResultsGrid.tsx` | `stats` memisahkan `perluReview`/`anomali`; konfirmasi “Pindahkan ke Final Analisa?” menyebut kedua jumlah itu — keputusan G8 opsi (a) | G8 | ✅ 2026-09-21 |
+| 10 | `src/components/BaseModal.tsx`, `src/components/useDialogBehavior.ts` (baru) + 20 file dialog | A3: `DialogPanel` (perilaku dialog: portal ke body, `role=dialog`/`aria-modal`/`aria-labelledby` otomatis dari judul yang terlihat, Esc, fokus masuk & kembali ke pemicu, Tab tertahan, klik-luar bisa dimatikan) dan `BaseModal` ( DialogPanel + header/body/footer `.modal-*`). 31 dialog dibungkus tanpa mengubah tampilan; `ConfirmDialog` tidak lagi menutup saat klik latar | A3 | ✅ 2026-09-21 (tsc 0 error, lint 0 error, diuji nyata di browser dev: Esc menutup, fokus kembali ke pemicu, Tab wrap dua arah) |
+| 11 | `src/utils/analystPipeline.ts` | B4: fallback kota/kode pos karangan ("KOTA JAKARTA PUSAT", "10110"), label "Wilayah 01", dan seluruh identitas sintetis baris penanda (W-code modulo, `CABANG x`, `KCP x`, `Jl. Protokol x`, `Status Outlet: Aktif`, `Provinsi: INDONESIA`) dihapus → jadi kosong | B4 | ✅ 2026-09-21 (build). **Angka hasil analisa bisa berubah — operator perlu menjalankan ulang Analisa untuk membandingkan** |
 
 Yang **belum** diuji pada sesi 2: (a) SQL `final_rows` terhadap Postgres sungguhan (butuh tulis ke Neon → aksi operator), (b) kartu Titik Koordinat di UI produksi untuk label `coba ulang 2.813 kode pos`.
 

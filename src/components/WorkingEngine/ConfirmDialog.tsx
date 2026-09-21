@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { X, AlertTriangle } from 'lucide-react';
+import { DialogPanel } from '../BaseModal';
 
 export interface ConfirmDialogProps {
   isOpen: boolean;
@@ -14,7 +15,31 @@ export interface ConfirmDialogProps {
   onClose: () => void;
 }
 
+const BACKDROP: React.CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  zIndex: 1070,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: 'rgba(15, 23, 42, 0.65)',
+  backdropFilter: 'blur(4px)',
+  padding: '1rem',
+};
+
+const PANEL: React.CSSProperties = {
+  width: '100%',
+  maxWidth: '480px',
+  background: '#ffffff',
+  borderRadius: '12px',
+  boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.18), 0 10px 10px -5px rgba(0, 0, 0, 0.06)',
+  overflow: 'hidden',
+  border: '1px solid #e9ebec',
+};
+
 // Dialog konfirmasi standar sebelum menyetujui tiap fase / final analisa.
+// Sengaja TIDAK menutup saat klik latar: keputusan fase tidak boleh hilang karena
+// klik tak sengaja (Esc dan "Batal" tetap menutup).
 export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   isOpen,
   icon,
@@ -27,36 +52,19 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   onClose,
 }) => {
-  if (!isOpen) return null;
+  const judulId = useId();
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 1070,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'rgba(15, 23, 42, 0.65)',
-        backdropFilter: 'blur(4px)',
-        padding: '1rem',
-      }}
-      onClick={onClose}
+    <DialogPanel
+      isOpen={isOpen}
+      onClose={onClose}
+      labelledBy={judulId}
+      closableOnOutside={false}
+      backdropClassName=""
+      backdropStyle={BACKDROP}
+      className="qdr-confirm-panel"
+      style={PANEL}
     >
-      <div
-        className="qdr-confirm-panel"
-        style={{
-          width: '100%',
-          maxWidth: '480px',
-          background: '#ffffff',
-          borderRadius: '12px',
-          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.18), 0 10px 10px -5px rgba(0, 0, 0, 0.06)',
-          overflow: 'hidden',
-          border: '1px solid #e9ebec',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
         {/* Header */}
         <div
           style={{
@@ -83,7 +91,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             >
               {icon}
             </div>
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#212529', margin: 0, lineHeight: 1.3 }}>
+            <h3 id={judulId} style={{ fontSize: '1.05rem', fontWeight: 800, color: '#212529', margin: 0, lineHeight: 1.3 }}>
               {title}
             </h3>
           </div>
@@ -169,7 +177,6 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             {confirmLabel}
           </button>
         </div>
-      </div>
-    </div>
+    </DialogPanel>
   );
 };

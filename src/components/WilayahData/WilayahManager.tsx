@@ -30,6 +30,7 @@ import type { WilayahSetting } from '../../types';
 import { DEFAULT_WILAYAH_DATA, normalizeWilayahItem } from '../../utils/defaultWilayah';
 import { loadWilayahFromNeon, saveWilayahToNeon, checkNeonStatus } from '../../utils/neonSync';
 import { useNotification } from '../Notification/NotificationContext';
+import { DialogPanel } from '../BaseModal';
 
 interface WilayahManagerProps {
   initialSettings?: WilayahSetting[];
@@ -1190,8 +1191,7 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
 
       {/* MODAL: Tambah / Edit Wilayah */}
       {(modalMode === 'create' || modalMode === 'edit') && (
-        <div className="modal-backdrop">
-          <div className="modal-container" style={{ maxWidth: '680px' }}>
+        <DialogPanel onClose={() => setModalMode(null)} closableOnOutside={false} style={{ maxWidth: '680px' }}>
             {/* Modal Header */}
             <div className="modal-header">
               <h4 className="modal-title">
@@ -1400,14 +1400,12 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+    </DialogPanel>
       )}
 
       {/* MODAL: Detail View */}
       {modalMode === 'detail' && (
-        <div className="modal-backdrop">
-          <div className="modal-container" style={{ maxWidth: '560px' }}>
+        <DialogPanel onClose={() => setModalMode(null)} closableOnOutside={false} style={{ maxWidth: '560px' }}>
             <div className="modal-header">
               <h4 className="modal-title">
                 <Building2 size={18} color="#405189" />
@@ -1483,14 +1481,12 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
                 Tutup
               </button>
             </div>
-          </div>
-        </div>
+    </DialogPanel>
       )}
 
       {/* MODAL: Konfirmasi Hapus */}
       {deleteTargetIndex !== null && (
-        <div className="modal-backdrop">
-          <div className="modal-container" style={{ maxWidth: '420px' }}>
+        <DialogPanel onClose={() => setDeleteTargetIndex(null)} closableOnOutside={false} style={{ maxWidth: '420px' }}>
             <div className="modal-header">
               <h4 className="modal-title">
                 <Trash2 size={18} color="#f06548" />
@@ -1542,14 +1538,12 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
                 Ya, Hapus
               </button>
             </div>
-          </div>
-        </div>
+    </DialogPanel>
       )}
 
       {/* MODAL: Konfirmasi Reset Standar */}
       {showResetConfirm && (
-        <div className="modal-backdrop">
-          <div className="modal-container" style={{ maxWidth: '440px' }}>
+        <DialogPanel onClose={() => setShowResetConfirm(false)} closableOnOutside={false} style={{ maxWidth: '440px' }}>
             <div className="modal-header">
               <h4 className="modal-title">
                 <RefreshCw size={18} color="#d68b0c" />
@@ -1601,8 +1595,7 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
                 Ya, Reset Standar
               </button>
             </div>
-          </div>
-        </div>
+    </DialogPanel>
       )}
     </div>
   );

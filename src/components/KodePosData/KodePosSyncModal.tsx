@@ -12,6 +12,7 @@ import {
 import { saveKodePosToNeon, mapsUrlFor, geoLabel, type KodePosRow } from '../../utils/neonSync';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
 import { useGeoTooltip } from '../GeoTooltip';
+import { DialogPanel } from '../BaseModal';
 
 interface KodePosSyncModalProps {
   open: boolean;
@@ -94,15 +95,6 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
     if (open) void startCheck();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
 
   const allChecked = shownRows.length > 0 && shownRows.every((r) => selected.has(rowKey(r)));
   const someChecked = shownRows.some((r) => selected.has(rowKey(r)));
@@ -195,8 +187,8 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
   if (!open) return null;
 
   return (
-    <div className="modal-backdrop">
-      <div className="modal-container" role="dialog" aria-modal="true" aria-labelledby="kodepos-sync-title" style={{ maxWidth: '1000px' }}>
+    <>
+      <DialogPanel onClose={onClose} closableOnOutside={false} labelledBy="kodepos-sync-title" style={{ maxWidth: '1000px' }}>
         <div className="modal-header">
           <h4 className="modal-title" id="kodepos-sync-title">
             <RefreshCw size={16} color="#405189" />
@@ -484,9 +476,9 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
             {phase === 'importing' ? 'Menyimpan...' : `Simpan/Import Data Terpilih ke Neon (${fmt(selectedRows.length)})`}
           </button>
         </div>
-      </div>
+      </DialogPanel>
       {tooltipNode}
-    </div>
+    </>
   );
 };
 

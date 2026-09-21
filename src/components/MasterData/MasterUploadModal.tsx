@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { UploadCloud, Download, AlertCircle, CheckCircle, X, RotateCcw } from 'lucide-react';
 import type { MasterRow } from '../../types';
 import { parseExcelFile, validateMasterHeaders, downloadMasterTemplate } from '../../utils/excel';
+import { DialogPanel } from '../BaseModal';
 
 interface MasterUploadModalProps {
   isOpen: boolean;
@@ -188,8 +189,11 @@ export const MasterUploadModal: React.FC<MasterUploadModalProps> = ({
   };
 
   return (
-    <div
-      style={{
+    <DialogPanel
+      isOpen={isOpen}
+      onClose={handleClose}
+      backdropClassName=""
+      backdropStyle={{
         position: 'fixed',
         inset: 0,
         zIndex: 1050,
@@ -200,11 +204,8 @@ export const MasterUploadModal: React.FC<MasterUploadModalProps> = ({
         backdropFilter: 'blur(4px)',
         padding: '1rem',
       }}
-      onClick={handleClose}
-    >
-      <div
-        className="glass-card"
-        style={{
+      className="glass-card"
+      style={{
           width: '100%',
           maxWidth: '560px',
           background: '#ffffff',
@@ -212,9 +213,8 @@ export const MasterUploadModal: React.FC<MasterUploadModalProps> = ({
           boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
           overflow: 'hidden',
           border: '1px solid #e9ebec',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
+      }}
+    >
         {/* Modal Header */}
         <div
           style={{
@@ -508,7 +508,6 @@ export const MasterUploadModal: React.FC<MasterUploadModalProps> = ({
             Tutup
           </button>
         </div>
-      </div>
-    </div>
+    </DialogPanel>
   );
 };

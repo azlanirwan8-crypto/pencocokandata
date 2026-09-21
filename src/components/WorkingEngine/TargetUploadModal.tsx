@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { UploadCloud, Download, AlertCircle, CheckCircle, X, RotateCcw } from 'lucide-react';
 import type { TargetRow } from '../../types';
 import { parseExcelFile, validateTargetHeaders, downloadTargetTemplate } from '../../utils/excel';
+import { DialogPanel } from '../BaseModal';
 
 interface TargetUploadModalProps {
   isOpen: boolean;
@@ -140,8 +141,11 @@ export const TargetUploadModal: React.FC<TargetUploadModalProps> = ({
   };
 
   return (
-    <div
-      style={{
+    <DialogPanel
+      isOpen={isOpen}
+      onClose={handleClose}
+      backdropClassName=""
+      backdropStyle={{
         position: 'fixed',
         inset: 0,
         zIndex: 1050,
@@ -152,11 +156,8 @@ export const TargetUploadModal: React.FC<TargetUploadModalProps> = ({
         backdropFilter: 'blur(4px)',
         padding: '1rem',
       }}
-      onClick={handleClose}
-    >
-      <div
-        className="glass-card"
-        style={{
+      className="glass-card"
+      style={{
           width: '100%',
           maxWidth: '560px',
           background: '#ffffff',
@@ -164,9 +165,8 @@ export const TargetUploadModal: React.FC<TargetUploadModalProps> = ({
           boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
           overflow: 'hidden',
           border: '1px solid #e9ebec',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
+      }}
+    >
         {/* Modal Header */}
         <div
           style={{
@@ -447,7 +447,6 @@ export const TargetUploadModal: React.FC<TargetUploadModalProps> = ({
             Tutup
           </button>
         </div>
-      </div>
-    </div>
+    </DialogPanel>
   );
 };

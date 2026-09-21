@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState, useDeferredValue } from 'react';
+import React, { useMemo, useState, useDeferredValue } from 'react';
 import { ClipboardCheck, Search, FileSpreadsheet, Undo2, RotateCcw, Eye, Trash2, X, Building2, ShieldCheck, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import type { AnalystRow } from '../../utils/analystPipeline';
 import { formatWilayahCode, applyStandardSheetStyle } from '../../utils/excel';
 import { ConfirmDialog } from './ConfirmDialog';
+import { DialogPanel } from '../BaseModal';
 
 interface FinalDataManagerProps {
   rows: AnalystRow[];
@@ -25,14 +26,6 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
   const [confirmAction, setConfirmAction] = useState<{ kind: 'returnAll' | 'revise' | 'delete'; row?: AnalystRow } | null>(null);
   // Modal Detail (View) per baris.
   const [detailRow, setDetailRow] = useState<AnalystRow | null>(null);
-
-  // Escape menutup modal Detail.
-  useEffect(() => {
-    if (!detailRow) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDetailRow(null); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [detailRow]);
 
   // Card informasi ringkas (kebutuhan BRD 5d).
   const metrics = useMemo(() => ({
@@ -310,7 +303,7 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
               ? `Baris #${confirmAction.row.no} (${confirmAction.row.kelurahan}, ${confirmAction.row.kotaPtenMax15 || confirmAction.row.kotaPten}) akan DIHAPUS PERMANEN dari Final Data. Baris ini bisa dianalisa ulang dari awal bila diperlukan.`
                 : confirmAction?.kind === 'revise' && confirmAction.row
                   ? `Baris #${confirmAction.row.no} (${confirmAction.row.namaOutlet}) akan keluar dari Final Data dan kembali ke Data Analyst mulai Fase 1 untuk diproses ulang.`
-                    : `${rows.length.toLocaleString('id-ID')} baris akan dikembalikan ke Data Analyst. Final Data akan kosong.`
+                    : `${rows.length.toLocaleString('id-ID')} baris akan dikembalikan ke Data Analyst mulai Fase 1 (persetujuan tiap fase dilepas, sama seperti "Revisi" per baris). Final Data akan kosong.`
           }
           confirmLabel={confirmAction?.kind === 'delete' ? 'Ya, Hapus Permanen' : 'Ya, Lanjutkan'}
           onConfirm={() => {
@@ -324,17 +317,14 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
         />
 
         {detailRow && (
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Detail baris Final Data"
-            style={{ position: 'fixed', inset: 0, zIndex: 1070, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', padding: '1rem' }}
-            onClick={() => setDetailRow(null)}
+          <DialogPanel
+            onClose={() => setDetailRow(null)}
+            label="Detail baris Final Data"
+            backdropClassName=""
+            backdropStyle={{ position: 'fixed', inset: 0, zIndex: 1070, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', padding: '1rem' }}
+            className=""
+            style={{ width: '100%', maxWidth: '860px', maxHeight: '86vh', overflowY: 'auto', background: '#ffffff', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.18)', border: '1px solid #e9ebec' }}
           >
-            <div
-              style={{ width: '100%', maxWidth: '860px', maxHeight: '86vh', overflowY: 'auto', background: '#ffffff', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.18)', border: '1px solid #e9ebec' }}
-              onClick={(e) => e.stopPropagation()}
-            >
               <div style={{ padding: '1.1rem 1.4rem 0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #eef1f4' }}>
                 <div>
                   <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#212529', margin: 0 }}>
@@ -384,8 +374,7 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
                   Tutup
                 </button>
               </div>
-            </div>
-          </div>
+          </DialogPanel>
         )}
       </div>
     </div>

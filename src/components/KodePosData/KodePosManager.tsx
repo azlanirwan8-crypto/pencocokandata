@@ -45,6 +45,7 @@ import {
 import { getStoredGoogleApiKey } from '../../utils/onlineGeoCoder';
 import { KodePosSyncModal } from './KodePosSyncModal';
 import { useGeoTooltip } from '../GeoTooltip';
+import { DialogPanel } from '../BaseModal';
 import { useNotification } from '../Notification/NotificationContext';
 
 interface KodePosManagerProps {
@@ -303,16 +304,6 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     textDecoration: 'underline',
     cursor: 'pointer',
   };
-
-  // Dialog detail ikut Tutup dengan Esc, seperti dialog Sync Data.
-  useEffect(() => {
-    if (modalMode !== 'detail') return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setModalMode(null);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [modalMode]);
 
   const jalankanGeo = async (ulang = false) => {
     if (geoRun.aktif) {
@@ -1314,8 +1305,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
 
       {/* 5. Modal: Create / Edit Form */}
       {modalMode === 'edit' && (
-        <div className="modal-backdrop">
-          <div className="modal-container" style={{ maxWidth: '520px' }}>
+        <DialogPanel onClose={() => setModalMode(null)} closableOnOutside={false} style={{ maxWidth: '520px' }}>
             <div className="modal-header">
               <h4 className="modal-title">
                 <Mail size={16} color="#405189" />
@@ -1459,20 +1449,17 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+    </DialogPanel>
       )}
 
       {/* 6. Modal: Detail View — info wilayah di kiri, peta di kanan */}
       {modalMode === 'detail' && detailItem && (
-        <div className="modal-backdrop">
-          <div
-            className="modal-container"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="kodepos-detail-title"
-            style={{ maxWidth: '880px' }}
-          >
+        <DialogPanel
+          onClose={() => setModalMode(null)}
+          closableOnOutside={false}
+          labelledBy="kodepos-detail-title"
+          style={{ maxWidth: '880px' }}
+        >
             <div className="modal-header">
               <h4 className="modal-title" id="kodepos-detail-title">
                 <MapPin size={16} color="#405189" />
@@ -1752,14 +1739,12 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                 Tutup
               </button>
             </div>
-          </div>
-        </div>
+    </DialogPanel>
       )}
 
       {/* 7. Modal: Delete Confirmation */}
       {deleteTarget && (
-        <div className="modal-backdrop">
-          <div className="modal-container" style={{ maxWidth: '420px' }}>
+        <DialogPanel onClose={() => setDeleteTarget(null)} closableOnOutside={false} style={{ maxWidth: '420px' }}>
             <div className="modal-header">
               <h4 className="modal-title">
                 <Trash2 size={16} color="#f06548" />
@@ -1813,8 +1798,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                 Ya, Hapus Data
               </button>
             </div>
-          </div>
-        </div>
+    </DialogPanel>
       )}
 
       {/* Modal: Sync Data (bandingkan master lokal vs Neon, import terpilih ke cloud) */}
@@ -1829,8 +1813,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
 
       {/* 8. Modal: Reset Confirmation */}
       {showResetConfirm && (
-        <div className="modal-backdrop">
-          <div className="modal-container" style={{ maxWidth: '440px' }}>
+        <DialogPanel onClose={() => setShowResetConfirm(false)} closableOnOutside={false} style={{ maxWidth: '440px' }}>
             <div className="modal-header">
               <h4 className="modal-title">
                 <Trash2 size={16} color="#f06548" />
@@ -1885,8 +1868,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                 Ya, Kosongkan Semua
               </button>
             </div>
-          </div>
-        </div>
+    </DialogPanel>
       )}
 
       {tooltipNode}

@@ -37,6 +37,7 @@ import { DEFAULT_PTEN_DATA } from '../PTENData/defaultPtenData';
 import type { PTENRecord } from '../PTENData/PTENManager';
 import { formatWilayahName, extractWilayahFromBranchCode, cleanKelurahan, cleanKecamatan } from '../../utils/normalizer';
 import { findTopRoleMatchesByLocation } from '../../utils/roleRecommender';
+import { DialogPanel } from '../BaseModal';
 
 export interface ColumnOption {
   key: string;
@@ -3178,10 +3179,14 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
         wilayahSettings={wilayahSettings}
       />
 
-      {/* Modal Progress Bar Real-time Non-blocking Saat Menyetujui Rekomendasi */}
+      {/* Modal Progress Bar Real-time Non-blocking Saat Menyetujui Rekomendasi
+          Klik latar/Esc hanya menyembunyikan progres; loop persetujuan tetap jalan. */}
       {approvalProgress !== null && (
-        <div
-          style={{
+        <DialogPanel
+          onClose={() => setApprovalProgress(null)}
+          closableOnOutside={false}
+          backdropClassName=""
+          backdropStyle={{
             position: 'fixed',
             inset: 0,
             zIndex: 99999,
@@ -3193,9 +3198,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
             padding: '1rem',
             animation: 'fadeIn 0.2s ease-out',
           }}
-        >
-          <div
-            style={{
+          className=""
+          style={{
               background: '#ffffff',
               borderRadius: '16px',
               padding: '1.75rem 2rem',
@@ -3207,8 +3211,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               flexDirection: 'column',
               alignItems: 'center',
               textAlign: 'center',
-            }}
-          >
+          }}
+        >
             {/* Animated Icon */}
             <div
               style={{
@@ -3321,8 +3325,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                 Lihat Data Match Sekarang
               </button>
             )}
-          </div>
-        </div>
+        </DialogPanel>
       )}
     </div>
   );

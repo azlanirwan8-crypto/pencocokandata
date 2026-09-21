@@ -18,6 +18,7 @@ import type { TargetRow, MasterRow, WilayahSetting } from '../../types';
 import type { CandidateOption } from '../../utils/recommender';
 import { calculateRealDistance, buildGoogleMapsDirectionsUrl } from '../../utils/geoDistance';
 import { extractWilayahFromBranchCode } from '../../utils/normalizer';
+import { DialogPanel } from '../BaseModal';
 
 // Helper ekstraksi nomor telepon / No HP KC/KCP
 const extractPhone = (row: any): string => {
@@ -205,8 +206,11 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
   };
 
   return (
-    <div
-      style={{
+    <DialogPanel
+      isOpen={isOpen}
+      onClose={onClose}
+      backdropClassName=""
+      backdropStyle={{
         position: 'fixed',
         inset: 0,
         zIndex: 1060,
@@ -217,11 +221,8 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
         backdropFilter: 'blur(4px)',
         padding: '1rem',
       }}
-      onClick={onClose}
-    >
-      <div
-        className="glass-card"
-        style={{
+      className="glass-card"
+      style={{
           width: '100%',
           maxWidth: '780px',
           maxHeight: '92vh',
@@ -232,9 +233,8 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
           flexDirection: 'column',
           overflow: 'hidden',
           border: '1px solid #e9ebec',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
+      }}
+    >
         {/* Modal Header */}
         <div
           style={{
@@ -1223,7 +1223,6 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
             <span>Gunakan Cabang Ini</span>
           </button>
         </div>
-      </div>
-    </div>
+    </DialogPanel>
   );
 };

@@ -27,6 +27,7 @@ import { useVirtualWindow } from '../../utils/useVirtualWindow';
 
 import { DEFAULT_PTEN_DATA } from './defaultPtenData';
 import { useNotification } from '../Notification/NotificationContext';
+import { DialogPanel } from '../BaseModal';
 
 interface PTENManagerProps {
   targetRows?: TargetRow[];
@@ -980,8 +981,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
 
       {/* Create / Edit / Detail PTEN Modal */}
       {modalMode && (
-        <div className="modal-backdrop">
-          <div className="modal-container" style={{ maxWidth: '520px' }}>
+        <DialogPanel onClose={() => setModalMode(null)} closableOnOutside={false} style={{ maxWidth: '520px' }}>
             <div className="modal-header">
               <h4 className="modal-title">
                 <ShieldCheck size={18} color="#d68b0c" />
@@ -1060,14 +1060,12 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
                 )}
               </div>
             </form>
-          </div>
-        </div>
+    </DialogPanel>
       )}
 
       {/* Delete Confirmation Modal */}
       {deleteTargetIndex !== null && (
-        <div className="modal-backdrop">
-          <div className="modal-container" style={{ maxWidth: '420px' }}>
+        <DialogPanel onClose={() => setDeleteTargetIndex(null)} closableOnOutside={false} style={{ maxWidth: '420px' }}>
             <div className="modal-body" style={{ textAlign: 'center', alignItems: 'center', padding: '1.5rem' }}>
               <AlertCircle size={40} color="#f06548" />
               <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#212529' }}>
@@ -1095,14 +1093,12 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
                 Ya, Hapus
               </button>
             </div>
-          </div>
-        </div>
+    </DialogPanel>
       )}
 
       {/* Reset Confirmation Modal */}
       {showResetConfirm && (
-        <div className="modal-backdrop">
-          <div className="modal-container" style={{ maxWidth: '460px' }}>
+        <DialogPanel onClose={() => setShowResetConfirm(false)} closableOnOutside={false} style={{ maxWidth: '460px' }}>
             <div className="modal-body" style={{ textAlign: 'center', alignItems: 'center', padding: '1.5rem' }}>
               <RefreshCw size={36} color="#405189" />
               <h4 style={{ margin: '0.5rem 0 0.25rem', fontSize: '1rem', fontWeight: 700, color: '#212529' }}>
@@ -1137,8 +1133,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
                 Reset ke Standar Bawaan
               </button>
             </div>
-          </div>
-        </div>
+    </DialogPanel>
       )}
 
     </div>

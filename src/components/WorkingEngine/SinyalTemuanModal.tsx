@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { X, Search } from 'lucide-react';
+import { DialogPanel } from '../BaseModal';
 import { SINYAL_PENCOCOKAN, bitUntuk, bitTemuanBaris, hitungBit, type AnalystRow } from '../../utils/analystPipeline';
 
 interface Props {
@@ -21,14 +22,6 @@ export const SinyalTemuanModal: React.FC<Props> = ({ no, rows, onClose }) => {
   const [batas, setBatas] = useState(TABEL_BATAS_AWAL);
   const [cari, setCari] = useState('');
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
   const bit = bitUntuk(no);
   const temuan = useMemo(() => (bit ? rows.filter((r) => bitTemuanBaris(r) & bit) : []), [rows, bit]);
   const namaSinyal = useMemo(() => {
@@ -49,15 +42,7 @@ export const SinyalTemuanModal: React.FC<Props> = ({ no, rows, onClose }) => {
   if (!meta) return null;
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div
-        className="modal-container"
-        style={{ maxWidth: '980px' }}
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Temuan sinyal ${meta.judul}`}
-      >
+    <DialogPanel onClose={onClose} label={`Temuan sinyal ${meta.judul}`} style={{ maxWidth: '980px' }}>
         <div className="modal-header">
           <h4 className="modal-title" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             <span style={{ color: meta.warna }}>{meta.no}.</span> {meta.emoji} {meta.judul}
@@ -185,7 +170,6 @@ export const SinyalTemuanModal: React.FC<Props> = ({ no, rows, onClose }) => {
             Tutup
           </button>
         </div>
-      </div>
-    </div>
+    </DialogPanel>
   );
 };

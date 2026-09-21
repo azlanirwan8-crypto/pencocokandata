@@ -28,6 +28,7 @@ import type { MasterRow, MasterHealth, WilayahSetting } from '../../types';
 import { parseExcelFile, validateMasterHeaders, downloadMasterTemplate } from '../../utils/excel';
 import { MasterHealthCard } from './MasterHealthCard';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
+import { DialogPanel } from '../BaseModal';
 import { useNotification } from '../Notification/NotificationContext';
 
 interface CabangManagerProps {
@@ -989,8 +990,7 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
 
       {/* Create / Edit / Detail Modal */}
       {modalMode && (
-        <div className="modal-backdrop">
-          <div className="modal-container" style={{ maxWidth: '620px' }}>
+        <DialogPanel onClose={() => setModalMode(null)} closableOnOutside={false} style={{ maxWidth: '620px' }}>
             <div className="modal-header">
               <h4 className="modal-title">
                 <Store size={18} color="#405189" />
@@ -1172,14 +1172,12 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
                 )}
               </div>
             </form>
-          </div>
-        </div>
+    </DialogPanel>
       )}
 
       {/* Delete Confirmation Modal */}
       {deleteTargetIndex !== null && (
-        <div className="modal-backdrop">
-          <div className="modal-container" style={{ maxWidth: '420px' }}>
+        <DialogPanel onClose={() => setDeleteTargetIndex(null)} closableOnOutside={false} style={{ maxWidth: '420px' }}>
             <div className="modal-header">
               <h4 className="modal-title">
                 <AlertCircle size={18} color="#f06548" />
@@ -1215,14 +1213,12 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
                 Ya, Hapus
               </button>
             </div>
-          </div>
-        </div>
+    </DialogPanel>
       )}
 
       {/* Reset Confirmation Modal */}
       {showResetConfirm && (
-        <div className="modal-backdrop">
-          <div className="modal-container" style={{ maxWidth: '440px' }}>
+        <DialogPanel onClose={() => setShowResetConfirm(false)} closableOnOutside={false} style={{ maxWidth: '440px' }}>
             <div className="modal-header">
               <h4 className="modal-title">
                 <RefreshCw size={18} color="#f06548" />
@@ -1260,8 +1256,7 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
                 Ya, Kosongkan
               </button>
             </div>
-          </div>
-        </div>
+    </DialogPanel>
       )}
     </div>
   );

@@ -26,6 +26,7 @@ import * as XLSX from 'xlsx';
 import { getItem, setItem } from '../../utils/storage';
 import { loadRoleMappingFromNeon, saveRoleMappingToNeon } from '../../utils/neonSync';
 import { useNotification } from '../Notification/NotificationContext';
+import { DialogPanel } from '../BaseModal';
 
 export interface RoleMappingRecord {
   id?: string;
@@ -1913,10 +1914,14 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
         </div>
       )}
 
-      {/* Create / Edit / Detail Modal with Clean Checkboxes and Distinct User Input */}
+      {/* Create / Edit / Detail Modal with Clean Checkboxes and Distinct User Input
+          Klik latar tidak menutup (seperti sebelumnya) supaya isian form tidak hilang. */}
       {modalMode && (
-        <div
-          style={{
+        <DialogPanel
+          onClose={() => setModalMode(null)}
+          closableOnOutside={false}
+          backdropClassName=""
+          backdropStyle={{
             position: 'fixed',
             inset: 0,
             zIndex: 1050,
@@ -1926,9 +1931,8 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
             justifyContent: 'center',
             padding: '1rem',
           }}
-        >
-          <div
-            style={{
+          className=""
+          style={{
               background: '#ffffff',
               borderRadius: '8px',
               width: '100%',
@@ -1936,8 +1940,8 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
               boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
               border: '1px solid #e9ebec',
               overflow: 'hidden',
-            }}
-          >
+          }}
+        >
             <div
               style={{
                 padding: '1.1rem 1.4rem',
@@ -2110,14 +2114,16 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
                 )}
               </div>
             </form>
-          </div>
-        </div>
+        </DialogPanel>
       )}
 
       {/* Delete Confirmation Modal */}
       {deleteTargetIndex !== null && (
-        <div
-          style={{
+        <DialogPanel
+          onClose={() => setDeleteTargetIndex(null)}
+          closableOnOutside={false}
+          backdropClassName=""
+          backdropStyle={{
             position: 'fixed',
             inset: 0,
             zIndex: 1050,
@@ -2127,9 +2133,8 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
             justifyContent: 'center',
             padding: '1rem',
           }}
-        >
-          <div
-            style={{
+          className=""
+          style={{
               background: '#ffffff',
               borderRadius: '8px',
               width: '100%',
@@ -2137,8 +2142,8 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
               padding: '1.5rem',
               boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
               textAlign: 'center',
-            }}
-          >
+          }}
+        >
             <AlertCircle size={40} color="#f06548" style={{ margin: '0 auto 0.75rem' }} />
             <h4 style={{ margin: '0 0 0.5rem', fontSize: '1rem', fontWeight: 700, color: '#212529' }}>
               Hapus Data Mapping Role?
@@ -2164,14 +2169,16 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
                 Ya, Hapus
               </button>
             </div>
-          </div>
-        </div>
+        </DialogPanel>
       )}
 
       {/* Reset Confirmation Modal */}
       {showResetConfirm && (
-        <div
-          style={{
+        <DialogPanel
+          onClose={() => setShowResetConfirm(false)}
+          closableOnOutside={false}
+          backdropClassName=""
+          backdropStyle={{
             position: 'fixed',
             inset: 0,
             zIndex: 1050,
@@ -2181,9 +2188,8 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
             justifyContent: 'center',
             padding: '1rem',
           }}
-        >
-          <div
-            style={{
+          className=""
+          style={{
               background: '#ffffff',
               borderRadius: '8px',
               width: '100%',
@@ -2191,8 +2197,8 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
               padding: '1.5rem',
               boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
               textAlign: 'center',
-            }}
-          >
+          }}
+        >
             <RefreshCw size={36} color="#405189" style={{ margin: '0 auto 0.5rem' }} />
             <h4 style={{ margin: '0 0 0.4rem', fontSize: '1rem', fontWeight: 700, color: '#212529' }}>
               Reset Data Mapping Role
@@ -2225,8 +2231,7 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
                 Reset ke Standar Bawaan
               </button>
             </div>
-          </div>
-        </div>
+        </DialogPanel>
       )}
     </div>
   );

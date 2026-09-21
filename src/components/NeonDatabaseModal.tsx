@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, CheckCircle, AlertCircle, Database, RefreshCw, Zap, Table, Server } from 'lucide-react';
 import { checkNeonStatus, type NeonStatus } from '../utils/neonSync';
+import { DialogPanel } from './BaseModal';
 
 interface NeonDatabaseModalProps {
   isOpen: boolean;
@@ -35,8 +36,11 @@ export const NeonDatabaseModal: React.FC<NeonDatabaseModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div
-      style={{
+    <DialogPanel
+      isOpen={isOpen}
+      onClose={onClose}
+      backdropClassName=""
+      backdropStyle={{
         position: 'fixed',
         inset: 0,
         backgroundColor: 'rgba(33, 37, 41, 0.45)',
@@ -47,24 +51,20 @@ export const NeonDatabaseModal: React.FC<NeonDatabaseModalProps> = ({
         justifyContent: 'center',
         padding: '1rem',
       }}
-      onClick={onClose}
+      className="glass-card"
+      style={{
+        maxWidth: '560px',
+        width: '100%',
+        maxHeight: '90vh',
+        overflowY: 'auto',
+        padding: '1.5rem',
+        position: 'relative',
+        background: '#ffffff',
+        border: '1px solid var(--border-subtle)',
+        boxShadow: '0 10px 25px rgba(56, 65, 74, 0.15)',
+        borderRadius: '8px',
+      }}
     >
-      <div
-        className="glass-card"
-        style={{
-          maxWidth: '560px',
-          width: '100%',
-          maxHeight: '90vh',
-          overflowY: 'auto',
-          padding: '1.5rem',
-          position: 'relative',
-          background: '#ffffff',
-          border: '1px solid var(--border-subtle)',
-          boxShadow: '0 10px 25px rgba(56, 65, 74, 0.15)',
-          borderRadius: '8px',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
         {/* Close Button */}
         <button
           type="button"
@@ -296,7 +296,6 @@ export const NeonDatabaseModal: React.FC<NeonDatabaseModalProps> = ({
             Database Neon Postgres terhubung langsung via backend serverless Vercel melalui environment variable <code>POSTGRES_URL</code> / <code>DATABASE_URL</code>. Seluruh auto-migrasi tabel dijalankan otomatis tanpa perlu konfigurasi SQL manual.
           </p>
         </div>
-      </div>
-    </div>
+    </DialogPanel>
   );
 };

@@ -10,6 +10,7 @@ import {
   Clock,
 } from 'lucide-react';
 import type { MasterRow, TargetRow } from '../types';
+import { DialogPanel } from './BaseModal';
 import { ConfirmDialog } from './WorkingEngine/ConfirmDialog';
 
 export interface WorkspaceSnapshot {
@@ -165,8 +166,10 @@ export const SnapshotModal: React.FC<SnapshotModalProps> = ({
 
   return (
     <>
-      <div className="modal-backdrop">
-      <div
+      <DialogPanel
+        isOpen={isOpen}
+        onClose={onClose}
+        closableOnOutside={false}
         className="glass-card modal-container"
         style={{
           maxWidth: '540px',
@@ -393,8 +396,7 @@ export const SnapshotModal: React.FC<SnapshotModalProps> = ({
             Tutup
           </button>
         </div>
-      </div>
-      </div>
+      </DialogPanel>
 
       <ConfirmDialog
         isOpen={pendingRestore !== null}

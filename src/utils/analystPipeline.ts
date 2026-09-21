@@ -1059,41 +1059,31 @@ export async function executeAnalystPipeline(
       .sort((a, b) =>
         (a[1][0]?.kotaPten || a[0]).localeCompare(b[1][0]?.kotaPten || b[0], 'id', { sensitivity: 'base' })
       )
-      .map(([cityKey, ptenRecs], idx) => {
+      .map(([cityKey, ptenRecs]) => {
       const masters = findMasterByCity(cityKey);
       if (masters.length > 0) return masters[0];
 
-      // Kota PTEN tanpa cabang → baris sintetis dari data PTEN itu sendiri
+      // Kota PTEN yang tidak punya cabang di master → baris penanda saja, supaya kota itu
+      // tetap ikut dalam daftar kelurahan. Identitas cabang TIDAK dikarang (B4): kolom
+      // nama/kode/status dibiarkan kosong sehingga barisnya jatuh ke antrean review
+      // alih-alih menyamar sebagai data asli.
       const p = ptenRecs[0];
-      let wilayahCode = 'W01';
-      const cityUpper = (p.kotaPten || '').toUpperCase();
-      if (/MEDAN|SUMATERA UTARA|ACEH|RIAU|JAMBI|SUMATERA BARAT|BENGKULU|LAMPUNG|PEKANBARU|PADANG/.test(cityUpper)) {
-        wilayahCode = idx % 9 === 0 ? 'W01' : idx % 9 === 1 ? 'W02' : idx % 9 === 2 ? 'W03' : 'W04';
-      } else if (/JAWA|JAKARTA|BANTEN|YOGYAKARTA|SEMARANG|SURABAYA|BANDUNG|MALANG|SOLO/.test(cityUpper)) {
-        wilayahCode = idx % 6 === 0 ? 'W05' : idx % 6 === 1 ? 'W06' : idx % 6 === 2 ? 'W07' : 'W08';
-      } else if (/KALIMANTAN|PONTIANAK|BALIKPAPAN|BANJARMASIN|SAMARINDA/.test(cityUpper)) {
-        wilayahCode = 'W09';
-      } else if (/SULAWESI|GORONTALO|MAKASSAR|MANADO|PALU|KENDARI/.test(cityUpper)) {
-        wilayahCode = 'W10';
-      } else if (/BALI|NUSA TENGGARA|MALUKU|PAPUA|DENPASAR|MATARAM|KUPANG|AMBON|JAYAPURA/.test(cityUpper)) {
-        wilayahCode = idx % 3 === 0 ? 'W11' : idx % 3 === 1 ? 'W12' : 'W13';
-      }
       return {
-        Wilayah: wilayahCode,
-        'Sandi Cabang': `${String(idx + 1).padStart(3, '0')}`,
-        Sandi: `${String(idx + 1).padStart(3, '0')}`,
-        Cabang: `CABANG ${p.kotaPten}`,
-        'Branch Code': `${String(idx + 1).padStart(3, '0')}001`,
-        'Kode Cabang': `${String(idx + 1).padStart(3, '0')}`,
-        'Nama Outlet': `KCP ${p.kotaPten}`,
-        'Status Outlet': 'Aktif',
-        ALAMAT: `Jl. Protokol ${p.kotaPten}`,
+        Wilayah: '',
+        'Sandi Cabang': '',
+        Sandi: '',
+        Cabang: '',
+        'Branch Code': '',
+        'Kode Cabang': '',
+        'Nama Outlet': '',
+        'Status Outlet': '',
+        ALAMAT: '',
         'KODE POS': p.kodePosPten,
         Kelurahan: '',
         Kecamatan: '',
         'Dati II': p.kotaPten,
         'Kode Dati II': '',
-        Provinsi: 'INDONESIA',
+        Provinsi: '',
         Telp: '',
       };
     });
@@ -1550,8 +1540,11 @@ export async function executeAnalystPipeline(
       ptenFuzzyCache.set(cityClean, { rec: matchedPtenRecord, sinyal: citySinyal, catatan: cityCatat });
     }
 
-    const finalKotaPten = matchedPtenRecord?.kotaPten || (cityRaw ? cityRaw.toUpperCase() : 'KOTA JAKARTA PUSAT');
-    const finalKodePosPten = matchedPtenRecord?.kodePosPten || kpRaw || '10110';
+    // Tanpa kepastian kota/kode pos PTEN, jangan mengarang ("KOTA JAKARTA PUSAT"/"10110"):
+    // nilai kosong akan terdeteksi sebagai kota yang belum terpetakan dan masuk antrean
+    // manual, bukan salah tempel ke ibu kota.
+    const finalKotaPten = matchedPtenRecord?.kotaPten || (cityRaw ? cityRaw.toUpperCase() : '');
+    const finalKodePosPten = matchedPtenRecord?.kodePosPten || kpRaw || '';
     // 🧾 CATATAN KERAS: nama kota utk Fase 2 dst = kolom PTEN "KOTA/KABUPATEN MAX 15
     // DIGIT" (kotaPtenMax15). Bila file PTEN tidak punya kolom itu → potong keras 15
     // karakter, karena itulah definisi kolom tersebut.
@@ -1938,7 +1931,7 @@ export async function executeAnalystPipeline(
         kelurahanSeq: seq + 1,
 
         // Fase 2 — kosong selama Fase 1 belum disetujui (alur bertahap)
-        wilayah: fase2Jalan ? (meta.resolvedWilayah.wilayahName !== '-' ? meta.resolvedWilayah.wilayahName : 'Wilayah 01') : '',
+        wilayah: fase2Jalan ? (meta.resolvedWilayah.wilayahName !== '-' ? meta.resolvedWilayah.wilayahName : '') : '',
         kotaPtenMax15: fase2Jalan ? meta.kotaPtenMax15 : '',
         sandiCabang: fase2Jalan ? String(meta.sandiCabang) : '',
         sandi: fase2Jalan ? meta.sandi : '',

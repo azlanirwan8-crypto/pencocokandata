@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Key, X } from 'lucide-react';
 import { getStoredGoogleApiKey, setStoredGoogleApiKey } from '../utils/onlineGeoCoder';
+import { DialogPanel } from './BaseModal';
 
 interface GoogleApiKeyModalProps {
   onClose: () => void;
@@ -11,14 +12,6 @@ interface GoogleApiKeyModalProps {
 export const GoogleApiKeyModal: React.FC<GoogleApiKeyModalProps> = ({ onClose, onSaved }) => {
   const [draft, setDraft] = useState(() => getStoredGoogleApiKey());
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
   const apply = (key: string) => {
     setStoredGoogleApiKey(key);
     onSaved?.(key);
@@ -26,11 +19,12 @@ export const GoogleApiKeyModal: React.FC<GoogleApiKeyModalProps> = ({ onClose, o
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="google-api-key-title"
-      style={{
+    <DialogPanel
+      onClose={onClose}
+      labelledBy="google-api-key-title"
+      closableOnOutside={false}
+      backdropClassName=""
+      backdropStyle={{
         position: 'fixed',
         inset: 0,
         zIndex: 10000,
@@ -41,18 +35,16 @@ export const GoogleApiKeyModal: React.FC<GoogleApiKeyModalProps> = ({ onClose, o
         justifyContent: 'center',
         padding: '1rem',
       }}
+      style={{
+        background: '#ffffff',
+        borderRadius: '12px',
+        maxWidth: '460px',
+        width: '100%',
+        padding: '1.5rem',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+        border: '1px solid #e2e8f0',
+      }}
     >
-      <div
-        style={{
-          background: '#ffffff',
-          borderRadius: '12px',
-          maxWidth: '460px',
-          width: '100%',
-          padding: '1.5rem',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-          border: '1px solid #e2e8f0',
-        }}
-      >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <div style={{ padding: '0.4rem', borderRadius: '8px', background: 'rgba(59, 130, 246, 0.1)', color: '#2563eb' }}>
@@ -162,7 +154,6 @@ export const GoogleApiKeyModal: React.FC<GoogleApiKeyModalProps> = ({ onClose, o
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </DialogPanel>
   );
 };

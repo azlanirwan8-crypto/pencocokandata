@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, Edit, MapPin, Building2, Users } from 'lucide-react';
 import type { AnalystRow } from '../../utils/analystPipeline';
 import type { WilayahSetting } from '../../types';
+import { DialogPanel } from '../BaseModal';
 
 interface AnalystRowEditModalProps {
   isOpen: boolean;
@@ -51,8 +52,11 @@ export const AnalystRowEditModal: React.FC<AnalystRowEditModalProps> = ({
   };
 
   return (
-    <div
-      style={{
+    <DialogPanel
+      isOpen={isOpen}
+      onClose={onClose}
+      backdropClassName=""
+      backdropStyle={{
         position: 'fixed',
         inset: 0,
         zIndex: 1060,
@@ -63,11 +67,8 @@ export const AnalystRowEditModal: React.FC<AnalystRowEditModalProps> = ({
         justifyContent: 'center',
         padding: '1rem',
       }}
-      onClick={onClose}
-    >
-      <div
-        className="glass-card"
-        style={{
+      className="glass-card"
+      style={{
           background: '#ffffff',
           borderRadius: '10px',
           width: '100%',
@@ -78,9 +79,8 @@ export const AnalystRowEditModal: React.FC<AnalystRowEditModalProps> = ({
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
           overflow: 'hidden',
           border: '1px solid #e9ebec',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
+      }}
+    >
         {/* Modal Header */}
         <div
           style={{
@@ -353,7 +353,6 @@ export const AnalystRowEditModal: React.FC<AnalystRowEditModalProps> = ({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </DialogPanel>
   );
 };

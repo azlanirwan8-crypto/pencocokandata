@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { X, CheckCircle2, MapPin, Navigation, Search } from 'lucide-react';
 import { mapsUrlFor, type KodePosRow } from '../../utils/neonSync';
 import { muatTitikKodePos } from '../../utils/onlineGeoCoder';
+import { DialogPanel } from '../BaseModal';
 
 interface CityOverrideModalProps {
   isOpen: boolean;
@@ -54,8 +55,12 @@ export const CityOverrideModal: React.FC<CityOverrideModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div
-      style={{
+    <DialogPanel
+      isOpen={isOpen}
+      onClose={onClose}
+      label="Setujui Pemetaan Kota Manual"
+      backdropClassName=""
+      backdropStyle={{
         position: 'fixed',
         inset: 0,
         zIndex: 1060,
@@ -66,10 +71,8 @@ export const CityOverrideModal: React.FC<CityOverrideModalProps> = ({
         justifyContent: 'center',
         padding: '1rem',
       }}
-      onClick={onClose}
-    >
-      <div
-        style={{
+      className=""
+      style={{
           background: '#fff',
           borderRadius: '10px',
           width: '100%',
@@ -78,9 +81,8 @@ export const CityOverrideModal: React.FC<CityOverrideModalProps> = ({
           display: 'flex',
           flexDirection: 'column',
           boxShadow: '0 20px 50px rgba(15,23,42,0.3)',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
+      }}
+    >
         <div
           style={{
             display: 'flex',
@@ -294,7 +296,6 @@ export const CityOverrideModal: React.FC<CityOverrideModalProps> = ({
             {isProcessing ? 'Memproses ulang…' : 'Setujui'}
           </button>
         </div>
-      </div>
-    </div>
+    </DialogPanel>
   );
 };
