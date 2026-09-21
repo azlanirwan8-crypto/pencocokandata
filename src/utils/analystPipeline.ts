@@ -134,6 +134,27 @@ export function makeFinalKey(kodePosPten: string, kelurahan: string, kecamatan =
   return `${kp}|${norm(kelurahan)}|${norm(kecamatan)}|${norm(kota)}`;
 }
 
+/**
+ * Baris salinan cloud `final_rows` yang BELUM ada di daftar lokal (G9).
+ * Non-destruktif: baris lokal tidak pernah ditimpa, hanya ditambah; penyaringan pakai
+ * kunci alami (makeFinalKey), bukan `id` yang berubah tiap run (G12) — kalau tidak,
+ * hasil run lama dengan id berbeda akan muncul lagi sebagai baris duplikat.
+ */
+export function pilFinalDariCloud(lokal: AnalystRow[], cloudRows: any[]): AnalystRow[] {
+  const kunci = new Set(
+    (lokal || []).map((r) => makeFinalKey(r.kodePosPten, r.kelurahan, r.kecamatan, r.kotaPten))
+  );
+  const hasil: AnalystRow[] = [];
+  for (const r of cloudRows || []) {
+    if (!r || typeof r.id !== 'string' || r.kodePosPten === undefined) continue;
+    const k = makeFinalKey(r.kodePosPten, r.kelurahan, r.kecamatan, r.kotaPten);
+    if (kunci.has(k)) continue;
+    kunci.add(k);
+    hasil.push(r as AnalystRow);
+  }
+  return hasil;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 🔬 MESIN PENCOCOKAN — 12 sinyal + 2 penjaga identitas (lihat SINYAL_BIT untuk
 // daftar resmi). Semua algoritmanya publik; yang khas di sini adalah susunannya:

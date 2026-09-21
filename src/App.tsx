@@ -16,7 +16,7 @@ import { KodePosManager } from './components/KodePosData/KodePosManager';
 import { AnalystCanvas } from './components/WorkingEngine/AnalystCanvas';
 import { AnalystResultsGrid } from './components/WorkingEngine/AnalystResultsGrid';
 import { FinalDataManager } from './components/WorkingEngine/FinalDataManager';
-import { executeAnalystPipeline, cityMatchKey, makeFinalKey, hitungBit, bitTemuanBaris, AnalisaDibatalkan, type AnalystRow, type AnalystCoverage } from './utils/analystPipeline';
+import { executeAnalystPipeline, cityMatchKey, makeFinalKey, pilFinalDariCloud, hitungBit, bitTemuanBaris, AnalisaDibatalkan, type AnalystRow, type AnalystCoverage } from './utils/analystPipeline';
 import { SinyalTemuanModal } from './components/WorkingEngine/SinyalTemuanModal';
 import { detectFinalAnomalies } from './utils/finalAnomaly';
 import type { ActiveTab } from './components/Sidebar';
@@ -41,6 +41,10 @@ import {
   saveTargetToNeon,
   loadWilayahFromNeon,
   saveWilayahToNeon,
+  loadFinalFromNeon,
+  saveFinalToNeon,
+  deleteFinalRowInNeon,
+  clearFinalInNeon,
   fetchKodePosExport,
   fetchKodePosStats,
   type KodePosRow,
@@ -293,9 +297,46 @@ export const App: React.FC = () => {
           console.warn('Background Neon sync skipped:', cloudErr);
         }
       })();
+
+      // ---------------------------------------------------------------------
+      // STEP 2b: Data Final ↔ cloud (G9). Non-destruktif: salinan cloud hanya
+      // MENAMBAH baris yang belum ada di browser, tidak pernah menimpa yang lokal.
+      // Dedup lewat kunci alami (kode pos + kelurahan + kecamatan + kota), bukan `id`
+      // yang berubah tiap run (G12).
+      // ---------------------------------------------------------------------
+      (async () => {
+        const cloud = await loadFinalFromNeon();
+        if (!cloud) return; // endpoint tidak tersedia (dev tanpa serverless / offline)
+
+        const lokal = ((await getItem<AnalystRow[]>('analyst_final_data')) || []).filter(
+          (r) => r && typeof r.id === 'string'
+        );
+        const tambahan = pilFinalDariCloud(lokal, cloud.rows);
+
+        if (tambahan.length > 0) {
+          const merged = [...lokal, ...tambahan];
+          setFinalRows(merged);
+          setItem('analyst_final_data', merged).catch(() => {});
+          notify(
+            `${tambahan.length} baris Data Final dipulihkan dari cloud — browser ini belum memilikinya.`,
+            'info'
+          );
+        } else if (lokal.length > 0 && cloud.rows.length === 0) {
+          // Cloud kosong padahal browser punya hasil: tanamkan sekali sebagai salinan kedua.
+          const ok = await saveFinalToNeon(lokal, 'replace');
+          notify(
+            ok
+              ? `${lokal.length} baris Data Final ditanamkan ke cloud sebagai salinan kedua.`
+              : 'Penanaman awal Data Final ke cloud gagal — hasil tetap aman di browser ini.',
+            ok ? 'success' : 'warning'
+          );
+        }
+      })().catch((err) => console.warn('Sinkron Final latar belakang dilewati:', err));
     };
 
     restoreSavedData();
+    // `notify` stabil (useCallback tanpa dep) — effect ini memang hanya sekali saat boot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const persistTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -763,6 +804,25 @@ export const App: React.FC = () => {
     });
   };
 
+  // ---------------------------------------------------------------------------
+  // Sinkron Data Final ke Neon (G9). Cloud = salinan kedua; IndexedDB tetap sumber
+  // tampilan. Kegagalan push dilaporkan, tidak pernah diam-diam.
+  // ---------------------------------------------------------------------------
+  const laporkanSinkronFinal = (ok: boolean, label: string) => {
+    // Offline / dev tanpa endpoint serverless: jangan menagih koneksi yang tidak ada.
+    if (ok || !isNeonConnected) return;
+    notify(
+      `Sinkron Data Final (${label}) gagal ke cloud. Hasil tetap aman di browser ini — cloud belum menerima perubahan ini.`,
+      'warning'
+    );
+  };
+
+  const pushFinalSemuaKeNeon = async (rows: AnalystRow[], mode: 'upsert' | 'replace' = 'upsert') => {
+    if (!isNeonConnected || rows.length === 0) return;
+    const ok = await saveFinalToNeon(rows, mode);
+    laporkanSinkronFinal(ok, mode === 'replace' ? 'tanam awal' : 'perbarui semua');
+  };
+
   // "Saya Setuju (Masuk ke Final Analisa)": pindahkan baris hasil analisa ke menu Final Data.
   // Baris TIDAK_ANALISA (kota belum terpetakan) TETAP di Data Analyst sebagai antrean kerja —
   // bukan hasil final, jadi tidak ikut dipindahkan agar Final Data berisi data yang benar/real.
@@ -778,6 +838,7 @@ export const App: React.FC = () => {
 
     setFinalRows(merged);
     setItem('analyst_final_data', merged).catch(() => {});
+    void pushFinalSemuaKeNeon(merged);
     setAnalystRows(remaining);
     setItem('analyst_results_data', remaining).catch(() => {});
     setAnalystCoverage(null);
@@ -796,6 +857,7 @@ export const App: React.FC = () => {
     setItem('analyst_results_data', merged).catch(() => {});
     setFinalRows([]);
     setItem('analyst_final_data', []).catch(() => {});
+    if (isNeonConnected) void clearFinalInNeon().then((ok) => laporkanSinkronFinal(ok, 'dikosongkan'));
     setActiveTab('working');
   };
 
@@ -807,6 +869,8 @@ export const App: React.FC = () => {
     const remainingFinal = finalRows.filter((r) => r.id !== rowId);
     setFinalRows(remainingFinal);
     setItem('analyst_final_data', remainingFinal).catch(() => {});
+    if (isNeonConnected)
+      void deleteFinalRowInNeon(rowId).then((ok) => laporkanSinkronFinal(ok, 'revisi 1 baris'));
     // Kembalikan sebagai kandidat Fase 1 (belum disetujui) ke antrean Data Analyst.
     const revived: AnalystRow = {
       ...target,
@@ -830,6 +894,8 @@ export const App: React.FC = () => {
     const remaining = finalRows.filter((r) => r.id !== rowId);
     setFinalRows(remaining);
     setItem('analyst_final_data', remaining).catch(() => {});
+    if (isNeonConnected)
+      void deleteFinalRowInNeon(rowId).then((ok) => laporkanSinkronFinal(ok, 'hapus 1 baris'));
   };
 
   // "Setujui" pada tab Perlu Analisa Manual: barisnya dinyatakan beres, tetapi fase

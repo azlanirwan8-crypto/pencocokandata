@@ -289,6 +289,10 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
   const geoAntrean = geoStats?.menunggu ?? 0;
   const geoBelumTitik = Math.max(0, stats.total - stats.totalBerTitik);
   const geoUlang = geoAntrean === 0;
+  // `geoBelumTitik` dihitung per BARIS (kelurahan), sedangkan aksi retry bekerja per
+  // KODE POS. Keduanya ditampilkan terpisah supaya angka pada tombol tidak menyesatkan
+  // (lihat dokumen perbaikan Bagian K).
+  const geoKodePosGagal = geoStats?.geo?.gagal ?? 0;
   const gayaTautanGeo: React.CSSProperties = {
     marginLeft: '0.4rem',
     padding: 0,
@@ -338,6 +342,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     };
     let patokan = 0;
     let tanpaHasil = 0; // batch beruntun tanpa satu pun titik berhasil
+    let batchKe = 0; // jumlah batch yang sudah dijalankan — memicu refresh KPI berkala
 
     try {
       // Serverless Vercel mati setelah 60 detik, jadi tahap kecil diulang terus.
@@ -373,11 +378,22 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
           `${diproses.toLocaleString('id-ID')} kode pos dikerjakan · sisa ${sisa.toLocaleString('id-ID')}` +
           (hasil.googleTerhenti ? ' · kuota Google habis, titik diisi ESRI' : '');
         setGeoRun({ aktif: true, pesan: keterangan, persen, diproses, sisa });
+        // PENTING: kartu "TITIK KOORDINAT" memakai `stats` (baris ber-titik / belum ada
+        // titik), BUKAN `geoStats`. Tanpa refresh berkala, angka di kartu tetap angka
+        // lama walau titik baru sudah tersimpan ke database — inilah yang membuat tombol
+        // "coba ulang" terlihat tidak berefek. Refresh tiap 5 batch supaya angkanya ikut
+        // turun selagi proses berjalan.
+        batchKe += 1;
+        if (batchKe % 5 === 0) void refreshStats();
         if (hasil.diproses === 0 || sisa === 0) {
           if (sisa === 0) {
             try {
               localStorage.removeItem(kunciPatokan);
             } catch {}
+          } else {
+            // Server tidak memproses apa pun padahal masih ada sisa — jelaskan alasannya
+            // supaya kartu tidak terlihat "macet" tanpa keterangan.
+            pesanAkhir = `Sisa ${sisa.toLocaleString('id-ID')} kode pos tidak bisa diproses server — kemungkinan sudah pernah dicoba semua atau kuota penyedia peta habis.`;
           }
           break;
         }
@@ -402,6 +418,9 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
         setTimeout(() => setSuccessMsg(null), 4000);
       }
       await refreshGeo();
+      // WAJIB: angka "X baris belum ada titik" di kartu dihitung dari `stats`.
+      // Tanpa refresh ini, kartu tetap menampilkan angka lama setelah retry selesai.
+      await refreshStats();
       setReloadKey((k) => k + 1);
     }
   };
@@ -845,7 +864,11 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               </>
             ) : (
               <>
-                {`${geoBelumTitik.toLocaleString('id-ID')} baris belum ada titik`}
+                {geoBelumTitik === 0
+                  ? 'semua baris sudah punya titik'
+                  : geoUlang
+                    ? `${geoBelumTitik.toLocaleString('id-ID')} baris tanpa titik — sudah dicoba, penyedia peta tidak menyediakannya`
+                    : `${geoBelumTitik.toLocaleString('id-ID')} baris belum ada titik`}
                 {geoBelumTitik > 0 && (
                   <button
                     type="button"
@@ -858,7 +881,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                     )}
                   >
                     {geoUlang
-                      ? `coba ulang ${geoBelumTitik.toLocaleString('id-ID')}`
+                      ? `coba ulang ${(geoKodePosGagal || geoBelumTitik).toLocaleString('id-ID')} kode pos`
                       : `isi ${geoAntrean.toLocaleString('id-ID')} kode pos`}
                   </button>
                 )}

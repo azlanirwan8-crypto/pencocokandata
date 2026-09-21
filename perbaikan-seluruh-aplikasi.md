@@ -1,6 +1,6 @@
 # RENCANA PERBAIKAN SELURUH APLIKASI
-> **⚠️ STATUS 2026-09-21: BELUM SELESAI — 12 dari 67 item `SELESAI`, 55 `BELUM` (8 di antaranya tinggal dieksekusi, keputusannya sudah diambil).**
-> Baca Bagian 0 sebelum mengerjakan apa pun. Titik lanjut: **G9** (lihat kotak 🚫 di Bagian G9 — jangan bikin file `api/` baru). Rincian & bukti verifikasi ada di sana.
+> **⚠️ STATUS 2026-09-21: BELUM SELESAI — 13 dari 67 item `SELESAI`, 54 `BELUM` (8 di antaranya tinggal dieksekusi, keputusannya sudah diambil).**
+> Baca Bagian 0 sebelum mengerjakan apa pun. Titik lanjut: **A3** (BaseModal). Rincian & bukti verifikasi ada di sana.
 
 **Aplikasi:** Tools Data Matcher Cabang & Outlet v2.x — React + TypeScript + Vite; IndexedDB (lokal) + Neon Postgres (cloud via serverless `api/`).
 **Sumber:** tinjauan kode statis; aplikasi TIDAK dijalankan saat audit (`node`/`npm` tidak tersedia). Nomor baris = kondisi saat audit; verifikasi ulang dengan pencarian teks sebelum mengubah.
@@ -14,19 +14,23 @@
 >
 > | Status | Jumlah | ID |
 > |---|---|---|
-> | ✅ `SELESAI` | **12** | A1, A2, A4, A5, F3-C1, F3-C2, F6-X4, G2, G4, G5, G6, G10 |
-> | ⬜ `BELUM` | **55** | sisanya — termasuk 8 item yang dulu `SKIP`: keputusannya **sudah diambil 2026-09-21** (lihat Bagian 12), tinggal dieksekusi (B1, B2, B4, D1, D3, D6, G7, G8) |
+> | ✅ `SELESAI` | **13** | A1, A2, A4, A5, F3-C1, F3-C2, F6-X4, G2, G4, G5, G6, G9, G10 |
+> | ⬜ `BELUM` | **54** | sisanya — termasuk 8 item yang dulu `SKIP`: keputusannya **sudah diambil 2026-09-21** (lihat Bagian 12), tinggal dieksekusi (B1, B2, B4, D1, D3, D6, G7, G8) |
 >
-> Belum termasuk item Bagian **H/I/J di Lampiran** (statusnya `BELUM`, ditandai langsung di barisnya).
+> Belum termasuk item Bagian **H/I/J/K di Lampiran** (statusnya `BELUM`, ditandai langsung di barisnya; khusus Bagian K: K1–K3 sudah dikerjakan & build-verified 2026-09-21, K4–K5 `BELUM`).
 >
 > **Untuk AI berikutnya (Cline / lainnya):**
-> 1. Urutan sisa yang disepakati: **G9** (sinkron Neon — baca kotak 🚫 di Bagian G9 dulu, jangan bikin file `api/` baru) → **A3** (BaseModal) → **B4/D2/D3/D6/G7/G8** (kejujuran data) → **C2a–C2e + C3/C4** (Fase 2) → **A6–A10, E, F, G1/G3/G11** (kebersihan & sisanya).
-> 2. **Jangan kerjakan ulang** 12 item `SELESAI`; baca kolom "Catatan" untuk file yang sudah disentuh.
+> 1. Urutan sisa yang disepakati: **A3** (BaseModal) → **B4/D2/D3/D6/G7/G8** (kejujuran data) → **C2a–C2e + C3/C4** (Fase 2) → **A6–A10, E, F, G1/G3/G11/G12** (kebersihan & sisanya). **G9 sudah selesai** — jangan buat file `api/` baru apa pun (alasan + bukti: kotak 🚫 di Bagian G9).
+> 2. **Jangan kerjakan ulang** 13 item `SELESAI`; baca kolom "Catatan" untuk file yang sudah disentuh.
 > 3. Nomor baris di dokumen ini berasal dari audit statis dan **sudah bergeser** — cari teksnya, jangan percaya angka barisnya.
 > 4. Setelah satu item selesai: ganti statusnya di tabel + isi tanggal `YYYY-MM-DD` + file yang diubah, lalu commit dokumen ini bersama kodenya.
 > 5. Wajib jalankan Bagian 11 sebelum melapor selesai: `npm run build` dan `npm run lint` (oxlint, **bukan eslint**) harus bersih.
 >
-> **Bukti verifikasi terakhir (2026-09-21):** `npm run build` ✓ · `npm run lint` 0 error / 84 warning (baseline) · diuji di browser (dev `localhost:5199`, modul sumber di-import langsung): `makeFinalKey` V2 memisahkan dua kota yang bertabrakan di versi lama, `AnalisaDibatalkan` benar-benar terlempar saat flag naik dan run normal tetap selesai, notifikasi warning muncul & hilang sesuai auto-dismiss, `ConfirmDialog` restore cadangan menjalankan aksinya hanya setelah "Ya, Pulihkan" · `grep alert(` di `src/` = 0.
+> **Bukti verifikasi batch G2/A4 (2026-09-21):** `npm run build` ✓ · `npm run lint` 0 error / 84 warning (baseline saat itu) · diuji di browser (dev `localhost:5199`, modul sumber di-import langsung): `makeFinalKey` V2 memisahkan dua kota yang bertabrakan di versi lama, `AnalisaDibatalkan` benar-benar terlempar saat flag naik dan run normal tetap selesai, notifikasi warning muncul & hilang sesuai auto-dismiss, `ConfirmDialog` restore cadangan menjalankan aksinya hanya setelah "Ya, Pulihkan" · `grep alert(` di `src/` = 0.
+>
+> **Bukti verifikasi terakhir (2026-09-21, batch G9):** `npx tsc -b --force` 0 error · `npm run build` ✓ · `npm run lint` 0 error / **82** warning (semuanya di file lain; `src/App.tsx` & `src/utils/neonSync.ts` = 0 warning) · `npx tsc -p api/tsconfig.json --noEmit` ✓ · `pilFinalDariCloud` diukur di browser dev lewat 7 kasus (baris cloud baru diterima; baris berkunci alami sama dengan `id` berbeda DITOLAK; duplikat internal cloud hanya 1 yang masuk; baris tanpa `id`/tanpa `kodePosPten` dibuang; kota kembar beda kota tetap dipulihkan) · helper cloud diukur dengan endpoint tiruan: 700 baris = 2 GET (500+200, tanpa celah) dan 3 POST (chunk 300, body maks 102 KB utk baris 146 B) · handler `api/target.ts` dijalankan terhadap `sql` palsu: GET kosong → `CREATE TABLE final_rows` + `total:0`; GET paging → `returned:500 offset:200 total:700`; POST upsert 701 baris → `written:700` (baris tanpa id dibuang) & **tidak ada** `DELETE`; POST `mode:'replace'` → ada `DELETE` lebih dulu; POST tanpa mode → upsert (aman); DELETE tanpa `key`/`all` → 400 dan nol query destruktif; DELETE `&key=` → 1 baris; DELETE `&all=1` → 705 baris; `view` tak dikenal pada POST/DELETE → 400 tanpa menyentuh `target_records`; jalur lama `GET/DELETE /api/target` (tanpa `view`) tetap meng tabel target.
+>
+> Catatan penting batch ini: `npm run build` memakai `tsc -b` **inkremental** — tanpa `--force` error di file yang tidak diubah bisa terlewat. Selalu verifikasi dengan `npx tsc -b --force`.
 
 
 **Aturan untuk AI/developer:**
@@ -102,7 +106,7 @@
 | G6 | SELESAI | 2026-09-21 | FinalDataManager — returnAll & revisi pakai ConfirmDialog. Build & lint terverifikasi 2026-09-21 |
 | G7 | BELUM | — | Keputusan diambil 2026-09-21 (Bagian 12) — menunggu eksekusi |
 | G8 | BELUM | — | Keputusan diambil 2026-09-21 (Bagian 12) — menunggu eksekusi |
-| G9 | BELUM | — | |
+| G9 | SELESAI | 2026-09-21 | Tabel per-baris `final_rows` + `?view=final` pada `api/target.ts` yang sudah ada (BUKAN file `api/` baru). `neonSync.ts`: `loadFinalFromNeon/saveFinalToNeon/deleteFinalRowInNeon/clearFinalInNeon`; `analystPipeline.ts`: `pilFinalDariCloud`; `App.tsx`: merge non-destruktif di boot + push di 4 titik mutasi Final; `api/status.ts` + modal Database menampilkan jumlah `final_rows`. Bukti verifikasi di Bagian G9 |
 | G10 | SELESAI | 2026-09-21 | FinalDataManager — card metrik (total/KC/KCP/role lengkap/wilayah). Build & lint terverifikasi 2026-09-21 |
 | G11 | BELUM | — | |
 | G12 | BELUM | — | Panduan, bukan tugas terpisah |
@@ -132,7 +136,7 @@
 | Cabang | `master_data` (App) | `master_records` + `master_meta` | replace/append |
 | Mapping Role | `role_mapping_data` | `app_store.rolemapping_data` (JSONB) | replace-all |
 | KodePos | `kodepos_master_data` (cache) | `kodepos_data` per-baris | per-id + batch |
-| **Data Final** | `analyst_final_data` | **BELUM ADA sinkron Neon** | IndexedDB saja |
+| **Data Final** | `analyst_final_data` | `final_rows` (per baris, via `/api/target?view=final`) | upsert per-baris + hapus per kunci |
 
 ## 2. Prioritas ringkas
 
@@ -379,6 +383,26 @@ Server paging (`api/kodepos.ts:382–407`, default 25 cap 500), CRUD per-id (`PU
 > **Jangan tulis ke Neon dari agen:** operator menjalankan sendiri alur produksinya
 > ([[feedback-user-reruns-flows-himself]]). Verifikasi cukup GET `?view=final` setelah deploy.
 
+**✅ EKSEKUSI 2026-09-21 (pilihan (a): tabel per-baris `final_rows`):**
+
+| Bagian | Isi |
+|---|---|
+| Skema | `final_rows(row_key TEXT PRIMARY KEY, raw_data JSONB NOT NULL, updated_at)` ditambahkan ke `ensureSchema` **`api/target.ts` yang sudah ada** (bukan file baru) |
+| Endpoint | `GET/POST/DELETE /api/target?view=final` — GET dipaging (default & maks 500 baris, `ORDER BY row_key` agar halaman tidak tumpang tindih); POST upsert chunk 200 baris via `json_to_recordset` + `ON CONFLICT (row_key) DO UPDATE` (pola yang sama sudah produksi di `api/kodepos-id.ts`/`-baseline.ts`); DELETE `?key=` 1 baris / `?all=1` kosongkan |
+| Aman dari salah ketik | POST/DELETE dengan `view` tak dikenal → **400**, tidak jatuh ke jalur `target_records` (yang akan `DELETE FROM target_records`). Tanpa `key` **dan** tanpa `all=1`, DELETE final ditolak — satu DELETE lupa param tidak bisa menghapus semua hasil |
+| Tidak ada jendela kosong | mode default `upsert` (tidak pernah `DELETE`); `replace` hanya untuk penanaman awal saat cloud masih kosong |
+| Klien | `neonSync.ts`: `loadFinalFromNeon` (paging otomatis, `null` = endpoint tak tersedia vs `{rows:[]}` = cloud kosong), `saveFinalToNeon` (chunk 300 baris ≈ 350 KB), `deleteFinalRowInNeon`, `clearFinalInNeon` |
+| Boot merge | `App.tsx` STEP 2b (di luar `Promise.allSettled` agar tidak memperlambat sync lain): **non-destruktif** — baris cloud hanya MENAMBAH yang belum ada lokal, tidak pernah menimpa. Dedup via `pilFinalDariCloud()` (kunci alami `makeFinalKey`, bukan `id` — lihat G12). Cloud kosong + lokal ada → tanamkan sekali + toast |
+| Push setelah mutasi | 4 titik: Setujui-all→upsert seluruh daftar; Kembalikan-ke-Analyst→`clearFinalInNeon`; Revisi & Hapus per baris→`deleteFinalRowInNeon(rowId)`. Gagal → toast warning "hasil tetap aman di browser ini"; di dev/offline tidak menuntut koneksi yang tidak ada (`isNeonConnected`) |
+| Visibilitas | `api/status.ts` menambah `tables.finalRecords`; modal Database menampilkan kartu `final_rows` + jumlahnya, jadi "sudah ada salinan cloud" bisa dilihat tanpa membuka SQL |
+
+**Cara operator memverifikasi (setelah deploy, tanpa perlu menulis):**
+1. Buka `https://match-sepia.vercel.app/api/target?view=final&limit=5` → harus `{"ok":true,"table":"final_rows","total":N,...}` (tabel dibuat otomatis pada permintaan pertama).
+2. Buka `.../api/status` → `tables.finalRecords` > 0 setelah menekan **Saya Setuju** di Data Analyst.
+3. Reset browser/PC lain → buka aplikasi → toast "N baris Data Final dipulihkan dari cloud".
+4. known limit (disengaja): cloud bisa menyimpan baris hasil run lama yang `id`-nya berbeda; baris itu **tidak pernah tampil** karena difilter `pilFinalDariCloud` berdasar kunci alami, tapi membuat `finalRecords` bisa lebih besar dari jumlah baris lokal. Belum ada GC-nya (butuh hapus-banyak-kunci; sampai hari ini manfaatnya tidak sebanding risikonya).
+5. `analyst_purge_v2` (`App.tsx` boot) hanya menghapus salinan lokal; kalau nanti ada purge struktural baru, purge-nya juga harus menyapu `final_rows` — kalau tidak, baris format lama kembali dari cloud.
+
 
 ### G10 — Card informasi ringkas (kebutuhan 5d)
 **Eksekusi:** di header `FinalDataManager.tsx:87–97` tambah 4 metrik mini: total baris, KC vs KCP, role lengkap (n/3), jumlah wilayah tercakup. Data sudah ada di `rows`.
@@ -491,5 +515,86 @@ Server paging (`api/kodepos.ts:382–407`, default 25 cap 500), CRUD per-id (`PU
 | ANI-3 | BELUM | Kartu peta muncul tanpa animasi → `qdrFade`/`qdrRise` saat container dimount |
 | ANI-4 | BELUM | Progress geocoding hanya bar → tambahkan spinner `qdrSpin` + teks “Mencari titik X dari Y” |
 | ANI-5 | BELUM | Angka KPI berubah mendadak → count-up ~0,4 dtk (berlaku juga kartu dashboard lain) |
+
+## BAGIAN K — KARTU “TITIK KOORDINAT” (Data Kode Pos) terlihat aneh/macet
+
+**Gejala yang dilaporkan:** kartu menampilkan angka besar `83.361`, lalu teks `401 baris belum ada titik`, dan tautan `coba ulang 401` — diklik tidak mengubah apa pun (terasa seperti bug/macet).
+
+**Hasil analisa: BUKAN salah hitung — ini bug satuan/labeling & umpan balik.**
+
+| Angka di layar | Sumber kode | Satuan sebenarnya |
+|---|---|---|
+| `83.361` (angka besar) | `KodePosManager.tsx:835` → `stats.totalBerTitik` | **baris kelurahan** yang punya titik (koordinat sendiri **atau** fallback titik kode pos) |
+| `401 baris belum ada titik` | `:290` `geoBelumTitik = stats.total - stats.totalBerTitik`, ditampilkan `:848` | **baris kelurahan** tanpa titik |
+| `coba ulang 401` (tautan) | `:852` → `jalankanGeo(geoUlang=true)` | aksi berjalan atas **kode pos unik** (`kodepos_geo.kode_pos` = PRIMARY KEY), **bukan** 401 baris |
+
+Verifikasi konsistensi: `83.361 + 401 = 83.762` = total baris master → perhitungan benar, tidak ada data hilang.
+
+**Akar kebingungan:**
+1. Judul kartu “TITIK KOORDINAT” tanpa satuan → 83.361 dibaca sebagai “jumlah titik”, padahal “jumlah baris yang punya titik”.
+2. Tautan retry menulis `401` (baris) padahal retry memproses **kode pos unik**; bila 401 baris itu hanya menempati mis. 37 kode pos, yang dikerjakan hanya 37.
+3. Query retry: `api/kodepos-geo.ts:227–235` mode `ulang` → `WHERE g.kode_pos IS NULL OR g.latitude IS NULL` (per kode pos). Baris `kodepos_data` hanya terisi bila kode pos baris itu punya titik di `kodepos_geo` (fallback `COALESCE(...)`, `api/kodepos.ts:141–146`). Bila penyedia (Google/ESRI/OSM) tidak punya data → hasil 0 → angka 401 tidak berubah.
+4. Tidak ada umpan balik “0 berhasil / N kode pos tidak bersumber”. Klien memang berhenti sendiri setelah satu putaran tanpa hasil (`KodePosManager.tsx:340` — `tanpaHasil`), tetapi user tidak melihat pesan apa pun → terasa macet.
+
+| ID | Status | Perbaikan |
+|---|---|---|
+| K1 | SELESAI | Satuan diperjelas: pesan kartu kini membedakan “belum ada titik” (masih ada antrean) vs “sudah dicoba, penyedia tidak menyediakan” (`KodePosManager.tsx:863–867`) — build terverifikasi 2026-09-21 |
+| K2 | SELESAI | Label tombol retry memakai satuan kode pos: `coba ulang {geoStats.geo.gagal} kode pos` (`:295`, `:880`). **Koreksi 2026-09-21:** `geoStats.gagal` tidak ada di tipe `KodePosGeoStats` (build mati TS2339); lapangan: `/api/kodepos-geo?view=stats` mengembalikan `geo.gagal=2.813`, dan tidak ada `gagal` di level atas — jadi path yang benar `geoStats?.geo?.gagal` |
+| K3 | SELESAI | Umpan balik hasil retry: pesan eksplisit saat server tidak memproses apa pun (`:393–397`) + pesan selesai/berhenti (`:410–419`) |
+| K4 | BELUM | Tandai kode pos “tidak bersumber” (kolom `sumber`/`presisi` di `kodepos_geo`) agar tidak terus ditawarkan sebagai “coba ulang” — menghentikan ilusi tombol macet |
+| K5 | BELUM | Naikkan info “terverifikasi Google: X” dari tooltip (`:824–826`) ke baris kartu (sekarang tersembunyi di tooltip) |
+
+## BAGIAN L — CATATAN HASIL FIXING (log perubahan per sesi)
+
+> Bagian ini adalah **log**, bukan daftar tugas. Ditulis agar qoder/tim lain tahu persis apa yang sudah diubah, mengapa, dan apa yang belum diverifikasi. Jangan mengubah kode yang sudah tercatat di sini tanpa membaca catatannya.
+
+### Sesi 1 — 2026-09-21 · Tier-1 (UI & Data Master) + perbaikan kartu Titik Koordinat
+
+| # | File | Perubahan | Item | Verifikasi build |
+|---|---|---|---|---|
+| 1 | `src/App.tsx` | `handleMasterLoaded` menerima parameter `mode` (`'replace' | 'append' | 'update'`); mode `'update'` = terapkan daftar lengkap apa adanya (tanpa merge/dedup) lalu simpan ke IndexedDB + Neon. Diperlukan karena edit/hapus Data Cabang sebelumnya hilang diam-diam. Ref: `App.tsx:929` | F3-C1, F3-C2 | ✅ build 2026-09-21 |
+| 2 | `src/App.tsx` | Handler baru `handleDeleteFinalRow(rowId)` + kirim prop `onDeleteRow` ke `FinalDataManager`. Ref: `App.tsx:893`, `:1319` | G5 | ✅ build 2026-09-21 |
+| 3 | `src/components/MasterData/CabangManager.tsx` | Tipe prop `onMasterLoaded` ditambah `'update'`; pemanggilan untuk create/edit (`:324`) dan hapus (`:334`) memakai `'update'`; impor Excel tetap `'replace'` (merge+dedup, perilaku lama dipertahankan). Ref: `:35`, `:322–334` | F3-C1, F3-C2 | ✅ build 2026-09-21 |
+| 4 | `src/components/WorkingEngine/FinalDataManager.tsx` | (a) Card metrik ringkas: total/KC/KCP/3-role-lengkap/wilayah; (b) aksi **Detail** (modal `role="dialog"` + Esc); (c) aksi **Hapus permanen**; (d) `ConfirmDialog` untuk “Kembalikan semua”, “Revisi”, dan “Hapus”; (e) prop baru `onDeleteRow` | G4, G5, G6, G10 | ✅ build 2026-09-21 |
+| 5 | `src/components/WorkingEngine/AnalystResultsGrid.tsx` | Konfirmasi “Revisi ke Perlu Analisa Manual” memakai `ConfirmDialog` (state `confirmManualRow`, `:159`; tombol `:1864`; dialog `:2081–2096`). **Sekaligus memperbaiki baris `onClick` yang rusak** akibat patch fuzz sebelumnya | A2 (sebagian) | ✅ build 2026-09-21 |
+| 6 | `src/components/Topbar.tsx` | Badge status koneksi Neon (“Terhubung · disinkron HH:MM” / “Offline”), tombol **Database** (buka `NeonDatabaseModal`), tombol **Simpan** (memanggil `flushPendingWrites()` + umpan balik “Tersimpan ✓”) | A5 | ✅ build 2026-09-21 |
+| 7 | `src/components/KodePosData/KodePosManager.tsx` | **Perbaikan utama kartu “TITIK KOORDINAT”**: (a) `await refreshStats()` di blok `finally` `jalankanGeo()` (`:423`) — inilah penyebab angka “belum ada titik” tidak pernah berubah setelah “coba ulang”; (b) refresh KPI tiap 5 batch (`:345`, `:386–387`); (c) pesan eksplisit saat server tidak memproses apa pun (`:396`); (d) satuan diperjelas: `N baris tanpa titik — sudah dicoba, penyedia peta tidak menyediakannya` (`:870`); (e) label tombol memakai satuan kode pos (`:884`) | K1, K2, K3 | ✅ build 2026-09-21 |
+
+**Ringkasan akar masalah kartu “TITIK KOORDINAT” (untuk referensi):** `jalankanGeo()` hanya me-refresh `geoStats`, padahal angka kartu dihitung dari `stats` (`geoBelumTitik = stats.total − stats.totalBerTitik`). Akibatnya titik yang sudah tersimpan tidak pernah tercermin di kartu → tombol “coba ulang” terlihat tidak bekerja.
+
+### Yang BELUM dikerjakan (lanjutan untuk qoder)
+
+| Item | Isi | Catatan |
+|---|---|---|
+| ~~A2 (sisa)~~ | `SnapshotModal.tsx` `window.confirm` → `ConfirmDialog` | **SELESAI 2026-09-21** (lihat tabel Bagian 0) |
+| ~~A1 (sisa)~~ | `alert()` pada alur impor Excel & validasi form | **SELESAI 2026-09-21** — `grep -n "alert(" src/` = 0 |
+| ~~MAP-1~~ | `NotificationProvider` dipasang di `main.tsx` | **SELESAI 2026-09-21** — toast benar-benar tampil (diuji di dev) |
+| K4, K5 | Tandai kode pos “tidak bersumber”; naikkan info “terverifikasi Google” ke baris kartu | kecil |
+| H, I, J | Bagian Dashboard/Peta/Animasi (lihat di atas) | H3 = keputusan produk |
+
+### Aturan verifikasi (WAJIB)
+
+Sesi fixing pertama dilakukan tanpa `node`/`npm`/`git` di mesinnya, sehingga tabel di atas dulu berlabel "⚠️ BELUM diverifikasi compiler". **Sudah diverifikasi 2026-09-21** (`npx tsc -b --force` 0 error) — kecuali satu error tipe yang ditemukan & diperbaiki saat itu juga: `geoStats.gagal` → `geoStats.geo.gagal` (lihat catatan K2).
+
+```bash
+npx tsc -b --force   # TypeScript PENUH — `npm run build` biasa bersifat inkremental dan bisa melewatkan error di file yang tidak diubah
+npm run lint         # oxlint
+```
+
+Lalu uji manual minimal: (1) edit & hapus 1 baris di menu Data Cabang → refresh → pastikan berubah; (2) Data Final → tombol Detail/Revisi/Hapus; (3) Topbar → tombol Simpan; (4) Data Kode Pos → klik “coba ulang N kode pos” → angka “belum ada titik” harus turun.
+
+### Sesi 2 — 2026-09-21 · G2 + A4 (commit `eec7bd1`), lalu G9
+
+| # | File | Perubahan | Item | Verifikasi build |
+|---|---|---|---|---|
+| 1 | `src/utils/analystPipeline.ts` | `makeFinalKey` dilebarkan jadi 4 komponen + `AnalisaDibatalkan` + `tick()` pembatal di `executeAnalystPipeline`; subsequently `pilFinalDariCloud()` untuk merge cloud | G2, A4, G9 | ✅ 2026-09-21 |
+| 2 | `src/App.tsx` + `AnalystCanvas.tsx` | Tombol **Batalkan** saat analisa; state dikembalikan, tidak ada hasil setengah jadi tersimpan | A4 | ✅ 2026-09-21 |
+| 3 | `api/target.ts` | `?view=final` (tabel `final_rows`) + penolakan `view` tak dikenal pada POST/DELETE. **Tidak ada file `api/` baru** (lihat kotak 🚫 G9 — menambah file fungsi baru membuat deploy mati diam) | G9 | ✅ `tsc -p api/tsconfig.json` 0 error; handler dijalankan terhadap `sql` palsu (hasil lengkap di Bagian G9). **SQL asli belum dieksekusi ke Neon** — itu aksi operator setelah deploy (`GET ?view=final`) |
+| 4 | `src/utils/neonSync.ts` | `loadFinalFromNeon` / `saveFinalToNeon` / `deleteFinalRowInNeon` / `clearFinalInNeon`; `NeonStatus.tables.finalRecords` | G9 | ✅ 2026-09-21 |
+| 5 | `src/App.tsx` | STEP 2b boot merge non-destruktif + push di 4 titik mutasi Final + toast gagal | G9 | ✅ 2026-09-21 |
+| 6 | `api/status.ts`, `src/components/NeonDatabaseModal.tsx` | Jumlah baris `final_rows` terlihat di modal Database | G9 | ✅ 2026-09-21 |
+| 7 | `src/components/KodePosData/KodePosManager.tsx` | Perbaikan tipe `geoStats?.gagal` → `geoStats?.geo?.gagal` (sisa patch sesi 1 yang belum di-commit; membuat `tsc -b --force` gagal TS2339) | K2 | ✅ 2026-09-21 |
+
+Yang **belum** diuji pada sesi 2: (a) SQL `final_rows` terhadap Postgres sungguhan (butuh tulis ke Neon → aksi operator), (b) kartu Titik Koordinat di UI produksi untuk label `coba ulang 2.813 kode pos`.
 
 **Akhir dokumen.** Untuk konversi PDF: buka file ini di VS Code → “Markdown PDF: Export (pdf)”, atau paste ke Google Docs/Word → Export PDF; untuk Canva: paste bagian tabel per bagian (Canva tidak merender Markdown tabel otomatis).

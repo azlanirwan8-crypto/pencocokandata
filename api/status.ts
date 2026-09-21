@@ -25,12 +25,14 @@ export default async function handler(req: any, res: any) {
   try {
     const sql = neon(connectionString);
 
-    // Semua query paralel: 4 round-trip berurutan membuat boot aplikasi lambat
-    const [timeRes, masterRes, targetRes, kodeposRes] = await Promise.all([
+    // Semua query paralel: round-trip berurutan membuat boot aplikasi lambat
+    const [timeRes, masterRes, targetRes, kodeposRes, finalRes] = await Promise.all([
       sql`SELECT NOW() as current_time;`,
       sql`SELECT COUNT(*)::int as count FROM master_records;`.catch(() => [{ count: 0 }]),
       sql`SELECT COUNT(*)::int as count FROM target_records;`.catch(() => [{ count: 0 }]),
       sql`SELECT COUNT(*)::int as count FROM kodepos_data;`.catch(() => [{ count: 0 }]),
+      // final_rows dibuat otomatis oleh /api/target; belum ada = 0 (belum pernah sinkron Final).
+      sql`SELECT COUNT(*)::int as count FROM final_rows;`.catch(() => [{ count: 0 }]),
     ]);
 
     return res.status(200).json({
@@ -41,6 +43,7 @@ export default async function handler(req: any, res: any) {
         masterRecords: masterRes[0]?.count || 0,
         targetRecords: targetRes[0]?.count || 0,
         kodeposRecords: kodeposRes[0]?.count || 0,
+        finalRecords: finalRes[0]?.count || 0,
       },
     });
   } catch (error: any) {

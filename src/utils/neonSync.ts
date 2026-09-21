@@ -9,6 +9,7 @@ export interface NeonStatus {
     masterRecords: number;
     targetRecords: number;
     kodeposRecords: number;
+    finalRecords: number;
   };
 }
 
@@ -299,6 +300,126 @@ export async function clearTargetFromNeon(): Promise<boolean> {
     return Boolean(json.ok);
   } catch (err) {
     console.warn('Neon target delete error:', err);
+    return false;
+  }
+}
+
+/**
+ * ---------------------------------------------------------------------------
+ * Data Final Analisa (tabel `final_rows`, dilayani /api/target?view=final)
+ *
+ * `analyst_final_data` di IndexedDB adalah satu-satunya salinan hasil Final selama
+ * endpoint ini tidak dipakai: ganti perangkat atau bersihkan browser = hasil hilang.
+ * Barisnya longgar (`any[]`) supaya modul ini tidak mengimpor dari analystPipeline
+ * (analystPipeline sudah mengimpor tipe dari modul ini — siklus impor harus dihindari).
+ * ---------------------------------------------------------------------------
+ */
+
+export interface FinalNeonPayload {
+  rows: any[];
+  total: number;
+}
+
+/** Baris per permintaan POST; ~40 kolom × 300 ≈ 350 KB, aman di bawah batas body Vercel. */
+const FINAL_CHUNK_SIZE = 300;
+const FINAL_PAGE_SIZE = 500;
+
+/**
+ * Muat SELURUH Data Final dari cloud (dipaging).
+ * `null` = endpoint tidak tersedia/gagal; `{ rows: [] }` = cloud memang kosong.
+ */
+export async function loadFinalFromNeon(): Promise<FinalNeonPayload | null> {
+  const all: any[] = [];
+  try {
+    let offset = 0;
+    let total = 0;
+    // 200 halaman = 100 ribu baris; pelindung kalau `total` tidak pernah konsisten.
+    for (let page = 0; page < 200; page++) {
+      const res = await fetchWithRetry(
+        `/api/target?view=final&limit=${FINAL_PAGE_SIZE}&offset=${offset}`,
+        {},
+        10000,
+        2
+      );
+      if (!res.ok) return null;
+      const json = await res.json();
+      if (!json.ok || !json.data || !Array.isArray(json.data.rows)) return null;
+
+      const pageRows: any[] = json.data.rows;
+      all.push(...pageRows);
+      total = Number(json.total ?? all.length);
+      offset += pageRows.length;
+      if (pageRows.length === 0 || all.length >= total) break;
+    }
+    return { rows: all, total };
+  } catch (err) {
+    console.warn('Neon final load error:', err);
+    return null;
+  }
+}
+
+/**
+ * Dorong Data Final ke cloud. Default 'upsert': baris yang tidak ikut dikirim TIDAK
+ * dihapus, jadi kegagalan di tengah chunk tidak pernah menyisakan cloud dalam keadaan kosong.
+ * Panggil dengan mode 'replace' hanya untuk penanaman awal (seed) dari satu daftar lengkap.
+ */
+export async function saveFinalToNeon(
+  rows: any[],
+  mode: 'upsert' | 'replace' = 'upsert'
+): Promise<boolean> {
+  try {
+    for (let i = 0; i < rows.length; i += FINAL_CHUNK_SIZE) {
+      const chunk = rows.slice(i, i + FINAL_CHUNK_SIZE);
+      const chunkMode = i === 0 ? mode : 'upsert';
+
+      const res = await fetchWithRetry(
+        '/api/target?view=final',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rows: chunk, mode: chunkMode }),
+        },
+        20000,
+        2
+      );
+      if (!res.ok) return false;
+      const json = await res.json().catch(() => null);
+      if (!json?.ok) return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Neon final save error:', err);
+    return false;
+  }
+}
+
+/** Hapus satu baris Data Final di cloud (aksi Revisi / Hapus per baris). */
+export async function deleteFinalRowInNeon(rowKey: string): Promise<boolean> {
+  try {
+    const res = await fetchWithRetry(
+      `/api/target?view=final&key=${encodeURIComponent(rowKey)}`,
+      { method: 'DELETE' },
+      8000,
+      2
+    );
+    if (!res.ok) return false;
+    const json = await res.json();
+    return Boolean(json.ok);
+  } catch (err) {
+    console.warn('Neon final delete error:', err);
+    return false;
+  }
+}
+
+/** Kosongkan seluruh Data Final di cloud (aksi "Kembalikan ke Data Analyst"). */
+export async function clearFinalInNeon(): Promise<boolean> {
+  try {
+    const res = await fetchWithRetry('/api/target?view=final&all=1', { method: 'DELETE' }, 15000, 2);
+    if (!res.ok) return false;
+    const json = await res.json();
+    return Boolean(json.ok);
+  } catch (err) {
+    console.warn('Neon final clear error:', err);
     return false;
   }
 }

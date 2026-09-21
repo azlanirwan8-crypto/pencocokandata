@@ -235,6 +235,41 @@ export const NeonDatabaseModal: React.FC<NeonDatabaseModalProps> = ({
                 {neonStatus?.tables ? `${neonStatus.tables.targetRecords.toLocaleString('id-ID')} baris` : 'Tersinkronisasi'}
               </span>
             </div>
+
+            {/* Table 3: final_rows */}
+            <div
+              style={{
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderRadius: '6px',
+                padding: '0.6rem 0.8rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#f0ad4e' }}>
+                  final_rows
+                </div>
+                <div style={{ fontSize: '0.71rem', color: '#64748b' }}>
+                  Salinan cloud Data Final — hasil tetap ada saat ganti perangkat atau browser dibersihkan
+                </div>
+              </div>
+              <span
+                style={{
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  background: 'rgba(240, 173, 78, 0.12)',
+                  color: '#b06f0f',
+                  padding: '0.15rem 0.55rem',
+                  borderRadius: '4px',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {neonStatus?.tables ? `${neonStatus.tables.finalRecords.toLocaleString('id-ID')} baris` : 'Tersinkronisasi'}
+              </span>
+            </div>
           </div>
         </div>
 
