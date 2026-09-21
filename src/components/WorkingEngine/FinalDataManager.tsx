@@ -317,10 +317,9 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
         </div>
 
         <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', maxHeight: '580px', overflow: 'auto' }}>
-          <table className="modern-table" style={{ width: '100%', minWidth: '1650px', fontSize: '0.76rem' }}>
+          <table className="modern-table" style={{ width: '100%', minWidth: '1450px', fontSize: '0.76rem' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
               <tr>
-                <th style={{ width: '45px', textAlign: 'center' }}>No</th>
                 <th style={{ width: '70px', textAlign: 'center' }}>Wilayah</th>
                 <th style={{ width: '90px', textAlign: 'center' }}>Sandi Cabang</th>
                 <th style={{ width: '90px', textAlign: 'center' }}>Branch Code</th>
@@ -328,21 +327,18 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
                 <th style={{ minWidth: '160px' }}>Nama Outlet</th>
                 <th style={{ width: '90px', textAlign: 'center' }}>Status Outlet</th>
                 <th style={{ minWidth: '200px' }}>ALAMAT</th>
-                <th style={{ width: '80px', textAlign: 'center' }}>Kode Pos</th>
+                <th style={{ width: '80px', textAlign: 'center' }} title="Kode pos dari data PTEN (hasil tabrakan Fase 1)">KODE POS</th>
                 <th style={{ minWidth: '130px' }}>Kelurahan</th>
                 <th style={{ minWidth: '130px' }}>Kecamatan</th>
                 <th style={{ minWidth: '150px' }} title="Kolom PTEN KOTA/KABUPATEN MAX 15 DIGIT">Dati II (Kota/Kab MAX 15)</th>
                 <th style={{ minWidth: '130px' }}>Provinsi</th>
-                <th style={{ minWidth: '180px' }}>Organisasi Tujuan</th>
-                <th style={{ width: '70px', textAlign: 'center' }}>Tipe Unit</th>
-                <th style={{ width: '90px', textAlign: 'center' }} title="Cek cabang tujuan 3 role lengkap (Sales+Verifikator+Penyetuju)">3 Role</th>
                 <th style={{ width: '90px', textAlign: 'center' }}>Aksi</th>
               </tr>
             </thead>
             <tbody>
               {tampil.length === 0 ? (
                 <tr>
-                  <td colSpan={17} style={{ textAlign: 'center', padding: '2rem', color: '#878a99' }}>
+                  <td colSpan={13} style={{ textAlign: 'center', padding: '2rem', color: '#878a99' }}>
                     {rows.length === 0
                       ? 'Belum ada Final Data — setujui seluruh fase di menu Data Analyst lalu klik "Saya Setuju (Masuk ke Final Analisa)".'
                       : 'Tidak ada baris yang cocok dengan pencarian/filter.'}
@@ -351,7 +347,6 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
               ) : (
                 tampil.map((r, i) => (
                   <tr key={r.id || `${hal}-${i}`}>
-                    <td style={{ textAlign: 'center', color: '#878a99' }}>{(hal - 1) * PAGE_SIZE + i + 1}</td>
                     <td style={{ textAlign: 'center' }}>
                       <span className="badge badge-level1">{r.wilayah}</span>
                     </td>
@@ -361,20 +356,13 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
                     <td style={{ fontWeight: 600, color: '#405189' }}>{r.namaOutlet}</td>
                     <td style={{ textAlign: 'center' }}>{r.statusOutlet || '-'}</td>
                     <td style={{ maxWidth: '260px' }} title={r.alamat || ''}>{r.alamat || '-'}</td>
-                    <td className="code-cell" style={{ textAlign: 'center', color: '#0ab39c', fontWeight: 700 }}>{r.kodePosKelurahan || r.kodePosPten}</td>
+                    <td className="code-cell" style={{ textAlign: 'center', color: '#0ab39c', fontWeight: 700 }} title={r.kodePosKelurahan && r.kodePosKelurahan !== r.kodePosPten ? `Kode pos kelurahan ini sendiri: ${r.kodePosKelurahan}` : undefined}>
+                      {r.kodePosPten || r.kodePosKelurahan || '-'}
+                    </td>
                     <td>{r.kelurahan}</td>
                     <td>{r.kecamatan}</td>
                     <td>{r.kotaPtenMax15 || r.kotaPten}</td>
                     <td>{r.provinsi}</td>
-                    <td>{r.organisasiTujuan}</td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span className={`badge ${r.tipeUnit === 'KC' ? 'badge-match' : 'badge-level2'}`}>{r.tipeUnit}</span>
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span className={`badge ${r.is3RoleLengkap ? 'badge-match' : 'badge-diff'}`}>
-                        {r.is3RoleLengkap ? 'LENGKAP' : `${r.roleGrandTotal}/3`}
-                      </span>
-                    </td>
                     <td style={{ textAlign: 'center' }}>
                       <div style={{ display: 'inline-flex', gap: '0.3rem', alignItems: 'center' }}>
                         <button
