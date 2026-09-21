@@ -150,6 +150,16 @@ export function penjelasanFase1(r: {
  * nama kelurahan yang sama; kalau keduanya tidak dihitung, baris kota B dianggap
  * "sudah final" dan hilang diam-diam dari hasil analisa.
  */
+/**
+ * Kunci alami yang stabil antar-run untuk dedup baris Final / cloud sync.
+ *
+ * G12 — PERINGATAN PENTING:
+ * Selalu gunakan makeFinalKey untuk dedup, JANGAN pernah pakai field `id`.
+ * Field `id` di-generate ulang setiap kali pipeline dijalankan sehingga
+ * baris yang sama akan memiliki `id` berbeda di run yang berbeda.
+ * Akibatnya: dedup berbasis `id` gagal → baris duplikat muncul diam-diam.
+ * Kunci yang benar: kodePosPten + kelurahan + kecamatan + kotaPten.
+ */
 export function makeFinalKey(kodePosPten: string, kelurahan: string, kecamatan = '', kota = ''): string {
   const norm = (s: unknown) => String(s || '').trim().toUpperCase().replace(/\s+/g, ' ');
   const kp = norm(kodePosPten).replace(/\D/g, '');

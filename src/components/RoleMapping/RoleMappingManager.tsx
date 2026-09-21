@@ -2228,7 +2228,9 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
               Reset Data Mapping Role
             </h4>
             <p style={{ fontSize: '0.8rem', color: '#878a99', margin: '0 0 1.25rem', lineHeight: 1.5 }}>
-              Pilih apakah Anda ingin mengembalikan data ke standar bawaan ({DEFAULT_ROLE_MAPPING_DATA.length.toLocaleString('id-ID')} entri) atau mengosongkan seluruh data untuk impor baru dari awal.
+              Data Mapping Role saat ini: <strong>{roleList.length.toLocaleString('id-ID')} entri</strong>.
+              Pilih apakah Anda ingin mengembalikan ke standar bawaan ({DEFAULT_ROLE_MAPPING_DATA.length.toLocaleString('id-ID')} entri)
+              atau <strong>menghapus seluruh {roleList.length.toLocaleString('id-ID')} entri</strong> untuk impor baru dari awal.
             </p>
             <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
               <button

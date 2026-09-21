@@ -48,6 +48,25 @@ import { useGeoTooltip } from '../GeoTooltip';
 import { DialogPanel } from '../BaseModal';
 import { useNotification } from '../Notification/NotificationContext';
 
+// F5-K1: Threshold seed bawaan (~140 baris). Database dianggap belum diisi
+// bila total baris Neon masih di bawah nilai ini.
+const SEED_THRESHOLD = 200;
+
+// F5-K2: Kunci unik per tab agar antrean geocoding tidak tabrakan antar-tab.
+const TAB_ID: string = (() => {
+  try {
+    const k = '__kp_tab_id__';
+    let id = sessionStorage.getItem(k);
+    if (!id) {
+      id = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      sessionStorage.setItem(k, id);
+    }
+    return id;
+  } catch {
+    return 'default';
+  }
+})();
+
 interface KodePosManagerProps {
   onKodePosCountChange?: (count: number) => void;
 }
@@ -322,7 +341,9 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
 
     // Patokan antrean disimpan di localStorage supaya persen tidak kembali ke 0
     // saat halaman di-reload: selama sisa masih mengecil, patokan lama dipakai terus.
-    const kunciPatokan = `kodepos_geo_antrean_${ulang ? 'ulang' : 'baru'}`;
+    // F5-K2: kunci dibuat unik per tab (TAB_ID) agar antrean tidak tabrakan bila
+    // dua tab membuka halaman Kode Pos secara bersamaan.
+    const kunciPatokan = `kodepos_geo_antrean_${ulang ? 'ulang' : 'baru'}_${TAB_ID}`;
     const bacaPatokan = (): { total: number; sisa: number } | null => {
       try {
         const v = JSON.parse(localStorage.getItem(kunciPatokan) || 'null');
@@ -580,7 +601,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
             <Mail size={22} />
           </div>
           <div>
-            <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
               <span>Master Data Kode Pos Indonesia</span>
               <span
                 style={{
@@ -594,9 +615,32 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               >
                 {stats.total.toLocaleString('id-ID')} Data
               </span>
+              {/* F5-K1: Badge peringatan saat database masih pakai data seed bawaan */}
+              {stats.total <= SEED_THRESHOLD && (
+                <span
+                  title="Database Kode Pos belum diisi. Analisa hanya memakai ~140 baris seed bawaan, bukan 83.000+ baris lengkap. Lakukan Sync Data untuk mengisi database."
+                  style={{
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    padding: '0.15rem 0.55rem',
+                    borderRadius: '4px',
+                    background: 'rgba(240, 165, 0, 0.12)',
+                    color: '#b45309',
+                    border: '1px solid rgba(240, 165, 0, 0.4)',
+                    cursor: 'help',
+                  }}
+                >
+                  ⚠ Data Sementara (Seed)
+                </span>
+              )}
             </div>
             <div className="section-subtitle">
               Referensi resmi kode pos wilayah kelurahan, kecamatan, kota/kabupaten & provinsi seluruh Indonesia.
+              {stats.total <= SEED_THRESHOLD && (
+                <span style={{ color: '#b45309', fontWeight: 600 }}>
+                  {' '}— Klik <strong>Sync Data</strong> untuk mengisi 83.000+ baris dari database cloud.
+                </span>
+              )}
             </div>
           </div>
         </div>

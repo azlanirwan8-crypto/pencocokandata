@@ -1078,10 +1078,21 @@ export const App: React.FC = () => {
       try {
         await clearMasterFromNeon();
       } catch (e) {
+        // F3-C3: cloud gagal saat reset — beri tahu operator, jangan diam-diam
         console.warn('Neon clear warning:', e);
+        notify(
+          'Data Cabang dikosongkan di browser, tetapi GAGAL dihapus dari cloud. ' +
+            'Sinkronkan ulang atau periksa koneksi database.',
+          'warning'
+        );
       }
     } catch (e) {
+      // F3-C3: error total (IndexedDB / setState) — operator harus tahu
       console.warn('Reset master error:', e);
+      notify(
+        'Gagal mengosongkan Data Cabang. Coba lagi atau muat ulang halaman.',
+        'error'
+      );
     }
   };
 

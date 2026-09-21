@@ -221,7 +221,15 @@ export function buildGoogleMapsDirectionsUrl(target: TargetRow, master: MasterRo
 }
 
 /**
- * Hitung Estimasi Jarak Realistis (Kilometer Nyata) Antara Data Target dan Cabang Master
+ * Hitung Estimasi Jarak Realistis (Kilometer) Antara Data Target dan Cabang Master.
+ *
+ * R-PETA1 — PERINGATAN: Nilai km yang dikembalikan adalah ESTIMASI berdasarkan
+ * kecocokan wilayah administratif (kelurahan / kecamatan / kota / kode pos),
+ * BUKAN jarak GPS atau jarak rute sesungguhnya.
+ * Algoritma menggunakan rentang rata-rata radius wilayah di Indonesia
+ * (kelurahan ~0,5–1,8 km, kecamatan ~5–8 km, dst.) sebagai patokan.
+ * Jangan tampilkan angka ini sebagai "jarak sebenarnya" kepada pengguna akhir.
+ * Untuk jarak rute nyata, gunakan buildGoogleMapsDirectionsUrl().
  */
 export function calculateRealDistance(target: TargetRow, master: MasterRow): RealDistanceInfo {
   const targetDatiRaw = cleanText(target['Dati II']);

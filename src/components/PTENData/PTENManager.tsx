@@ -1130,7 +1130,9 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
                 Reset Data Master PTEN
               </h4>
               <p style={{ fontSize: '0.8rem', color: '#878a99', margin: 0, lineHeight: 1.5 }}>
-                Pilih apakah Anda ingin mengembalikan data ke standar bawaan ({DEFAULT_PTEN_DATA.length.toLocaleString('id-ID')} referensi) atau mengosongkan seluruh data untuk impor baru dari awal.
+                Data PTEN saat ini: <strong>{ptenList.length.toLocaleString('id-ID')} referensi</strong>.
+                Pilih apakah Anda ingin mengembalikan ke standar bawaan ({DEFAULT_PTEN_DATA.length.toLocaleString('id-ID')} referensi)
+                atau <strong>menghapus seluruh {ptenList.length.toLocaleString('id-ID')} baris</strong> untuk impor baru dari awal.
               </p>
             </div>
             <div className="modal-footer" style={{ justifyContent: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
