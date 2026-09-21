@@ -59,7 +59,8 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
         r.sandiCabang?.toLowerCase().includes(q) ||
         r.branchCode?.toLowerCase().includes(q) ||
         r.organisasiTujuan?.toLowerCase().includes(q) ||
-        r.kodePosPten?.includes(q)
+        r.kodePosPten?.includes(q) ||
+        r.kodePosKelurahan?.includes(q)
       );
     });
   }, [rows, deferredSearch, wilayahFilter]);
@@ -71,7 +72,7 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
   const handleExport = () => {
     const columns = [
       'No', 'Wilayah', 'Sandi Cabang', 'Branch Code', 'Kode Cabang', 'Nama Outlet', 'Status Outlet',
-      'ALAMAT', 'KODE POS', 'Kelurahan', 'Kecamatan', 'Dati II', 'Provinsi',
+      'ALAMAT', 'KODE POS', 'Kelurahan', 'Kecamatan', 'Dati II', 'Provinsi', 'KODE POS PTEN',
       'ORGANISASI TUJUAN', 'Tipe Unit', '3 Role Lengkap', 'Status',
     ];
     const data = filtered.map((r, i) => ({
@@ -83,11 +84,12 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
       'Nama Outlet': r.namaOutlet,
       'Status Outlet': r.statusOutlet,
       ALAMAT: r.alamat,
-      'KODE POS': r.kodePosPten,
+      'KODE POS': r.kodePosKelurahan || r.kodePosPten,
       Kelurahan: r.kelurahan,
       Kecamatan: r.kecamatan,
       'Dati II': r.kotaPtenMax15 || r.kotaPten,
       Provinsi: r.provinsi,
+      'KODE POS PTEN': r.kodePosPten,
       'ORGANISASI TUJUAN': r.organisasiTujuan,
       'Tipe Unit': r.tipeUnit,
       '3 Role Lengkap': r.is3RoleLengkap ? 'LENGKAP' : `${r.roleGrandTotal}/3 BELUM`,
@@ -226,7 +228,7 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
                     <td style={{ fontWeight: 600, color: '#405189' }}>{r.namaOutlet}</td>
                     <td style={{ textAlign: 'center' }}>{r.statusOutlet || '-'}</td>
                     <td style={{ maxWidth: '260px' }} title={r.alamat || ''}>{r.alamat || '-'}</td>
-                    <td className="code-cell" style={{ textAlign: 'center', color: '#0ab39c', fontWeight: 700 }}>{r.kodePosPten}</td>
+                    <td className="code-cell" style={{ textAlign: 'center', color: '#0ab39c', fontWeight: 700 }}>{r.kodePosKelurahan || r.kodePosPten}</td>
                     <td>{r.kelurahan}</td>
                     <td>{r.kecamatan}</td>
                     <td>{r.kotaPtenMax15 || r.kotaPten}</td>
@@ -344,6 +346,7 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
                 {([
                   ['Fase 1 — Kota/Kabupaten', detailRow.kotaPtenMax15 || detailRow.kotaPten],
                   ['Fase 1 — Kode Pos PTEN', detailRow.kodePosPten],
+                  ['Fase 1 — Kode Pos Kelurahan', detailRow.kodePosKelurahan || '—'],
                   ['Fase 1 — Kelurahan', detailRow.kelurahan],
                   ['Fase 1 — Kecamatan', detailRow.kecamatan],
                   ['Fase 1 — Provinsi', detailRow.provinsi],

@@ -295,7 +295,7 @@ export function exportAnalystExecutivePdf({
       wilayah: r.wilayah,
       outlet: r.namaOutlet,
       kota: r.kotaPtenMax15 || r.kotaPten,
-      kodePos: r.kodePosPten,
+      kodePos: r.kodePosKelurahan || r.kodePosPten,
       kelurahan: r.kelurahan,
       kecamatan: r.kecamatan,
       org: r.organisasiTujuan,

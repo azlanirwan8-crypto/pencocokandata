@@ -166,6 +166,16 @@ export const AnalystRowEditModal: React.FC<AnalystRowEditModalProps> = ({
                   />
                 </div>
                 <div>
+                  <label style={{ fontSize: '0.72rem', fontWeight: 600, color: '#495057' }}>Kode Pos Kelurahan:</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    style={{ fontSize: '0.78rem', padding: '0.35rem 0.6rem' }}
+                    value={formData.kodePosKelurahan || ''}
+                    onChange={(e) => setFormData({ ...formData, kodePosKelurahan: e.target.value })}
+                  />
+                </div>
+                <div>
                   <label style={{ fontSize: '0.72rem', fontWeight: 600, color: '#495057' }}>Kelurahan:</label>
                   <input
                     type="text"

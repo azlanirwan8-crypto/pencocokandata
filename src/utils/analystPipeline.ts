@@ -12,6 +12,9 @@ export interface AnalystRow {
   // Fase 1: PTEN & Kode Pos
   kotaPten: string;
   kodePosPten: string;
+  // Kode pos milik kelurahan/kecamatan ini dari Master Kode Pos — beda dengan
+  // `kodePosPten` (kode pos tingkat kota dari PTEN) pada kota dengan banyak blok.
+  kodePosKelurahan: string;
   kelurahan: string;
   kecamatan: string;
   provinsi: string;
@@ -371,6 +374,18 @@ export function cityMatchKey(raw: string): string {
     .map((w) => CITY_ABBREV_MAP[w] || w)
     .join(' ');
   return CITY_ALIAS_MAP[norm] || norm;
+}
+
+/**
+ * Jenis daerah administratif dari nama mentah: `KOTA` / `KAB` / `''` (tak menyebut jenis).
+ * Dipakai hanya untuk MELAPORKAN kota kembar yang tergabung oleh `cityMatchKey`
+ * ("KOTA BOGOR" dan "KABUPATEN BOGOR" jadi satu grup) — bukan untuk pencocokan.
+ */
+export function jenisDaerahDariNama(raw: string): 'KOTA' | 'KAB' | '' {
+  const token = cleanAndStandardizeText(raw).split(' ')[0] || '';
+  if (token === 'KABUPATEN' || token === 'KAB') return 'KAB';
+  if (token === 'KOTA' || token === 'KODYA' || token === 'KOTAMADYA') return 'KOTA';
+  return '';
 }
 
 // 🗺️ PEMEKARAN: nama daerah anak = nama induk + kata penanda wilayah. Ini pengetahuan
@@ -962,6 +977,9 @@ export interface AnalystCoverage {
   unanalysedRows: number;
   unmappedCities: CoverageCity[];
   includedCities: CoverageCity[];
+  // Grup yang menampung "KOTA X" sekaligus "KABUPATEN X" (26 grup pada data kode pos
+  // nasional 2026-09-21). Kelurahan keduanya disatukan di satu kota PTEN.
+  mergedCities: Array<{ kota: string; kabupaten: string; rows: number }>;
 }
 
 /**
@@ -1021,6 +1039,22 @@ export async function executeAnalystPipeline(
     if (!c) return;
     if (!kodePosByCity.has(c)) kodePosByCity.set(c, []);
     kodePosByCity.get(c)!.push(kp);
+  });
+
+  // 🪞 "KOTA BOGOR" dan "KABUPATEN BOGOR" sengaja jadi satu grup oleh `cityMatchKey`
+  // (kode pos & PTEN memang satu kota). Penggabungan itu benar untuk pencocokan tapi
+  // tidak boleh diam-diam: grup yang menampung kedua jenis daerah dicatat lalu
+  // dilaporkan di cakupan supaya pembacanya tahu kelurahan dari 2 daerah menyatu.
+  const mergedCityMap = new Map<string, { kota: string; kabupaten: string; rows: number }>();
+  kodePosByCity.forEach((rows, key) => {
+    let namaKota = '';
+    let namaKab = '';
+    rows.forEach((r) => {
+      const j = jenisDaerahDariNama(r.kabupatenKota);
+      if (j === 'KOTA' && !namaKota) namaKota = String(r.kabupatenKota || '').trim();
+      else if (j === 'KAB' && !namaKab) namaKab = String(r.kabupatenKota || '').trim();
+    });
+    if (namaKota && namaKab) mergedCityMap.set(key, { kota: namaKota, kabupaten: namaKab, rows: rows.length });
   });
 
   // ── DRIVER FASE 1 = KOTA/KABUPATEN UNIK DARI DATA PTEN (grouping berdasar PTEN) ──
@@ -1920,6 +1954,7 @@ export async function executeAnalystPipeline(
         // Fase 1
         kotaPten: meta.finalKotaPten,
         kodePosPten: meta.finalKodePosPten, // SAMA untuk semua kelurahan dalam 1 kota PTEN
+        kodePosKelurahan: String(kpEntry.kodePos || '').trim(), // kode pos kelurahan ini sendiri
         kelurahan,
         kecamatan,
         provinsi,
@@ -2017,6 +2052,7 @@ export async function executeAnalystPipeline(
         no: 0,
         kotaPten: '',
         kodePosPten: e.kodePos,
+        kodePosKelurahan: e.kodePos,
         kelurahan: e.kelurahan || '',
         kecamatan: e.kecamatan || '',
         provinsi: e.provinsi || '',
@@ -2072,6 +2108,7 @@ export async function executeAnalystPipeline(
     unanalysedRows: unanalysedRows.length,
     unmappedCities,
     includedCities: Array.from(includedCityMap.values()).sort((a, b) => b.rows - a.rows),
+    mergedCities: Array.from(mergedCityMap.values()).sort((a, b) => b.rows - a.rows),
   };
   unanalysedRows.forEach((r) => { r.no = globalRowNo++; });
   results.push(...unanalysedRows);
@@ -2085,7 +2122,8 @@ export async function executeAnalystPipeline(
       `${safetyNetCities > 0 ? `, jaring pengaman: ${fmt(safetyNetRows)} baris dari ${safetyNetCities} kota sisa dilampirkan` : ''}` +
       `${unmappedKodePos > 0 ? `, belum masuk ${fmt(unmappedKodePos)} di ${unmappedCities.length} kota (kotanya tidak ada di PTEN)` : ''}` +
       `${reviewCityCount > 0 ? `. Kota perlu review manual: ${reviewCityCount}` : ''}` +
-      `${fallbackCityCount > 0 ? `. Kota tanpa data kodepos (baris fallback): ${fallbackCityCount}` : ''}.`);
+      `${fallbackCityCount > 0 ? `. Kota tanpa data kodepos (baris fallback): ${fallbackCityCount}` : ''}` +
+      `${mergedCityMap.size > 0 ? `. Perhatian: ${mergedCityMap.size} nama kota menampung KOTA sekaligus KABUPATEN, kelurahannya digabung jadi satu grup (lihat daftar "kota kembar" di laporan cakupan)` : ''}.`);
   }
 
   // Bagian akhir (jaring pengaman & laporan cakupan) tidak selalu melewati `tick()`,

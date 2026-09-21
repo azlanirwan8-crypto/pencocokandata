@@ -60,7 +60,7 @@ function stageOf(r: AnalystRow): 1 | 2 | 3 | 4 {
 /** Kolom tabel yang bisa diurutkan lewat klik header. */
 type SortKolom =
   | 'no' | 'kelurahan' | 'kecamatan' | 'provinsi' | 'kotaPten' | 'statusPten'
-  | 'kodePosPten' | 'namaOutlet' | 'wilayah' | 'organisasiTujuan';
+  | 'kodePosPten' | 'kodePosKelurahan' | 'namaOutlet' | 'wilayah' | 'organisasiTujuan';
 
 const PENGAMBIL_SORT: Record<SortKolom, (r: AnalystRow) => string | number> = {
   no: (r) => r.no,
@@ -70,6 +70,7 @@ const PENGAMBIL_SORT: Record<SortKolom, (r: AnalystRow) => string | number> = {
   kotaPten: (r) => r.kotaPten || r.groupKota || '',
   statusPten: (r) => `${r.statusPten || ''}|${r.placementMethod || ''}`,
   kodePosPten: (r) => r.kodePosPten || '',
+  kodePosKelurahan: (r) => r.kodePosKelurahan || '',
   namaOutlet: (r) => r.namaOutlet || '',
   wilayah: (r) => r.wilayah || '',
   organisasiTujuan: (r) => r.organisasiTujuan || '',
@@ -533,6 +534,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
           r.groupKota?.toLowerCase().includes(q) ||
           r.provinsi?.toLowerCase().includes(q) ||
           r.kodePosPten?.includes(q) ||
+          r.kodePosKelurahan?.includes(q) ||
           r.kelurahan?.toLowerCase().includes(q) ||
           r.kecamatan?.toLowerCase().includes(q) ||
           r.wilayah?.toLowerCase().includes(q) ||
@@ -657,13 +659,14 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
           'Nama Outlet': r.namaOutlet,
           'Status Outlet': r.statusOutlet,
           'ALAMAT': r.alamat,
-          'KODE POS': r.kodePosPten,
+          'KODE POS': r.kodePosKelurahan || r.kodePosPten,
           'Kelurahan': r.kelurahan,
           'Kecamatan': r.kecamatan,
           'Dati II': r.kotaPtenMax15 || r.kotaPten,
           'Provinsi': r.provinsi,
           'KOTA PTEN': r.kotaPtenMax15 || r.kotaPten,
           'KODE POS PTEN': r.kodePosPten,
+          // `CEK KODE POS + PTEN` membandingkan tingkat KOTA, bukan kode pos kelurahan di atas
           'CEK KODE POS + PTEN': r.statusPten,
           'VERIFIKASI PENEMPATAN': r.placementStatus === 'VERIFIED' ? 'TERVERIFIKASI' : r.placementStatus === 'REVIEW' ? 'PERLU REVIEW' : 'FALLBACK',
           'METODE PENEMPATAN': r.placementMethod,
@@ -692,11 +695,12 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
         'Nama Outlet': r.namaOutlet,
         'Status Outlet': r.statusOutlet,
         'ALAMAT': r.alamat,
-        'KODE POS': r.kodePosPten,
+        'KODE POS': r.kodePosKelurahan || r.kodePosPten,
         'Kelurahan': r.kelurahan,
         'Kecamatan': r.kecamatan,
         'Dati II': r.kotaPtenMax15 || r.kotaPten,
         'Provinsi': r.provinsi,
+        'KODE POS PTEN': r.kodePosPten,
         'ORGANISASI TUJUAN': r.organisasiTujuan,
         'Tipe Unit': r.tipeUnit,
         'Alur Wondr': r.alurWondr,
@@ -723,6 +727,27 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '2rem' }}>
+      {/* B1: "KOTA X" + "KABUPATEN X" sengaja satu grup — dilaporkan, tidak dibiar diam */}
+      {(coverage?.mergedCities?.length || 0) > 0 && (
+        <details style={{ background: '#fff8ec', border: '1px solid #f2d9a8', borderRadius: '6px', padding: '0.6rem 1rem' }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 700, color: '#8a5a00', fontSize: '0.86rem' }}>
+            {coverage!.mergedCities.length} nama kota kembar digabung — kelurahan &ldquo;KOTA X&rdquo; dan
+            &nbsp;&ldquo;KABUPATEN X&rdquo; masuk satu grup analisa
+          </summary>
+          <p style={{ fontSize: '0.78rem', color: '#6b5836', margin: '0.5rem 0' }}>
+            Nama kota dibandingkan tanpa kata KOTA/KABUPATEN, jadi daerah dengan nama sama diperlakukan sebagai
+            &nbsp;satu kota PTEN. Angka = jumlah baris kode pos pada grup itu (nama diambil dari versi Kabupaten):
+          </p>
+          <p style={{ fontSize: '0.76rem', color: '#6b5836', margin: '0 0 0.2rem', lineHeight: 1.7 }}>
+            {coverage!.mergedCities.map((c) => (
+              <span key={c.kabupaten} title={`${c.kota} + ${c.kabupaten}`} style={{ display: 'inline-block', marginRight: '0.85rem', whiteSpace: 'nowrap' }}>
+                {c.kabupaten.replace(/^(KABUPATEN|KAB)\s+/i, '')} <strong>{c.rows.toLocaleString('id-ID')}</strong>
+              </span>
+            ))}
+          </p>
+        </details>
+      )}
+
       {/* ────────────────────────────────────────────────────────────────────────── */}
       {/* 1b. LAPORAN CAKUPAN KODEPOS → FASE 1 (kenapa jumlah bisa ≠ master)        */}
       {/* ────────────────────────────────────────────────────────────────────────── */}
@@ -1276,7 +1301,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                   <th style={{ width: '90px', textAlign: 'center' }}>Branch Code</th>
                   {thSort('namaOutlet', 'Nama Outlet', { minWidth: '160px' })}
                   {thSort('kotaPten', 'Kota PTEN', { width: '110px' })}
-                  {thSort('kodePosPten', 'Kode Pos', { width: '75px', textAlign: 'center' })}
+                  {thSort('kodePosKelurahan', 'Kode Pos', { width: '75px', textAlign: 'center' })}
                   {thSort('kelurahan', 'Kelurahan / Kec.')}
                   {thSort('organisasiTujuan', 'ORGANISASI TUJUAN', { minWidth: '180px' })}
                   <th style={{ width: '75px', textAlign: 'center' }}>Tipe Unit</th>
@@ -1291,7 +1316,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                 <>
                   <tr>
                     {thSort('no', 'No', { width: '40px', textAlign: 'center', verticalAlign: 'middle' }, { rowSpan: 2 })}
-                    <th colSpan={3} style={{ textAlign: 'center', background: '#eff6fb', color: '#299cdb', borderLeft: '2px solid #d5e7f2' }}>
+                    <th colSpan={4} style={{ textAlign: 'center', background: '#eff6fb', color: '#299cdb', borderLeft: '2px solid #d5e7f2' }}>
                       📮 DATA POS (Kelurahan &amp; Wilayah Administrasi)
                     </th>
                     <th colSpan={3} style={{ textAlign: 'center', background: '#eefaf6', color: '#0ab39c', borderLeft: '2px solid #b7ebe4' }}>
@@ -1305,8 +1330,9 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                     {thSort('kelurahan', 'Kelurahan', { minWidth: '140px', borderLeft: '2px solid #d5e7f2' })}
                     {thSort('kecamatan', 'Kecamatan', { minWidth: '140px' })}
                     {thSort('provinsi', 'Provinsi', { minWidth: '130px' })}
+                    {thSort('kodePosKelurahan', 'Kode Pos', { width: '90px', textAlign: 'center' })}
                     {thSort('kotaPten', 'Kota / Kabupaten', { minWidth: '150px', borderLeft: '2px solid #b7ebe4' })}
-                    {thSort('kodePosPten', 'Kode Pos', { width: '100px', textAlign: 'center' })}
+                    {thSort('kodePosPten', 'Kode Pos PTEN', { width: '115px', textAlign: 'center' })}
                     {thSort('statusPten', 'Status PTEN', { minWidth: '170px', textAlign: 'center' })}
                   </tr>
                 </>
@@ -1409,7 +1435,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                           <td style={{ fontWeight: 600, color: '#405189' }}>{r.namaOutlet}</td>
                           <td>{r.kotaPtenMax15 || r.kotaPten}</td>
                           <td className="code-cell" style={{ textAlign: 'center', color: '#0ab39c', fontWeight: 700 }}>
-                            {r.kodePosPten}
+                            {r.kodePosKelurahan || r.kodePosPten}
                           </td>
                           <td>
                             <div>{r.kelurahan}</div>
@@ -1441,11 +1467,15 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                           <td style={{ fontWeight: 700, color: '#212529', borderLeft: '2px solid #d5e7f2' }}>{r.kelurahan}</td>
                           <td>{r.kecamatan}</td>
                           <td>{r.provinsi}</td>
+                          <td className="code-cell" style={{ textAlign: 'center', color: '#299cdb', fontWeight: 700 }}>
+                            {r.kodePosKelurahan || '—'}
+                          </td>
                           <td style={{ fontWeight: 700, color: r.kotaPten ? '#212529' : '#f0ad4e', borderLeft: '2px solid #b7ebe4' }}>
                             {r.kotaPten || `${r.groupKota} (belum terpetakan ke PTEN)`}
                           </td>
                           <td className="code-cell" style={{ textAlign: 'center', color: '#0ab39c', fontWeight: 700 }}>
-                            {r.kodePosPten}
+                            {/* Baris belum terpetakan warisi kode pos kelurahan, bukan dari PTEN */}
+                            {r.kategori === 'TIDAK_ANALISA' ? '—' : r.kodePosPten}
                           </td>
                           {/* Satu kartu label: warna = status, teks kecil di bawahnya = alasannya */}
                           <td style={{ textAlign: 'center' }} title={r.placementMethod || ''}>
