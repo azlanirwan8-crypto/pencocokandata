@@ -655,7 +655,7 @@ Yang **belum** diuji pada sesi 2: (a) SQL `final_rows` terhadap Postgres sungguh
 
 ## BAGIAN M â€” FASE 2: PULIHKAN PEMBAGIAN â€œOTOMATIS TERVALIDASIâ€ vs â€œPERLU MANUALâ€
 
-> Ditambahkan 2026-09-21 dari temuan produksi: tab Fase 2 menampilkan **Outlet Tervalidasi (0)** vs **Perlu Validasi Manual (84.136)** â€” 100% baris masuk manual, padahal alur lama punya pembagian otomatis/manual yang benar.  Status SEMUA item bagian ini: `SELESAI 2026-09-21` (M1–M7 di bawah; M2/M4 sudah lebih dulu selesai sebagai C2a/C2d).
+> Ditambahkan 2026-09-21 dari temuan produksi: tab Fase 2 menampilkan **Outlet Tervalidasi (0)** vs **Perlu Validasi Manual (84.136)** â€” 100% baris masuk manual, padahal alur lama punya pembagian otomatis/manual yang benar.  Status SEMUA item bagian ini: `SELESAI 2026-09-21` (M1–M7 di bawah; M2/M4 sudah lebih dulu selesai sebagai C2a/C2d) — kecuali **M9 (tiga pilihan selalu ada) yang baru ditambahkan & diselesaikan 2026-09-22**.
 
 > **Hasil eksekusi:** field baru `fase2Status` (`OTOMATIS_VALID` | `SIAP_DIPROSES` | `PERLU_MANUAL`), `fase2Sumber` (`ATURAN_ACEH_KIM` | `OTOMATIS_TERDEKAT` | `TIDAK_ADA_CABANG` | `PILIHAN_OPERATOR`) dan `sinyalF2Bit` ditulis per baris di blok hasil; grid membaca `fase2Status` (bukan lagi "tidak masuk 3 rekomendasi"), `isFinalApproved` menuntut `OTOMATIS_VALID`, dan M5 membuat Fase 2 dinilai `calculateCityMatchScore` yang sama dengan Fase 1 (bit-nya ikut `bitTemuanBaris`). **Terukur jalan di Node** (`tests/uji-fase2-status.mjs`, pipeline asli dipanggil, 6 kasus M7): Aceh → `ATURAN_ACEH_KIM` + OTOMATIS_VALID; Braga → ASIA AFRIKA; Coblong → DAGO (dua baris beda, keduanya valid); kota tanpa cabang → PERLU_MANUAL dengan alasan; Fase 2 belum dijalankan → semua SIAP_DIPROSES, **nol** manual; manual 1 dari 4 baris. Semua hijau: `tsc -b --force` 0 error · build ✓ · lint 83 warning (baseline) · `tests/uji-mesin-role.mjs` 13/13 ✓.
 >
@@ -739,18 +739,36 @@ Di luar itu — termasuk baris Aceh dan baris yang cabangnya sudah Rank-1 — **
 | 5 | Fase 2 belum dijalankan | Semua baris di kategori **SIAP DIPROSES** (bukan manual) |
 | 6 | Bandingkan angka | “Perlu Validasi Manual” jauh lebih kecil dari 84.136 |
 
+### M9 — TIGA PILIHAN SELALU ADA, TERMASUK BARIS MANUAL (status `SELESAI 2026-09-22`)
+
+> Permintaan pemilik produk 2026-09-22: "cek ya **jika yang manual itu harus muncul 3 rekomendasinya**" — di layar, baris tertentu hanya menampilkan "Pilihan 1".
+
+**Akar masalah (hasil baca kode, bukan dugaan tampilan):** `recommender.ts` memotong pool lebih dulu — Tier 1 = cabang sekota (Dati II), Tier 2 = seprovinsi HANYA kalau Dati II kosong, Tier 3 = semua — lalu `topList = scored.slice(0, 3)`. Jadi kota yang cuma punya 1-2 cabang unik di Master memang menghasilkan 1-2 kartu kandidat. Bukan bug render.
+
+**Perbaikan:** setelah Rank ditetapkan, slot yang kurang diisi cabang TERDEKAT di luar zona (`index.all`, diurutkan bobot `selisih kode pos + penalti 100.000 untuk provinsi lain`), dengan tiga jaminan:
+1. **Rank 1 tidak pernah berubah** — padding terjadi setelah `scored.sort()` dan hanya menambah indeks ≥ jumlah kandidat zona, jadi seluruh `fase2Status`/`fase2Sumber`/auto-fill Rank-1 tidak tersentuh.
+2. **Jujur di layar** — alasannya berbunyi "Cabang terdekat di luar kota ini (hanya N cabang sekota tersedia di Master) — nilai ini keputusan operator, bukan hasil otomatis mesin", skor dipatok 20%, dan kartu pilihan menampilkan badge **LUAR ZONA** + tooltip.
+3. **Audit nilai prefill hanya atas kandidat zona** (`candidates.slice(0, jumlahZona)`), supaya cabang tambahan tidak pernah bikin nilai lama user terbaca "cocok dengan rekomendasi sistem".
+
+**Terukur** (`tests/uji-kandidat-tiga.mjs`, 15 asersi, semua LULUS): kota 2 cabang → 3 pill (ranks 1-2 zona, rank 3 `diLuarZona`); prioritas provinsi sama menang atas cabang provinsi lain yang kode posnya lebih dekat; tidak ada outlet kembar; kota 1 cabang → 1 zona + 2 ditandai; master cuma 1 cabang → tetap 1 pilihan (mesin tidak mengarang); target tanpa kode pos → tidak crash, Rank 1 sama.
+
+**Biaya (terukur, `scratch/uji-kecepatan.mjs`, master 1.513 cabang):** baris yang memicu padding **2,2 ms/panggilan**, baris kota ramai tanpa padding **5,75 ms/panggilan** — jalur padding justru lebih murah karena pool zonanya kecil, jadi tambahan biaya netto nol pada 83 ribu baris.
+
+**Belum diuji di layar:** jumlah pill yang tampil pada data produksi (butuh hasil analisa nyata di browser operator).
+
 ### M8 — FILE YANG DISENTUH
 
 - `src/utils/analystPipeline.ts` — auto-fill Rank-1, `fase2Status`, `fase2Sumber`, `sinyalF2Bit`, per-kelurahan
-- `src/utils/recommender.ts` — ensemble 12 sinyal untuk Fase 2, urutan KC (seri ≤ 2 km), Tier-2 diurut jarak km
-- `src/components/WorkingEngine/AnalystResultsGrid.tsx` — gate 3 kategori per baris, hapus ketergantungan `fase2ValidCities`
+- `src/utils/recommender.ts` — ensemble 12 sinyal untuk Fase 2, urutan KC (seri ≤ 2 km), Tier-2 diurut jarak km, **M9: padding kandidat luar zona + flag `CandidateOption.diLuarZona`**
+- `src/components/WorkingEngine/AnalystResultsGrid.tsx` — gate 3 kategori per baris, hapus ketergantungan `fase2ValidCities`, **M9: badge "LUAR ZONA" + tooltip pada pill & kartu kandidat**
+- `tests/entry-uji.ts` (+`findClosestMasterRecommendation`, `buildMasterProximityIndex`), `tests/uji-kandidat-tiga.mjs` baru (15 asersi M9)
 - dokumen ini — Bagian 0 dan Bagian M
 
 ---
 
 ## BAGIAN N — ATURAN EDIT/REVISI & TABEL YANG TIDAK TERPOTONG
 
-> Ditambahkan 2026-09-21 atas permintaan pemilik produk. Semua item di bagian ini BELUM.
+> Ditambahkan 2026-09-21 atas permintaan pemilik produk. Status per bagian: **N0 SELESAI 2026-09-22** (butir 4 belum), **N3 SELESAI 2026-09-22**, N1 & N2 masih `BELUM`.
 
 ### N0 — ATURAN PRODUK: FASE 1/2/3 TIDAK ADA EDIT, HANYA REVISI (status `SELESAI 2026-09-22` kecuali butir 4)
 

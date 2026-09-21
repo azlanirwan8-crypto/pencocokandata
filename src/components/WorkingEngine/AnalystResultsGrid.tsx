@@ -1860,7 +1860,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                             key={`pill-${r.id}-${cand.rank}`}
                                             type="button"
                                             onClick={() => setFase2Choice((prev) => ({ ...prev, [r.id]: cand.rank }))}
-                                            title={`Klik untuk melihat Pilihan ${cand.rank} (${cand.score}%)${isUserChoice ? ' - Ini cabang yang terisi di data' : ''}`}
+                                            title={`Klik untuk melihat Pilihan ${cand.rank} (${cand.score}%)${cand.diLuarZona ? ' - cabang ini di LUAR kota/provinsi data ini, ditambah hanya supaya Anda punya tiga pilihan' : ''}${isUserChoice ? ' - Ini cabang yang terisi di data' : ''}`}
                                             style={{
                                               display: 'inline-flex',
                                               alignItems: 'center',
@@ -1906,6 +1906,11 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                         <span style={{ padding: '0.1rem 0.38rem', borderRadius: '3px', fontSize: '0.67rem', fontWeight: 700, background: badgeBg, color: badgeColor }}>
                                           {isTop1 ? 'Pilihan 1 (Utama)' : `Pilihan ${activeCand.rank} (Alternatif)`}
                                         </span>
+                                        {activeCand.diLuarZona && (
+                                          <span style={{ padding: '0.1rem 0.38rem', borderRadius: '3px', fontSize: '0.67rem', fontWeight: 700, background: 'rgba(217,119,6,0.12)', color: '#925807' }} title="Kota ini punya kurang dari tiga cabang di Master, jadi pilihan ini diambil dari luar kota/provinsi — bukan hasil pencocokan otomatis">
+                                            LUAR ZONA
+                                          </span>
+                                        )}
                                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.15rem', fontSize: '0.67rem', fontWeight: 600, color: badgeColor }}>
                                           <Sparkles size={10} /> Skor {activeCand.score}%
                                         </span>

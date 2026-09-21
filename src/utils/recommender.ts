@@ -24,6 +24,8 @@ export interface CandidateOption {
   formattedDistance?: string;
   distanceBasis?: string;
   googleMapsUrl?: string;
+  /** Kandidat tambahan di luar zona baris (dipakai hanya kalau kota ini <3 cabang). */
+  diLuarZona?: boolean;
 }
 
 export interface UserPrefilledAudit {
@@ -725,6 +727,51 @@ export function findClosestMasterRecommendation(
   }
   if (topList.length === 0) return null;
 
+  // Aturan operator: SATU BARIS HARUS PUNYA TIGA PILIHAN, termasuk baris yang masuk
+  // antrean Manual. Kalau zona administratif baris ini cuma menyisakan 1-2 cabang unik,
+  // slot sisanya diisi cabang terdekat di luar zona. Penambahan dilakukan SESUDAH rank
+  // ditetapkan di sini, jadi Rank 1 — dan seluruh status Fase 2 yang bergantung
+  // padanya — tidak pernah berubah karenanya.
+  const jumlahZona = topList.length;
+  if (jumlahZona < 3) {
+    const butuh = 3 - jumlahZona;
+    const objekZona = new Set(topList.map((s) => s.master));
+    const namaZona = new Set(topList.map((s) => String(s.master['Nama Outlet'] || s.master.Cabang || '')));
+    const kpTarget = parseInt(normalizeKodePos(target['KODE POS']), 10);
+    const jarakKp = (m: MasterRow) => {
+      const kp = parseInt(normalizeKodePos(m['KODE POS']), 10);
+      return !isNaN(kpTarget) && !isNaN(kp) ? Math.abs(kpTarget - kp) : 99999;
+    };
+    // Bobot: selisih kode pos (murah, tanpa haversine) + penalti besar untuk provinsi
+    // lain, jadi cabang sesegara selalu didahulukan tanpa menguji nama provinsi kabur.
+    const bobot = (m: MasterRow) => jarakKp(m) + (targetProv && cleanProvinsi(m.Provinsi) !== targetProv ? 100000 : 0);
+    const ekstra: { m: MasterRow; w: number }[] = [];
+    for (const m of index.all) {
+      if (objekZona.has(m)) continue;
+      if (namaZona.has(String(m['Nama Outlet'] || m.Cabang || ''))) continue;
+      const w = bobot(m);
+      if (w >= 199999) continue;
+      if (ekstra.length < butuh) {
+        ekstra.push({ m, w });
+        ekstra.sort((a, b) => a.w - b.w);
+      } else if (w < ekstra[ekstra.length - 1].w) {
+        ekstra[ekstra.length - 1] = { m, w };
+        ekstra.sort((a, b) => a.w - b.w);
+      }
+    }
+    ekstra.forEach(({ m, w }) => {
+      const luarProvinsi = targetProv && cleanProvinsi(m.Provinsi) !== targetProv;
+      topList.push({
+        master: m,
+        score: 20,
+        distance: w,
+        reason: luarProvinsi
+          ? `Cabang terdekat di LUAR PROVINSI (hanya ${jumlahZona} cabang sekota tersedia di Master) — nilai ini keputusan operator, bukan hasil otomatis mesin`
+          : `Cabang terdekat di luar kota ini (hanya ${jumlahZona} cabang sekota tersedia di Master) — nilai ini keputusan operator, bukan hasil otomatis mesin`,
+      });
+    });
+  }
+
   const candidates: CandidateOption[] = topList.map((item, idx) => {
     const distInfo = calculateRealDistance(target, item.master);
     return {
@@ -736,10 +783,13 @@ export function findClosestMasterRecommendation(
       formattedDistance: distInfo.formattedDistance,
       distanceBasis: distInfo.basis,
       googleMapsUrl: distInfo.googleMapsUrl,
+      diLuarZona: idx >= jumlahZona,
     };
   });
 
-  const userPrefilledAudit = evaluateUserPrefilledAudit(target, candidates, scored);
+  // Audit nilai prefill hanya atas kandidat zona — kandidat tambahan di luar zona
+  // tidak boleh bikin nilai lama user dianggap "cocok dengan rekomendasi sistem".
+  const userPrefilledAudit = evaluateUserPrefilledAudit(target, candidates.slice(0, jumlahZona), scored);
 
   return {
     targetRow: target,
