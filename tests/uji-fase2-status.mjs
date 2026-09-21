@@ -70,11 +70,13 @@ asa('M7.3 Lebak Siliwangi/Coblong → DAGO', coblong?.namaOutlet, 'BANDUNG DAGO'
 asa('M7.2/3 dua baris BEDA hasil', braga?.namaOutlet !== coblong?.namaOutlet, true);
 asa('M7.2/3 keduanya otomatis valid', [braga?.fase2Status, coblong?.fase2Status], ['OTOMATIS_VALID', 'OTOMATIS_VALID']);
 
-// 4 — kota tanpa cabang di Data Cabang → manual dengan alasan yang jelas
+// 4 — kota tanpa cabang sendiri: kolom Fase 2 TETAP terisi cabang terdekat yang jujur,
+//     tapi barisnya wajib masuk manual karena cabangnya di luar provinsi.
 const singkawang = cari(hasil3, 'KAMPUNG BARU BARAT');
 asa('M7.4 Singkawang → perlu manual', singkawang?.fase2Status, 'PERLU_MANUAL');
-asa('M7.4 Singkawang → sumber', singkawang?.fase2Sumber, 'TIDAK_ADA_CABANG');
-asa('M7.4 alasannya menyebut master', (singkawang?.fase2Temuan || []).some((t) => /tidak punya cabang di Data Master/.test(t)), true);
+asa('M7.4 Singkawang → sumber: cabang terdekat, bukan dibiarkan kosong', singkawang?.fase2Sumber, 'OTOMATIS_TERDEKAT');
+asa('M7.4 kolom cabang terisi (bukan strip kosong)', (singkawang?.branchCode || '').length > 0, true);
+asa('M7.4 alasannya menyebut di luar provinsi', (singkawang?.fase2Temuan || []).some((t) => /di luar provinsi/.test(t)), true);
 
 // 5 — Fase 2 belum dijalankan = SIAP DIPROSES, bukan manual
 const hasil1 = utama((await jalankan(1)).rows);

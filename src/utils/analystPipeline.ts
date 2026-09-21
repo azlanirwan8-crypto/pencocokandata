@@ -1871,21 +1871,29 @@ export async function executeAnalystPipeline(
       // Aturan Aceh: seluruh penempatan provinsi Aceh dilayani Cabang KIM.
       const d = calculateRealDistance(target, meta.kimCabang);
       hasil = { master: meta.kimCabang, km: d.distanceKm, presisi: d.isPrecise, tier: 1, alasan: 'Aturan Aceh → Cabang KIM' };
-    } else if (!indeksProximity || meta.masterKota.length === 0) {
-      hasil = { master: null, km: 999, presisi: false, tier: 3, alasan: 'kota tidak punya cabang di Data Master' };
+    } else if (!indeksProximity) {
+      const m = meta.masterKota[0] || null;
+      const d = m ? calculateRealDistance(target, m) : null;
+      hasil = { master: m, km: d?.distanceKm ?? 999, presisi: !!d?.isPrecise, tier: m ? 1 : 3, alasan: m ? 'Satu-satunya cabang di kota ini' : 'kota tidak punya cabang di Data Master' };
     } else if (meta.masterKota.length === 1) {
       const m = meta.masterKota[0];
       const d = calculateRealDistance(target, m);
       hasil = { master: m, km: d.distanceKm, presisi: d.isPrecise, tier: 1, alasan: 'Satu-satunya cabang di kota ini' };
     } else {
+      // Kota tanpa cabang sendiri (masterKota kosong) JUGA lewat sini. Dulu kasus itu
+      // langsung dianggap `master: null`, sehingga Kanwil/Sandi Cabang/Branch Code/Kode
+      // Cabang dibiarkan kosong padahal indeks kedekatan tahu cabang terdekat di
+      // kabupaten sebelah (mis. OKU Selatan → MUARA DUA 4,2 km) dan layar menunjukkannya.
       const rec = findClosestMasterRecommendation(target, indeksProximity);
       const c = rec?.candidates[0];
       if (c) {
         hasil = { master: c.master, km: c.distanceKm ?? 0, presisi: c.distanceKm != null, tier: tierCabang(meta, c.master), alasan: c.reason };
-      } else {
+      } else if (meta.masterKota.length > 0) {
         const m = meta.masterKota[0];
         const d = calculateRealDistance(target, m);
         hasil = { master: m, km: d.distanceKm, presisi: d.isPrecise, tier: 1, alasan: '' };
+      } else {
+        hasil = { master: null, km: 999, presisi: false, tier: 3, alasan: 'tidak ada cabang sama sekali di Data Cabang' };
       }
     }
     cacheRank1.set(kunci, hasil);

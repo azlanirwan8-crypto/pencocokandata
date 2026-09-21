@@ -50,7 +50,11 @@ asa('kota Baburino = HALMAHERA TIMUR, bukan hasil bajakan', baburino[0]?.kotaPte
 asa('Baburino berstatus DIANALISA', baburino[0]?.kategori, 'DIANALISA');
 asa('kode pos PTEN ikut terbawa', baburino[0]?.kodePosPten, '97862');
 asa('tidak ada baris BABURINO atas nama HALMAHERA UTARA', h1.rows.filter((r) => r.kelurahan === 'BABURINO' && r.kotaPten === 'HALMAHERA UTARA').length, 0);
-asa('Kantor cabang Halmahera Utara TIDAK dipinjam ke Halmahera Timur', baburino[0]?.namaOutlet, '');
+// Cabang UTARA boleh MEMINJAMI kolom Fase 2 kota TIMUR sebagai kandidat terdekat —
+// yang tidak boleh lagi adalah membajak NAMA KOTA-nya. Barisnya wajib tetap manual.
+asa('Baburino dipasangi cabang terdekat (TOBELO), bukan dibiarkan kosong', baburino[0]?.namaOutlet, 'TOBELO');
+asa('tapi statusnya tetap perlu manual', baburino[0]?.fase2Status, 'PERLU_MANUAL');
+asa('alasannya menyebut cabang di luar kota', (baburino[0]?.fase2Temuan || []).some((t) => /di luar kota/.test(t)), true);
 asa('KanJORU tetap kotanya HALMAHERA UTARA', h1.rows.find((r) => r.kelurahan === 'KANJORU')?.kotaPten, 'HALMAHERA UTARA');
 
 // ── kontrol positif: kota yang cabangnya memang ada sendiri tetap terisi ──
