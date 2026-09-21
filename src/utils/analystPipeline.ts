@@ -7,7 +7,7 @@ import { calculateRealDistance } from './geoDistance';
 import type { PTENRecord } from '../components/PTENData/PTENManager';
 import type { RoleMappingRecord } from '../components/RoleMapping/RoleMappingManager';
 import { getUnitCategory, getWondrRecommendation } from '../components/RoleMapping/RoleMappingManager';
-import { extractWilayahFromBranchCode, hasDirectionalConflict } from './normalizer';
+import { extractWilayahFromBranchCode, hasDirectionalConflict, UNIT_NOISE_SET } from './normalizer';
 import type { KodePosRow } from './neonSync';
 
 export interface AnalystRow {
@@ -225,8 +225,8 @@ export const SINYAL_PENCOCOKAN: {
   /** Penjelasan bahasa awam untuk modal temuan: apa sinyal ini & kenapa baris masuk daftarnya. */
   penjelasan: string;
 }[] = [
-  { no: 1, emoji: '🔤', judul: 'Canonical Thesaurus', warna: '#405189', deskripsi: 'Standarisasi singkatan otomatis: KAB → KABUPATEN, KCP → KANTOR CABANG PEMBANTU, KCB → KANTOR CABANG, BO → BRANCH OFFICE, JABAR → JAWA BARAT.', penjelasan: 'Singkatan dibaca sebagai bentuk panjangnya: KAB dibaca KABUPATEN, KCP dibaca KANTOR CABANG PEMBANTU, BO dibaca BRANCH OFFICE. Baris masuk daftar ini karena namanya mengandung singkatan seperti itu.' },
-  { no: 2, emoji: '🧹', judul: 'Pembuang Token Administratif', warna: '#405189', deskripsi: 'KOTA / KABUPATEN / KEC / KEL / DESA dibuang dari kunci, jadi "TEGALSARI" == "KEC. TEGALSARI".', penjelasan: 'Kata KOTA / KABUPATEN / KEC / KEL / DESA dibuang dulu sebelum membandingkan, karena itu gelar administrasi, bukan nama asli daerahnya. Baris masuk daftar ini karena namanya mengandung kata semacam itu.' },
+  { no: 1, emoji: '🔤', judul: 'Canonical Thesaurus', warna: '#405189', deskripsi: 'Standarisasi singkatan wilayah: KAB → KABUPATEN, KEC → KECAMATAN, KEL → KELURAHAN, JL → JALAN, JABAR → JAWA BARAT, SUMUT → SUMATERA UTARA.', penjelasan: 'Singkatan dibaca sebagai bentuk panjangnya: KAB dibaca KABUPATEN, JABAR dibaca JAWA BARAT. Baris masuk daftar ini karena namanya mengandung singkatan seperti itu. Penanda tipe unit (KC, KCP, BO) TIDAK dibaca panjang lagi — dianggap gelar dan dibuang, lihat sinyal 2.' },
+  { no: 2, emoji: '🧹', judul: 'Pembuang Token Administratif', warna: '#405189', deskripsi: 'KOTA / KABUPATEN / KEC / KEL / DESA dan penanda tipe unit (KC / KCP / KANTOR CABANG) dibuang dari kunci, jadi "TEGALSARI" == "KEC. TEGALSARI".', penjelasan: 'Kata KOTA / KABUPATEN / KEC / KEL / DESA dibuang dulu sebelum membandingkan, karena itu gelar administrasi, bukan nama asli daerahnya. Sama halnya KC / KCP / KANTOR CABANG: itu penanda tipe unit, jadi tidak dihitung sebagai nama — aturan yang sama dipakai mesin role sejak E3, supaya satu pasangan tidak dinilai dua cara berbeda. Baris masuk daftar ini karena namanya mengandung kata semacam itu.' },
   { no: 3, emoji: '🔄', judul: 'Token Set & Jaccard', warna: '#0ab39c', deskripsi: 'Anti-kata terbalik: "KOTA MEDAN BALAI KOTA" dihitung sama dengan "BALAI KOTA MEDAN".', penjelasan: 'Mengecek susunan kata: "KOTA MEDAN BALAI KOTA" dihitung sama dengan "BALAI KOTA MEDAN" walau urutannya terbalik. Baris masuk daftar ini karena kecocokannya terbukti lewat pengecek susunan kata.' },
   { no: 4, emoji: '🎯', judul: 'Jaro-Winkler', warna: '#f7b84b', deskripsi: 'Kemiripan huruf dengan bobot awalan: PEKALONAGN → PEKALONGAN, MAKASAR → MAKASSAR.', penjelasan: 'Mengecek ejaan dan menangkap salah ketik: PEKALONAGN dianggap PEKALONGAN, MAKASAR dianggap MAKASSAR. Baris masuk daftar ini karena kecocokannya terbukti lewat kemiripan ejaan.' },
   { no: 5, emoji: '✏️', judul: 'Damerau-Levenshtein (OSA)', warna: '#f7b84b', deskripsi: 'Sisipan, hapus, ganti, dan tukar huruf berdampingan dihitung sebagai satu kesalahan.', penjelasan: 'Mengecek huruf yang disisip, dihapus, diganti, atau tertukar posisinya. Baris masuk daftar ini karena kecocokannya terbukti lewat pengecek salah ketik ini.' },
@@ -236,7 +236,7 @@ export const SINYAL_PENCOCOKAN: {
   { no: 9, emoji: '🔊', judul: 'Fonetik Indonesia', warna: '#299cdb', deskripsi: 'Ejaan lama/baru disatukan: DJ→J, TJ→C, SJ→S, CH/KH→K, OE→U, huruf kembar dilipat.', penjelasan: 'Mengenali ejaan lama & baru yang bunyinya sama: DJ dibaca J, TJ dibaca C, OE dibaca U, huruf kembar dilipat jadi satu. Baris masuk daftar ini karena namanya cocok lewat kemiripan bunyi.' },
   { no: 10, emoji: '🧱', judul: 'Token Containment', warna: '#299cdb', deskripsi: 'Nama pendek ⊆ nama panjang untuk hierarki wilayah, dengan lantai 4 huruf agar tidak asal klaim.', penjelasan: 'Nama pendek yang ada di dalam nama panjang dianggap cocok: "PALEMBANG" cocok dengan "PALEMBANG BRANCH OFFICE". Baris masuk daftar ini karena nama pendeknya termuat di dalam nama panjang.' },
   { no: 11, emoji: '🗺️', judul: 'Geo-Hierarchy & Pemekaran', warna: '#299cdb', deskripsi: 'Batas Provinsi/Dati II dikunci; induk-anak pemekaran (BANGGAI → BANGGAI KEPULAUAN) dikenali.', penjelasan: 'Pemetaan lewat peta wilayah: kota hasil pemekaran yang belum ada di data PTEN dipetakan ke kotanya yang lebih tua (induk). Baris masuk daftar ini karena pemetaannya lewat jalur wilayah.' },
-  { no: 12, emoji: '🔠', judul: 'Initialism Match', warna: '#0ab39c', deskripsi: '"JP" ↔ "JAKARTA PUSAT", "KCP" ↔ "KANTOR CABANG PEMBANTU".', penjelasan: 'Singkatan resmi dibaca kepanjangannya: JP dibaca JAKARTA PUSAT. Baris masuk daftar ini karena kecocokannya lewat bentuk singkatan.' },
+  { no: 12, emoji: '🔠', judul: 'Initialism Match', warna: '#0ab39c', deskripsi: '"JP" ↔ "JAKARTA PUSAT", "SULTRA" ↔ "SULAWESI TENGGARA" (bentuk singkat dibaca per suku awal).', penjelasan: 'Singkatan resmi dibaca kepanjangannya: JP dibaca JAKARTA PUSAT. Baris masuk daftar ini karena kecocokannya lewat bentuk singkatan. Penanda tipe unit (KC/KCP) tidak lewat jalur ini — itu dibuang sebagai gelar, lihat sinyal 2.' },
   { no: 13, emoji: '🛡️', judul: 'Penjaga Identitas (2 aturan)', warna: '#f06548', deskripsi: 'Angka beda → nilai dipotong 0,60 (KCP 001 ≠ KCP 002). Penanda wilayah beda → 0,70 (TANGERANG ≠ TANGERANG SELATAN).', penjelasan: 'Pengaman identitas: bila angkanya beda (KCP 001 vs KCP 002) atau penanda wilayahnya beda (TANGERANG vs TANGERANG SELATAN), pasangan yang hurufnya mirip pun nilainya dipangkas. Daftar ini justru bukti engine menolak asal tempel.' },
 ];
 
@@ -319,12 +319,10 @@ const THESAURUS_MAP: Record<string, string> = {
   'JL.': 'JALAN',
   'JLN': 'JALAN',
   'JLN.': 'JALAN',
-  'KC': 'KANTOR CABANG',
-  'KCB': 'KANTOR CABANG',
-  'KCP': 'KANTOR CABANG PEMBANTU',
-  'KK': 'KANTOR KAS',
-  'BO': 'BRANCH OFFICE',
-  'SBO': 'SUB BRANCH OFFICE',
+  // E3: penanda tipe unit (KC/KCB/KCP/KK/BO/SBO) SENGAJA tidak ada di sini lagi.
+  // Dulu dikembangkan menjadi "KANTOR CABANG ..." di jalur ini padahal mesin role
+  // membuangnya — satu pasangan nama dinilai dua cara berbeda. Sekarang satu aturan
+  // untuk semua jalur: lihat UNIT_NOISE_TOKENS di normalizer.ts (dibuang, bukan dikembangkan).
   'KEP': 'KEPULAUAN',
   'DKI': 'DKI JAKARTA',
   'DIY': 'DAERAH ISTIMEWA YOGYAKARTA',
@@ -361,12 +359,14 @@ const ADMIN_NOISE_TOKENS = new Set([
   // gagal dikenali sebagai "KALIMANTAN TIMUR" (terukur di tests/uji-akurasi-nama.mjs).
   'PROV', 'PROVINSI',
 ]);
-// Normalisasi pakar: canonical + buang token administratif. Dipakai SEMUA mesin
-// similarity (kota, kabupaten, kecamatan, kelurahan, provinsi, alamat, organisasi).
+// Normalisasi pakar: canonical + buang token administratif & penanda tipe unit.
+// Dipakai SEMUA mesin similarity (kota, kabupaten, kecamatan, kelurahan, provinsi,
+// alamat, organisasi). E3: penanda unit ikut dibuang di sini — sama seperti mesin
+// role (`roleMatcher.normalizeBranchName`), memakai SATU daftar (`UNIT_NOISE_SET`).
 export function expertNormalize(raw: string): string {
   return cleanAndStandardizeText(raw)
     .split(' ')
-    .filter((w) => w && !ADMIN_NOISE_TOKENS.has(w))
+    .filter((w) => w && !ADMIN_NOISE_TOKENS.has(w) && !UNIT_NOISE_SET.has(w))
     .join(' ');
 }
 /** Pasangan [singkatan, bentuk baku] yang benar-benar muncul di teks ini (bukti temuan). */
@@ -381,12 +381,15 @@ function pasanganThesaurus(raw: string): Array<[string, string]> {
     });
   return out;
 }
-/** Token administratif (KOTA/KAB/KEC/...) yang dibuang dari teks ini (bukti temuan). */
+/** Token yang dibuang dari teks ini (bukti temuan): gelar administrasi DAN penanda tipe unit. */
 function tokenAdminDibuang(raw: string): string[] {
   return cleanAndStandardizeText(raw)
     .split(' ')
-    .filter((w) => w && ADMIN_NOISE_TOKENS.has(w));
+    .filter((w) => w && (ADMIN_NOISE_TOKENS.has(w) || UNIT_NOISE_SET.has(w)));
 }
+/** Pesan bukti per token yang dibuang — bedakan gelar wilayah dari tipe unit. */
+const pesanTokenDibuang = (t: string) =>
+  `"${t}" dibuang — ${UNIT_NOISE_SET.has(t) ? 'penanda tipe unit' : 'gelar administrasi'}, bukan nama asli`;
 // Singkatan arah/bagian yang hanya dipakai pada KUNCI KOTA (kolom MAX 15 DIGIT PTEN
 // memotong nama: BENGKULU SELATAN -> BENGKULU SEL, SERAM BAGIAN TIMUR -> SERAM BAG TIMUR).
 // Sengaja tidak masuk THESAURUS_MAP global supaya normalisasi alamat/role tidak berubah.
@@ -756,7 +759,7 @@ export function calculateUnifiedPrecisionScore(
   const tkB = tokenAdminDibuang(textB);
   if (tkA.length > 0 || tkB.length > 0) {
     sinyal |= SINYAL_BIT.tokenAdmin;
-    for (const t of [...tkA, ...tkB]) tambahCatatan(catatan, 2, `"${t}" dibuang — gelar administrasi, bukan nama asli`);
+    for (const t of [...tkA, ...tkB]) tambahCatatan(catatan, 2, pesanTokenDibuang(t));
   }
   const cek = (v: number, bit: number, no: number, label: string) => {
     if (v >= 0.75) {
@@ -878,7 +881,7 @@ export function calculateCityMatchScore(textA: string, textB: string): { score: 
   const tkB = tokenAdminDibuang(textB);
   if (tkA.length > 0 || tkB.length > 0) {
     sinyal |= SINYAL_BIT.tokenAdmin;
-    for (const t of [...tkA, ...tkB]) tambahCatatan(catatan, 2, `"${t}" dibuang — gelar administrasi, bukan nama asli`);
+    for (const t of [...tkA, ...tkB]) tambahCatatan(catatan, 2, pesanTokenDibuang(t));
   }
   const catat = (v: number, bit: number, no: number, label: string) => {
     if (v >= 0.75) {
@@ -1573,7 +1576,7 @@ export async function executeAnalystPipeline(
     const cityTokens = tokenAdminDibuang(cityRaw);
     if (cityTokens.length > 0) {
       citySinyal |= SINYAL_BIT.tokenAdmin;
-      for (const t of cityTokens) tambahCatatan(cityCatat, 2, `"${t}" dibuang — gelar administrasi, bukan nama asli`);
+      for (const t of cityTokens) tambahCatatan(cityCatat, 2, pesanTokenDibuang(t));
     }
 
     // ── Cari PTEN Match ──

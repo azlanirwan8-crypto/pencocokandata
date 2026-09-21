@@ -1,6 +1,22 @@
 // String and data normalizer functions
 
 /**
+ * E3 — SATU daftar penanda tipe unit untuk SEMUA jalur pencocokan.
+ *
+ * Sebelum daftar ini ada, tiga normalizer berebut arti yang sama: thesaurus sinyal
+ * MENGEMBANGKAN `KCP` menjadi `KANTOR CABANG PEMBANTU`, mesin role justru MENGHAPUS
+ * penanda itu, dan satu pasangan nama bisa dinilai berbeda tergantung mesin mana yang
+ * memanggilnya. Aturannya sekarang satu: penanda tipe unit BUKAN bagian dari nama,
+ * jadi dibuang — bukan dikembangkan.
+ */
+export const UNIT_NOISE_TOKENS: readonly string[] = [
+  'KANTOR', 'CABANG', 'PEMBANTU', 'OUTLET', 'INDUK', 'SENTRA', 'KAS',
+  'KC', 'KCB', 'KCP', 'KK', 'BO', 'SBO',
+  'BRANCH', 'OFFICE', 'SUB', 'MAIN',
+];
+export const UNIT_NOISE_SET: ReadonlySet<string> = new Set(UNIT_NOISE_TOKENS);
+
+/**
  * Standardize postal code to 5-digit string with leading zeros preserved
  */
 export function normalizeKodePos(val: unknown): string {

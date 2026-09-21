@@ -133,3 +133,23 @@ console.log(`\nSALAH GABUNG (berbahaya: dua kota beda disatukan) = ${hasil.salah
 hasil.salahGabung.forEach((t) => console.log('  - ' + t));
 console.log(`\nTERLEWAT (seharusnya cocok, mesin menolak → masuk manual) = ${hasil.lewat.length}`);
 hasil.lewat.forEach((t) => console.log('  - ' + t));
+
+// Gerbang CI: tanpa ini skrip selalu exit 0 dan "LULUS" tidak berarti apa pun.
+// E3 menaikkan 88,9% -> 90,3%; angka di bawah 90 berarti normalisasi/regresi baru.
+let gagal = 0;
+const asa = (label, ok, keterangan) => {
+  if (!ok) { gagal++; console.log(`GAGAL ${label}${keterangan ? ` — ${keterangan}` : ''}`); }
+  else console.log(`OK    ${label}`);
+};
+const akurasi = hasil.benar / hasil.total;
+asa('akurasi >= 90,0% pada 72 pasangan berlabel', akurasi >= 0.9, `${(akurasi * 100).toFixed(1)}%`);
+asa('mesin mengalahkan Levenshtein saja', hasil.benar > bl, `${hasil.benar} vs ${bl}`);
+asa('salah gabung <= 5', hasil.salahGabung.length <= 5, `${hasil.salahGabung.length}`);
+asa('terlewat <= 2', hasil.lewat.length <= 2, `${hasil.lewat.length}`);
+// Regresi E3: penanda tipe unit harus diperlakukan SAMA di semua jalur (dibuang,
+// bukan dikembangkan), jadi "KCP 001" dan "KCP 002" tidak boleh disatukan lagi.
+const { score: skorKcp } = calculateCityMatchScore('KCP 001', 'KCP 002');
+asa('E3: KCP 001 vs KCP 002 tidak lagi tertambat', skorKcp < AMBANG_TERIMA, `skor ${(skorKcp * 100).toFixed(0)}%`);
+
+console.log(gagal === 0 ? '\nSEMUA LULUS' : `\n${gagal} UJI GAGAL`);
+process.exit(gagal === 0 ? 0 : 1);

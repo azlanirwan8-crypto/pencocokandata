@@ -1,6 +1,13 @@
 import type { RoleMappingRecord } from '../components/RoleMapping/RoleMappingManager';
 import { getUnitCategory, getWondrRecommendation } from '../components/RoleMapping/RoleMappingManager';
-import { cleanDati, cleanText, textSimilarityScore } from './normalizer';
+import { cleanDati, cleanText, textSimilarityScore, UNIT_NOISE_TOKENS } from './normalizer';
+
+/**
+ * Daftar penanda tipe unit dipakai BERSAMA dengan sinyal Fase 1/2 (E3): sumber
+ * kebenarannya satu, `normalizer.UNIT_NOISE_TOKENS`. Frasa dua kata ("KANTOR CABANG")
+ * ikut hilang karena setiap kata diuji sendiri, persis seperti sebelumnya.
+ */
+const UNIT_NOISE_RE = new RegExp(`\\b(${[...UNIT_NOISE_TOKENS].sort((a, b) => b.length - a.length).join('|')})\\b`, 'g');
 
 /**
  * Standar Wilayah Administratif Pulau di Indonesia berdasarkan Provinsi/Teks
@@ -63,8 +70,8 @@ export function normalizeBranchName(name: string): string {
     .replace(/^[\d\s•\-\.\)]+/, '')
     // 1. Bersihkan keterangan riwayat perubahan nama cabang (d/h = dahulu, ex = bekas, fka = formerly known as)
     .replace(/\b(D\/H|DH\/|D\s*\.\s*H|EX|FKA)\b[\s\S]*$/i, '')
-    // 2. Bersihkan tipe unit administratif
-    .replace(/\b(KC|KCP|KK|KANTOR CABANG|KANTOR CABANG PEMBANTU|KANTOR KAS|BRANCH OFFICE|SUB BRANCH|MAIN BRANCH|INDUK|SENTRA|OUTLET|KANTOR|CABANG)\b/g, '')
+    // 2. Bersihkan tipe unit administratif (satu daftar dengan mesin lain, E3)
+    .replace(UNIT_NOISE_RE, '')
     // 3. Bersihkan karakter non-alphanumeric (tanda hubung '-', titik '.', slash '/', dll menjadi spasi)
     .replace(/[^A-Z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
