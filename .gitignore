@@ -24,3 +24,5 @@ dist-ssr
 *.xlsx
 *.csv
 scratch/
+
+tests/out/

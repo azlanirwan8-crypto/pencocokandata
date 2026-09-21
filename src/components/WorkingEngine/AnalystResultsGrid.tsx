@@ -252,7 +252,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
         (master.Sandi && master.Cabang ? `${master.Sandi} - ${master.Cabang}` : master.Cabang || master.Sandi || r.sandiCabang)
     );
     const namaOutlet = String(master['Nama Outlet'] || master.Cabang || r.namaOutlet);
-    const role = matchRoleForOutlet(namaOutlet, cityMatchKey(r.groupKota), roleMappingList);
+    const role = matchRoleForOutlet(master, targetFromAnalystRow(r), roleMappingList, masterRows);
     onUpdateRow({
       ...r,
       wilayah: resolved.wilayahName !== '-' ? resolved.wilayahName : r.wilayah,

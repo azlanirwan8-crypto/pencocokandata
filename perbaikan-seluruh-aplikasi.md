@@ -10,18 +10,20 @@
 
 > ### ðŸŸ¨ PENAANDAAN STATUS â€” 2026-09-21 â€” **DOKUMEN INI BELUM SELESAI, JANGAN DIANGGAP TUNTAS**
 >
-> Ringkas dari 67 item pada tabel di bawah ini:
+> Ringkas dari 69 item pada tabel di bawah ini (terukur skrip, bukan hitungan manual):
 >
 > | Status | Jumlah | ID |
 > |---|---|---|
-> | SELESAI | **38** | A1, A2, A3, A4, A5, A6, A7, A8, B1, B2, B4, C2a, C2b, C2c, C2d, C2e, C3, C4, D2, D3, D4, D6, W1, W3, P1, F3-C1, F3-C2, R1, F6-X4, X5, G2, G4, G5, G6, G7, G8, G9, G10 |
+> | SELESAI | **42** | A1, A2, A3, A4, A5, A6, A7, A8, B1, B2, B4, C2a, C2b, C2c, C2d, C2e, C3, C4, C5*, C6*, D1, D2, D3, D4, D5, D6, W1, W3, P1, F3-C1, F3-C2, R1, F6-X4, X5, G2, G4, G5, G6, G7, G8, G9, G10 |
 > | SEDANG | **1** | A9 — breakpoint responsivitas belum; CSS mati menunggu konfirmasi hapus |
-> | BELUM | **28** | A10, B3, D1, D5, E1, E2, E3, E4, E5, E6, E7, E8, F1-W2, F2-P2, F2-P3, F3-C3, F4-R2, F4-R3, F5-K1, F5-K2, F5-K3, F6-X1, F6-X2, F6-X3, G1, G3, G11, G12 |
+> | BELUM | **26** | A10, B3, E1, E2, E3, E4, E5, E6, E7, E8, F1-W2, F2-P2, F2-P3, F3-C3, F4-R2, F4-R3, F5-K1, F5-K2, F5-K3, F6-X1, F6-X2, F6-X3, G1, G3, G11, G12 |
+>
+> \* C5 & C6 = dua temuan BARU dari screenshot operator (bug substring "KIM" & banjir antrean manual), ditambahkan 2026-09-21 sehingga total item jadi **69**.
 >
 > Belum termasuk item Bagian **H/I/J/K di Lampiran** (statusnya `BELUM`, ditandai langsung di barisnya; khusus Bagian K: K1â€“K3 sudah dikerjakan & build-verified 2026-09-21, K4â€“K5 `BELUM`).
 >
 > **Untuk AI berikutnya (Cline / lainnya):**
-> 1. Urutan sisa yang disepakati: **B1/B2/D1** + C2aâ€“C2e/C3/C4 (Fase 2), lalu A6â€“A10, E, F, G1/G3/G11/G12 â†’ **C2aâ€“C2e + C3/C4** (Fase 2) â†’ **A6â€“A10, E, F, G1/G3/G11/G12** (kebersihan & sisanya). **G9 sudah selesai** â€” jangan buat file `api/` baru apa pun (alasan + bukti: kotak ðŸš« di Bagian G9).
+> 1. Urutan sisa yang disepakati: **Fase 1/2/3 selesai semua** (B1, B2, B4, C2a–C6, D1–D6). Yang BELUM: **E1–E8** (12 sinyal), **F** (5 menu data master), **A10**, **B3**, **G1/G3/G11/G12**, lalu Bagian H/I/J/K di lampiran. **G9 sudah selesai** — jangan buat file `api/` baru apa pun (alasan + bukti: kotak larangan di Bagian G9).
 > 2. **Jangan kerjakan ulang** 13 item `SELESAI`; baca kolom "Catatan" untuk file yang sudah disentuh.
 > 3. Nomor baris di dokumen ini berasal dari audit statis dan **sudah bergeser** â€” cari teksnya, jangan percaya angka barisnya.
 > 4. Setelah satu item selesai: ganti statusnya di tabel + isi tanggal `YYYY-MM-DD` + file yang diubah, lalu commit dokumen ini bersama kodenya.
@@ -31,6 +33,10 @@
 >
 > **Bukti verifikasi terakhir (2026-09-21, batch G9):** `npx tsc -b --force` 0 error Â· `npm run build` âœ“ Â· `npm run lint` 0 error / **82** warning (semuanya di file lain; `src/App.tsx` & `src/utils/neonSync.ts` = 0 warning) Â· `npx tsc -p api/tsconfig.json --noEmit` âœ“ Â· `pilFinalDariCloud` diukur di browser dev lewat 7 kasus (baris cloud baru diterima; baris berkunci alami sama dengan `id` berbeda DITOLAK; duplikat internal cloud hanya 1 yang masuk; baris tanpa `id`/tanpa `kodePosPten` dibuang; kota kembar beda kota tetap dipulihkan) Â· helper cloud diukur dengan endpoint tiruan: 700 baris = 2 GET (500+200, tanpa celah) dan 3 POST (chunk 300, body maks 102 KB utk baris 146 B) Â· handler `api/target.ts` dijalankan terhadap `sql` palsu: GET kosong â†’ `CREATE TABLE final_rows` + `total:0`; GET paging â†’ `returned:500 offset:200 total:700`; POST upsert 701 baris â†’ `written:700` (baris tanpa id dibuang) & **tidak ada** `DELETE`; POST `mode:'replace'` â†’ ada `DELETE` lebih dulu; POST tanpa mode â†’ upsert (aman); DELETE tanpa `key`/`all` â†’ 400 dan nol query destruktif; DELETE `&key=` â†’ 1 baris; DELETE `&all=1` â†’ 705 baris; `view` tak dikenal pada POST/DELETE â†’ 400 tanpa menyentuh `target_records`; jalur lama `GET/DELETE /api/target` (tanpa `view`) tetap meng tabel target.
 >
+
+> **Yang belum terukur setelah batch ini:** angka antrean "Perlu Validasi Manual" pada data operator (sebelumnya 84.136 baris). Perbaikan C5/C6 mengubah penyebabnya, tapi jumlah akhirnya hanya bisa dibaca dengan menjalankan ulang Analisa di aplikasi — browser in-app sesi ini diblokir kebijakan, jadi angka itu sengaja TIDAK dikarang.
+>
+> **Bukti verifikasi batch D1/D5/C5/C6 (2026-09-21):** `npx tsc -b --force` 0 error · `npm run build` sukses · `npm run lint` 0 error / **83 warning** (sama dengan baseline) · mesin diuji **jalan** di Node lewat bundel SSR (`tests/entry-uji.ts` + `tests/uji-mesin-role.mjs`; jalankan `npx vite build --ssr tests/entry-uji.ts --outDir tests/out` lalu `node tests/uji-mesin-role.mjs`): **13/13 assertion lulus** — (i) `isKimBranchAceh` menolak "AR HAKIM" (Medan) dan menerima "KIM BANDA ACEH", `findKimBranch` mengembalikan `null` bila satu-satunya calon adalah AR HAKIM; (ii) hasil `matchRoleForOutlet` **sama persis** dengan kandidat pertama engine layar yang punya record Data Mapping Role, pada 4 kandidat berbeda; (iii) KC yang tidak ada di Data Mapping Role → `organisasiTujuan` kosong + ANOMALI (sebelum batch ini mesin menulis "MAKASSAR BRANCH OFFICE" 3/3/3 — terdeteksi oleh uji ini sendiri); (iv) pulau tak teridentifikasi → 60/PERLU_REVIEW + catatan; (v) 400 panggilan `matchRoleForOutlet` = 4,6 ms.
 > Catatan verifikasi: `npm run build` memakai `tsc -b` **inkremental** â€” tanpa `--force` error di file yang tidak diubah bisa terlewat. Selalu verifikasi dengan `npx tsc -b --force`.
 
 
@@ -65,11 +71,13 @@
 | C2e | SELESAI | 2026-09-21 | Urutan kandidat memakai `calculateRealDistance().distanceKm`; proxy `postalDiff*2+4000` tetap dihitung `evaluateMasterCandidate` tapi tidak lagi menentukan siapa Rank 1. `findCityCoord` di-cache per nama kota (2,8 ms → 0,2 ms per panggilan) supaya pengukuran jarak nyata terjangkau |
 | C3 | SELESAI | 2026-09-21 | Gerbang baru = field baris `fase2Tier` + `fase2JarakKm` + `fase2Temuan[]`: (a) kandidat luar kota/provinsi, (b) jarak > 16 km, (c) tidak ada KC di kota itu tapi KCP terpilih, (d) kota tidak punya cabang di master. Grid `butuhManual(stage 2)` membaca `fase2Temuan`, kartu Fase 2 menampilkan alasannya, dan `isFinalApproved` otomatis menolak baris bertemuan. Audit lama `match_top1/2/3` tidak lagi jadi gerbang (alasan: ia membandingkan nilai lama dengan kandidat per-kota) |
 | C4 | SELESAI | 2026-09-21 | Dijalankan nyata di browser dev dengan 43 cabang asli Kota Bandung dari produksi: Braga (40111, Sumur Bandung) → **JL. BRAGA D/H CIKAPUNDUNG** 0,8 km; Lebak Siliwangi (40132, Coblong) → **PERGURUAN TINGGI BANDUNG** (KC) 0,8 km; Cijaura (40262, Coblong) → PT BANDUNG 3,6 km. **Tiga baris wajib BEDA: terpenuhi.** KOREKSI kasus uji: harapan lama "Lebak Siliwangi → Dago ±1,4 km" tidak berlaku pada data sekarang karena master punya 2 cabang di kelurahan Lebak Siliwangi sendiri (PT BANDUNG KC + GANESHA), jadi Dago (Tamansari) bukan yang terdekat |
-| D1 | BELUM | â€” | Keputusan diambil 2026-09-21 (Bagian 12) â€” menunggu eksekusi |
+| C5 | SELESAI | 2026-09-21 | **Bug nyata dari screenshot operator**: baris ACEH BARAT dilayani cabang "AR HAKIM" (Medan, Branch 60100664) dengan alasan "Khusus Provinsi Aceh otomatis dilayani Cabang KIM". Penyebab: `findKimBranch` punya loop fallback `combined.includes('KIM')` (dan `buildMasterProximityIndex:137` `\|\| includes('KIM')`) sehingga **HAKIM tertangkap sebagai KIM** lewat substring. Sekarang satu penjaga `isKimBranchAceh(m)`: kata utuh `\bKIM\b` **dan** barisnya benar-benar di Aceh (Provinsi/Dati II/ALAMAT memuat "ACEH"). Tanpa cabang KIM sah → `null` → aturan Aceh tidak menyala dan kandidat dipilih mesin jarak biasa dengan alasan yang sebenarnya. Teruji 4 kasus di Node (`tests/uji-mesin-role.mjs`) |
+| C6 | SELESAI | 2026-09-21 | Gerbang manual C3 (b) "jarak > 16 km" ternyata membanjiri antrean: pada data operator **84.136 baris** masuk "Perlu Validasi Manual", dan contoh di layar berjarak ~42 km padahal 40 km dari cabang terdekat itu wajar di kabupaten luas. Jarak bukan cacat, jadi tidak lagi jadi penanda: `JARAK_MANUAL_KM = 16` → `JARAK_MUSTAHIL_KM = 150` dan hanya untuk **tier 1** (satu kota) â†' penanda itu sekarang berarti "koordinat perlu diperiksa". Tier 2/3 tetap tertanda oleh penandanya sendiri, jadi tidak ada kasus yang diam-diam lolos; angka km tetap tampil di kartu & kolom `fase2JarakKm` |
+| D1 | SELESAI | 2026-09-21 | Keputusan Bagian 12 (a) dieksekusi: **engine layar = mesin resmi Fase 3**. `matchRoleForOutlet` ditulis ulang jadi adaptor di atas `findTopRoleMatchesByLocation` (analyzer lama `calculateUnifiedPrecisionScore` + fallback keyword kota 0,85 + `preCleanedRoles`/`completeRoleList`/`roleMatchCache` pipeline **dihapus**), jadi kelas temuan "otomatis bilang AMBON, layar bilang JAYAPURA" hilang permanen. `roleRecommender` kini mengekspor `RoleMatchScored` (`nameMatchScore`, `isFullRole`, `synthetic`, `islandUnknown`) supaya keyakinan disusun dari bukti, bukan tebakan: KC sendiri â†' 100, cabang induk KC â†' 95, nama/alias persis â†' 95, kemiripan tinggi â†' 90, nama induk â†' 82, token terkandung â†' 75, **jarak semata â†' 60 + catatan sinyal 11**. D2 tetap hidup: kandidat `synthetic` (usulan struktur yang tidak ada di Data Mapping Role) **tidak ditulis otomatis** â†' kosong + ANOMALI dengan alasan menyebut cabang yang disarankan. Terukur di Node (`tests/uji-mesin-role.mjs`): 13/13 assertions lulus, hasil otomatis == kandidat engine layar ber-record nyata pada 4 kandidat, 400 panggilan 4,6 ms |
 | D2 | SELESAI | 2026-09-21 | Opsi "kosongkan + lempar manual": fallback `completeRoles[0]` / `completeRoleList[0]` (skor 0,70) dihapus di kedua mesin (`matchRoleForOutlet` :916 dan jalur pipeline :1682). Tanpa kecocokan nyata sekarang menghasilkan `organisasiTujuan` kosong, `tipeUnit: OUTLET` (bukan KC karangan), role 0/0/0 (`is3RoleLengkap` false), `alurWondr`/`flowDescription` kosong, status ANOMALI â†’ masuk antrean review. Varian "kandidat terdekat satu pulau" TIDAK dibuat â€” butuh mesin jarak baru |
 | D3 | SELESAI | 2026-09-21 | `isFinalApproved` otomatis sekarang butuh `statusAnalisa===EXACT_MATCH` **dan** `placementStatus===VERIFIED` **dan** `!usedFallback` (`analystPipeline.ts` blok hasil) |
 | D4 | SELESAI | 2026-09-21 | `analystPipeline.ts` `alurWondr` kini memakai `wondr?.tier` (kosakata sama dengan `getWondrRecommendation`, tidak ada lagi label generik Tier 1/Tier 2) |
-| D5 | BELUM | â€” | |
+| D5 | SELESAI | 2026-09-21 | `roleRecommender.ts`: `sameIsland` tidak lagi bernilai `true` saat salah satu pulau `"Lainnya"`. Ditambah flag `islandUnknown` — kandidat tetap dinilai (tidak dibuang, karena datanya memang tidak lengkap) tapi adaptor Fase 3 memotong keyakinannya ke 60 = `PERLU_REVIEW` + catatan sinyal 11 "pulau tidak dikenali — tidak dianggap satu pulau". Teruji: KCP tanpa provinsi/ Dati II dengan record "JAKARTA BRANCH OFFICE" â†' 60/PERLU_REVIEW, bukan 95/EXACT_MATCH |
 | D6 | SELESAI | 2026-09-21 | Opsi (b): `applyFase3Role` (pilihan manual operator) tidak lagi menulis `EXACT_MATCH` â€” sekarang `HIGH_CONFIDENCE`, jadi akurasi mesin tidak naik oleh keputusan manusia dan barisnya tidak lolos ke Final tanpa diperiksa |
 | E1 | BELUM | â€” | |
 | E2 | BELUM | â€” | |
@@ -236,11 +244,11 @@ Kota **Bandung**: baris **Braga** (40111, Sumur Bandung) â†’ P1 Asia Afrika
 
 | ID | Temuan | Lokasi | Perbaikan |
 |---|---|---|---|
-| D1 | Dua engine beda kriteria â†’ hasil otomatis â‰  rekomendasi layar (contoh: fallback daftar pertama = AMBON, padahal layar menyarankan JAYAPURA di pulau sama) | `analystPipeline.ts:1591â€“1660` vs `roleRecommender.ts:60â€“471` | **Perlu keputusan**: jadikan engine layar sebagai engine resmi Fase 3 (disarankan) |
+| D1 | Dua engine beda kriteria → hasil otomatis â‰  rekomendasi layar (contoh: fallback daftar pertama = AMBON, padahal layar menyarankan JAYAPURA di pulau sama) | `analystPipeline.ts:1591–1660` vs `roleRecommender.ts:60–471` | ✅ **SELESAI 2026-09-21** — engine layar jadi mesin resmi Fase 3 lewat adaptor `matchRoleForOutlet`; lihat baris D1 di tabel status Bagian 0 |
 | D2 | âœ… SELESAI 2026-09-21 â€” fallback arbitrer `completeRoleList[0]` (skor 0,70) | `analystPipeline.ts` `matchRoleForOutlet` & jalur pipeline | Kosongkan + lempar manual: tanpa kecocokan nyata â†’ `organisasiTujuan` kosong (bukan `<OUTLET> BRANCH OFFICE`), `tipeUnit: OUTLET` (bukan KC), role 0/0/0 sehingga `is3RoleLengkap` false, `alurWondr`/`flowDescription` kosong (bukan label Tier karangan), status ANOMALI â†’ masuk antrean review |
 | D3 | âœ… SELESAI 2026-09-21 â€” auto-final dari EXACT_MATCH tanpa melihat F1/F2 | blok hasil `analystPipeline.ts` | `isFinalApproved` otomatis kini = EXACT_MATCH **dan** `placementStatus===VERIFIED` **dan** `!usedFallback` |
 | D4 | Dua kosakata Alur Wondr | `getWondrRecommendation` (`RoleMappingManager.tsx:283â€“312`) vs label generik pipeline `:1660, 900` | Satukan kosakata di satu fungsi |
-| D5 | Pulau `'Lainnya'` membuat strict-1-pulau longgar | `roleRecommender.ts:334â€“336` | Bila pulau tak teridentifikasi â†’ paksa REVIEW, jangan anggap sama pulau |
+| D5 | Pulau `'Lainnya'` membuat strict-1-pulau longgar | `roleRecommender.ts:334–336` | ✅ **SELESAI 2026-09-21** — flag `islandUnknown` memaksa REVIEW (skor dipotong ke 60 + catatan), bukan lagi dianggap sama pulau |
 | D6 | âœ… SELESAI 2026-09-21 â€” pilihan manual selalu `EXACT_MATCH` + confidence 100 | `AnalystResultsGrid.tsx` `applyFase3Role` | Sekarang `HIGH_CONFIDENCE`: akurasi mesin tidak lagi naik oleh keputusan manusia, dan baris hasil pilihan manual tidak ikut lolos gerbang auto-final |
 
 ## BAGIAN E â€” TINJAUAN 12 SINYAL
@@ -464,7 +472,7 @@ Server paging (`api/kodepos.ts:382â€“407`, default 25 cap 500), CRUD per-id
 | B1 | Penggabungan Kota/Kabupaten kembar nama di Fase 1 | (a) pisahkan jenis daerah, (b) biarkan + peringatan | **(b)** âœ… dikerjakan 2026-09-21 â€” 26 grup dilaporkan |
 | B2 | Kode pos kelurahan masuk ekspor? | (a) ya + pisahkan kolom, (b) tetap kode pos kota | **(a)** âœ… dikerjakan 2026-09-21 â€” kolom `kodePosKelurahan` terpisah |
 | B4 | Hapus default palsu (`'10110'`, `'KOTA JAKARTA PUSAT'`, `'Wilayah 01'`, tebakan W-code, identitas sintetis) | (a) kosong + status manual, (b) biarkan | **(a)** â€” jangan isi karangan |
-| D1 | Engine resmi Fase 3 | (a) engine layar (nama+jarak+KC+pulau) â€” disarankan, (b) engine nama | **(a)** |
+| D1 | Engine resmi Fase 3 | (a) engine layar (nama+jarak+KC+pulau) — disarankan, (b) engine nama | **(a)** |
 | D3/D6 | Aturan auto-final & pilihan manual | (a) auto-final hanya VERIFIED+non-fallback, (b) manual = HIGH_CONFIDENCE | **(a) + (b)** keduanya |
 | G8 | â€œSetujui Finalâ€ menyertakan PERLU_REVIEW/ANOMALI? | (a) ya + peringatan, (b) filter status | **(a)** â€” tetap disertakan tapi jumlahnya disebut di konfirmasi |
 | G7 | â€œKembalikan semuaâ€ reset ke Fase 1? | (a) ya (disarankan), (b) tetap fase terakhir | **(a)** â€” disamakan dengan Revisi per baris |

@@ -81,34 +81,29 @@ export function isAcehRegion(target: TargetRow): boolean {
 }
 
 /**
- * Cari cabang berlabel 'KIM' di master
+ * Cabang KIM = layanan khusus Provinsi Aceh. Dua syarat harus bersamaan terpenuhi:
+ * nama/sandi memuat kata utuh 'KIM' DAN barisnya memang berada di Aceh.
+ * Tanpa penjaga ini, 'AR HAKIM' (Medan) ikut tertangkap sebagai "KIM" lewat
+ * pencocokan substring, lalu seluruh penempatan provinsi Aceh dilayani cabang
+ * Sumatera Utara itu dengan alasan yang salah.
+ */
+export function isKimBranchAceh(m: MasterRow): boolean {
+  const combined = [m.Cabang, m['Sandi Cabang'], m.Sandi, m['Nama Outlet']]
+    .filter(Boolean)
+    .join(' ')
+    .toUpperCase();
+  if (!/\bKIM\b/.test(combined)) return false;
+  const lokasi = `${m.Provinsi || ''} ${m['Dati II'] || ''} ${m['Kota/Dati II'] || ''} ${m.ALAMAT || ''}`.toUpperCase();
+  return lokasi.includes('ACEH');
+}
+
+/**
+ * Cari cabang berlabel 'KIM' di master (khusus baris yang berada di Aceh)
  */
 export function findKimBranch(masterRows: MasterRow[]): MasterRow | null {
   for (let i = 0; i < masterRows.length; i++) {
-    const m = masterRows[i];
-    const combined = [m.Cabang, m['Sandi Cabang'], m.Sandi, m['Nama Outlet']]
-      .filter(Boolean)
-      .join(' ')
-      .toUpperCase();
-
-    // Cocokkan kata utuh 'KIM' atau awalan 'KIM'
-    if (/\bKIM\b/.test(combined) || combined.startsWith('KIM') || combined.includes(' KIM ') || combined.endsWith(' KIM')) {
-      return m;
-    }
+    if (isKimBranchAceh(masterRows[i])) return masterRows[i];
   }
-
-  // Fallback pencarian lebih longgar jika belum ketemu
-  for (let i = 0; i < masterRows.length; i++) {
-    const m = masterRows[i];
-    const combined = [m.Cabang, m['Sandi Cabang'], m.Sandi, m['Nama Outlet']]
-      .filter(Boolean)
-      .join(' ')
-      .toUpperCase();
-    if (combined.includes('KIM')) {
-      return m;
-    }
-  }
-
   return null;
 }
 
@@ -128,15 +123,9 @@ export function buildMasterProximityIndex(masterRows: MasterRow[]): MasterProxim
   for (let i = 0; i < masterRows.length; i++) {
     const m = masterRows[i];
 
-    // Deteksi cabang KIM
-    if (!kimBranch) {
-      const combined = [m.Cabang, m['Sandi Cabang'], m.Sandi, m['Nama Outlet']]
-        .filter(Boolean)
-        .join(' ')
-        .toUpperCase();
-      if (/\bKIM\b/.test(combined) || combined.includes('KIM')) {
-        kimBranch = m;
-      }
+    // Deteksi cabang KIM (kata utuh + benar-benar di Aceh)
+    if (!kimBranch && isKimBranchAceh(m)) {
+      kimBranch = m;
     }
 
     // Indeks Kelurahan (Simpan varian nama bersih, nama murni tanpa stopword, nama asli, varian tanpa spasi, dan angka)
