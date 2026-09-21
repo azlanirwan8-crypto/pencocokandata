@@ -794,6 +794,25 @@ Di luar itu — termasuk baris Aceh dan baris yang cabangnya sudah Rank-1 — **
 
 **Eksekusi:** `src/components/WorkingEngine/AnalystResultsGrid.tsx` (definisi kolom + sel) dan `src/styles/index.css` (kelas bantu: `.cell-wrap`, `.cell-code`, `.cell-num`, `.table-density-compact`, `.table-density-normal`, `.table-density-wide`).
 
+### N3 — Checkbox "pilih semua" di SEMUA tab Fase 1/2/3/4 (permintaan pemilik produk 2026-09-22, status `BELUM`)
+
+**Aturan:** di setiap tabel fase (Fase 1, 2, 3, dan tab 4/Ditandai Manual) harus ada kolom checkbox per baris + satu checkbox di header untuk memilih semua, lalu baris yang terpilih dapat diaksi massal. Aksi yang tersedia BERBEDA menurut tab tempat baris itu berada:
+
+| Tab | Aksi massal untuk baris terpilih |
+|---|---|
+| **Berhasil Dianalisa** (semua tab fase) | `Revisi` dan `Setujui` |
+| **Perlu Analisa Manual / Perlu Validasi Manual** | `Setujui` dan `Ganti Kab/Kota PTEN` |
+
+**Cara eksekusi:**
+1. `AnalystResultsGrid.tsx` — state `barisTerpilih: Set<string>` (kunci `r.id`), kolom `<th>` checkbox di header SETIAP `viewTab` (fase1/fase2/fase3/fase4) + `<td>` checkbox di body tiap tab; jangan cuma satu tab.
+2. Checkbox header = pilih/batalkan **semua baris yang sedang tampil** (`filteredRows` setelah filter+search, bukan seluruh `rows`) — dan harus ikut berubah saat pindah halaman. Simpan seleksi di `useTampilanTersimpan` supaya tidak hilang saat pindah menu (pola A6).
+3. Bar aksi massal muncul hanya saat `barisTerpilih.size > 0`, menampilkan `N baris terpilih`, tombol aksinya, dan `Batalkan pilihan`.
+4. Aksi dipasang ke handler yang SUDAH ada, jangan bikin jalur tulis baru: `Setujui` = `approveRow`/alur "Setujui semua" per baris; `Revisi` = `setConfirmManualRow(r)`; `Ganti Kab/Kota PTEN` = `CityOverrideModal` (satu modal untuk banyak baris: terapkan `cityOverrides[kota] = kotaPten` lalu analisa ulang kota itu — jangan satu per satu).
+5. Konfirmasi massal WAJIB lewat `ConfirmDialog` (A2) dan menyebut jumlah baris + akibatnya; jangan pakai `window.confirm`/`alert`.
+6. Aksi massal tidak boleh menaikkan akurasi mesin: baris hasil keputusan manusia tetap `HIGH_CONFIDENCE` (D6), dan `isFinalApproved` otomatis tidak berubah karena pilihan massal.
+
+**Uji wajib:** (1) checkbox ada di 4 tab, (2) pilih-semua = jumlah yang tampil di tab itu, (3) Setujui massal memindahkan baris ke tab berikutnya, (4) Revisi massal mengembalikan baris, (5) Ganti Kab/Kota PTEN massal membuat seluruh kelurahan kota itu dianalisa ulang, (6) seleksi bertahan saat pindah menu dan kosong saat pindah tab fase.
+
 ### N2 — KERAPIAN UI (clean, enak dilihat, rapi)
 
 Aturan tampilan — berlaku untuk grid Data Analyst, Final, dan semua menu:
