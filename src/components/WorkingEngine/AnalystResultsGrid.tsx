@@ -1400,6 +1400,19 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                 <tr>
                   {thSort('no', 'No', { width: '40px', textAlign: 'center' })}
                   {thSort('namaOutlet', 'Nama Outlet', { minWidth: '180px' })}
+                  {/* Hasil Fase 2 dibawa PENUH ke layar Fase 3: operator memilih cabang role
+                      sambil melihat baris yang sama, bukan nama outletnya saja. */}
+                  {thSort('wilayah', 'Kanwil', { width: '85px', textAlign: 'center' })}
+                  <th style={{ width: '90px', textAlign: 'center' }}>Sandi Cabang</th>
+                  <th style={{ width: '95px', textAlign: 'center' }}>Branch Code</th>
+                  <th style={{ width: '85px', textAlign: 'center' }}>Kode Cabang</th>
+                  <th style={{ width: '90px', textAlign: 'center' }}>Status Outlet</th>
+                  <th style={{ minWidth: '200px' }}>ALAMAT</th>
+                  <th style={{ width: '85px', textAlign: 'center' }} title="Kode pos dari data PTEN (hasil tabrakan Fase 1)">KODE POS</th>
+                  <th style={{ minWidth: '130px' }}>Kelurahan</th>
+                  <th style={{ minWidth: '130px' }}>Kecamatan</th>
+                  <th style={{ minWidth: '150px' }} title="Wajib dari kolom PTEN &quot;KOTA/KABUPATEN MAX 15 DIGIT&quot;">Kota / Kab (MAX 15 Digit)</th>
+                  <th style={{ minWidth: '130px' }}>Provinsi</th>
                   {roleMappingList.length > 0 && (
                     <th
                       style={{
@@ -1431,7 +1444,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
             <tbody>
               {filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={14} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
+                  <td colSpan={25} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
                     Tidak ada baris analisa yang cocok dengan filter pencarian "{searchTerm}".
                   </td>
                 </tr>
@@ -1791,6 +1804,19 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                         <>
                           <td style={{ textAlign: 'center', color: '#878a99' }}>{displayIdx}</td>
                           <td style={{ fontWeight: 600, color: '#405189' }}>{r.namaOutlet}</td>
+                          <td style={{ textAlign: 'center' }}>
+                            <span className="badge badge-level1">{r.wilayah}</span>
+                          </td>
+                          <td className="code-cell" style={{ textAlign: 'center' }}>{r.sandiCabang || '-'}</td>
+                          <td className="code-cell" style={{ textAlign: 'center' }}>{r.branchCode || '-'}</td>
+                          <td className="code-cell" style={{ textAlign: 'center' }}>{r.kodeCabang || '-'}</td>
+                          <td style={{ textAlign: 'center' }}>{r.statusOutlet || '-'}</td>
+                          <td title={r.alamat || ''}>{r.alamat || '-'}</td>
+                          <td className="code-cell" style={{ textAlign: 'center' }}>{r.kodePosPten || '-'}</td>
+                          <td>{r.kelurahan}</td>
+                          <td>{r.kecamatan}</td>
+                          <td title={r.kotaPten}>{r.kotaPtenMax15 || r.kotaPten}</td>
+                          <td>{r.provinsi}</td>
                           {roleMappingList.length > 0 &&
                             (() => {
                               // Engine lama: 3 cabang role lengkap terdekat dari outlet hasil Fase 2,
