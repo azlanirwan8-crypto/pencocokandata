@@ -850,7 +850,17 @@ export const App: React.FC = () => {
     if (finalRows.length === 0) return;
     const byId = new Map<string, AnalystRow>();
     for (const r of analystRows) byId.set(r.id, { ...r, isFinalApproved: false });
-    for (const r of finalRows) byId.set(r.id, { ...r, isFinalApproved: false });
+    // G7: sama seperti "Revisi" per baris — kembali ke Fase 1 dengan semua persetujuan
+    // fase dilepas. Kalau hanya `isFinalApproved` yang di-reset, baris muncul lagi di
+    // fase terakhir sambil membawa persetujuan fase yang sudah tidak berlaku.
+    for (const r of finalRows)
+      byId.set(r.id, {
+        ...r,
+        fase1Approved: false,
+        fase2Approved: false,
+        fase3Approved: false,
+        isFinalApproved: false,
+      });
     const merged = Array.from(byId.values());
 
     setAnalystRows(merged);

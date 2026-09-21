@@ -1,5 +1,5 @@
 # RENCANA PERBAIKAN SELURUH APLIKASI
-> **⚠️ STATUS 2026-09-21: BELUM SELESAI — 13 dari 67 item `SELESAI`, 54 `BELUM` (8 di antaranya tinggal dieksekusi, keputusannya sudah diambil).**
+> **⚠️ STATUS 2026-09-21: BELUM SELESAI — 15 dari 67 item `SELESAI`, 52 `BELUM` (6 di antaranya tinggal dieksekusi, keputusannya sudah diambil).**
 > Baca Bagian 0 sebelum mengerjakan apa pun. Titik lanjut: **A3** (BaseModal). Rincian & bukti verifikasi ada di sana.
 
 **Aplikasi:** Tools Data Matcher Cabang & Outlet v2.x — React + TypeScript + Vite; IndexedDB (lokal) + Neon Postgres (cloud via serverless `api/`).
@@ -14,13 +14,13 @@
 >
 > | Status | Jumlah | ID |
 > |---|---|---|
-> | ✅ `SELESAI` | **13** | A1, A2, A4, A5, F3-C1, F3-C2, F6-X4, G2, G4, G5, G6, G9, G10 |
-> | ⬜ `BELUM` | **54** | sisanya — termasuk 8 item yang dulu `SKIP`: keputusannya **sudah diambil 2026-09-21** (lihat Bagian 12), tinggal dieksekusi (B1, B2, B4, D1, D3, D6, G7, G8) |
+> | ✅ `SELESAI` | **15** | A1, A2, A4, A5, F3-C1, F3-C2, F6-X4, G2, G4, G5, G6, G7, G8, G9, G10 |
+> | ⬜ `BELUM` | **52** | sisanya — termasuk 6 item yang dulu `SKIP`: keputusannya **sudah diambil 2026-09-21** (lihat Bagian 12), tinggal dieksekusi (B1, B2, B4, D1, D3, D6) |
 >
 > Belum termasuk item Bagian **H/I/J/K di Lampiran** (statusnya `BELUM`, ditandai langsung di barisnya; khusus Bagian K: K1–K3 sudah dikerjakan & build-verified 2026-09-21, K4–K5 `BELUM`).
 >
 > **Untuk AI berikutnya (Cline / lainnya):**
-> 1. Urutan sisa yang disepakati: **A3** (BaseModal) → **B4/D2/D3/D6/G7/G8** (kejujuran data) → **C2a–C2e + C3/C4** (Fase 2) → **A6–A10, E, F, G1/G3/G11/G12** (kebersihan & sisanya). **G9 sudah selesai** — jangan buat file `api/` baru apa pun (alasan + bukti: kotak 🚫 di Bagian G9).
+> 1. Urutan sisa yang disepakati: **A3** (BaseModal) → **B4/D2/D3/D6** + B1/B2/D1 (kejujuran data) → **C2a–C2e + C3/C4** (Fase 2) → **A6–A10, E, F, G1/G3/G11/G12** (kebersihan & sisanya). **G9 sudah selesai** — jangan buat file `api/` baru apa pun (alasan + bukti: kotak 🚫 di Bagian G9).
 > 2. **Jangan kerjakan ulang** 13 item `SELESAI`; baca kolom "Catatan" untuk file yang sudah disentuh.
 > 3. Nomor baris di dokumen ini berasal dari audit statis dan **sudah bergeser** — cari teksnya, jangan percaya angka barisnya.
 > 4. Setelah satu item selesai: ganti statusnya di tabel + isi tanggal `YYYY-MM-DD` + file yang diubah, lalu commit dokumen ini bersama kodenya.
@@ -104,8 +104,8 @@
 | G4 | SELESAI | 2026-09-21 | FinalDataManager — modal Detail per baris (role dialog + Esc). Build & lint terverifikasi 2026-09-21 |
 | G5 | SELESAI | 2026-09-21 | FinalDataManager — aksi Hapus permanen + App.tsx handleDeleteFinalRow. Build & lint terverifikasi 2026-09-21 |
 | G6 | SELESAI | 2026-09-21 | FinalDataManager — returnAll & revisi pakai ConfirmDialog. Build & lint terverifikasi 2026-09-21 |
-| G7 | BELUM | — | Keputusan diambil 2026-09-21 (Bagian 12) — menunggu eksekusi |
-| G8 | BELUM | — | Keputusan diambil 2026-09-21 (Bagian 12) — menunggu eksekusi |
+| G7 | SELESAI | 2026-09-21 | Opsi (a): `handleReturnFinalToAnalyst` (App.tsx) kini me-reset `fase1/2/3Approved` + `isFinalApproved` untuk baris yang datang dari Final — sama seperti Revisi per baris, jadi kembali ke Fase 1. Baris yang sejak awal ada di antrean Analyst tidak ikut kehilangan persetujuannya |
+| G8 | SELESAI | 2026-09-21 | Opsi (a): baris PERLU_REVIEW/ANOMALI tetap ikut dipindahkan, tapi `ConfirmDialog` "Pindahkan ke Final Analisa?" menyebut jumlahnya (pemisah `perluReview`/`anomali` ditambahkan ke `stats` di AnalystResultsGrid) |
 | G9 | SELESAI | 2026-09-21 | Tabel per-baris `final_rows` + `?view=final` pada `api/target.ts` yang sudah ada (BUKAN file `api/` baru). `neonSync.ts`: `loadFinalFromNeon/saveFinalToNeon/deleteFinalRowInNeon/clearFinalInNeon`; `analystPipeline.ts`: `pilFinalDariCloud`; `App.tsx`: merge non-destruktif di boot + push di 4 titik mutasi Final; `api/status.ts` + modal Database menampilkan jumlah `final_rows`. Bukti verifikasi di Bagian G9 |
 | G10 | SELESAI | 2026-09-21 | FinalDataManager — card metrik (total/KC/KCP/role lengkap/wilayah). Build & lint terverifikasi 2026-09-21 |
 | G11 | BELUM | — | |
@@ -354,11 +354,11 @@ Server paging (`api/kodepos.ts:382–407`, default 25 cap 500), CRUD per-id (`PU
 
 ### G7 — Inkonsistensi “Kembalikan semua” vs “Revisi per baris”
 **Masalah:** `handleReturnFinalToAnalyst` (`App.tsx:760–772`) hanya reset `isFinalApproved`, **tidak** reset `fase1/2/3Approved` → baris muncul di fase terakhir, bukan Fase 1; sedangkan Revisi per baris reset semuanya (`:783–789`).
-**Eksekusi:** samakan perilaku (reset semua fase) ATAU beri dua tombol berbeda labelnya (“Kembalikan ke Fase terakhir” vs “Kembalikan ke Fase 1”). **Perlu keputusan** — default yang disarankan: samakan dengan Revisi per baris (mulai Fase 1).
+**Eksekusi:** ✅ SELESAI 2026-09-21, opsi (a) — `handleReturnFinalToAnalyst` di `App.tsx` me-reset `fase1Approved/fase2Approved/fase3Approved/isFinalApproved` untuk baris yang datang dari Final, persis seperti Revisi per baris. Baris yang sejak awal berada di antrean Data Analyst TIDAK ikut kehilangan persetujuannya (kalau iya, menekan “Kembalikan semua” akan merusak progres fase yang sedang direview).
 
 ### G8 — “Setujui Final” memindahkan semua status
 **Masalah:** `handleApproveAllAnalystFinal` (`App.tsx:741–744`) memindahkan semua non-`TIDAK_ANALISA`, termasuk `PERLU_REVIEW`/`ANOMALI`, tanpa inspeksi.
-**Eksekusi:** tambahkan peringatan di `ConfirmDialog`: “Termasuk N baris berstatus PERLU_REVIEW dan M baris ANOMALI”; atau filter hanya `isFinalApproved===true`/status EXACT+HIGH. **Perlu keputusan**.
+**Eksekusi:** ✅ SELESAI 2026-09-21, opsi (a) — baris PERLU_REVIEW/ANOMALI tetap ikut dipindahkan, dan `ConfirmDialog` “Pindahkan ke Final Analisa?” sekarang menyebut jumlah keduanya (“Termasuk N baris perlu direview dan M baris anomali…”). `stats` di `AnalystResultsGrid.tsx` memisahkan penghitung `perluReview` dan `anomali` (sebelumnya hanya digabung di `anomalies`).
 
 ### G9 — Data Final tidak sinkron ke Neon (P0)
 **Masalah:** `analyst_final_data` hanya IndexedDB (`App.tsx:752, 770, 781`; boot restore `:215`). Tidak ada endpoint Neon; ganti perangkat/bersih browser = **Final Data hilang**.
@@ -514,7 +514,7 @@ Server paging (`api/kodepos.ts:382–407`, default 25 cap 500), CRUD per-id (`PU
 | ANI-2 | BELUM | Marker anomali muncul mendadak (`IndonesiaBranchMap.tsx:1070–1083`) → pakai `bniPinDrop` yang sama |
 | ANI-3 | BELUM | Kartu peta muncul tanpa animasi → `qdrFade`/`qdrRise` saat container dimount |
 | ANI-4 | BELUM | Progress geocoding hanya bar → tambahkan spinner `qdrSpin` + teks “Mencari titik X dari Y” |
-| ANI-5 | BELUM | Angka KPI berubah mendadak → count-up ~0,4 dtk (berlaku juga kartu dashboard lain) |
+| ANI-5 | SELESAI | Angka KPI berubah mendadak → count-up ~0,4 dtk (ease-out, hormati `prefers-reduced-motion`). File baru `src/components/Dashboard/AnimatedMetricValue.tsx` + 5 kartu di `src/components/Dashboard/MetricCards.tsx` memakainya. Tidak mengubah rumus/perhitungan. ⚠️ build belum diverifikasi |
 
 ## BAGIAN K — KARTU “TITIK KOORDINAT” (Data Kode Pos) terlihat aneh/macet
 
@@ -547,6 +547,19 @@ Verifikasi konsistensi: `83.361 + 401 = 83.762` = total baris master → perhitu
 ## BAGIAN L — CATATAN HASIL FIXING (log perubahan per sesi)
 
 > Bagian ini adalah **log**, bukan daftar tugas. Ditulis agar qoder/tim lain tahu persis apa yang sudah diubah, mengapa, dan apa yang belum diverifikasi. Jangan mengubah kode yang sudah tercatat di sini tanpa membaca catatannya.
+
+### Sesi 3 — 2026-09-21 · ANI-5 (animasi angka KPI) — dari Cline
+
+| # | File | Perubahan | Item | Verifikasi build |
+|---|---|---|---|---|
+| 8 | `src/components/Dashboard/AnimatedMetricValue.tsx` (**file baru**) | Komponen `AnimatedMetricValue`: count-up/down ~400 ms (ease-out kubik, rAF), hormati `prefers-reduced-motion` (langsung ke nilai akhir). Presentasi saja — **tidak mengubah data/rumus** | ANI-5 | ⚠️ BELUM |
+| 9 | `src/components/Dashboard/MetricCards.tsx` | 5 angka KPI memakai `AnimatedMetricValue` (`stats.totalProcessed`, `fm.distinctKodePos`, `fm.belumDikerjakan`, `fm.anomali`, `fm.top.count`). Teks kecil footer tetap `fmt(...)` | ANI-5 | ⚠️ BELUM |
+
+**Batas kerja Sesi 2 (sesuai kesepakatan anti-bentrok):** hanya kedua file di atas. File yang TIDAK disentuh: `IndonesiaBranchMap.tsx`, `styles/index.css`, `App.tsx`, `perbaikan-seluruh-aplikasi.md` (kecuali log ini). Pekerjaan animasi peta (ANI-1…ANI-4) tetap milik qoder.
+
+### Catatan koordinasi (Sesi 2)
+- ANI-3: **sudah ada dasar** (`.bni-map-container` memakai `qdrFade`) — tidak perlu diulang.
+- ANI-4: pilar geocoding di `IndonesiaBranchMap.tsx:2935` memakai `animation: 'spin 1s linear infinite'` — tetapi stylesheet hanya mendefinisikan `@keyframes qdrSpin` (`styles/index.css:965`). **Spinner geocoding kemungkinan diam** → qoder: ganti ke class `spinner-border spinner-border-sm` (sudah ada) atau definisikan `@keyframes spin`.
 
 ### Sesi 1 — 2026-09-21 · Tier-1 (UI & Data Master) + perbaikan kartu Titik Koordinat
 
@@ -594,6 +607,8 @@ Lalu uji manual minimal: (1) edit & hapus 1 baris di menu Data Cabang → refres
 | 5 | `src/App.tsx` | STEP 2b boot merge non-destruktif + push di 4 titik mutasi Final + toast gagal | G9 | ✅ 2026-09-21 |
 | 6 | `api/status.ts`, `src/components/NeonDatabaseModal.tsx` | Jumlah baris `final_rows` terlihat di modal Database | G9 | ✅ 2026-09-21 |
 | 7 | `src/components/KodePosData/KodePosManager.tsx` | Perbaikan tipe `geoStats?.gagal` → `geoStats?.geo?.gagal` (sisa patch sesi 1 yang belum di-commit; membuat `tsc -b --force` gagal TS2339) | K2 | ✅ 2026-09-21 |
+| 8 | `src/App.tsx` | `handleReturnFinalToAnalyst` reset semua fase (disamakan dengan Revisi per baris) — keputusan Bagian 12 G7 opsi (a) | G7 | ✅ 2026-09-21 |
+| 9 | `src/components/WorkingEngine/AnalystResultsGrid.tsx` | `stats` memisahkan `perluReview`/`anomali`; konfirmasi “Pindahkan ke Final Analisa?” menyebut kedua jumlah itu — keputusan G8 opsi (a) | G8 | ✅ 2026-09-21 |
 
 Yang **belum** diuji pada sesi 2: (a) SQL `final_rows` terhadap Postgres sungguhan (butuh tulis ke Neon → aksi operator), (b) kartu Titik Koordinat di UI produksi untuk label `coba ulang 2.813 kode pos`.
 

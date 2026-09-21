@@ -386,6 +386,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     let exact = 0;
     let highConf = 0;
     let anomalies = 0;
+    let perluReview = 0;
+    let anomali = 0;
     let placementReview = 0;
     let placementVerified = 0;
     let approved = 0;
@@ -396,7 +398,13 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       else if (r.statusAnalisa === 'HIGH_CONFIDENCE') highConf++;
       // 'MENUNGGU' = fase 3 belum dijalankan sama sekali — bukan temuan salah,
       // jadi tidak boleh ikut menghitung antrean "Ulangi yang Salah Saja".
-      else if (r.statusAnalisa !== 'MENUNGGU') anomalies++;
+      else if (r.statusAnalisa === 'PERLU_REVIEW') {
+        perluReview++;
+        anomalies++;
+      } else if (r.statusAnalisa === 'ANOMALI') {
+        anomali++;
+        anomalies++;
+      }
 
       if (r.placementStatus === 'VERIFIED') placementVerified++;
       else placementReview++;
@@ -417,6 +425,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       exact,
       highConf,
       anomalies,
+      perluReview,
+      anomali,
       placementReview,
       placementVerified,
       approved,
@@ -2060,7 +2070,11 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
             icon: <CheckCircle2 size={20} />,
             title: 'Pindahkan ke Final Analisa?',
             msg: `Seluruh ${n} baris hasil analisa Fase 1–3 akan DIPINDAHKAN ke menu Final Data. Menu Data Analyst akan kembali kosong (hanya menyisakan baris yang belum terpetakan).`,
-            detail: 'Tindakan ini bisa dibatalkan kapan saja lewat tombol "Kembalikan ke Data Analyst" di menu Final Data.',
+            detail:
+              stats.anomalies > 0
+                ? `Termasuk ${stats.perluReview.toLocaleString('id-ID')} baris berstatus "perlu direview" dan ${stats.anomali.toLocaleString('id-ID')} baris "anomali" — keduanya ikut dipindahkan dan masih bisa direvisi satu per satu dari menu Final Data. ` +
+                  'Tindakan ini bisa dibatalkan kapan saja lewat tombol "Kembalikan ke Data Analyst" di menu Final Data.'
+                : 'Tindakan ini bisa dibatalkan kapan saja lewat tombol "Kembalikan ke Data Analyst" di menu Final Data.',
             confirm: 'Ya, Pindahkan ke Final Data',
           },
         }[confirmKind ?? 'fase1'];
