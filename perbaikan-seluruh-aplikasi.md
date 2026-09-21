@@ -1,9 +1,34 @@
 # RENCANA PERBAIKAN SELURUH APLIKASI
+> **⚠️ STATUS 2026-09-21: BELUM SELESAI — 10 dari 67 item `SELESAI`, 49 `BELUM`, 8 menunggu keputusan.**
+> Baca Bagian 0 sebelum mengerjakan apa pun. Titik lanjut: **A3**, lalu **A4**. Rincian & bukti verifikasi ada di sana.
+
 **Aplikasi:** Tools Data Matcher Cabang & Outlet v2.x — React + TypeScript + Vite; IndexedDB (lokal) + Neon Postgres (cloud via serverless `api/`).
 **Sumber:** tinjauan kode statis; aplikasi TIDAK dijalankan saat audit (`node`/`npm` tidak tersedia). Nomor baris = kondisi saat audit; verifikasi ulang dengan pencarian teks sebelum mengubah.
 **Pemakai:** AI/developer eksekutor. Ikuti urutan di Bagian 10. Jangan ubah dua mesin sekaligus tanpa membaca file pasangannya (`analystPipeline.ts` ↔ `recommender.ts` ↔ `AnalystResultsGrid.tsx`).
 
 ## 0. STATUS PENGERJAAN — WAJIB DIBACA AI SEBELUM EKSEKUSI
+
+> ### 🟨 PENAANDAAN STATUS — 2026-09-21 — **DOKUMEN INI BELUM SELESAI, JANGAN DIANGGAP TUNTAS**
+>
+> Ringkas dari 67 item pada tabel di bawah ini:
+>
+> | Status | Jumlah | ID |
+> |---|---|---|
+> | ✅ `SELESAI` | **10** | A1, A2, A5, F3-C1, F3-C2, F6-X4, G4, G5, G6, G10 |
+> | ⏸️ `SKIP (keputusan)` | **8** | B1, B2, B4, D1, D3, D6, G7, G8 — tunggu Bagian 12, **jangan dieksekusi AI** |
+> | ⬜ `BELUM` | **49** | sisanya (A3, A4, A6–A10, B3, C2a–C4, D2/D4/D5, E1–E8, F1–F6, F3-C3, G1–G3, G9, G11, G12) |
+>
+> Belum termasuk item Bagian **H/I/J di Lampiran** (statusnya `BELUM`, ditandai langsung di barisnya).
+>
+> **Untuk AI berikutnya (Cline / lainnya):**
+> 1. Titik lanjut sekarang = **A3 (BaseModal aksesibilitas)** — sisa Langkah 1 Bagian 10; lalu **A4 (tombol Batalkan analisa)**.
+> 2. **Jangan kerjakan ulang** 10 item `SELESAI`; baca kolom "Catatan" untuk file yang sudah disentuh.
+> 3. Nomor baris di dokumen ini berasal dari audit statis dan **sudah bergeser** — cari teksnya, jangan percaya angka barisnya.
+> 4. Setelah satu item selesai: ganti statusnya di tabel + isi tanggal `YYYY-MM-DD` + file yang diubah, lalu commit dokumen ini bersama kodenya.
+> 5. Wajib jalankan Bagian 11 sebelum melapor selesai: `npm run build` dan `npm run lint` (oxlint, **bukan eslint**) harus bersih.
+>
+> **Bukti verifikasi terakhir (2026-09-21):** `npm run build` ✓ · `npm run lint` 0 error / 84 warning (baseline) · diuji manual di browser (dev `localhost:5199`): notifikasi warning muncul & hilang sesuai auto-dismiss, `ConfirmDialog` restore cadangan menampilkan ringkasan baris dan menjalankan aksinya hanya setelah "Ya, Pulihkan" · `grep alert(` di `src/` = 0 · bundle produksi `index-B2q5Z4PQ.js` memuat UI baru. Commit `8fc64a7`, deploy Vercel `success`.
+
 
 **Aturan untuk AI/developer:**
 1. Baca tabel status di bawah SEBELUM mengerjakan apa pun.
@@ -68,7 +93,7 @@
 | F6-X1 | BELUM | — | |
 | F6-X2 | BELUM | — | |
 | F6-X3 | BELUM | — | |
-| F6-X4 | BELUM | — | = A5 |
+| F6-X4 | SELESAI | 2026-09-21 | = A5 (Topbar status koneksi + tombol Database + Simpan). Build & lint terverifikasi 2026-09-21 |
 | F6-X5 | BELUM | — | |
 | G1 | BELUM | — | |
 | G2 | BELUM | — | |
