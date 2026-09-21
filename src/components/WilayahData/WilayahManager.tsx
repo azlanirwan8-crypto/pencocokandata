@@ -114,11 +114,17 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
             onSettingsSaved?.(normalized);
           }
         } else if (status.connected) {
-          // Cloud has no data yet: automatically push the complete 17 default records to cloud!
-          await saveWilayahToNeon(DEFAULT_WILAYAH_DATA);
+          // Cloud belum berisi apa pun. Dulu: langsung mengirim 17 data bawaan ke cloud
+          // tanpa bertanya — sekarang hanya dipakai di layar, operator yang memutuskan
+          // kapan cloud menerima isinya (tombol "Simpan ke Database").
           if (isMounted) {
             setSettings(DEFAULT_WILAYAH_DATA);
             onSettingsSaved?.(DEFAULT_WILAYAH_DATA);
+            notify(
+              'Cloud belum punya Data Wilayah — 17 wilayah bawaan hanya dipakai di browser ini. ' +
+                'Klik "Simpan ke Database" bila memang ingin mengirimnya ke cloud.',
+              'info'
+            );
           }
         }
       } catch (err) {

@@ -2078,6 +2078,11 @@ export async function executeAnalystPipeline(
           if (r1.tier === 1 && !adalahKcFase2(r1.master) && !meta.masterKota.some(adalahKcFase2)) {
             temuanFase2.push('tidak ada KC di kota ini — KCP yang terpilih');
           }
+          // W1: kode cabang alfanumerik (mis. "JKT-THM-01") tidak membaca Kanwil dari
+          // potongan angka — jangan biarkan barisnya diam-diam tanpa wilayah.
+          if (f2.branchCode && !f2.wilayah) {
+            temuanFase2.push(`wilayah tidak terbaca dari Branch Code ${f2.branchCode}`);
+          }
         }
       }
       const statusBaris = roleBaris

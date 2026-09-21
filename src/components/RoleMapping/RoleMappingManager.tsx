@@ -392,7 +392,9 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
       onRoleMappingCountChange?.(listToSave.length);
       setSuccessMsg(`Berhasil menyimpan ${listToSave.length.toLocaleString('id-ID')} data mapping role!`);
       setTimeout(() => setSuccessMsg(null), 4000);
-      saveRoleMappingToNeon(listToSave).catch(() => undefined);
+      const laporGagal = () =>
+        notify(`${listToSave.length.toLocaleString('id-ID')} baris mapping role tersimpan di browser, tapi GAGAL dikirim ke cloud.`, 'warning');
+      saveRoleMappingToNeon(listToSave).then((ok) => { if (!ok) laporGagal(); }, laporGagal);
     } catch (err: any) {
       setErrorMsg(err.message || 'Gagal menyimpan data mapping role');
       setTimeout(() => setErrorMsg(null), 4000);
@@ -548,11 +550,33 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
           return;
         }
 
-        setRoleList(imported);
-        handleSaveData(imported);
+        // Impor = TAMBAH dengan dedup kunci `organisasiTujuan`; data lama tidak dibuang
+        // diam-diam (mengosongkan pustaka punya tombol Reset sendiri).
+        const kunciOrg = (x: { organisasiTujuan: string }) => String(x.organisasiTujuan || '').toUpperCase().trim();
+        const sudahAda = new Set(roleList.map(kunciOrg));
+        const terlihat = new Set<string>();
+        const barisBaru: typeof imported = [];
+        let duplikatBerkas = 0;
+        let duplikatPustaka = 0;
+        imported.forEach((item) => {
+          const k = kunciOrg(item);
+          if (terlihat.has(k)) { duplikatBerkas++; return; }
+          terlihat.add(k);
+          if (sudahAda.has(k)) { duplikatPustaka++; return; }
+          barisBaru.push(item);
+        });
+        const gabungan = [...roleList, ...barisBaru];
+
+        setRoleList(gabungan);
+        handleSaveData(gabungan);
         if (fileInputRef.current) fileInputRef.current.value = '';
-        setSuccessMsg(`Berhasil mengimpor ${imported.length.toLocaleString('id-ID')} baris data mapping role!`);
-        setTimeout(() => setSuccessMsg(null), 4000);
+        notify(
+          `Impor Mapping Role: ${barisBaru.length.toLocaleString('id-ID')} organisasi baru` +
+            `${duplikatPustaka ? `, ${duplikatPustaka.toLocaleString('id-ID')} sudah ada (dilewati)` : ''}` +
+            `${duplikatBerkas ? `, ${duplikatBerkas.toLocaleString('id-ID')} duplikat di dalam berkas (dilewati)` : ''}.` +
+            ` Total pustaka kini ${gabungan.length.toLocaleString('id-ID')} baris.`,
+          barisBaru.length ? 'success' : 'info'
+        );
       } catch (err: any) {
         notify('Gagal membaca format file Excel: ' + err.message, 'error');
       }

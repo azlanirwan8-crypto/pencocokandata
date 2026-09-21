@@ -113,7 +113,9 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
       onPtenCountChange?.(listToSave.length);
       setSuccessMsg(`Berhasil menyimpan ${listToSave.length.toLocaleString('id-ID')} data PTEN!`);
       setTimeout(() => setSuccessMsg(null), 4000);
-      savePtenToNeon(listToSave).catch(() => undefined);
+      savePtenToNeon(listToSave)
+        .then((ok) => { if (!ok) notify(`${listToSave.length.toLocaleString('id-ID')} baris PTEN tersimpan di browser, tapi GAGAL dikirim ke cloud.`, 'warning'); })
+        .catch(() => notify(`${listToSave.length.toLocaleString('id-ID')} baris PTEN tersimpan di browser, tapi GAGAL dikirim ke cloud.`, 'warning'));
     } catch (err: any) {
       setErrorMsg(err.message || 'Gagal menyimpan data PTEN');
       setTimeout(() => setErrorMsg(null), 4000);
@@ -296,11 +298,34 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
           return;
         }
 
-        setPtenList(imported);
-        handleSaveData(imported);
+        // Impor = TAMBAH, bukan ganti: lama yang sudah ada tidak hilang diam-diam
+        // ( Tombol "Reset" khusus untuk mengosongkan). Kunci = kode pos + nama kota.
+        const kunciPten = (x: { kodePosPten: string; kotaPten: string }) =>
+          `${String(x.kodePosPten || '').replace(/\D/g, '')}|${String(x.kotaPten || '').toUpperCase().trim()}`;
+        const sudahAda = new Set(ptenList.map(kunciPten));
+        const terlihat = new Set<string>();
+        const barisBaru: typeof imported = [];
+        let duplikatBerkas = 0;
+        let duplikatPustaka = 0;
+        imported.forEach((item) => {
+          const k = kunciPten(item);
+          if (terlihat.has(k)) { duplikatBerkas++; return; }
+          terlihat.add(k);
+          if (sudahAda.has(k)) { duplikatPustaka++; return; }
+          barisBaru.push(item);
+        });
+
+        const gabungan = [...ptenList, ...barisBaru];
+        setPtenList(gabungan);
+        handleSaveData(gabungan);
         if (fileInputRef.current) fileInputRef.current.value = '';
-        setSuccessMsg(`Berhasil mengimpor ${imported.length.toLocaleString('id-ID')} baris data master PTEN!`);
-        setTimeout(() => setSuccessMsg(null), 4000);
+        notify(
+          `Impor PTEN: ${barisBaru.length.toLocaleString('id-ID')} baris baru ditambahkan` +
+            `${duplikatPustaka ? `, ${duplikatPustaka.toLocaleString('id-ID')} sudah ada di pustaka (dilewati)` : ''}` +
+            `${duplikatBerkas ? `, ${duplikatBerkas.toLocaleString('id-ID')} duplikat di dalam berkas (dilewati)` : ''}.` +
+            ` Total pustaka kini ${gabungan.length.toLocaleString('id-ID')} baris.`,
+          barisBaru.length ? 'success' : 'info'
+        );
       } catch (err: any) {
         notify('Gagal membaca format file Excel: ' + err.message, 'error');
       }

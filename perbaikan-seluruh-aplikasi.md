@@ -1,5 +1,5 @@
 ﻿# RENCANA PERBAIKAN SELURUH APLIKASI
-> **STATUS 2026-09-21: BELUM SELESAI — 33 dari 67 item `SELESAI`, 1 `SEDANG` (A9), 33 `BELUM`. Sisa terberat: D1 (engine resmi Fase 3), G1/G3/G11 (unggah & status lewati Data Final), F1–F6, H1–H5 (Dashboard), A9/A10, E, B3, D5.**
+> **STATUS 2026-09-21: BELUM SELESAI — 38 dari 67 item `SELESAI`, 1 `SEDANG` (A9), 28 `BELUM`. Sisa terberat: D1 (engine resmi Fase 3), G1/G3/G11 (unggah & status lewati Data Final), F1-W2/F2-P2/F4-R2/X1/X2/X3 (conflict lock & transaksi), F3-C3, F5-K1/K2/K3, F2-P3/F4-R3, H1–H5, E1–E8, B3, D5, A10.**
 > Baca Bagian 0 sebelum mengerjakan apa pun. Titik lanjut: **A3** (BaseModal). Rincian & bukti verifikasi ada di sana.
 
 **Aplikasi:** Tools Data Matcher Cabang & Outlet v2.x â€” React + TypeScript + Vite; IndexedDB (lokal) + Neon Postgres (cloud via serverless `api/`).
@@ -14,9 +14,9 @@
 >
 > | Status | Jumlah | ID |
 > |---|---|---|
-> | SELESAI | **33** | A1, A2, A3, A4, A5, A6, A7, A8, B1, B2, B4, C2a, C2b, C2c, C2d, C2e, C3, C4, D2, D3, D4, D6, F3-C1, F3-C2, F6-X4, G2, G4, G5, G6, G7, G8, G9, G10 |
+> | SELESAI | **38** | A1, A2, A3, A4, A5, A6, A7, A8, B1, B2, B4, C2a, C2b, C2c, C2d, C2e, C3, C4, D2, D3, D4, D6, W1, W3, P1, F3-C1, F3-C2, R1, F6-X4, X5, G2, G4, G5, G6, G7, G8, G9, G10 |
 > | SEDANG | **1** | A9 — breakpoint responsivitas belum; CSS mati menunggu konfirmasi hapus |
-> | BELUM | **33** | A10, B3, D1, D5, E1, E2, E3, E4, E5, E6, E7, E8, F1-W1, F1-W2, F1-W3, F2-P1, F2-P2, F2-P3, F3-C3, F4-R1, F4-R2, F4-R3, F5-K1, F5-K2, F5-K3, F6-X1, F6-X2, F6-X3, F6-X5, G1, G3, G11, G12 |
+> | BELUM | **28** | A10, B3, D1, D5, E1, E2, E3, E4, E5, E6, E7, E8, F1-W2, F2-P2, F2-P3, F3-C3, F4-R2, F4-R3, F5-K1, F5-K2, F5-K3, F6-X1, F6-X2, F6-X3, G1, G3, G11, G12 |
 >
 > Belum termasuk item Bagian **H/I/J/K di Lampiran** (statusnya `BELUM`, ditandai langsung di barisnya; khusus Bagian K: K1â€“K3 sudah dikerjakan & build-verified 2026-09-21, K4â€“K5 `BELUM`).
 >
@@ -79,16 +79,16 @@
 | E6 | BELUM | â€” | |
 | E7 | BELUM | â€” | |
 | E8 | BELUM | â€” | |
-| F1-W1 | BELUM | â€” | |
+| W1 | SELESAI | 2026-09-21 | Opsi "peringatan": baris Fase 2 yang Branch Code-nya tidak menghasilkan wilayah (mis. `JKT-THM-01`) kini membawa `fase2Temuan` "wilayah tidak terbaca dari Branch Code …" → muncul di antrean manual + kartu Fase 2. Terukur: 1 baris pengujian dengan kode alfanumerik tertandai, baris berkode numerik bersih |
 | F1-W2 | BELUM | â€” | |
-| F1-W3 | BELUM | â€” | |
-| F2-P1 | BELUM | â€” | |
+| W3 | SELESAI | 2026-09-21 | `WilayahManager.handleSaveToDatabase` sudah melapor (batch A1). Untuk PTEN & Mapping Role, pemanggilan `save*ToNeon(...).catch(() => undefined)` yang membungkam kegagalan kini melapor "tersimpan di browser, GAGAL dikirim ke cloud" (warning) |
+| P1 | SELESAI | 2026-09-21 | Impor PTEN tidak lagi mengganti seluruh pustaka: kunci `kode pos + nama kota`, laporan 3 bucket (baru / sudah ada / duplikat di dalam berkas), dan data lama tetap utuh — mengosongkan tetap lewat tombol Reset |
 | F2-P2 | BELUM | â€” | |
 | F2-P3 | BELUM | â€” | |
 | F3-C1 | SELESAI | 2026-09-21 | App.tsx handleMasterLoaded: mode 'update' = replace langsung; CabangManager kirim 'update' utk edit/hapus; impor Excel tetap 'replace' (merge+dedup). Build & lint terverifikasi 2026-09-21 |
 | F3-C2 | SELESAI | 2026-09-21 | Sama seperti F3-C1 |
 | F3-C3 | BELUM | â€” | |
-| F4-R1 | BELUM | â€” | |
+| R1 | SELESAI | 2026-09-21 | Sama seperti P1 dengan kunci `organisasiTujuan` (RoleMappingManager) |
 | F4-R2 | BELUM | â€” | |
 | F4-R3 | BELUM | â€” | |
 | F5-K1 | BELUM | â€” | |
@@ -98,7 +98,7 @@
 | F6-X2 | BELUM | â€” | |
 | F6-X3 | BELUM | â€” | |
 | F6-X4 | SELESAI | 2026-09-21 | = A5 (Topbar status koneksi + tombol Database + Simpan). Build & lint terverifikasi 2026-09-21 |
-| F6-X5 | BELUM | â€” | |
+| X5 | SELESAI | 2026-09-21 | `WilayahManager` tidak lagi mengirim 17 wilayah bawaan ke cloud saat cloud kosong — datanya hanya dipakai di layar dan operator diberi tahu cara mengirimnya (tombol "Simpan ke Database"). PTEN tidak punya auto-push (hanya baca); kiriman default Mapping Role tetap ada karena terjadi lewat tombol Reset yang dikonfirmasi |
 | G1 | BELUM | â€” | |
 | G2 | SELESAI | 2026-09-21 | `makeFinalKey` dilebarkan â†’ `kodePos\|kelurahan\|kecamatan\|kota`; 4 titik pemakai ikut (`App.tsx` exclude + merge persetujuan, `analystPipeline.ts` skip). Migrasi IndexedDB tidak diperlukan (kunci dihitung dari field, tidak disimpan). Lihat catatan di Bagian G2 |
 | G3 | BELUM | â€” | |
@@ -622,6 +622,7 @@ Lalu uji manual minimal: (1) edit & hapus 1 baris di menu Data Cabang â†’ r
 | 17 | `src/components/Dashboard/IndonesiaBranchMap.tsx`, `src/styles/index.css`, `src/components/Topbar.tsx` | MAP-3/4/6/7/8 + ANI-1/2/3/4: reset pin saat data berubah, chip status kunci Google, panel anomali bisa ditutup/Esc, tile default OSM tanpa kunci, aria-label + tabindex peta, fade layer pin, ramp radius titik anomali, class `.bni-pop`, spinner geocoding yang selama ini diam (keyframes `spin` tidak pernah ada) | MAP, ANI | ✅ tipe/build/lint (83 warning, sama seperti baseline) + terukur di browser dev: chip "Google ✗", tile `openstreetmap.org`, aria-label & tabindex terpasang |
 | 18 | `api/kodepos-geo.ts`, `src/utils/neonSync.ts`, `src/components/KodePosData/KodePosManager.tsx` | K4 (kode pos tak bersumber tidak ditawarkan ulang lagi) + K5 (angka Google terlihat di kartu) | K4, K5 | ✅ tipe/build/lint. ⚠️ `takBersumber` & filter baru di `ulang` baru berlaku setelah deploy Vercel; angka produksi sebelum deploy diukur dari `menungguUlang` |
 | 19 | `src/utils/analystPipeline.ts`, `src/utils/recommender.ts`, `src/utils/normalizer.ts`, `src/utils/geoDistance.ts`, `AnalystResultsGrid.tsx` | C2a–C2e + C3 + C4: Fase 2 otomatis dihitung per kelurahan dengan mesin kandidat yang sama seperti layar (Rank-1 = skor lalu jarak nyata, KC menang dalam seri ≤2 km), penanda manual baru (`fase2Tier`/`fase2JarakKm`/`fase2Temuan`), gerbang auto-final ikut menolak baris bertemuan, cache `cleanText`/`stripAdminNoise`/`findCityCoord` + memo `matchesDati`/`matchesProvince` + `ALAMAT` target tidak lagi dihitung dari alamat cabang lama. B4 lanjutan: `Jl. Protokol No. n`, sandi `00n`, dan `Status Outlet: Aktif` dikosongkan | C2, C3, C4, B4 | ✅ 2026-09-21 — terukur di browser dev: 43 cabang asli Kota Bandung, 3 kelurahan → 3 outlet berbeda & rank-1 = terdekat; agregat 6 kota besar/985 baris: 90,6% baris berubah outlet, 0 anomali tier>1; biaya mesin 5,07 → 3,57 ms/baris (proyeksi ±5 menit untuk 83.762 baris) |
+| 20 | `src/components/PTENData/PTENManager.tsx`, `src/components/RoleMapping/RoleMappingManager.tsx`, `src/components/WilayahData/WilayahManager.tsx`, `src/utils/analystPipeline.ts` | F2-P1 & F4-R1 (impor = tambah + dedup + laporan 3 bucket), F6-X5 (wilayah bawaan tidak lagi otomatis naik ke cloud), F1-W3 (kegagalan kirim cloud PTEN/Role dilaporkan), F1-W1 (Branch Code tak terbaca → penanda manual Fase 2) | F1, F2, F4, F6 | ✅ tipe/build/lint (83 warning = baseline) + terukur di browser dev dengan 2 cabang Kota Bandung |
 | â€” | `src/App.css`, `src/index.css` | A9 (sebagian): dua file CSS mati terverifikasi tidak diimpor siapa pun. **Penghapusannya tidak dilakukan** â€” diblokir kebijakan "jangan hapus file tanpa konfirmasi operator" | A9, A10 | â¸ menunggu konfirmasi |
 
 Yang **belum** diuji pada sesi 2: (a) SQL `final_rows` terhadap Postgres sungguhan (butuh tulis ke Neon â†’ aksi operator), (b) kartu Titik Koordinat di UI produksi untuk label `coba ulang 2.813 kode pos`.
