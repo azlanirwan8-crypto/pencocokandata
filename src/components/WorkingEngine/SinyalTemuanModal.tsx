@@ -13,6 +13,17 @@ const TABEL_BATAS_AWAL = 150;
 const SEL_POTONG: React.CSSProperties = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 };
 
 /**
+ * E7: bukti tiap fase disimpan TERPISAH di baris (`sinyalBit` / `sinyalF2Bit` /
+ * `sinyalRoleBit`) dan baru digabung saat mencari baris yang kena. Di modal, bukti
+ * ditampilkan per kelompok supaya operator tahu fase mana yang menghasilkan temuan.
+ */
+const FASE_BUKTI: Array<{ label: string; nama: string; ambil: (r: AnalystRow) => number }> = [
+  { label: 'F1', nama: 'Fase 1 — pencocokan nama kota/kelurahan', ambil: (r) => r.sinyalBit || 0 },
+  { label: 'F2', nama: 'Fase 2 — nama kota cabang yang terpilih', ambil: (r) => r.sinyalF2Bit || 0 },
+  { label: 'F3', nama: 'Fase 3 — nama organisasi tujuan dari Mapping Role', ambil: (r) => r.sinyalRoleBit || 0 },
+];
+
+/**
  * Detail "temuan" satu sinyal pencocokan, ditulis untuk pembaca non-teknis:
  * berapa banyak, dan kenapa tiap baris masuk daftar (catatan `temuanCatatan`
  * yang dicatat engine saat pencocokan berjalan — bukan dihitung ulang setelahnya).
@@ -38,6 +49,20 @@ export const SinyalTemuanModal: React.FC<Props> = ({ no, rows, onClose }) => {
   }, [temuan, cari, no]);
   const tampil = termFilter.slice(0, batas);
   const adaAlasan = useMemo(() => temuan.some((r) => (r.temuanCatatan?.[no] || []).length > 0), [temuan, no]);
+  // E7: berapa baris yang buktinya datang dari masing-masing fase.
+  const jumlahPerFase = useMemo(
+    () => FASE_BUKTI.map((f) => ({ ...f, n: bit ? temuan.filter((r) => (f.ambil(r) & bit) !== 0).length : 0 })),
+    [temuan, bit]
+  );
+  const buktiBaris = (r: AnalystRow) =>
+    FASE_BUKTI.map((f) => {
+      const b = bit ? f.ambil(r) & bit : 0;
+      if (!b) return null;
+      const lain = hitungBit(b).filter((n) => n !== no).map((n) => namaSinyal.get(n) || `#${n}`);
+      return `${f.label}: ${lain.length ? lain.join(', ') : 'sinyal ini saja'}`;
+    })
+      .filter(Boolean)
+      .join(' · ');
 
   if (!meta) return null;
 
@@ -71,6 +96,24 @@ export const SinyalTemuanModal: React.FC<Props> = ({ no, rows, onClose }) => {
           >
             {meta.penjelasan}
           </p>
+
+          {temuan.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.7rem', fontSize: '0.74rem', color: '#878a99' }}>
+              <span>Bukti dari fase:</span>
+              {jumlahPerFase.map((f) => (
+                <span
+                  key={f.label}
+                  title={f.nama}
+                  style={{
+                    padding: '0.08rem 0.45rem', borderRadius: '9999px', fontWeight: 700,
+                    background: f.n ? '#eef6ff' : '#f6f7f8', color: f.n ? '#405189' : '#adb5bd',
+                  }}
+                >
+                  {f.label} {f.n.toLocaleString('id-ID')}
+                </span>
+              ))}
+            </div>
+          )}
 
           {!adaAlasan && temuan.length > 0 && (
             <div
@@ -126,15 +169,13 @@ export const SinyalTemuanModal: React.FC<Props> = ({ no, rows, onClose }) => {
                     <th style={{ width: '160px' }}>Kelurahan</th>
                     <th style={{ width: '190px' }}>Nama Outlet (Fase 2)</th>
                     <th>Kenapa masuk daftar ini</th>
-                    <th style={{ width: '170px' }}>Sinyal lain yang membantu</th>
+                    <th style={{ width: '170px' }} title="F1 = Fase 1 (nama kota/kelurahan), F2 = Fase 2 (kota cabang terpilih), F3 = Fase 3 (nama organisasi tujuan)">Bukti per fase</th>
                   </tr>
                 </thead>
                 <tbody>
                   {tampil.map((r) => {
                     const alasan = r.temuanCatatan?.[no] || [];
-                    const lain = hitungBit(bitTemuanBaris(r))
-                      .filter((n) => n !== no)
-                      .map((n) => namaSinyal.get(n) || `#${n}`);
+                    const bukti = buktiBaris(r);
                     return (
                       <tr key={r.id}>
                         <td>{r.no}</td>
@@ -145,7 +186,7 @@ export const SinyalTemuanModal: React.FC<Props> = ({ no, rows, onClose }) => {
                         <td style={{ ...SEL_POTONG, maxWidth: '360px' }} title={alasan.join(' · ') || undefined}>
                           {alasan.length > 0 ? alasan.join(' · ') : '-'}
                         </td>
-                        <td style={SEL_POTONG} title={lain.join(' · ')}>{lain.length > 0 ? lain.join(' · ') : '-'}</td>
+                        <td style={SEL_POTONG} title={bukti}>{bukti || '-'}</td>
                       </tr>
                     );
                   })}
