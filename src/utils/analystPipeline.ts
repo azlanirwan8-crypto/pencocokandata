@@ -7,7 +7,7 @@ import { calculateRealDistance } from './geoDistance';
 import type { PTENRecord } from '../components/PTENData/PTENManager';
 import type { RoleMappingRecord } from '../components/RoleMapping/RoleMappingManager';
 import { getUnitCategory, getWondrRecommendation } from '../components/RoleMapping/RoleMappingManager';
-import { extractWilayahFromBranchCode } from './normalizer';
+import { extractWilayahFromBranchCode, hasDirectionalConflict } from './normalizer';
 import type { KodePosRow } from './neonSync';
 
 export interface AnalystRow {
@@ -1130,6 +1130,10 @@ export async function executeAnalystPipeline(
     let best: MasterRow[] = [];
     let bestScore = 0;
     for (const [mKey, mVals] of masterByCity.entries()) {
+      // Penjaga arah: "HALMAHERA UTARA" bukan pasangan "HALMAHERA TIMUR" walau skornya
+      // 0,93 — huruf depannya sama persis, tapi ini dua kabupaten berbeda dan baris
+      // kotanya bisa dibajak sehingga seluruh kelurahan aslinya hilang dari PTEN.
+      if (hasDirectionalConflict(cityKey, mKey)) continue;
       const { score } = calculateCityMatchScore(cityKey, mKey);
       if (score > bestScore && score >= 0.88) {
         bestScore = score;
@@ -1154,7 +1158,13 @@ export async function executeAnalystPipeline(
       )
       .map(([cityKey, ptenRecs]) => {
       const masters = findMasterByCity(cityKey);
-      if (masters.length > 0) return masters[0];
+      if (masters.length > 0) {
+        // Item ini mewakili SATU KOTA PTEN — jadi nama kotanya wajib tetap nama PTEN.
+        // Kalau `Dati II` cabang yang ikut dipakai, kota tujuan bisa berganti oleh
+        // cabang kota sebelah (HALMAHERA TIMUR → HALMAHERA UTARA) dan kelurahan aslinya
+        // tidak pernah di-resolve. Field cabang lainnya sengaja dipertahankan untuk Fase 2/3.
+        return { ...masters[0], 'Dati II': ptenRecs[0]?.kotaPten || masters[0]['Dati II'] };
+      }
 
       // Kota PTEN yang tidak punya cabang di master → baris penanda saja, supaya kota itu
       // tetap ikut dalam daftar kelurahan. Identitas cabang TIDAK dikarang (B4): kolom

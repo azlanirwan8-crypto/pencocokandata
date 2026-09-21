@@ -10,15 +10,15 @@
 
 > ### ðŸŸ¨ PENAANDAAN STATUS â€” 2026-09-21 â€” **DOKUMEN INI BELUM SELESAI, JANGAN DIANGGAP TUNTAS**
 >
-> Ringkas dari 69 item pada tabel di bawah ini (terukur skrip, bukan hitungan manual):
+> Ringkas dari 70 item pada tabel di bawah ini (terukur skrip, bukan hitungan manual):
 >
 > | Status | Jumlah | ID |
 > |---|---|---|
-> | SELESAI | **48** | A1, A2, A3, A4, A5, A6, A7, A8, B1, B2, B4, C2a, C2b, C2c, C2d, C2e, C3, C4, C5*, C6*, D1, D2, D3, D4, D5, D6, E1, E2, E4, E5, E6, E8, W1, W3, P1, F3-C1, F3-C2, R1, F6-X4, X5, G2, G4, G5, G6, G7, G8, G9, G10 |
+> | SELESAI | **49** | A1, A2, A3, A4, A5, A6, A7, A8, B1, B2, B4, C2a, C2b, C2c, C2d, C2e, C3, C4, B5, C5*, C6*, D1, D2, D3, D4, D5, D6, E1, E2, E4, E5, E6, E8, W1, W3, P1, F3-C1, F3-C2, R1, F6-X4, X5, G2, G4, G5, G6, G7, G8, G9, G10 |
 > | SEDANG | **1** | A9 — breakpoint responsivitas belum; CSS mati menunggu konfirmasi hapus |
 > | BELUM | **20** | A10, B3, E3, E7, F1-W2, F2-P2, F2-P3, F3-C3, F4-R2, F4-R3, F5-K1, F5-K2, F5-K3, F6-X1, F6-X2, F6-X3, G1, G3, G11, G12 |
 >
-> \* C5 & C6 = dua temuan BARU dari screenshot operator (bug substring "KIM" & banjir antrean manual), ditambahkan 2026-09-21 sehingga total item jadi **69**.
+> \* C5 & C6 = dua temuan BARU dari screenshot operator (bug substring "KIM" & banjir antrean manual), ditambahkan 2026-09-21 sehingga total item jadi **70**.
 >
 > Belum termasuk item Bagian **H/I/J/K di Lampiran** (statusnya `BELUM`, ditandai langsung di barisnya; khusus Bagian K: K1â€“K3 sudah dikerjakan & build-verified 2026-09-21, K4â€“K5 `BELUM`).
 >
@@ -64,6 +64,7 @@
 | B2 | SELESAI | 2026-09-21 | Opsi (a): field baru `AnalystRow.kodePosKelurahan` (kode pos baris KodePos-nya sendiri). Kolom "Kode Pos" pindah ke grup DATA POS di tab Fase 1 + bisa disortir + ikut pencarian; grup PTEN diganti label "Kode Pos PTEN"; baris `TIDAK_ANALISA` menampilkan "â€”" di kolom PTEN karena tidak punya kode pos PTEN. Ikut di ekspor Excel (2 sheet), PDF, modal Edit, tabel & modal Detail Data Final. `targetFromAnalystRow` (suara mesin Fase 2) SENGAJA masih pakai `kodePosPten` â€” berubahnya itu bagian C2d |
 | B3 | BELUM | â€” | Verifikasi ekspor saja |
 | B4 | SELESAI | 2026-09-21 | Opsi (a): semua karangan di `analystPipeline.ts` dihapus (dua tambahan ketahuan oleh pengukuran, bukan pembacaan kode: `namaOutlet` fallback `BNI KCP <kota>` :1625 dan label `Wilayah <kota>` dari `formatWilayahName(finalKotaPten)` :1620) â€” fallback kota "KOTA JAKARTA PUSAT" & kode pos "10110" jadi kosong, label "Wilayah 01" jadi kosong, dan baris penanda "kota PTEN tanpa cabang di master" tidak lagi mengarang W-code (tabel modulo) / `CABANG x` / `KCP x` / `Jl. Protokol x` / `Status Outlet: Aktif`. Sisa karangan di mesin role dicatat sebagai bagian D2 |
+| B5 | SELESAI | 2026-09-21 | **Bug nyata dari screenshot operator**: kelurahan `Baburino / Maba / Kabupaten Halmahera Timur` (kode pos 97860) tidak pernah ketemu PTEN `HALMAHERA TIMUR` (97862/97863) dan dilebeli "nama kota ini tidak ada di daftar PTEN". Dua akar, keduanya di `analystPipeline.ts`: (1) `findMasterByCity` fuzzy (ambang 0,88) meloloskan cabang **HALMAHERA UTARA** untuk kota TIMUR — skor **0,9313**, karena beda cuma kata arah di ujung; (2) driver Fase 1 memakai baris master itu sebagai perwakilan kota lalu membaca `cityRaw` dari **`Dati II` cabang** (`:1541`), jadi nama kota PTEN ditimpa oleh kota tetangga dan kelurahan aslinya tidak pernah di-resolve. Tambalan: penjaga `hasDirectionalConflict` sebelum menerima kandidat fuzzy, dan item per-kota kini membawa `Dati II` = `kotaPten` PTEN-nya sendiri (field cabang tetap dipakai untuk Fase 2/3). **Terukur**: `tests/uji-kota-pten.mjs` 12/12 — Baburino kembali `DIANALISA` dengan `kotaPten=HALMAHERA TIMUR`, tidak ada lagi baris ganda atas nama UTARA, dan kontrol positif (cabang yang memang sekota) tetap terpakai. Kasus `KEPULAUAN TALAUD` sudah aman di level kunci kota (`cityMatchKey` menormalkan `Kabupaten`/`Kepulauan`) |
 | C2a | SELESAI | 2026-09-21 | Fase 2 otomatis kini memakai MESIN KANDIDAT YANG SAMA dengan layar review (`findClosestMasterRecommendation`), dipanggil PER KELURAHAN, lalu Rank-1 ditulis ke field Fase 2 baris itu. Diukur pada data produksi nyata (6 kota besar, 985 baris): **892 dari 985 baris (90,6%) kini mendapat outlet yang BERBEDA** dari "cabang pertama kota" (perilaku lama); rata-rata 28,8 outlet unik per kota, dulu selalu 1 |
 | C2b | SELESAI | 2026-09-21 | Di `recommender.ts`: setelah sort skor, kandidat dalam pita skor ≤5 poin diukur JARAK NYATA-nya (maks 6), lalu bila pemimpin bukan KC dan ada KC yang tidak lebih dari 2 km lebih jauh → KC diangkat ke Rank 1. Dikerjakan POST-sort (bukan lewat comparator) supaya urutannya deterministik. Terbukti di kasus Bandung: Lebak Siliwangi → KC "PERGURUAN TINGGI BANDUNG" menang atas KCP "GANESHA" pada jarak seri 0,8 km |
 | C2c | SELESAI | 2026-09-21 | `adalahKcFase2(m)` = kolom **Status Outlet** master, `trim().toUpperCase() === 'KC'`. Mapping Role tidak dipakai untuk menentukan KC di Fase 2. Pada data produksi nyata kolom ini berisi `KC` / `KCP` / `KCP d/h KK` sehingga perbandingan persis itu benar |
