@@ -323,7 +323,10 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       flowDescription: wondr?.desc || r.flowDescription,
       confidenceScore: 100,
       matchingAlgorithm: 'Manual Role Selection (Terdekat, 1 Pulau)',
-      statusAnalisa: 'EXACT_MATCH',
+      // D6: pilihan manual bukan temuan mesin — jangan catat sebagai EXACT_MATCH,
+      // kalau tidak akurasi mesin ikut naik oleh keputusan manusia dan barisnya
+      // lolos ke Final tanpa pernah diperiksa.
+      statusAnalisa: 'HIGH_CONFIDENCE',
       isFinalApproved: false,
       editedManually: true,
     });

@@ -1,5 +1,5 @@
 # RENCANA PERBAIKAN SELURUH APLIKASI
-> **⚠️ STATUS 2026-09-21: BELUM SELESAI — 17 dari 67 item `SELESAI`, 50 `BELUM` (5 di antaranya tinggal dieksekusi, keputusannya sudah diambil).**
+> **⚠️ STATUS 2026-09-21: BELUM SELESAI — 20 dari 67 item `SELESAI`, 47 `BELUM` (3 di antaranya tinggal dieksekusi, keputusannya sudah diambil).**
 > Baca Bagian 0 sebelum mengerjakan apa pun. Titik lanjut: **A3** (BaseModal). Rincian & bukti verifikasi ada di sana.
 
 **Aplikasi:** Tools Data Matcher Cabang & Outlet v2.x — React + TypeScript + Vite; IndexedDB (lokal) + Neon Postgres (cloud via serverless `api/`).
@@ -14,13 +14,13 @@
 >
 > | Status | Jumlah | ID |
 > |---|---|---|
-> | ✅ `SELESAI` | **17** | A1, A2, A3, A4, A5, B4, F3-C1, F3-C2, F6-X4, G2, G4, G5, G6, G7, G8, G9, G10 |
-> | ⬜ `BELUM` | **50** | sisanya — termasuk 5 item yang dulu `SKIP`: keputusannya **sudah diambil 2026-09-21** (lihat Bagian 12), tinggal dieksekusi (B1, B2, D1, D3, D6) |
+> | ✅ `SELESAI` | **20** | A1, A2, A3, A4, A5, B4, D2, D3, D6, F3-C1, F3-C2, F6-X4, G2, G4, G5, G6, G7, G8, G9, G10 |
+> | ⬜ `BELUM` | **47** | sisanya — termasuk 3 item yang dulu `SKIP`: keputusannya **sudah diambil 2026-09-21** (lihat Bagian 12), tinggal dieksekusi (B1, B2, D1) |
 >
 > Belum termasuk item Bagian **H/I/J/K di Lampiran** (statusnya `BELUM`, ditandai langsung di barisnya; khusus Bagian K: K1–K3 sudah dikerjakan & build-verified 2026-09-21, K4–K5 `BELUM`).
 >
 > **Untuk AI berikutnya (Cline / lainnya):**
-> 1. Urutan sisa yang disepakati: **D2/D3/D6** + B1/B2/D1 (kejujuran data) → **C2a–C2e + C3/C4** (Fase 2) → **A6–A10, E, F, G1/G3/G11/G12** (kebersihan & sisanya). **G9 sudah selesai** — jangan buat file `api/` baru apa pun (alasan + bukti: kotak 🚫 di Bagian G9).
+> 1. Urutan sisa yang disepakati: **B1/B2/D1** + C2a–C2e/C3/C4 (Fase 2), lalu A6–A10, E, F, G1/G3/G11/G12 → **C2a–C2e + C3/C4** (Fase 2) → **A6–A10, E, F, G1/G3/G11/G12** (kebersihan & sisanya). **G9 sudah selesai** — jangan buat file `api/` baru apa pun (alasan + bukti: kotak 🚫 di Bagian G9).
 > 2. **Jangan kerjakan ulang** 13 item `SELESAI`; baca kolom "Catatan" untuk file yang sudah disentuh.
 > 3. Nomor baris di dokumen ini berasal dari audit statis dan **sudah bergeser** — cari teksnya, jangan percaya angka barisnya.
 > 4. Setelah satu item selesai: ganti statusnya di tabel + isi tanggal `YYYY-MM-DD` + file yang diubah, lalu commit dokumen ini bersama kodenya.
@@ -56,7 +56,7 @@
 | B1 | BELUM | — | Keputusan diambil 2026-09-21 (Bagian 12) — menunggu eksekusi |
 | B2 | BELUM | — | Keputusan diambil 2026-09-21 (Bagian 12) — menunggu eksekusi |
 | B3 | BELUM | — | Verifikasi ekspor saja |
-| B4 | SELESAI | 2026-09-21 | Opsi (a): semua karangan di `analystPipeline.ts` dihapus — fallback kota "KOTA JAKARTA PUSAT" & kode pos "10110" jadi kosong, label "Wilayah 01" jadi kosong, dan baris penanda "kota PTEN tanpa cabang di master" tidak lagi mengarang W-code (tabel modulo) / `CABANG x` / `KCP x` / `Jl. Protokol x` / `Status Outlet: Aktif`. Sisa karangan di mesin role dicatat sebagai bagian D2 |
+| B4 | SELESAI | 2026-09-21 | Opsi (a): semua karangan di `analystPipeline.ts` dihapus (dua tambahan ketahuan oleh pengukuran, bukan pembacaan kode: `namaOutlet` fallback `BNI KCP <kota>` :1625 dan label `Wilayah <kota>` dari `formatWilayahName(finalKotaPten)` :1620) — fallback kota "KOTA JAKARTA PUSAT" & kode pos "10110" jadi kosong, label "Wilayah 01" jadi kosong, dan baris penanda "kota PTEN tanpa cabang di master" tidak lagi mengarang W-code (tabel modulo) / `CABANG x` / `KCP x` / `Jl. Protokol x` / `Status Outlet: Aktif`. Sisa karangan di mesin role dicatat sebagai bagian D2 |
 | C2a | BELUM | — | |
 | C2b | BELUM | — | |
 | C2c | BELUM | — | |
@@ -65,11 +65,11 @@
 | C3 | BELUM | — | Wajib setelah C2a–C2e |
 | C4 | BELUM | — | Kasus uji |
 | D1 | BELUM | — | Keputusan diambil 2026-09-21 (Bagian 12) — menunggu eksekusi |
-| D2 | BELUM | — | |
-| D3 | BELUM | — | Keputusan diambil 2026-09-21 (Bagian 12) — menunggu eksekusi |
+| D2 | SELESAI | 2026-09-21 | Opsi "kosongkan + lempar manual": fallback `completeRoles[0]` / `completeRoleList[0]` (skor 0,70) dihapus di kedua mesin (`matchRoleForOutlet` :916 dan jalur pipeline :1682). Tanpa kecocokan nyata sekarang menghasilkan `organisasiTujuan` kosong, `tipeUnit: OUTLET` (bukan KC karangan), role 0/0/0 (`is3RoleLengkap` false), `alurWondr`/`flowDescription` kosong, status ANOMALI → masuk antrean review. Varian "kandidat terdekat satu pulau" TIDAK dibuat — butuh mesin jarak baru |
+| D3 | SELESAI | 2026-09-21 | `isFinalApproved` otomatis sekarang butuh `statusAnalisa===EXACT_MATCH` **dan** `placementStatus===VERIFIED` **dan** `!usedFallback` (`analystPipeline.ts` blok hasil) |
 | D4 | BELUM | — | |
 | D5 | BELUM | — | |
-| D6 | BELUM | — | Keputusan diambil 2026-09-21 (Bagian 12) — menunggu eksekusi |
+| D6 | SELESAI | 2026-09-21 | Opsi (b): `applyFase3Role` (pilihan manual operator) tidak lagi menulis `EXACT_MATCH` — sekarang `HIGH_CONFIDENCE`, jadi akurasi mesin tidak naik oleh keputusan manusia dan barisnya tidak lolos ke Final tanpa diperiksa |
 | E1 | BELUM | — | |
 | E2 | BELUM | — | |
 | E3 | BELUM | — | |
@@ -236,11 +236,11 @@ Kota **Bandung**: baris **Braga** (40111, Sumur Bandung) → P1 Asia Afrika 98% 
 | ID | Temuan | Lokasi | Perbaikan |
 |---|---|---|---|
 | D1 | Dua engine beda kriteria → hasil otomatis ≠ rekomendasi layar (contoh: fallback daftar pertama = AMBON, padahal layar menyarankan JAYAPURA di pulau sama) | `analystPipeline.ts:1591–1660` vs `roleRecommender.ts:60–471` | **Perlu keputusan**: jadikan engine layar sebagai engine resmi Fase 3 (disarankan) |
-| D2 | Fallback arbitrer `completeRoleList[0]` (skor 0,70) | `analystPipeline.ts:1682` (juga `:916` di jalur lama) | BELUM. Yang masih harus dikosongkan (sisa B4 di mesin role): `organisasiTujuan` karangan `<NAMA OUTLET> BRANCH OFFICE` (`:1688`), `roleCabsal/roleCabapv1/roleCabapv2` dipaksa `1` saat tidak ada kandidat (`:1691-1693`) sehingga `is3RoleLengkap` & label Tier ikut diklaim, dan `isKc` default `true` (`:1689`). Ganti dengan kandidat terdekat satu pulau, atau kosongkan + lempar manual |
-| D3 | Auto-final dari EXACT_MATCH tanpa melihat F1/F2 | `:1929` | Auto-final hanya bila `placementStatus==='VERIFIED'` dan bukan hasil fallback |
+| D2 | ✅ SELESAI 2026-09-21 — fallback arbitrer `completeRoleList[0]` (skor 0,70) | `analystPipeline.ts` `matchRoleForOutlet` & jalur pipeline | Kosongkan + lempar manual: tanpa kecocokan nyata → `organisasiTujuan` kosong (bukan `<OUTLET> BRANCH OFFICE`), `tipeUnit: OUTLET` (bukan KC), role 0/0/0 sehingga `is3RoleLengkap` false, `alurWondr`/`flowDescription` kosong (bukan label Tier karangan), status ANOMALI → masuk antrean review |
+| D3 | ✅ SELESAI 2026-09-21 — auto-final dari EXACT_MATCH tanpa melihat F1/F2 | blok hasil `analystPipeline.ts` | `isFinalApproved` otomatis kini = EXACT_MATCH **dan** `placementStatus===VERIFIED` **dan** `!usedFallback` |
 | D4 | Dua kosakata Alur Wondr | `getWondrRecommendation` (`RoleMappingManager.tsx:283–312`) vs label generik pipeline `:1660, 900` | Satukan kosakata di satu fungsi |
 | D5 | Pulau `'Lainnya'` membuat strict-1-pulau longgar | `roleRecommender.ts:334–336` | Bila pulau tak teridentifikasi → paksa REVIEW, jangan anggap sama pulau |
-| D6 | Pilihan manual selalu `EXACT_MATCH` + confidence 100 → bisa lolos auto-final | `AnalystResultsGrid.tsx:301–327`, `App.tsx:620` | Pilihan manual = `HIGH_CONFIDENCE` atau butuh persetujuan terpisah. **Perlu keputusan** |
+| D6 | ✅ SELESAI 2026-09-21 — pilihan manual selalu `EXACT_MATCH` + confidence 100 | `AnalystResultsGrid.tsx` `applyFase3Role` | Sekarang `HIGH_CONFIDENCE`: akurasi mesin tidak lagi naik oleh keputusan manusia, dan baris hasil pilihan manual tidak ikut lolos gerbang auto-final |
 
 ## BAGIAN E — TINJAUAN 12 SINYAL
 
@@ -612,6 +612,7 @@ Lalu uji manual minimal: (1) edit & hapus 1 baris di menu Data Cabang → refres
 | 8 | `src/App.tsx` | `handleReturnFinalToAnalyst` reset semua fase (disamakan dengan Revisi per baris) — keputusan Bagian 12 G7 opsi (a) | G7 | ✅ 2026-09-21 |
 | 9 | `src/components/WorkingEngine/AnalystResultsGrid.tsx` | `stats` memisahkan `perluReview`/`anomali`; konfirmasi “Pindahkan ke Final Analisa?” menyebut kedua jumlah itu — keputusan G8 opsi (a) | G8 | ✅ 2026-09-21 |
 | 10 | `src/components/BaseModal.tsx`, `src/components/useDialogBehavior.ts` (baru) + 20 file dialog | A3: `DialogPanel` (perilaku dialog: portal ke body, `role=dialog`/`aria-modal`/`aria-labelledby` otomatis dari judul yang terlihat, Esc, fokus masuk & kembali ke pemicu, Tab tertahan, klik-luar bisa dimatikan) dan `BaseModal` ( DialogPanel + header/body/footer `.modal-*`). 31 dialog dibungkus tanpa mengubah tampilan; `ConfirmDialog` tidak lagi menutup saat klik latar | A3 | ✅ 2026-09-21 (tsc 0 error, lint 0 error, diuji nyata di browser dev: Esc menutup, fokus kembali ke pemicu, Tab wrap dua arah) |
+| 12 | `src/utils/analystPipeline.ts`, `AnalystResultsGrid.tsx` | D2 (fallback role arbitrer + tujuan role/label Tier karangan dikosongkan), D3 (auto-final butuh VERIFIED & non-fallback), D6 (pilihan manual = HIGH_CONFIDENCE), + dua karangan B4 lagi yang ketahuan dari pengukuran (`BNI KCP <kota>`, `Wilayah <kota>`) | D2, D3, D6, B4 | ✅ 2026-09-21 — diukur nyata di browser dev: pipeline dijalankan atas 25 kota PTEN tanpa role mapping → 152 baris, semuanya `organisasiTujuan`/`namaOutlet`/`wilayah`/`alurWondr` kosong, `is3RoleLengkap=true` 0 baris, `isFinalApproved=true` 0 baris, status hanya ANOMALI/PERLU_REVIEW |
 | 11 | `src/utils/analystPipeline.ts` | B4: fallback kota/kode pos karangan ("KOTA JAKARTA PUSAT", "10110"), label "Wilayah 01", dan seluruh identitas sintetis baris penanda (W-code modulo, `CABANG x`, `KCP x`, `Jl. Protokol x`, `Status Outlet: Aktif`, `Provinsi: INDONESIA`) dihapus → jadi kosong | B4 | ✅ 2026-09-21 (build). **Angka hasil analisa bisa berubah — operator perlu menjalankan ulang Analisa untuk membandingkan** |
 
 Yang **belum** diuji pada sesi 2: (a) SQL `final_rows` terhadap Postgres sungguhan (butuh tulis ke Neon → aksi operator), (b) kartu Titik Koordinat di UI produksi untuk label `coba ulang 2.813 kode pos`.

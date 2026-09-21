@@ -3,7 +3,7 @@ import { isAcehRegion, findKimBranch } from './recommender';
 import type { PTENRecord } from '../components/PTENData/PTENManager';
 import type { RoleMappingRecord } from '../components/RoleMapping/RoleMappingManager';
 import { getUnitCategory, getWondrRecommendation } from '../components/RoleMapping/RoleMappingManager';
-import { formatWilayahName, extractWilayahFromBranchCode } from './normalizer';
+import { extractWilayahFromBranchCode } from './normalizer';
 import type { KodePosRow } from './neonSync';
 
 export interface AnalystRow {
@@ -913,18 +913,20 @@ export function matchRoleForOutlet(namaOutlet: string, cityKey: string, roleMapp
         break;
       }
     }
-    if (!matchedRole) { matchedRole = completeRoles[0]; highestRoleScore = 0.70; chosenAlgorithm = 'Default Fallback (Cabang 3 Role Lengkap)'; }
+    // D2: tidak ada kandidat yang benar-benar cocok → JANGAN ambil cabang pertama
+    // sebagai tujuan role. Biarkan kosong; status turun ke ANOMALI sehingga barisnya
+    // muncul di antrean review, bukan menyamar sebagai hasil mesin.
   }
-  const organisasiTujuan = matchedRole?.organisasiTujuan || `${namaOutlet.toUpperCase()} BRANCH OFFICE`;
-  const isKc = matchedRole ? getUnitCategory(matchedRole.organisasiTujuan) === 'KC' : true;
-  const tipeUnit: 'KC' | 'KCP' | 'OUTLET' = isKc ? 'KC' : 'KCP';
-  const roleCabsal = matchedRole ? matchedRole.qrsCabsal : 1;
-  const roleCabapv1 = matchedRole ? matchedRole.qrsCabapv1 : isKc ? 1 : 0;
-  const roleCabapv2 = matchedRole ? matchedRole.qrsCabapv2 : 1;
+  const organisasiTujuan = matchedRole?.organisasiTujuan || '';
+  const isKc = matchedRole ? getUnitCategory(matchedRole.organisasiTujuan) === 'KC' : false;
+  const tipeUnit: 'KC' | 'KCP' | 'OUTLET' = matchedRole ? (isKc ? 'KC' : 'KCP') : 'OUTLET';
+  const roleCabsal = matchedRole?.qrsCabsal ?? 0;
+  const roleCabapv1 = matchedRole?.qrsCabapv1 ?? 0;
+  const roleCabapv2 = matchedRole?.qrsCabapv2 ?? 0;
   const is3RoleLengkap = roleCabsal === 1 && roleCabapv1 === 1 && roleCabapv2 === 1;
   const wondr = matchedRole ? getWondrRecommendation(matchedRole) : null;
-  const alurWondr = wondr?.tier || (is3RoleLengkap ? 'Tier 1: Full Approval KC' : 'Tier 2: Dual Approval KCP via KC');
-  const flowDescription = wondr?.desc || (is3RoleLengkap ? 'Semua role lengkap (Sales, Verifikator, Penyetuju) berada pada 1 unit mandiri.' : 'Role Verifikator/Penyetuju dialihkan ke KC Pengampu dalam 1 pulau.');
+  const alurWondr = wondr?.tier || '';
+  const flowDescription = wondr?.desc || '';
   const confidenceScore = Math.min(100, Math.round(highestRoleScore * 100));
   let statusAnalisa: 'EXACT_MATCH' | 'HIGH_CONFIDENCE' | 'PERLU_REVIEW' | 'ANOMALI' | 'MENUNGGU' = 'EXACT_MATCH';
   if (confidenceScore >= 90) statusAnalisa = 'EXACT_MATCH';
@@ -1612,15 +1614,18 @@ export async function executeAnalystPipeline(
     const kodeCabang = String(rawFase2['Kode Cabang'] || rawFase2['Branch Code'] || '').trim();
     const sandi = String(rawFase2.Sandi || rawFase2['Sandi Cabang'] || '');
     const cabang = String(rawFase2.Cabang || rawFase2['Sandi Cabang'] || '');
+    // B4: tanpa wilayah yang benar-benar dikenali, jangan labeli barisnya dengan
+    // "Wilayah <nama kota>" — biarkan kosong supaya tampil sebagai belum terpetakan.
     const resolvedWilayah = extractWilayahFromBranchCode(
       branchCode,
       wilayahSettings,
-      rawFase2.Wilayah || formatWilayahName(finalKotaPten)
+      rawFase2.Wilayah || ''
     );
     const sandiCabang =
       rawFase2['Sandi Cabang'] ||
       (rawFase2.Sandi && rawFase2.Cabang ? `${rawFase2.Sandi} - ${rawFase2.Cabang}` : rawFase2.Cabang || rawFase2.Sandi || `00${(i % 99) + 1}`);
-    const namaOutlet = rawFase2['Nama Outlet'] || rawFase2.Cabang || `BNI KCP ${finalKotaPten}`;
+    // B4: nama outlet = data asli atau kosong; "BNI KCP <kota>" bukan temuan, itu karangan.
+    const namaOutlet = rawFase2['Nama Outlet'] || rawFase2.Cabang || '';
     const statusOutlet = rawFase2['Status Outlet'] || 'Aktif';
     const alamat = rawFase2.ALAMAT || `Jl. Protokol No. ${i + 1}, ${finalKotaPten}`;
 
@@ -1679,24 +1684,22 @@ export async function executeAnalystPipeline(
               break;
             }
           }
-          if (!matchedRole) { matchedRole = completeRoleList[0]; highestRoleScore = 0.70; chosenAlgorithm = 'Default Fallback (Cabang 3 Role Lengkap)'; }
+          // D2: tanpa kecocokan nyata, jangan menjatuhkan pilihan pada cabang pertama.
         }
         roleMatchCache.set(outletNameToMatch, { role: matchedRole, score: highestRoleScore, algorithm: chosenAlgorithm, sinyal: chosenSinyal, catatan: chosenCatat });
       }
     }
 
-    const organisasiTujuan = fase3Jalan ? (matchedRole?.organisasiTujuan || `${namaOutlet.toUpperCase()} BRANCH OFFICE`) : '';
-    const isKc = matchedRole ? getUnitCategory(matchedRole.organisasiTujuan) === 'KC' : true;
-    const tipeUnit: 'KC' | 'KCP' | 'OUTLET' = isKc ? 'KC' : 'KCP';
-    const roleCabsal = fase3Jalan ? (matchedRole ? matchedRole.qrsCabsal : 1) : 0;
-    const roleCabapv1 = fase3Jalan ? (matchedRole ? matchedRole.qrsCabapv1 : isKc ? 1 : 0) : 0;
-    const roleCabapv2 = fase3Jalan ? (matchedRole ? matchedRole.qrsCabapv2 : 1) : 0;
+    const organisasiTujuan = fase3Jalan ? (matchedRole?.organisasiTujuan || '') : '';
+    const isKc = matchedRole ? getUnitCategory(matchedRole.organisasiTujuan) === 'KC' : false;
+    const tipeUnit: 'KC' | 'KCP' | 'OUTLET' = matchedRole ? (isKc ? 'KC' : 'KCP') : 'OUTLET';
+    const roleCabsal = fase3Jalan ? (matchedRole?.qrsCabsal ?? 0) : 0;
+    const roleCabapv1 = fase3Jalan ? (matchedRole?.qrsCabapv1 ?? 0) : 0;
+    const roleCabapv2 = fase3Jalan ? (matchedRole?.qrsCabapv2 ?? 0) : 0;
     const is3RoleLengkap = fase3Jalan && roleCabsal === 1 && roleCabapv1 === 1 && roleCabapv2 === 1;
     const wondr = fase3Jalan && matchedRole ? getWondrRecommendation(matchedRole) : null;
-    const alurWondr = wondr?.tier || (fase3Jalan ? (is3RoleLengkap ? 'Tier 1: Full Approval KC' : 'Tier 2: Dual Approval KCP via KC') : '');
-    const flowDesc = wondr?.desc || (fase3Jalan
-      ? (is3RoleLengkap ? 'Semua role lengkap (Sales, Verifikator, Penyetuju) berada pada 1 unit mandiri.' : 'Role Verifikator/Penyetuju dialihkan ke KC Pengampu dalam 1 pulau.')
-      : '');
+    const alurWondr = fase3Jalan ? (wondr?.tier || '') : '';
+    const flowDesc = fase3Jalan ? (wondr?.desc || '') : '';
     const confidenceScore = fase3Jalan ? Math.min(100, Math.round(highestRoleScore * 100)) : 0;
     let statusAnalisa: 'EXACT_MATCH' | 'HIGH_CONFIDENCE' | 'PERLU_REVIEW' | 'ANOMALI' | 'MENUNGGU' = 'MENUNGGU';
     if (fase3Jalan) {
@@ -1962,7 +1965,14 @@ export async function executeAnalystPipeline(
         sinyalRoleBit: fase3Jalan ? meta.roleSinyalBit : 0,
         temuanCatatan: gabungCatatanTemuan(meta.cityCatatan, fase3Jalan ? meta.roleCatatan : undefined),
         statusAnalisa: fase3Jalan ? meta.statusAnalisa : 'MENUNGGU',
-        isFinalApproved: fase3Jalan && meta.statusAnalisa === 'EXACT_MATCH',
+        // D3: otomatis-final hanya yang penempatannya TERBUKTI (kode pos + kecamatan)
+        // dan bukan hasil fallback. Status Fase 3 saja tidak cukup — baris kota yang
+        // salah tempel bisa tetap skor 90-an.
+        isFinalApproved:
+          fase3Jalan &&
+          meta.statusAnalisa === 'EXACT_MATCH' &&
+          meta.placementStatus === 'VERIFIED' &&
+          !meta.usedFallback,
       });
     });
   }
