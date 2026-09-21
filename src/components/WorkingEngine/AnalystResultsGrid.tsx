@@ -262,6 +262,11 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       namaOutlet,
       statusOutlet: String(master['Status Outlet'] || r.statusOutlet || 'Aktif'),
       alamat: String(master.ALAMAT || r.alamat),
+      // Operator sudah memutuskan → barisnya keluar dari antrean manual, tapi sumbernya
+      // dicatat sebagai pilihan manusia, bukan kemenangan mesin (sejajar dengan D6).
+      fase2Temuan: [],
+      fase2Status: 'OTOMATIS_VALID',
+      fase2Sumber: 'PILIHAN_OPERATOR',
       ...role,
       isFinalApproved: role.statusAnalisa === 'EXACT_MATCH' ? r.isFinalApproved : false,
       editedManually: true,
@@ -465,7 +470,10 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     (r: AnalystRow, stage: 1 | 2 | 3 | 4): boolean => {
       if (r.perluManual) return true;
       if (stage === 1) return r.kategori === 'TIDAK_ANALISA';
-      if (stage === 2) return (r.fase2Temuan?.length || 0) > 0;
+      // M1: Fase 2 memakai status tiga keranjang dari mesin. Baris yang kolomnya masih
+      // kosong (fasenya belum dijalankan) = SIAP DIPROSES, bukan manual — dulu itulah
+      // yang membuat 84.136 baris masuk antrean manual sekaligus.
+      if (stage === 2) return r.fase2Status ? r.fase2Status === 'PERLU_MANUAL' : (r.fase2Temuan?.length || 0) > 0;
       if (stage === 3) return r.statusAnalisa === 'PERLU_REVIEW' || r.statusAnalisa === 'ANOMALI';
       return false;
     },
@@ -1277,7 +1285,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
               </button>
               <span style={{ fontSize: '0.76rem', color: '#878a99' }}>
                 {stageTab === 1 && 'Kotanya tidak ada di data PTEN — isi Kota PTEN & Kode Pos lewat tombol Edit, atau setujui apa adanya.'}
-                {stageTab === 2 && 'Cabang tidak masuk 3 rekomendasi terdekat — pilih kandidat di kolom Rekomendasi, atau setujui apa adanya.'}
+                {stageTab === 2 && 'Cabang perlu diputuskan: beda kota/provinsi/pulau, koordinat mencurigakan, atau kota ini tidak ada di Data Cabang — pilih kandidat di kolom Rekomendasi.'}
                 {stageTab === 3 && 'Skor kecocokan role rendah — ganti kandidat mapping, atau setujui apa adanya.'}
                 {stageTab === 4 && 'Baris yang Anda tarik kembali dari Final Data. Setujui untuk mengirimnya lagi ke penyetujuan akhir.'}
               </span>

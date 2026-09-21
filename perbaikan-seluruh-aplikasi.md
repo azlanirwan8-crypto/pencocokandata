@@ -14,9 +14,9 @@
 >
 > | Status | Jumlah | ID |
 > |---|---|---|
-> | SELESAI | **42** | A1, A2, A3, A4, A5, A6, A7, A8, B1, B2, B4, C2a, C2b, C2c, C2d, C2e, C3, C4, C5*, C6*, D1, D2, D3, D4, D5, D6, W1, W3, P1, F3-C1, F3-C2, R1, F6-X4, X5, G2, G4, G5, G6, G7, G8, G9, G10 |
+> | SELESAI | **44** | A1, A2, A3, A4, A5, A6, A7, A8, B1, B2, B4, C2a, C2b, C2c, C2d, C2e, C3, C4, C5*, C6*, D1, D2, D3, D4, D5, D6, E1, E6, W1, W3, P1, F3-C1, F3-C2, R1, F6-X4, X5, G2, G4, G5, G6, G7, G8, G9, G10 |
 > | SEDANG | **1** | A9 — breakpoint responsivitas belum; CSS mati menunggu konfirmasi hapus |
-> | BELUM | **26** | A10, B3, E1, E2, E3, E4, E5, E6, E7, E8, F1-W2, F2-P2, F2-P3, F3-C3, F4-R2, F4-R3, F5-K1, F5-K2, F5-K3, F6-X1, F6-X2, F6-X3, G1, G3, G11, G12 |
+> | BELUM | **24** | A10, B3, E2, E3, E4, E5, E7, E8, F1-W2, F2-P2, F2-P3, F3-C3, F4-R2, F4-R3, F5-K1, F5-K2, F5-K3, F6-X1, F6-X2, F6-X3, G1, G3, G11, G12 |
 >
 > \* C5 & C6 = dua temuan BARU dari screenshot operator (bug substring "KIM" & banjir antrean manual), ditambahkan 2026-09-21 sehingga total item jadi **69**.
 >
@@ -79,12 +79,12 @@
 | D4 | SELESAI | 2026-09-21 | `analystPipeline.ts` `alurWondr` kini memakai `wondr?.tier` (kosakata sama dengan `getWondrRecommendation`, tidak ada lagi label generik Tier 1/Tier 2) |
 | D5 | SELESAI | 2026-09-21 | `roleRecommender.ts`: `sameIsland` tidak lagi bernilai `true` saat salah satu pulau `"Lainnya"`. Ditambah flag `islandUnknown` — kandidat tetap dinilai (tidak dibuang, karena datanya memang tidak lengkap) tapi adaptor Fase 3 memotong keyakinannya ke 60 = `PERLU_REVIEW` + catatan sinyal 11 "pulau tidak dikenali — tidak dianggap satu pulau". Teruji: KCP tanpa provinsi/ Dati II dengan record "JAKARTA BRANCH OFFICE" â†' 60/PERLU_REVIEW, bukan 95/EXACT_MATCH |
 | D6 | SELESAI | 2026-09-21 | Opsi (b): `applyFase3Role` (pilihan manual operator) tidak lagi menulis `EXACT_MATCH` â€” sekarang `HIGH_CONFIDENCE`, jadi akurasi mesin tidak naik oleh keputusan manusia dan barisnya tidak lolos ke Final tanpa diperiksa |
-| E1 | BELUM | â€” | |
+| E1 | SELESAI | 2026-09-21 | Dikerjakan lewat M5: Fase 2 kini dinilai `calculateCityMatchScore` (ensemble yang sama dengan Fase 1) dan buktinya disimpan di `sinyalF2Bit` + ikut `bitTemuanBaris`, jadi tidak ada lagi fase yang tampil memakai 12 sinyal padahal tidak. Teruji di `tests/uji-fase2-status.mjs` |
 | E2 | BELUM | â€” | |
 | E3 | BELUM | â€” | |
 | E4 | BELUM | â€” | |
 | E5 | BELUM | â€” | |
-| E6 | BELUM | â€” | |
+| E6 | SELESAI | 2026-09-21 | Satu sumber definisi pulau: `roleMatcher.getIslandFromProvinsi`. Salinan di `roleRecommender.ts` dihapus (sekarang import), dan `getIslandFromProvince` di `analystPipeline.ts` (nilai "JAWA"/"INDONESIA", tidak pernah dipanggil) ikut dihapus. `finalAnomaly.ts` dialihkan ke sumber yang sama |
 | E7 | BELUM | â€” | |
 | E8 | BELUM | â€” | |
 | W1 | SELESAI | 2026-09-21 | Opsi "peringatan": baris Fase 2 yang Branch Code-nya tidak menghasilkan wilayah (mis. `JKT-THM-01`) kini membawa `fase2Temuan` "wilayah tidak terbaca dari Branch Code …" → muncul di antrean manual + kartu Fase 2. Terukur: 1 baris pengujian dengan kode alfanumerik tertandai, baris berkode numerik bersih |
@@ -639,7 +639,11 @@ Yang **belum** diuji pada sesi 2: (a) SQL `final_rows` terhadap Postgres sungguh
 
 ## BAGIAN M â€” FASE 2: PULIHKAN PEMBAGIAN â€œOTOMATIS TERVALIDASIâ€ vs â€œPERLU MANUALâ€
 
-> Ditambahkan 2026-09-21 dari temuan produksi: tab Fase 2 menampilkan **Outlet Tervalidasi (0)** vs **Perlu Validasi Manual (84.136)** â€” 100% baris masuk manual, padahal alur lama punya pembagian otomatis/manual yang benar. Status semua item di bagian ini: `BELUM`.
+> Ditambahkan 2026-09-21 dari temuan produksi: tab Fase 2 menampilkan **Outlet Tervalidasi (0)** vs **Perlu Validasi Manual (84.136)** â€” 100% baris masuk manual, padahal alur lama punya pembagian otomatis/manual yang benar.  Status SEMUA item bagian ini: `SELESAI 2026-09-21` (M1–M7 di bawah; M2/M4 sudah lebih dulu selesai sebagai C2a/C2d).
+
+> **Hasil eksekusi:** field baru `fase2Status` (`OTOMATIS_VALID` | `SIAP_DIPROSES` | `PERLU_MANUAL`), `fase2Sumber` (`ATURAN_ACEH_KIM` | `OTOMATIS_TERDEKAT` | `TIDAK_ADA_CABANG` | `PILIHAN_OPERATOR`) dan `sinyalF2Bit` ditulis per baris di blok hasil; grid membaca `fase2Status` (bukan lagi "tidak masuk 3 rekomendasi"), `isFinalApproved` menuntut `OTOMATIS_VALID`, dan M5 membuat Fase 2 dinilai `calculateCityMatchScore` yang sama dengan Fase 1 (bit-nya ikut `bitTemuanBaris`). **Terukur jalan di Node** (`tests/uji-fase2-status.mjs`, pipeline asli dipanggil, 6 kasus M7): Aceh → `ATURAN_ACEH_KIM` + OTOMATIS_VALID; Braga → ASIA AFRIKA; Coblong → DAGO (dua baris beda, keduanya valid); kota tanpa cabang → PERLU_MANUAL dengan alasan; Fase 2 belum dijalankan → semua SIAP_DIPROSES, **nol** manual; manual 1 dari 4 baris. Semua hijau: `tsc -b --force` 0 error · build ✓ · lint 83 warning (baseline) · `tests/uji-mesin-role.mjs` 13/13 ✓.
+>
+> **Sisa yang jujur:** angka akhir "Perlu Validasi Manual" pada 84 ribu baris data operator belum terukur — butuh jalankan ulang Analisa (browser in-app diblokir kebijakan sesi ini).
 
 ### M0 â€” BUKTI & AKAR MASALAH (jangan diubah tanpa membaca ini)
 

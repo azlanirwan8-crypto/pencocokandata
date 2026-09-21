@@ -3,30 +3,13 @@
 // KC prioritas, cache 60fps).
 import type { RoleMappingRecord } from '../components/RoleMapping/RoleMappingManager';
 import { getUnitCategory } from '../components/RoleMapping/RoleMappingManager';
-import { extractBranchAliases, normalizeIndonesianBranchAliases, normalizeBranchName } from './roleMatcher';
+import { extractBranchAliases, normalizeIndonesianBranchAliases, normalizeBranchName, getIslandFromProvinsi } from './roleMatcher';
 import type { MasterRow, TargetRow } from '../types';
 import { calculateRealDistance } from './geoDistance';
 import { cleanText, textSimilarityScore } from './normalizer';
 
-/**
- * Standar Wilayah Administratif Pulau di Indonesia berdasarkan Provinsi
- */
-export function getIslandFromProvinsi(prov?: string, dati?: string, textFallback?: string): string {
-  const p = String(prov || '').toUpperCase().replace(/PROVINSI\s*/i, '').trim();
-  const d = String(dati || '').toUpperCase();
-  const t = String(textFallback || '').toUpperCase();
-  const combined = `${p} ${d} ${t}`;
-
-  if (/JAKARTA|DKI|JAWA|BANTEN|YOGYAKARTA|DIY|BOGOR|BEKASI|DEPOK|TANGERANG|BANDUNG|SEMARANG|SURABAYA/.test(combined)) return 'Jawa';
-  if (/SUMATERA|ACEH|RIAU|JAMBI|BENGKULU|LAMPUNG|BANGKA|MEDAN|PALEMBANG|PADANG/.test(combined)) return 'Sumatera';
-  if (/KALIMANTAN|BANJARMASIN|PONTIANAK|BALIKPAPAN|SAMARINDA|BANJARBARU/.test(combined)) return 'Kalimantan';
-  if (/SULAWESI|GORONTALO|MAKASSAR|MANADO/.test(combined)) return 'Sulawesi';
-  if (/BALI|DENPASAR|BADUNG/.test(combined)) return 'Bali';
-  if (/NUSA TENGGARA|NTB|NTT|MATARAM|KUPANG/.test(combined)) return 'Nusa Tenggara';
-  if (/MALUKU|AMBON/.test(combined)) return 'Maluku';
-  if (/PAPUA|JAYAPURA/.test(combined)) return 'Papua';
-  return 'Lainnya';
-}
+// E6: definisi pulau SATU sumber (`roleMatcher.getIslandFromProvinsi`). Dulu file ini
+// punya salinannya sendiri, jadi Fase 2 dan Fase 3 bisa menyebut dua kota "beda pulau".
 
 export interface RoleMatchWithDistance {
   rec: RoleMappingRecord;

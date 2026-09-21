@@ -2,6 +2,7 @@ import type { MasterRow, TargetRow, WilayahSetting } from '../types';
 import { isAcehRegion, findKimBranch, buildMasterProximityIndex, findClosestMasterRecommendation, adalahKcFase2 } from './recommender';
 import type { MasterProximityIndex } from './recommender';
 import { findTopRoleMatchesByLocation } from './roleRecommender';
+import { getIslandFromProvinsi } from './roleMatcher';
 import { calculateRealDistance } from './geoDistance';
 import type { PTENRecord } from '../components/PTENData/PTENManager';
 import type { RoleMappingRecord } from '../components/RoleMapping/RoleMappingManager';
@@ -56,6 +57,15 @@ export interface AnalystRow {
   fase2Tier: 1 | 2 | 3;
   /** Alasan baris ini perlu diputuskan manual di Fase 2 (kosong = hasil mesin mantap). */
   fase2Temuan: string[];
+  /**
+   * M1: tiga keranjang Fase 2. `SIAP_DIPROSES` = kolom Fase 2 masih kosong karena
+   * fasenya belum dijalankan — itu BUKAN temuan manual.
+   */
+  fase2Status?: 'OTOMATIS_VALID' | 'SIAP_DIPROSES' | 'PERLU_MANUAL';
+  /** M1/M2: dari mana cabang terpasang ini datang (Rank-1 terdekat / aturan Aceh / manual). */
+  fase2Sumber?: string;
+  /** M5: bukti ensemble sinyal atas nama kota cabang vs nama kota PTEN (lihat SINYAL_BIT). */
+  sinyalF2Bit?: number;
 
   // Fase 3: Mapping Role & Wondr
   organisasiTujuan: string;
@@ -234,9 +244,18 @@ const BIT_URUT = [
 export const bitUntuk = (no: number): number => BIT_URUT[no - 1] || 0;
 export const hitungBit = (bitmask: number): number[] =>
   BIT_URUT.map((b, i) => ((bitmask & b) !== 0 ? i + 1 : 0)).filter(Boolean);
-/** Semua bit yang menangkap baris ini: bukti Fase 1 (kota/wilayah) + Fase 3 (role). */
-export const bitTemuanBaris = (r: { sinyalBit?: number; sinyalRoleBit?: number }): number =>
-  (r.sinyalBit || 0) | (r.sinyalRoleBit || 0);
+/**
+ * Semua bit yang menangkap baris ini: bukti Fase 1 (kota/wilayah) + Fase 2 (nama kota
+ * cabang terpilih, M5) + Fase 3 (role). Ketiganya disimpan TERPISAH supaya bisa dihitung
+ * ulang per fase; digabung hanya saat UI butuh "sinyal mana yang kena baris ini".
+ */
+export interface BitBuktiBaris {
+  sinyalBit?: number;
+  sinyalF2Bit?: number;
+  sinyalRoleBit?: number;
+}
+export const bitTemuanBaris = (r: BitBuktiBaris): number =>
+  (r.sinyalBit || 0) | (r.sinyalF2Bit || 0) | (r.sinyalRoleBit || 0);
 
 /** Maksimal catatan per sinyal yang disimpan ke satu baris hasil. */
 const CATATAN_MAX_PER_SINYAL = 3;
@@ -495,19 +514,9 @@ export function jaroWinklerDistance(s1: string, s2: string): number {
   return jaro + prefix * 0.1 * (1 - jaro);
 }
 
-// 4. 🗺️ GEO-HIERARCHY ISLAND CONSTRAINTS (Penguncian Wilayah Administratif & Pulau)
-export function getIslandFromProvince(provinceName: string): string {
-  const p = provinceName.toUpperCase();
-  if (/JAKARTA|JAWA|BANTEN|YOGYA|DIY/.test(p)) return 'JAWA';
-  if (/SUMATERA|ACEH|RIAU|JAMBI|BENGKULU|LAMPUNG|BANGKA/.test(p)) return 'SUMATERA';
-  if (/KALIMANTAN/.test(p)) return 'KALIMANTAN';
-  if (/SULAWESI|GORONTALO/.test(p)) return 'SULAWESI';
-  if (/BALI/.test(p)) return 'BALI';
-  if (/NUSA TENGGARA|NTB|NTT/.test(p)) return 'NUSA TENGGARA';
-  if (/MALUKU/.test(p)) return 'MALUKU';
-  if (/PAPUA/.test(p)) return 'PAPUA';
-  return 'INDONESIA';
-}
+// 4. 🗺️ PULAU — E6: definisi tunggal ada di `roleMatcher.getIslandFromProvinsi`.
+//    Salinan lama di file ini (`getIslandFromProvince`, nilai "JAWA"/"INDONESIA")
+//    tidak pernah dipakai dan jadi sumber dua fase menyimpulkan pulau yang berbeda.
 
 // 5. 📊 TRI-GRAM VECTOR COSINE SIMILARITY (Pencocokan Kalimat Kompleks)
 export function triGramCosineSimilarity(strA: string, strB: string): number {
@@ -1819,7 +1828,7 @@ export async function executeAnalystPipeline(
     return expertNormalize(String(m.Provinsi || '')) === expertNormalize(meta.matchedProvinsi) ? 2 : 3;
   };
 
-  type Rank1 = { master: MasterRow | null; km: number; tier: 1 | 2 | 3; alasan: string };
+  type Rank1 = { master: MasterRow | null; km: number; presisi: boolean; tier: 1 | 2 | 3; alasan: string };
   const cacheRank1 = new Map<string, Rank1>();
   const rank1Fase2 = (meta: RowMetaCache, kelurahan: string, kecamatan: string, kodePos: string, provinsi: string): Rank1 => {
     const kunci = `${meta.cityKey}|${kodePos}|${kelurahan}|${kecamatan}`;
@@ -1829,23 +1838,24 @@ export async function executeAnalystPipeline(
     let hasil: Rank1;
     if (meta.kimCabang) {
       // Aturan Aceh: seluruh penempatan provinsi Aceh dilayani Cabang KIM.
-      hasil = {
-        master: meta.kimCabang,
-        km: calculateRealDistance(target, meta.kimCabang).distanceKm,
-        tier: 1,
-        alasan: 'Aturan Aceh → Cabang KIM',
-      };
+      const d = calculateRealDistance(target, meta.kimCabang);
+      hasil = { master: meta.kimCabang, km: d.distanceKm, presisi: d.isPrecise, tier: 1, alasan: 'Aturan Aceh → Cabang KIM' };
     } else if (!indeksProximity || meta.masterKota.length === 0) {
-      hasil = { master: null, km: 999, tier: 3, alasan: 'kota tidak punya cabang di Data Master' };
+      hasil = { master: null, km: 999, presisi: false, tier: 3, alasan: 'kota tidak punya cabang di Data Master' };
     } else if (meta.masterKota.length === 1) {
       const m = meta.masterKota[0];
-      hasil = { master: m, km: calculateRealDistance(target, m).distanceKm, tier: 1, alasan: 'Satu-satunya cabang di kota ini' };
+      const d = calculateRealDistance(target, m);
+      hasil = { master: m, km: d.distanceKm, presisi: d.isPrecise, tier: 1, alasan: 'Satu-satunya cabang di kota ini' };
     } else {
       const rec = findClosestMasterRecommendation(target, indeksProximity);
       const c = rec?.candidates[0];
-      hasil = c
-        ? { master: c.master, km: c.distanceKm ?? 0, tier: tierCabang(meta, c.master), alasan: c.reason }
-        : { master: meta.masterKota[0], km: calculateRealDistance(target, meta.masterKota[0]).distanceKm, tier: 1, alasan: '' };
+      if (c) {
+        hasil = { master: c.master, km: c.distanceKm ?? 0, presisi: c.distanceKm != null, tier: tierCabang(meta, c.master), alasan: c.reason };
+      } else {
+        const m = meta.masterKota[0];
+        const d = calculateRealDistance(target, m);
+        hasil = { master: m, km: d.distanceKm, presisi: d.isPrecise, tier: 1, alasan: '' };
+      }
     }
     cacheRank1.set(kunci, hasil);
     return hasil;
@@ -1879,6 +1889,20 @@ export async function executeAnalystPipeline(
     if (lalu) return lalu;
     const hasil = matchRoleForOutlet(master, targetKandidatFase2(meta, kelurahan, kecamatan, kodePos, provinsi), roleMappingList, masterCabangRows);
     cacheRoleBaris.set(kunci, hasil);
+    return hasil;
+  };
+
+  // M5: Fase 2 ikut dinilai ensemble sinyal. Buktinya = nama kota PTEN vs Dati II
+  // cabang yang terpasang, memakai fungsi yang SAMA dengan Fase 1 — jadi kartu sinyal
+  // 1..13 tidak lagi memuat fase yang sebenarnya tidak dinilai.
+  const cacheBuktiF2 = new Map<string, { bit: number; skor: number; catatan: Record<number, string[]> }>();
+  const buktiFase2 = (kotaPten: string, kotaCabang: string) => {
+    const kunci = `${kotaPten}|${kotaCabang}`;
+    const lalu = cacheBuktiF2.get(kunci);
+    if (lalu) return lalu;
+    const { score, sinyal, catatan } = calculateCityMatchScore(kotaPten, kotaCabang);
+    const hasil = { bit: sinyal, skor: score, catatan: gabungCatatanTemuan(catatan) || {} };
+    cacheBuktiF2.set(kunci, hasil);
     return hasil;
   };
 
@@ -1952,20 +1976,32 @@ export async function executeAnalystPipeline(
       const f2 = paketFase2(r1?.master || null);
       const roleBaris = fase3Jalan && r1?.master ? roleUntukBaris(meta, r1.master, kelurahan, kecamatan, kodePosBaris, provinsi) : null;
 
-      // C3: penanda "perlu diputuskan operator" versi baru. Yang lama (audit
-      // "nilai awal sudah rank-1") tidak berlaku lagi karena Fase 2 kini dihitung
-      // per kelurahan, jadi gerbangnya diganti empat penanda konkret ini.
+      // M1 + M6: penanda "perlu diputuskan operator". Wajib TIDAK manual: baris aturan
+      // Aceh (deterministik) dan baris yang cabangnya memang Rank-1 mesin.
       const temuanFase2: string[] = [];
+      const kotaCabang = r1?.master ? String(r1.master['Dati II'] || r1.master['Kota/Dati II'] || '') : '';
+      const buktiF2 = r1?.master ? buktiFase2(meta.cityRawName || meta.finalKotaPten, kotaCabang) : null;
+      const aturanAceh = !!meta.kimCabang;
       if (r1) {
         if (!r1.master) {
           temuanFase2.push('kota ini tidak punya cabang di Data Master');
         } else {
           if (r1.tier === 2) temuanFase2.push('cabang terpilih di luar kota (masih satu provinsi)');
           else if (r1.tier === 3) temuanFase2.push('cabang terpilih di luar provinsi');
+          // M6(3): beda pulau — aturan Aceh dikecualikan karena memang penempatannya khusus.
+          const pulauBaris = getIslandFromProvinsi(provinsi, meta.cityRawName, `${kelurahan} ${kecamatan}`);
+          const pulauCabang = getIslandFromProvinsi(String(r1.master.Provinsi || ''), kotaCabang, String(r1.master.ALAMAT || ''));
+          if (!aturanAceh && pulauBaris !== 'Lainnya' && pulauCabang !== 'Lainnya' && pulauBaris !== pulauCabang) {
+            temuanFase2.push(`cabang terpilih beda pulau (${pulauCabang} vs ${pulauBaris})`);
+          }
           if (r1.tier === 1 && r1.km > JARAK_MUSTAHIL_KM) {
             temuanFase2.push(`jarak ${r1.km.toLocaleString('id-ID')} km padahal satu kota — koordinat perlu diperiksa`);
           }
-          if (r1.tier === 1 && !adalahKcFase2(r1.master) && !meta.masterKota.some(adalahKcFase2)) {
+          // M6(5): jarak tidak terukur DAN nama kota tidak saling mendukung → mesin buta.
+          if (!aturanAceh && !r1.presisi && (buktiF2?.skor ?? 0) < 0.75) {
+            temuanFase2.push('jarak tidak terukur dan nama kota cabang tidak mendukung');
+          }
+          if (!aturanAceh && r1.tier === 1 && !adalahKcFase2(r1.master) && !meta.masterKota.some(adalahKcFase2)) {
             temuanFase2.push('tidak ada KC di kota ini — KCP yang terpilih');
           }
           // W1: kode cabang alfanumerik (mis. "JKT-THM-01") tidak membaca Kanwil dari
@@ -1975,6 +2011,12 @@ export async function executeAnalystPipeline(
           }
         }
       }
+      const fase2Sumber = !fase2Jalan ? '' : !r1?.master ? 'TIDAK_ADA_CABANG' : aturanAceh ? 'ATURAN_ACEH_KIM' : 'OTOMATIS_TERDEKAT';
+      const fase2Status: 'OTOMATIS_VALID' | 'SIAP_DIPROSES' | 'PERLU_MANUAL' = !fase2Jalan
+        ? 'SIAP_DIPROSES'
+        : !r1?.master || temuanFase2.length > 0
+          ? 'PERLU_MANUAL'
+          : 'OTOMATIS_VALID';
       const statusBaris = roleBaris
         ? roleBaris.statusAnalisa
         : fase3Jalan ? 'ANOMALI' : 'MENUNGGU';
@@ -2019,6 +2061,8 @@ export async function executeAnalystPipeline(
         fase2JarakKm: r1?.km ?? 0,
         fase2Tier: r1?.tier ?? 3,
         fase2Temuan: temuanFase2,
+        fase2Status,
+        fase2Sumber,
 
         // Fase 3 — kosong sampai Fase 2 disetujui; dihitung dari outlet baris ini
         organisasiTujuan: roleBaris?.organisasiTujuan || '',
@@ -2036,17 +2080,19 @@ export async function executeAnalystPipeline(
         confidenceScore: roleBaris?.confidenceScore || 0,
         matchingAlgorithm: roleBaris?.matchingAlgorithm || '',
         sinyalBit: meta.citySinyalBit,
+        sinyalF2Bit: buktiF2?.bit || 0,
         sinyalRoleBit: roleBaris?.sinyalRoleBit || 0,
-        temuanCatatan: gabungCatatanTemuan(meta.cityCatatan, roleBaris?.temuanCatatan),
+        temuanCatatan: gabungCatatanTemuan(meta.cityCatatan, buktiF2?.catatan, roleBaris?.temuanCatatan),
         statusAnalisa: statusBaris,
-        // D3 + C3: otomatis-final hanya bila penempatan TERBUKTI (kode pos + kecamatan),
-        // bukan hasil fallback, dan Fase 2 baris ini tidak menyisakan penanda manual.
+        // D3 + C3 + M1: otomatis-final hanya untuk baris Fase 2 yang benar-benar
+        // OTOMATIS_VALID, penempatannya TERBUKTI (kode pos + kecamatan), bukan hasil
+        // fallback, dan Fase 3-nya EXACT_MATCH.
         isFinalApproved:
           fase3Jalan &&
           statusBaris === 'EXACT_MATCH' &&
+          fase2Status === 'OTOMATIS_VALID' &&
           meta.placementStatus === 'VERIFIED' &&
-          !meta.usedFallback &&
-          temuanFase2.length === 0,
+          !meta.usedFallback,
       });
     });
   }
