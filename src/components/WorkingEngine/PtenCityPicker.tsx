@@ -84,12 +84,31 @@ export const PtenCityPicker: React.FC<PtenCityPickerProps> = ({
     return options.filter((o) => o.toUpperCase().includes(q));
   }, [options, query]);
 
+  const handleToggle = () => {
+    if (disabled) return;
+    if (!open && wrapRef.current) {
+      const rect = wrapRef.current.getBoundingClientRect();
+      const dropdownHeight = 240;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      const placeAbove = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+
+      setCoords({
+        top: placeAbove ? rect.top - 4 : rect.bottom + 4,
+        left: Math.max(8, Math.min(rect.left, window.innerWidth - Math.max(rect.width, 280) - 8)),
+        width: Math.max(rect.width, 280),
+        placeAbove,
+      });
+    }
+    setOpen((v) => !v);
+  };
+
   return (
     <div ref={wrapRef} style={{ position: 'relative', minWidth: '220px', width: '100%' }}>
       <button
         type="button"
         disabled={disabled}
-        onClick={() => setOpen((v) => !v)}
+        onClick={handleToggle}
         style={{
           width: '100%',
           display: 'flex',
