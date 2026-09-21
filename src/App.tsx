@@ -974,6 +974,19 @@ export const App: React.FC = () => {
     });
   };
 
+  // N3: aksi massal atas baris terpilih (setujui/revisi banyak baris sekaligus).
+  // handleUpdateAnalystRow memindai ulang seluruh hasil untuk SATU baris, jadi
+  // pilihan besar harus lewat satu pembaruan array supaya tidak membekukan tab.
+  const handlePatchMassalAnalyst = (rowIds: string[], patch: Partial<AnalystRow>) => {
+    if (rowIds.length === 0) return;
+    const ids = new Set(rowIds);
+    setAnalystRows((prev) => {
+      const next = prev.map((r) => (ids.has(r.id) ? { ...r, ...patch } : r));
+      setItemDebounced('analyst_results_data', next);
+      return next;
+    });
+  };
+
   const handleApproveAnalystFase = (fase: 1 | 2 | 3) => {
     setAnalystRows((prev) => {
       const next = prev.map((r) => {
@@ -1356,6 +1369,7 @@ export const App: React.FC = () => {
                   onApproveAllFinal={handleApproveAllAnalystFinal}
                   onApproveFase={handleApproveAnalystFase}
                   onBersihkanManual={handleBersihkanManualAnalyst}
+                  onPatchMassal={handlePatchMassalAnalyst}
                   filterBelumSetuju={lihatBelumSetuju}
                   onResetBelumSetuju={() => setLihatBelumSetuju(null)}
                   onReRunAll={() => handleStartAnalystPipeline(false)}

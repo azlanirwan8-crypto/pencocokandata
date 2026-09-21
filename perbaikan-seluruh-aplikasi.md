@@ -22,6 +22,8 @@
 >
 > Belum termasuk item Bagian **H/I/J/K di Lampiran** (statusnya `BELUM`, ditandai langsung di barisnya; khusus Bagian K: K1â€“K3 sudah dikerjakan & build-verified 2026-09-21, K4â€“K5 `BELUM`).
 >
+> Belum termasuk lampiran **M / N / O** juga (status di judul tiap bagiannya, bukan di tabel ini): **M SELESAI** (status tiga keranjang Fase 2), **N: N0 SELESAI 2026-09-22 (butir 4 "Buka Data Cabang" belum) + N3 SELESAI 2026-09-22, N1/N2 BELUM**, **O BELUM** (token desain & `html { font-size }`). N3 = checkbox "pilih semua" + aksi massal di 4 tab fase — bukti & tiga deviasi dari rencananya ada di bagian N3.
+>
 > **Untuk AI berikutnya (Cline / lainnya):**
 > 1. Urutan sisa yang disepakati: **Fase 1/2/3 selesai semua** (B1, B2, B4, C2a–C6, D1–D6). Yang BELUM: **E1–E8** (12 sinyal), **F** (5 menu data master), **A10**, **B3**, **G1/G3/G11/G12**, lalu Bagian H/I/J/K di lampiran. **G9 sudah selesai** — jangan buat file `api/` baru apa pun (alasan + bukti: kotak larangan di Bagian G9).
 > 2. **Jangan kerjakan ulang** 13 item `SELESAI`; baca kolom "Catatan" untuk file yang sudah disentuh.
@@ -750,7 +752,7 @@ Di luar itu — termasuk baris Aceh dan baris yang cabangnya sudah Rank-1 — **
 
 > Ditambahkan 2026-09-21 atas permintaan pemilik produk. Semua item di bagian ini BELUM.
 
-### N0 — ATURAN PRODUK: FASE 1/2/3 TIDAK ADA EDIT, HANYA REVISI
+### N0 — ATURAN PRODUK: FASE 1/2/3 TIDAK ADA EDIT, HANYA REVISI (status `SELESAI 2026-09-22` kecuali butir 4)
 
 **Aturan:**
 - Di dalam Data Analyst (Fase 1, 2, 3) **tidak ada Edit field**. Yang tersedia hanya **Revisi** (mengembalikan baris agar diproses ulang) dan aksi kandidat (pilih cabang / terapkan role).
@@ -760,6 +762,16 @@ Di luar itu — termasuk baris Aceh dan baris yang cabangnya sudah Rank-1 — **
 - Tombol Edit masih ada di grid: `AnalystResultsGrid.tsx:1943` (ikon `Edit` + teks Edit).
 - Modal edit masih terpasang: import di `:38`, render di `:2051` (`AnalystRowEditModal`).
 - Revisi sudah ada: tombol `RotateCcw` menuju `setConfirmManualRow(r)` yang menandai `perluManual: true`.
+
+**Sudah dikerjakan 2026-09-22:**
+- Butir 1 ✅ tombol Edit di Fase 1 dan Fase 2 dihapus (Fase 3/`all` memang tidak pernah punya Edit); ikon `Edit` tidak di-import lagi.
+- Butir 2 ✅ render `AnalystRowEditModal` + state `editingRow`/`isEditModalOpen` + importnya dihapus dari grid — modal itu **tidak pernah bisa terbuka** (tak ada satu pun `setIsEditModalOpen(true)`), jadi tidak ada perubahan yang hilang. File `src/components/WorkingEngine/AnalystRowEditModal.tsx` kini tidak di-import siapa pun (`grep -rn AnalystRowEditModal src/` = 0 di luar file itu sendiri) dan **menunggu konfirmasi pemilik untuk dihapus** — dimasukkan ke daftar A10.
+- Butir 3 ✅ `onUpdateRow` dipertahankan; pemakai yang tersisa sekarang hanya 4 jalur yang diizinkan aturan: `applyFase2Candidate` (`:285`), `applyFase3Role` (`:324`), Setujui per baris (`:2167-2169`), dan konfirmasi Revisi (`:2417`).
+- Butir 5 ✅ keterangan dipasang di bawah banner langkah Fase 1-3: "Salah data? Perbaiki di menu Data Master lalu jalankan ulang fase ini — di sini hanya ada Setujui dan Revisi, tidak ada edit field."
+- Butir 6 ✅ diaudit: `CandidateDetailModal` dan `CityOverrideModal` tidak menulis field baris dari dalam fase (yang pertama read-only, yang kedua hanya menyimpan override kota yang memang aksi resmi N3).
+- Butir 4 ❌ BELUM — tombol "Buka Data Cabang" (navigasi ke tab master) belum dipasang; butuh prop navigasi baru dari `App.tsx` dan bukan bagian dari permintaan mendata operator hari ini.
+
+**Uji:** buka Fase 1/2/3, tombol Edit tidak ada; tombol Revisi tetap ada; mengubah data hanya bisa dari menu Data Master. → **Terbukti di kode** (jumlah `Edit` di grid = 0; `tsc -b --force` bersih, `npm run lint` 83 warning / 0 error, `npm run build` sukses 2026-09-22). Belum diklik pada data nyata karena sesi browser lokal sedang 0 data.
 
 **Eksekusi:**
 1. Hapus tombol Edit dari blok aksi baris pada grid (blok `{innerTab === BERES && (...)}` sekitar `:1887-1960`).
@@ -794,7 +806,7 @@ Di luar itu — termasuk baris Aceh dan baris yang cabangnya sudah Rank-1 — **
 
 **Eksekusi:** `src/components/WorkingEngine/AnalystResultsGrid.tsx` (definisi kolom + sel) dan `src/styles/index.css` (kelas bantu: `.cell-wrap`, `.cell-code`, `.cell-num`, `.table-density-compact`, `.table-density-normal`, `.table-density-wide`).
 
-### N3 — Checkbox "pilih semua" di SEMUA tab Fase 1/2/3/4 (permintaan pemilik produk 2026-09-22, status `BELUM`)
+### N3 — Checkbox "pilih semua" di SEMUA tab Fase 1/2/3/4 (permintaan pemilik produk 2026-09-22, status `SELESAI 2026-09-22` — uji 3/4/5 masih butuh data nyata di browser)
 
 **Aturan:** di setiap tabel fase (Fase 1, 2, 3, dan tab 4/Ditandai Manual) harus ada kolom checkbox per baris + satu checkbox di header untuk memilih semua, lalu baris yang terpilih dapat diaksi massal. Aksi yang tersedia BERBEDA menurut tab tempat baris itu berada:
 
@@ -803,7 +815,7 @@ Di luar itu — termasuk baris Aceh dan baris yang cabangnya sudah Rank-1 — **
 | **Berhasil Dianalisa** (semua tab fase) | `Revisi` dan `Setujui` |
 | **Perlu Analisa Manual / Perlu Validasi Manual** | `Setujui` dan `Ganti Kab/Kota PTEN` |
 
-**Cara eksekusi:**
+**Cara eksekusi (rencana awal):**
 1. `AnalystResultsGrid.tsx` — state `barisTerpilih: Set<string>` (kunci `r.id`), kolom `<th>` checkbox di header SETIAP `viewTab` (fase1/fase2/fase3/fase4) + `<td>` checkbox di body tiap tab; jangan cuma satu tab.
 2. Checkbox header = pilih/batalkan **semua baris yang sedang tampil** (`filteredRows` setelah filter+search, bukan seluruh `rows`) — dan harus ikut berubah saat pindah halaman. Simpan seleksi di `useTampilanTersimpan` supaya tidak hilang saat pindah menu (pola A6).
 3. Bar aksi massal muncul hanya saat `barisTerpilih.size > 0`, menampilkan `N baris terpilih`, tombol aksinya, dan `Batalkan pilihan`.
@@ -811,7 +823,20 @@ Di luar itu — termasuk baris Aceh dan baris yang cabangnya sudah Rank-1 — **
 5. Konfirmasi massal WAJIB lewat `ConfirmDialog` (A2) dan menyebut jumlah baris + akibatnya; jangan pakai `window.confirm`/`alert`.
 6. Aksi massal tidak boleh menaikkan akurasi mesin: baris hasil keputusan manusia tetap `HIGH_CONFIDENCE` (D6), dan `isFinalApproved` otomatis tidak berubah karena pilihan massal.
 
-**Uji wajib:** (1) checkbox ada di 4 tab, (2) pilih-semua = jumlah yang tampil di tab itu, (3) Setujui massal memindahkan baris ke tab berikutnya, (4) Revisi massal mengembalikan baris, (5) Ganti Kab/Kota PTEN massal membuat seluruh kelurahan kota itu dianalisa ulang, (6) seleksi bertahan saat pindah menu dan kosong saat pindah tab fase.
+**Yang benar-benar dipasang (3 menyimpang dari rencana, semua disengaja):**
+- Butir 1 ✅ — 1 `<td>` checkbox dipakai bersama di semua tab (`AnalystResultsGrid.tsx:1666`) + 4 `<th>` checkbox, satu per `viewTab` (`all`/`fase1`/`fase2`/`fase3` di `:1497`, `:1520`, `:1552`, `:1591`). Di tab Fase 2 kolom pilihan ikut **sticky** (`left:0`, `No` digeser ke 34px, kandidat ke 74px) karena tabel itu wajib di-scroll horizontal — kalau tidak, checkbox hilang dari layar begitu operator menggeser ke kolom rekomendasi.
+- Butir 2 ⚠ diubah — "pilih semua" memakai **`paginatedRows` (baris pada halaman yang tampil)**, bukan `filteredRows`. Alasannya: dengan page size `Semua`, `filteredRows` = 83 ribu baris, dan satu klik "pilih semua" lalu "Setujui" akan menulis 83 ribu baris sekaligus. Pengecualian: saat operator memang memilih `Semua`, `paginatedRows === filteredRows` jadi perilakunya tetap seperti yang diminta.
+- Butir 2 ⚠ diubah — seleksi TIDAK lewat `useTampilanTersimpan` (hook itu hanya membaca kunci saat mount, jadi kunci dinamis per-tab tidak akan pernah terbaca). Dipakai state `{ tab, ids }` di `sessionStorage` kunci `tampilan.analyst.terpilih`, dengan `tab = viewTab|innerTab`. Efeknya persis aturan: bertahan saat pindah menu (komponen di-unmount), **kosong otomatis saat pindah tab fase atau pindah Berhasil↔Manual**, dan hilang saat tab browser ditutup.
+- Butir 3 ✅ — bar aksi hanya muncul saat ada baris terpilih di halaman ini; jumlahnya dibaca dari `barisTerpilih.length` (id dari tab/halaman lain tidak mungkin teraksi).
+- Butir 4 ⚠ berubah — `Setujui` massal TIDAK boleh `onUpdateRow` per baris: handler itu `prev.map()` atas SELURUH hasil untuk SATU baris, jadi 500 centang = 500 × 83.762 pemindaian + 500 tulis debounced (tab membeku). Ditambah satu jalur batch `handlePatchMassalAnalyst(rowIds, patch)` di `App.tsx:980` (satu `setAnalystRows`, satu tulis) yang dipakai `Setujui` dan `Revisi` massal; patch-nya persis kolom yang ditulis tombol per baris (`fase1Approved`/`fase2Approved`/`fase3Approved`/`isFinalApproved`/`perluManual`). Di tab manual, `Setujui` tetap `onBersihkanManual(ids)` yang sudah batch. `Ganti Kab/Kota PTEN` membuka `CityOverrideModal` untuk kota pertama dari pilihan; kalau pilihan mencakup >1 kota, label tombol menyebut jumlahnya dan modal perlu dibuka ulang per kota (override kota memang berlaku per kota, bukan per baris).
+- Butir 5 ✅ — Revisi massal lewat `ConfirmDialog` dengan jumlah baris + akibatnya; tidak ada `window.confirm`/`alert` baru.
+- Butir 6 ✅ — aksi massal hanya menulis kolom persetujuan/flag manual yang sama dengan tombol per baris; `statusAnalisa`, `confidenceScore` dan sinyal mesin tidak disentuh, jadi tidak ada kenaikan akurasi palsu.
+
+**Hasil uji:** (1) jumlah `type="checkbox"` di grid = 5 = 4 header + 1 body → terverifikasi dari kode; (2) pilih-semua = `paginatedRows.length` halaman itu → terverifikasi dari kode; (6) kosong saat pindah tab & bertahan saat pindah menu → terverifikasi dari kode (kunci tab di `sessionStorage`). Butir (3) Setujui massal pindah tab, (4) Revisi massal mengembalikan baris, dan (5) Ganti Kab/Kota massal mengulang analisa kota **belum diukur** — sesi browser lokal saat ini menampilkan 0 data (Neon `Offline`, belum ada hasil analisa di origin `localhost:5173`), jadi tidak ada baris untuk diklik. `npx tsc -b --force` bersih, `npm run lint` 83 warning / 0 error (baseline), `npm run build` sukses, 4 suite `tests/uji-*.mjs` LULUS.
+
+**Sisa untuk pemilik produk:** buka Data Analyst dengan data terisi, lalu centang → jalankan (3), (4), (5) di atas dan catat angkanya.
+
+
 
 ### N2 — KERAPIAN UI (clean, enak dilihat, rapi)
 

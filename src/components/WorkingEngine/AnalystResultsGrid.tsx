@@ -34,7 +34,6 @@ import { buildMasterProximityIndex, findClosestMasterRecommendation, type Candid
 import { findTopRoleMatchesByLocation } from '../../utils/roleRecommender';
 import { getUnitCategory, getWondrRecommendation } from '../RoleMapping/RoleMappingManager';
 import { extractWilayahFromBranchCode } from '../../utils/normalizer';
-import { AnalystRowEditModal } from './AnalystRowEditModal';
 import { CandidateDetailModal } from './CandidateDetailModal';
 import { PtenCityPicker } from './PtenCityPicker';
 import { CityOverrideModal } from './CityOverrideModal';
@@ -96,6 +95,12 @@ interface AnalystResultsGridProps {
   onApproveFase: (fase: 1 | 2 | 3) => void;
   /** "Setujui semua" pada tab manual: baris dianggap bersih, tetap di fase yang sama. */
   onBersihkanManual: (rowIds: string[]) => void;
+  /**
+   * N3: satu pembaruan array untuk banyak baris terpilih. onUpdateRow per baris akan
+   * men-scan ulang seluruh hasil untuk SETIAP baris terpilih, jadi aksi massal wajib
+   * lewat jalur ini.
+   */
+  onPatchMassal: (rowIds: string[], patch: Partial<AnalystRow>) => void;
   /** A7: disaring ke baris yang belum disetujui pada fase ini (null = tanpa saringan). */
   filterBelumSetuju?: 1 | 2 | 3 | null;
   onResetBelumSetuju?: () => void;
@@ -120,6 +125,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   onApproveAllFinal,
   onApproveFase,
   onBersihkanManual,
+  onPatchMassal,
   filterBelumSetuju = null,
   onResetBelumSetuju,
   onReRunAll,
@@ -166,14 +172,25 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   const [confirmKind, setConfirmKind] = useState<null | 'fase1' | 'fase2' | 'fase3' | 'final'>(null);
   // Konfirmasi "Revisi ke Perlu Analisa Manual" per baris (menggantikan window.confirm).
   const [confirmManualRow, setConfirmManualRow] = useState<AnalystRow | null>(null);
+  // N3: pilihan massal. Disimpan bersama kunci tab-nya di sessionStorage supaya bertahan
+  // saat komponen ini di-unmount (pindah menu, pola A6) TETAPI otomatis kosong begitu
+  // operator pindah tab fase atau tab Berhasil/Manual — lihat `kunciTab` di blok N3.
+  const [pilihan, setPilihan] = useState<{ tab: string; ids: string[] }>(() => {
+    try {
+      const tersimpan = sessionStorage.getItem('tampilan.analyst.terpilih');
+      const nilai = tersimpan ? JSON.parse(tersimpan) : null;
+      return nilai && typeof nilai.tab === 'string' && Array.isArray(nilai.ids)
+        ? { tab: nilai.tab, ids: nilai.ids.map(String) }
+        : { tab: '', ids: [] };
+    } catch {
+      return { tab: '', ids: [] };
+    }
+  });
+  const [konfirmasiRevisiMassal, setKonfirmasiRevisiMassal] = useState(false);
 
   // Pagination states
   const [page, setPage] = useTampilanTersimpan<number>('tampilan.analyst.page', 1);
   const [pageSize, setPageSize] = useTampilanTersimpan<number | 'ALL'>('tampilan.analyst.pageSize', 15);
-
-  // Edit Modal
-  const [editingRow, setEditingRow] = useState<AnalystRow | null>(null);
-  const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
 
   // Pemetaan kota manual (laporan cakupan): pilihan sementara per kota + modal konfirmasi
   const [overrideDrafts, setOverrideDrafts] = useState<Record<string, string>>({});
@@ -610,6 +627,95 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   });
   const renderedRows = win.active ? paginatedRows.slice(win.start, win.end) : paginatedRows;
   const rowOffset = win.active ? win.start : 0;
+
+  // ── N3: pilihan & aksi massal ──────────────────────────────────────────────
+  // "Pilih semua" = baris pada HALAMAN yang sedang tampil (sudah lewat filter,
+  // pencarian, dan paginasi) — bukan seluruh isi database, supaya aksi massal tidak
+  // diam-diam menyentuh puluhan ribu baris yang tidak dilihat operator.
+  const kunciTab = `${viewTab}|${innerTab}`;
+  const terpilih = useMemo(
+    () => (pilihan.tab === kunciTab ? new Set(pilihan.ids) : new Set<string>()),
+    [pilihan, kunciTab]
+  );
+  const simpanPilihan = (ids: string[]) => {
+    const nilai = { tab: kunciTab, ids };
+    setPilihan(nilai);
+    try {
+      sessionStorage.setItem('tampilan.analyst.terpilih', JSON.stringify(nilai));
+    } catch {
+      /* mode privat penuh/diblokir: pilihan tetap jalan selama menu ini terbuka */
+    }
+  };
+  const toggleTerpilih = (id: string) => {
+    const baru = new Set(terpilih);
+    if (baru.has(id)) baru.delete(id);
+    else baru.add(id);
+    simpanPilihan(Array.from(baru));
+  };
+  const semuaHalamanTerpilih =
+    paginatedRows.length > 0 && paginatedRows.every((r) => terpilih.has(r.id));
+  const gantiPilihanSemua = () =>
+    simpanPilihan(semuaHalamanTerpilih ? [] : paginatedRows.map((r) => r.id));
+  // Aksi massal hanya memakai id yang memang ada di halaman ini; pilihan dari tab atau
+  // halaman lain diabaikan, jadi tidak perlu efek pembersih dan tidak ada risiko aksi
+  // menyasar baris yang tidak dilihat operator.
+  const barisTerpilih = useMemo(
+    () => paginatedRows.filter((r) => terpilih.has(r.id)),
+    [paginatedRows, terpilih]
+  );
+
+  // Kolom yang disetujui harus sama persis dengan tombol per baris di tab ini.
+  const setujuiTerpilih = () => {
+    const ids = barisTerpilih.map((r) => r.id);
+    if (innerTab === 'MANUAL') {
+      // Sama dengan tombol per baris di tab manual: "setujui" = beres, baris pindah ke
+      // tab Berhasil Dianalisa; persetujuan fase masih langkah terpisah.
+      onBersihkanManual(ids);
+      setInnerTab('BERES');
+      setPage(1);
+      showToast(`${ids.length.toLocaleString('id-ID')} baris ditandai selesai — cek di tab sebelah kiri, lalu "Setujui Fase".`, 'info');
+    } else {
+      const patch: Partial<AnalystRow> =
+        viewTab === 'fase1' ? { fase1Approved: true }
+        : viewTab === 'fase2' ? { fase2Approved: true }
+        : viewTab === 'fase3' ? { fase3Approved: true }
+        : { isFinalApproved: true };
+      onPatchMassal(ids, patch);
+      showToast(`${ids.length.toLocaleString('id-ID')} baris terpilih disetujui untuk fase ini.`);
+    }
+    simpanPilihan([]);
+  };
+  const revisiTerpilih = () => {
+    const ids = barisTerpilih.map((r) => r.id);
+    onPatchMassal(ids, { perluManual: true });
+    showToast(`${ids.length.toLocaleString('id-ID')} baris dikembalikan ke antrean manual.`);
+    setKonfirmasiRevisiMassal(false);
+    simpanPilihan([]);
+  };
+  // Kota berbeda di antara baris terpilih. Override kota berlaku untuk SELURUH kelurahan
+  // satu kota (memang begitu mesinnya), jadi modal dibuka untuk kota pertama — sisanya
+  // harus dipilih ulang satu per satu, dan itu dinyatakan lewat label tombol + toast ini.
+  const kotaTerpilih = useMemo(
+    () => Array.from(new Set(barisTerpilih.map((r) => (r.groupKota || r.kotaPten || '').trim()).filter(Boolean))),
+    [barisTerpilih]
+  );
+  const gantiKotaTerpilih = () => {
+    const masterCity = kotaTerpilih[0] || '';
+    if (!masterCity) {
+      showToast('Baris terpilih belum punya nama kota master — tidak ada yang bisa diganti.');
+      return;
+    }
+    const barisKotaIni = barisTerpilih.filter((r) => (r.groupKota || r.kotaPten || '').trim() === masterCity);
+    const k = cityMatchKey(masterCity);
+    const ptenKota = overrideDrafts[k] || cityOverrides[k] || barisKotaIni[0]?.kotaPten || masterCity;
+    const ptenKodePos = Array.from(
+      new Set(ptenList.filter((p) => p.kotaPten === ptenKota).map((p) => String(p.kodePosPten || '').trim()).filter(Boolean))
+    );
+    setOverrideModal({ masterCity, masterRows: masterRowsForCity(masterCity), ptenKota, ptenKodePos });
+    if (kotaTerpilih.length > 1) {
+      showToast(`Modal terbuka untuk ${masterCity} (${barisKotaIni.length} baris). ${kotaTerpilih.length - 1} kota lain di pilihan ini perlu diganti satu per satu.`, 'info');
+    }
+  };
 
   // C2d: kandidat Fase 2 dihitung PER BARIS (kelurahan), bukan per kota, dan hanya
   // untuk baris yang sedang tampil — dulu satu kota = satu daftar kandidat sehingga
@@ -1105,6 +1211,12 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
           </span>
         </div>
 
+        {phaseState.step <= 3 && (
+          <div style={{ margin: '-0.35rem 0 0.75rem', fontSize: '0.72rem', color: '#878a99' }}>
+            Salah data? Perbaiki di menu Data Master lalu jalankan ulang fase ini — di sini hanya ada Setujui dan Revisi, tidak ada edit field.
+          </div>
+        )}
+
         {/* Navigation Sub-Tabs */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem', borderBottom: '1px solid #e9ebec', paddingBottom: '0.65rem' }}>
           <div className="nav-tabs">
@@ -1321,7 +1433,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                 <span>Setujui semua ({filteredRows.length.toLocaleString('id-ID')})</span>
               </button>
               <span style={{ fontSize: '0.76rem', color: '#878a99' }}>
-                {stageTab === 1 && 'Kotanya tidak ada di data PTEN — isi Kota PTEN & Kode Pos lewat tombol Edit, atau setujui apa adanya.'}
+                {stageTab === 1 && 'Kotanya tidak ada di data PTEN — pilih kota PTEN lewat "Ganti Kab/Kota PTEN", atau setujui apa adanya.'}
                 {stageTab === 2 && 'Cabang perlu diputuskan: beda kota/provinsi/pulau, koordinat mencurigakan, atau kota ini tidak ada di Data Cabang — pilih kandidat di kolom Rekomendasi.'}
                 {stageTab === 3 && 'Skor kecocokan role rendah — ganti kandidat mapping, atau setujui apa adanya.'}
                 {stageTab === 4 && 'Baris yang Anda tarik kembali dari Final Data. Setujui untuk mengirimnya lagi ke penyetujuan akhir.'}
@@ -1330,12 +1442,61 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
           )}
         </div>
 
+        {/* N3: bar aksi massal — hanya muncul saat ada baris terpilih di halaman ini */}
+        {barisTerpilih.length > 0 && (
+          <div
+            style={{
+              display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap',
+              padding: '0.4rem 0.6rem', margin: '0 0 0.5rem', background: '#eef6ff',
+              border: '1px solid #cfe3f7', borderRadius: '6px',
+            }}
+          >
+            <strong style={{ fontSize: '0.78rem', color: '#405189' }}>{barisTerpilih.length.toLocaleString('id-ID')} baris terpilih</strong>
+            <button type="button" className="btn btn-outline btn-sm" onClick={setujuiTerpilih} title="Setujui baris terpilih untuk fase yang sedang dibuka">
+              <Check size={12} /> Setujui terpilih
+            </button>
+            {innerTab === 'BERES' && (
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => setKonfirmasiRevisiMassal(true)} title="Kembalikan baris terpilih ke tab Perlu Analisa Manual">
+                <RotateCcw size={12} /> Revisi terpilih
+              </button>
+            )}
+            {innerTab === 'MANUAL' && (
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={gantiKotaTerpilih}
+                title={kotaTerpilih.length > 1
+                  ? `Pilihan mencakup ${kotaTerpilih.length} kota. Modal terbuka untuk kota pertama (${kotaTerpilih[0]}) — berlaku untuk seluruh kelurahan kota itu, bukan per baris.`
+                  : 'Tetapkan kota/kabupaten PTEN untuk kota asal baris terpilih (berlaku untuk seluruh kelurahan kota itu)'}
+              >
+                <MapPin size={12} /> Ganti Kab/Kota PTEN{kotaTerpilih.length > 1 ? ` (${kotaTerpilih.length} kota)` : ''}
+              </button>
+            )}
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => simpanPilihan([])} title="Kosongkan pilihan">
+              Batalkan pilihan
+            </button>
+          </div>
+        )}
+        <ConfirmDialog
+          isOpen={konfirmasiRevisiMassal}
+          icon={<RotateCcw size={18} />}
+          accent="#d97706"
+          title="Kembalikan baris terpilih ke manual?"
+          message={`${barisTerpilih.length.toLocaleString('id-ID')} baris terpilih akan ditandai perlu diperiksa ulang dan keluar dari tab Berhasil Dianalisa.`}
+          confirmLabel="Ya, Revisi terpilih"
+          onConfirm={revisiTerpilih}
+          onClose={() => setKonfirmasiRevisiMassal(false)}
+        />
+
         <div ref={tableScrollRef} className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', maxHeight: '600px', overflow: 'auto' }}>
           <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
               {/* TAB 1: ALL COLUMNS */}
               {viewTab === 'all' && (
                 <tr>
+                  <th style={{ width: '34px', textAlign: 'center' }} title="Pilih semua baris pada halaman ini">
+                    <input type="checkbox" checked={semuaHalamanTerpilih} onChange={gantiPilihanSemua} aria-label="Pilih semua baris pada halaman ini" style={{ cursor: 'pointer' }} />
+                  </th>
                   {thSort('no', 'No', { width: '40px', textAlign: 'center' })}
                   {thSort('wilayah', 'Wilayah', { width: '70px', textAlign: 'center' })}
                   <th style={{ width: '85px', textAlign: 'center' }}>Sandi</th>
@@ -1356,6 +1517,9 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
               {viewTab === 'fase1' && (
                 <>
                   <tr>
+                    <th style={{ width: '34px', textAlign: 'center', verticalAlign: 'middle' }} rowSpan={2} title="Pilih semua baris pada halaman ini">
+                      <input type="checkbox" checked={semuaHalamanTerpilih} onChange={gantiPilihanSemua} aria-label="Pilih semua baris pada halaman ini" style={{ cursor: 'pointer' }} />
+                    </th>
                     {thSort('no', 'No', { width: '40px', textAlign: 'center', verticalAlign: 'middle' }, { rowSpan: 2 })}
                     <th colSpan={5} style={{ textAlign: 'center', background: '#eff6fb', color: '#299cdb', borderLeft: '2px solid #d5e7f2' }}>
                       📮 DATA POS (Kelurahan &amp; Wilayah Administrasi)
@@ -1383,7 +1547,12 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
               {/* TAB 3: FASE 2 WILAYAH & CABANG (kandidat kiri sticky, gaya tab "Rekomendasi Data" lama) */}
               {viewTab === 'fase2' && (
                 <tr>
-                  {thSort('no', 'No', { width: '40px', textAlign: 'center', position: 'sticky', left: 0, background: '#f3f6f9', zIndex: 12, borderRight: '1px solid #e9ebec' })}
+                  {/* Kolom pilihan ikut sticky: tabel Fase 2 lebar dan wajib di-scroll
+                      horizontal, jadi checkbox harus tetap terlihat saat memilih. */}
+                  <th style={{ width: '34px', minWidth: '34px', textAlign: 'center', position: 'sticky', left: 0, background: '#f3f6f9', zIndex: 13, borderRight: '1px solid #e9ebec' }} title="Pilih semua baris pada halaman ini">
+                    <input type="checkbox" checked={semuaHalamanTerpilih} onChange={gantiPilihanSemua} aria-label="Pilih semua baris pada halaman ini" style={{ cursor: 'pointer' }} />
+                  </th>
+                  {thSort('no', 'No', { width: '40px', textAlign: 'center', position: 'sticky', left: 34, background: '#f3f6f9', zIndex: 12, borderRight: '1px solid #e9ebec' })}
                   <th
                     style={{
                       width: '420px',
@@ -1393,7 +1562,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                       background: '#fff9f0',
                       color: '#d97706',
                       position: 'sticky',
-                      left: '40px',
+                      left: '74px',
                       zIndex: 12,
                       boxShadow: '3px 0 6px -2px rgba(0,0,0,0.06)',
                       borderRight: '2px solid #f7b84b',
@@ -1419,6 +1588,9 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
               {/* TAB 4: FASE 3 MAPPING ROLE & WONDR */}
               {viewTab === 'fase3' && (
                 <tr>
+                  <th style={{ width: '34px', textAlign: 'center' }} title="Pilih semua baris pada halaman ini">
+                    <input type="checkbox" checked={semuaHalamanTerpilih} onChange={gantiPilihanSemua} aria-label="Pilih semua baris pada halaman ini" style={{ cursor: 'pointer' }} />
+                  </th>
                   {thSort('no', 'No', { width: '40px', textAlign: 'center' })}
                   {thSort('namaOutlet', 'Nama Outlet', { minWidth: '180px' })}
                   {/* Hasil Fase 2 dibawa PENUH ke layar Fase 3: operator memilih cabang role
@@ -1482,6 +1654,18 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                       data-vrow={i === 0 ? 'true' : undefined}
                       style={{ background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd' }}
                     >
+                      <td
+                        style={{
+                          width: '34px',
+                          minWidth: '34px',
+                          textAlign: 'center',
+                          ...(viewTab === 'fase2'
+                            ? { position: 'sticky', left: 0, zIndex: 6, background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd', borderRight: '1px solid #e9ebec' }
+                            : {}),
+                        }}
+                      >
+                        <input type="checkbox" checked={terpilih.has(r.id)} onChange={() => toggleTerpilih(r.id)} aria-label={`Pilih baris ${r.no}`} style={{ cursor: 'pointer' }} />
+                      </td>
                       {/* TAB 1: ALL COLUMNS */}
                       {viewTab === 'all' && (
                         <>
@@ -1568,13 +1752,13 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                       {/* TAB 3: FASE 2 WILAYAH & CABANG */}
                       {viewTab === 'fase2' && (
                         <>
-                          <td style={{ textAlign: 'center', color: '#878a99', position: 'sticky', left: 0, background: '#fff', zIndex: 5, borderRight: '1px solid #e9ebec' }}>{displayIdx}</td>
+                          <td style={{ textAlign: 'center', color: '#878a99', position: 'sticky', left: 34, background: '#fff', zIndex: 5, borderRight: '1px solid #e9ebec' }}>{displayIdx}</td>
                           {(() => {
                             const entry = fase2Recs.get(r.id);
                             const cands = entry?.rec?.candidates || [];
                             const tdStyle: React.CSSProperties = {
                               position: 'sticky',
-                              left: '40px',
+                              left: '74px',
                               zIndex: 5,
                               width: '420px',
                               minWidth: '420px',
@@ -2114,22 +2298,6 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
           </div>
         )}
       </div>
-
-      {/* Edit Modal */}
-      <AnalystRowEditModal
-        isOpen={isEditModalOpen}
-        row={editingRow}
-        onClose={() => {
-          setIsEditModalOpen(false);
-          setEditingRow(null);
-        }}
-        onSave={(updated) => {
-          onUpdateRow(updated);
-          showToast(`Berhasil menyimpan koreksi pada baris #${updated.no} (${updated.namaOutlet})!`);
-        }}
-        wilayahSettings={wilayahSettings}
-        phase={viewTab === 'all' ? 'final' : viewTab}
-      />
 
       {/* Modal detail kandidat outlet Fase 2 (engine rekomendasi lama) */}
       <CandidateDetailModal
