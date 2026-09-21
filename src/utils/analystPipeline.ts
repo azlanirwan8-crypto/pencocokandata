@@ -1920,8 +1920,9 @@ export async function executeAnalystPipeline(
     }
     const branchCode = String(m['Branch Code'] || m['Kode Cabang'] || '').trim();
     const resolved = extractWilayahFromBranchCode(branchCode, wilayahSettings, m.Wilayah || '');
+    const fallbackWilayah = resolved.wilayahName && resolved.wilayahName !== '-' ? resolved.wilayahName : (m.Wilayah || '');
     return {
-      wilayah: resolved.wilayahName !== '-' ? resolved.wilayahName : '',
+      wilayah: fallbackWilayah,
       sandiCabang: String(m['Sandi Cabang'] || (m.Sandi && m.Cabang ? `${m.Sandi} - ${m.Cabang}` : m.Cabang || m.Sandi || '')),
       branchCode,
       kodeCabang: String(m['Kode Cabang'] || branchCode),
@@ -2064,9 +2065,12 @@ export async function executeAnalystPipeline(
         }
       }
       const fase2Sumber = !fase2Jalan ? '' : !r1?.master ? 'TIDAK_ADA_CABANG' : aturanAceh ? 'ATURAN_ACEH_KIM' : 'OTOMATIS_TERDEKAT';
+      // Fase 2 harus tetap bisa mengisi field Wilayah / Sandi / Kode Cabang saat kandidat
+      // master sudah ada, bahkan jika ada warning non-fatal (jarak, kota berbeda, dll).
+      // Warning tetap disimpan di `fase2Temuan`, tapi tidak menutup auto-fill data.
       const fase2Status: 'OTOMATIS_VALID' | 'SIAP_DIPROSES' | 'PERLU_MANUAL' = !fase2Jalan
         ? 'SIAP_DIPROSES'
-        : !r1?.master || temuanFase2.length > 0
+        : !r1?.master
           ? 'PERLU_MANUAL'
           : 'OTOMATIS_VALID';
       const statusBaris = roleBaris

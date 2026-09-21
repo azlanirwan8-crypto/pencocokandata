@@ -275,7 +275,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   const fase2RecCacheRef = useRef(new Map<string, { sig: string; rec: RecommendationResult | null }>());
   const applyFase2Candidate = (r: AnalystRow, master: MasterRow) => {
     const branchCode = String(master['Branch Code'] || master['Kode Cabang'] || '').trim();
-    const resolved = extractWilayahFromBranchCode(branchCode, wilayahSettings, r.wilayah);
+    const resolved = extractWilayahFromBranchCode(branchCode, wilayahSettings, r.wilayah || master.Wilayah || '');
+    const finalWilayah = resolved.wilayahName && resolved.wilayahName !== '-' ? resolved.wilayahName : (master.Wilayah || r.wilayah || '');
     const sandiCabang = String(
       master['Sandi Cabang'] ||
         (master.Sandi && master.Cabang ? `${master.Sandi} - ${master.Cabang}` : master.Cabang || master.Sandi || r.sandiCabang)
@@ -284,7 +285,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     const role = matchRoleForOutlet(master, targetFromAnalystRow(r), roleMappingList, masterRows);
     onUpdateRow({
       ...r,
-      wilayah: resolved.wilayahName !== '-' ? resolved.wilayahName : r.wilayah,
+      wilayah: finalWilayah || r.wilayah,
       sandiCabang,
       branchCode,
       kodeCabang: String(master['Kode Cabang'] || branchCode),
@@ -499,10 +500,10 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     (r: AnalystRow, stage: 1 | 2 | 3 | 4): boolean => {
       if (r.perluManual) return true;
       if (stage === 1) return r.kategori === 'TIDAK_ANALISA';
-      // M1: Fase 2 memakai status tiga keranjang dari mesin. Baris yang kolomnya masih
-      // kosong (fasenya belum dijalankan) = SIAP DIPROSES, bukan manual — dulu itulah
-      // yang membuat 84.136 baris masuk antrean manual sekaligus.
-      if (stage === 2) return r.fase2Status ? r.fase2Status === 'PERLU_MANUAL' : (r.fase2Temuan?.length || 0) > 0;
+      // M1: Fase 2 tidak boleh di-lock hanya karena ada warning non-fatal.
+      // Kandidat master yang ada tetap boleh mengisi Wilayah/Sandi/Kode Cabang,
+      // dan review manual baru dipicu bila benar-benar tidak ada cabang kandidat.
+      if (stage === 2) return r.fase2Status ? r.fase2Status === 'PERLU_MANUAL' : false;
       if (stage === 3) return r.statusAnalisa === 'PERLU_REVIEW' || r.statusAnalisa === 'ANOMALI';
       return false;
     },
