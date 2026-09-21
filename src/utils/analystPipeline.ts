@@ -1188,6 +1188,9 @@ export async function executeAnalystPipeline(
   const total = itemsToProcess.length;
   const results: AnalystRow[] = [];
   let globalRowNo = 1;
+  // G3: pencacah baris yang dilewati karena kuncinya sudah ada di Final Data.
+  let skippedFinalCount = 0;
+  const skippedFinalSampleList: Array<{ kelurahan: string; kodePos: string; kota: string }> = [];
 
   // ─────────────────────────────────────────────────────────────────────────────
   // ══ FASE 1: PTEN & KODE POS — Expand per Kelurahan/Kecamatan ══

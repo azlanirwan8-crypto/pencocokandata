@@ -1,4 +1,4 @@
-﻿# RENCANA PERBAIKAN SELURUH APLIKASI
+# RENCANA PERBAIKAN SELURUH APLIKASI
 > **STATUS 2026-09-21: BELUM SELESAI — 38 dari 67 item `SELESAI`, 1 `SEDANG` (A9), 28 `BELUM`. Sisa terberat: D1 (engine resmi Fase 3), G1/G3/G11 (unggah & status lewati Data Final), F1-W2/F2-P2/F4-R2/X1/X2/X3 (conflict lock & transaksi), F3-C3, F5-K1/K2/K3, F2-P3/F4-R3, H1–H5, E1–E8, B3, D5, A10.**
 > Baca Bagian 0 sebelum mengerjakan apa pun. Titik lanjut: **A3** (BaseModal). Rincian & bukti verifikasi ada di sana.
 
@@ -107,9 +107,9 @@
 | F6-X3 | BELUM | â€” | |
 | F6-X4 | SELESAI | 2026-09-21 | = A5 (Topbar status koneksi + tombol Database + Simpan). Build & lint terverifikasi 2026-09-21 |
 | X5 | SELESAI | 2026-09-21 | `WilayahManager` tidak lagi mengirim 17 wilayah bawaan ke cloud saat cloud kosong — datanya hanya dipakai di layar dan operator diberi tahu cara mengirimnya (tombol "Simpan ke Database"). PTEN tidak punya auto-push (hanya baca); kiriman default Mapping Role tetap ada karena terjadi lewat tombol Reset yang dikonfirmasi |
-| G1 | BELUM | â€” | |
+| G1 | SELESAI | 2026-09-21 | `FinalDataManager.tsx`: tombol "Unggah Excel" + parser `parseFinalExcelRow` + modal ringkasan impor. `App.tsx`: `handleImportFinalToAnalyst` menduplikasi dan memvalidasi terhadap `finalRows` dan `analystRows` menggunakan `makeFinalKey` (kombinasi 4 komponen). Baris baru masuk antrean Data Analyst untuk divalidasi |
 | G2 | SELESAI | 2026-09-21 | `makeFinalKey` dilebarkan â†’ `kodePos\|kelurahan\|kecamatan\|kota`; 4 titik pemakai ikut (`App.tsx` exclude + merge persetujuan, `analystPipeline.ts` skip). Migrasi IndexedDB tidak diperlukan (kunci dihitung dari field, tidak disimpan). Lihat catatan di Bagian G2 |
-| G3 | BELUM | â€” | |
+| G3 | SELESAI | 2026-09-21 | `analystPipeline.ts`: `skippedFinalRows` & `skippedFinalSamples` di `AnalystCoverage` mencatat baris yang dilewati karena kuncinya sudah ada di Final Data. `AnalystResultsGrid.tsx`: banner/laporan cakupan menampilkan jumlah baris dan rincian sampel kelurahan yang dilewati karena analisis inkremental |
 | G4 | SELESAI | 2026-09-21 | FinalDataManager â€” modal Detail per baris (role dialog + Esc). Build & lint terverifikasi 2026-09-21 |
 | G5 | SELESAI | 2026-09-21 | FinalDataManager â€” aksi Hapus permanen + App.tsx handleDeleteFinalRow. Build & lint terverifikasi 2026-09-21 |
 | G6 | SELESAI | 2026-09-21 | FinalDataManager â€” returnAll & revisi pakai ConfirmDialog. Build & lint terverifikasi 2026-09-21 |

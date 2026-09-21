@@ -752,6 +752,27 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
         </details>
       )}
 
+      {/* G3: Baris dilewati karena sudah ada di Final Data (Analisis Inkremental) */}
+      {(coverage?.skippedFinalRows || 0) > 0 && (
+        <details style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', padding: '0.6rem 1rem' }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 700, color: '#166534', fontSize: '0.86rem' }}>
+            {coverage!.skippedFinalRows.toLocaleString('id-ID')} baris dilewati — data kelurahan sudah berstatus Final (analisis inkremental)
+          </summary>
+          <p style={{ fontSize: '0.78rem', color: '#15803d', margin: '0.5rem 0' }}>
+            Baris berikut tidak dianalisa ulang karena kombinasi kode pos &amp; kelurahan sudah masuk ke Data Final:
+          </p>
+          <p style={{ fontSize: '0.76rem', color: '#15803d', margin: '0 0 0.2rem', lineHeight: 1.7 }}>
+            {coverage!.skippedFinalSamples?.slice(0, 15).map((s, idx) => (
+              <span key={idx} style={{ display: 'inline-block', marginRight: '0.85rem', whiteSpace: 'nowrap' }}>
+                {s.kelurahan} ({s.kodePos} - {s.kota})
+              </span>
+            ))}
+            {(coverage!.skippedFinalSamples?.length || 0) > 15 && <span>...dan lainnya</span>}
+          </p>
+        </details>
+      )}
+
+
       {/* ────────────────────────────────────────────────────────────────────────── */}
       {/* 1b. LAPORAN CAKUPAN KODEPOS → FASE 1 (kenapa jumlah bisa ≠ master)        */}
       {/* ────────────────────────────────────────────────────────────────────────── */}

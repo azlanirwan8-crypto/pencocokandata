@@ -7,6 +7,7 @@ import {
   MapPin,
 } from 'lucide-react';
 import type { MatchingStats } from '../../types';
+import { AnimatedMetricValue } from './AnimatedMetricValue';
 
 interface FinalMetrics {
   finalCount: number;
@@ -24,6 +25,7 @@ interface MetricCardsProps {
   multiCabangCount?: number;
 }
 
+// `fmt` dipertahankan untuk angka yang bukan inti animasi (teks kecil/persen).
 const fmt = (n: number) => n.toLocaleString('id-ID');
 
 export const MetricCards: React.FC<MetricCardsProps> = ({ stats, finalMetrics }) => {
@@ -45,7 +47,7 @@ export const MetricCards: React.FC<MetricCardsProps> = ({ stats, finalMetrics })
             <Layers size={14} />
           </div>
         </div>
-        <div className="metric-value">{fmt(stats.totalProcessed)}</div>
+        <div className="metric-value"><AnimatedMetricValue value={stats.totalProcessed} /></div>
         <div className="metric-footer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ color: '#405189', fontWeight: 600 }}>Volume Input</span>
           <span style={{ color: '#878a99', fontSize: '0.68rem' }}>100% Terindeks</span>
@@ -60,7 +62,7 @@ export const MetricCards: React.FC<MetricCardsProps> = ({ stats, finalMetrics })
             <CheckCircle2 size={14} />
           </div>
         </div>
-        <div className="metric-value">{fmt(fm.distinctKodePos)}</div>
+        <div className="metric-value"><AnimatedMetricValue value={fm.distinctKodePos} /></div>
         <div className="metric-footer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ color: '#0ab39c', fontWeight: 600 }}>Kode pos di Data Final</span>
           <span style={{ color: '#878a99', fontSize: '0.68rem' }}>{fmt(fm.finalCount)} baris</span>
@@ -75,7 +77,7 @@ export const MetricCards: React.FC<MetricCardsProps> = ({ stats, finalMetrics })
             <Clock size={14} />
           </div>
         </div>
-        <div className="metric-value">{fmt(fm.belumDikerjakan)}</div>
+        <div className="metric-value"><AnimatedMetricValue value={fm.belumDikerjakan} /></div>
         <div className="metric-footer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ color: '#d68b0c', fontWeight: 600 }}>
             {fm.totalKodePos > 0 ? `${((fm.belumDikerjakan / fm.totalKodePos) * 100).toFixed(1)}% Sisa` : 'Menunggu Master'}
@@ -92,7 +94,7 @@ export const MetricCards: React.FC<MetricCardsProps> = ({ stats, finalMetrics })
             <AlertTriangle size={14} />
           </div>
         </div>
-        <div className="metric-value" style={{ color: fm.anomali > 0 ? '#f06548' : '#0ab39c' }}>{fmt(fm.anomali)}</div>
+        <div className="metric-value" style={{ color: fm.anomali > 0 ? '#f06548' : '#0ab39c' }}><AnimatedMetricValue value={fm.anomali} /></div>
         <div className="metric-footer">
           {fm.anomali > 0 ? (
             <span style={{ color: '#f06548', fontWeight: 600 }}>Beda pulau / status / penempatan / role</span>
@@ -111,7 +113,7 @@ export const MetricCards: React.FC<MetricCardsProps> = ({ stats, finalMetrics })
           </div>
         </div>
         <div className="metric-value" style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem' }}>
-          <span>{fmt(fm.top.count)}</span>
+          <span><AnimatedMetricValue value={fm.top.count} /></span>
           <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6559cc' }}>cabang</span>
         </div>
         <div className="metric-footer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

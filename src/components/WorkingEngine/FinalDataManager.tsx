@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useDeferredValue } from 'react';
-import { ClipboardCheck, Search, FileSpreadsheet, Undo2, RotateCcw, Eye, Trash2, X, Building2, ShieldCheck, AlertTriangle } from 'lucide-react';
+import React, { useMemo, useState, useDeferredValue, useRef } from 'react';
+import { ClipboardCheck, Search, FileSpreadsheet, Undo2, RotateCcw, Eye, Trash2, X, Building2, ShieldCheck, AlertTriangle, Upload, CheckCircle2 } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import type { AnalystRow } from '../../utils/analystPipeline';
 import { formatWilayahCode, applyStandardSheetStyle } from '../../utils/excel';
@@ -12,13 +12,95 @@ interface FinalDataManagerProps {
   onReturnAll: () => void;
   onReturnRow: (rowId: string) => void;
   onDeleteRow: (rowId: string) => void;
+  onImportRows?: (rows: AnalystRow[]) => { imported: number; skippedFinal: number; skippedAnalyst: number };
+}
+
+function parseFinalExcelRow(raw: Record<string, any>, idx: number): AnalystRow {
+  const get = (keys: string[]): string => {
+    for (const k of keys) {
+      if (raw[k] !== undefined && raw[k] !== null && String(raw[k]).trim() !== '') {
+        return String(raw[k]).trim();
+      }
+    }
+    return '';
+  };
+
+  const wilayah = formatWilayahCode(get(['Wilayah', 'WILAYAH', 'wilayah']));
+  const sandiCabang = get(['Sandi Cabang', 'SANDI CABANG', 'sandiCabang', 'Sandi']);
+  const branchCode = get(['Branch Code', 'BRANCH CODE', 'branchCode']);
+  const kodeCabang = get(['Kode Cabang', 'KODE CABANG', 'kodeCabang']);
+  const namaOutlet = get(['Nama Outlet', 'NAMA OUTLET', 'namaOutlet', 'Outlet', 'Nama Cabang']);
+  const statusOutlet = get(['Status Outlet', 'STATUS OUTLET', 'statusOutlet', 'Status']);
+  const alamat = get(['ALAMAT', 'Alamat', 'alamat']);
+  const kodePosKelurahan = get(['KODE POS', 'Kode Pos', 'kodePos', 'kodepos', 'Kode Pos Kelurahan']);
+  const kelurahan = get(['Kelurahan', 'KELURAHAN', 'kelurahan', 'Desa']);
+  const kecamatan = get(['Kecamatan', 'KECAMATAN', 'kecamatan']);
+  const dati2 = get(['Dati II', 'DATI II', 'dati2', 'Kota', 'Kabupaten', 'Kota/Dati II']);
+  const provinsi = get(['Provinsi', 'PROVINSI', 'provinsi']);
+  const kodePosPten = get(['KODE POS PTEN', 'Kode Pos PTEN', 'kodePosPten']) || kodePosKelurahan;
+  const organisasiTujuan = get(['ORGANISASI TUJUAN', 'Organisasi Tujuan', 'organisasiTujuan']);
+  const tipeUnitRaw = get(['Tipe Unit', 'TIPE UNIT', 'tipeUnit']).toUpperCase();
+  const tipeUnit: 'KC' | 'KCP' | 'OUTLET' = tipeUnitRaw === 'KC' ? 'KC' : tipeUnitRaw === 'KCP' ? 'KCP' : 'OUTLET';
+  const roleLengkapRaw = get(['3 Role Lengkap', 'Role Lengkap', 'is3RoleLengkap']).toUpperCase();
+  const is3RoleLengkap = roleLengkapRaw.includes('LENGKAP') || roleLengkapRaw === 'TRUE' || roleLengkapRaw === '1';
+
+  return {
+    id: `import-final-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
+    no: idx + 1,
+    kotaPten: dati2,
+    kotaPtenMax15: dati2,
+    kodePosPten,
+    statusPten: 'SAME',
+    placementStatus: 'VERIFIED',
+    placementMethod: 'Import Excel',
+    groupKota: dati2,
+    kategori: 'DIANALISA',
+    sourceRowIndex: idx,
+    allKelurahanCount: 1,
+    kelurahanSeq: 1,
+    kelurahan,
+    kecamatan,
+    provinsi,
+    kodePosKelurahan: kodePosKelurahan || kodePosPten,
+    fase1Approved: true,
+    wilayah,
+    sandiCabang,
+    sandi: sandiCabang,
+    cabang: namaOutlet,
+    branchCode,
+    kodeCabang,
+    namaOutlet,
+    statusOutlet,
+    alamat,
+    fase2Approved: true,
+    fase2JarakKm: 0,
+    fase2Tier: 1,
+    fase2Temuan: [],
+    fase2Status: 'OTOMATIS_VALID',
+    fase2Sumber: 'IMPORT_EXCEL',
+    organisasiTujuan,
+    tipeUnit,
+    is3RoleLengkap,
+    roleCabsal: 1,
+    roleCabapv1: 1,
+    roleCabapv2: 1,
+    roleGrandTotal: 3,
+    alurWondr: 'SELESAI',
+    flowDescription: 'Data diimpor dari Excel',
+    fase3Approved: true,
+    confidenceScore: 100,
+    matchingAlgorithm: 'Import Excel',
+    statusAnalisa: 'EXACT_MATCH',
+    isFinalApproved: false, // dimasukkan ke Data Analyst agar operator bisa meninjau
+  };
 }
 
 const PAGE_SIZE = 25;
 
 // Final Data: hasil analisa 3 fase yang sudah disetujui operator.
 // Baris dipindah dari Data Analyst ke sini (IndexedDB `analyst_final_data`).
-export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onReturnAll, onReturnRow, onDeleteRow }) => {
+export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onReturnAll, onReturnRow, onDeleteRow, onImportRows }) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // A6: filter & halaman bertahan saat operator pindah menu lalu kembali.
   const [searchTerm, setSearchTerm] = useTampilanTersimpan('tampilan.final.cari', '');
   const deferredSearch = useDeferredValue(searchTerm);
@@ -28,6 +110,9 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
   const [confirmAction, setConfirmAction] = useState<{ kind: 'returnAll' | 'revise' | 'delete'; row?: AnalystRow } | null>(null);
   // Modal Detail (View) per baris.
   const [detailRow, setDetailRow] = useState<AnalystRow | null>(null);
+  // Laporan hasil impor Excel
+  const [importSummary, setImportSummary] = useState<{ imported: number; skippedFinal: number; skippedAnalyst: number; fileName: string } | null>(null);
+
 
   // Card informasi ringkas (kebutuhan BRD 5d).
   const metrics = useMemo(() => ({
@@ -69,6 +154,38 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
   const hal = Math.min(page, totalHal);
   const tampil = filtered.slice((hal - 1) * PAGE_SIZE, hal * PAGE_SIZE);
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: 'array' });
+      const firstSheet = wb.Sheets[wb.SheetNames[0]];
+      const rawJson = XLSX.utils.sheet_to_json<Record<string, any>>(firstSheet);
+
+      if (rawJson.length === 0) {
+        alert('File Excel kosong atau tidak memiliki baris data.');
+        return;
+      }
+
+      const parsedRows: AnalystRow[] = rawJson.map((r, idx) => parseFinalExcelRow(r, idx));
+      if (onImportRows) {
+        const res = onImportRows(parsedRows);
+        setImportSummary({
+          imported: res.imported,
+          skippedFinal: res.skippedFinal,
+          skippedAnalyst: res.skippedAnalyst,
+          fileName: file.name,
+        });
+      }
+    } catch (err: any) {
+      console.error('Gagal membaca berkas Excel:', err);
+      alert(`Gagal memproses berkas Excel: ${err?.message || 'Format tidak dikenali'}`);
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   const handleExport = () => {
     const columns = [
       'No', 'Wilayah', 'Sandi Cabang', 'Branch Code', 'Kode Cabang', 'Nama Outlet', 'Status Outlet',
@@ -104,6 +221,13 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '2rem' }}>
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileUpload}
+        accept=".xlsx,.xls"
+        style={{ display: 'none' }}
+      />
       <div className="glass-card" style={{ padding: '1.15rem 1.35rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.9rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
@@ -128,6 +252,15 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
               title="Kembalikan seluruh baris ke menu Data Analyst"
             >
               <Undo2 size={13} /> Kembalikan ke Data Analyst
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => fileInputRef.current?.click()}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.76rem', color: '#405189', borderColor: '#405189' }}
+              title="Unggah berkas Excel (.xlsx) untuk menambahkan data ke Data Analyst"
+            >
+              <Upload size={13} /> Unggah Excel
             </button>
             <button
               type="button"
@@ -379,6 +512,60 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
                   Tutup
                 </button>
               </div>
+          </DialogPanel>
+        )}
+
+        {importSummary && (
+          <DialogPanel
+            onClose={() => setImportSummary(null)}
+            label="Hasil Impor Excel"
+            backdropClassName=""
+            backdropStyle={{ position: 'fixed', inset: 0, zIndex: 1070, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', padding: '1rem' }}
+            className=""
+            style={{ width: '100%', maxWidth: '520px', background: '#ffffff', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.18)', border: '1px solid #e9ebec' }}
+          >
+            <div style={{ padding: '1.2rem 1.4rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.75rem', borderBottom: '1px solid #eef1f4' }}>
+              <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <CheckCircle2 size={22} color="#16a34a" />
+              </div>
+              <div style={{ flex: 1 }}>
+                <h3 style={{ fontSize: '0.98rem', fontWeight: 800, color: '#212529', margin: 0 }}>
+                  Impor Berkas Selesai
+                </h3>
+                <span style={{ fontSize: '0.74rem', color: '#878a99' }}>
+                  {importSummary.fileName}
+                </span>
+              </div>
+              <button type="button" onClick={() => setImportSummary(null)} aria-label="Tutup laporan" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#adb5bd', padding: '0.2rem', display: 'flex' }}>
+                <X size={18} />
+              </button>
+            </div>
+            <div style={{ padding: '1.2rem 1.4rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.9rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#166534' }}>Baris Baru Dimasukkan ke Data Analyst</span>
+                <strong style={{ fontSize: '0.92rem', color: '#15803d' }}>{importSummary.imported.toLocaleString('id-ID')} baris</strong>
+              </div>
+              {importSummary.skippedFinal > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.9rem', background: '#fff8ec', border: '1px solid #f2d9a8', borderRadius: '6px' }}>
+                  <span style={{ fontSize: '0.8rem', color: '#8a5a00' }}>Dilewati (Sudah ada di Final Data)</span>
+                  <strong style={{ fontSize: '0.88rem', color: '#b45309' }}>{importSummary.skippedFinal.toLocaleString('id-ID')} baris</strong>
+                </div>
+              )}
+              {importSummary.skippedAnalyst > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.9rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
+                  <span style={{ fontSize: '0.8rem', color: '#475569' }}>Dilewati (Sudah ada di Data Analyst)</span>
+                  <strong style={{ fontSize: '0.88rem', color: '#334155' }}>{importSummary.skippedAnalyst.toLocaleString('id-ID')} baris</strong>
+                </div>
+              )}
+              <p style={{ fontSize: '0.74rem', color: '#64748b', margin: '0.3rem 0 0', lineHeight: 1.5 }}>
+                Baris baru telah ditambahkan ke antrean <strong>Data Analyst</strong> sehingga operator dapat meninjau dan memvalidasi sebelum dijadikan Final.
+              </p>
+            </div>
+            <div style={{ padding: '0.8rem 1.4rem', borderTop: '1px solid #eef1f4', display: 'flex', justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => setImportSummary(null)} style={{ padding: '0.45rem 1.2rem', fontSize: '0.8rem', fontWeight: 600 }}>
+                Mengerti
+              </button>
+            </div>
           </DialogPanel>
         )}
       </div>

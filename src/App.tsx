@@ -912,6 +912,54 @@ export const App: React.FC = () => {
       void deleteFinalRowInNeon(rowId).then((ok) => laporkanSinkronFinal(ok, 'hapus 1 baris'));
   };
 
+  // G1: Impor baris dari Excel di menu Final Data
+  // Baris baru ditambahkan ke Data Analyst (agar melewati alur validasi)
+  // dan di-deduplikasi terhadap finalRows & analystRows.
+  const handleImportFinalToAnalyst = (newRows: AnalystRow[]): { imported: number; skippedFinal: number; skippedAnalyst: number } => {
+    const finalKeySet = new Set<string>();
+    finalRows.forEach((r) => {
+      finalKeySet.add(makeFinalKey(r.kodePosPten, r.kelurahan, r.kecamatan, r.kotaPten));
+    });
+
+    const analystKeySet = new Set<string>();
+    analystRows.forEach((r) => {
+      analystKeySet.add(makeFinalKey(r.kodePosPten, r.kelurahan, r.kecamatan, r.kotaPten));
+    });
+
+    let imported = 0;
+    let skippedFinal = 0;
+    let skippedAnalyst = 0;
+    const toAdd: AnalystRow[] = [];
+
+    newRows.forEach((r, idx) => {
+      const key = makeFinalKey(r.kodePosPten, r.kelurahan, r.kecamatan, r.kotaPten);
+      if (finalKeySet.has(key)) {
+        skippedFinal++;
+        return;
+      }
+      if (analystKeySet.has(key)) {
+        skippedAnalyst++;
+        return;
+      }
+      analystKeySet.add(key);
+      imported++;
+      toAdd.push({
+        ...r,
+        id: r.id || `imported-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
+        no: analystRows.length + toAdd.length + 1,
+      });
+    });
+
+    if (toAdd.length > 0) {
+      const merged = [...analystRows, ...toAdd];
+      setAnalystRows(merged);
+      setItem('analyst_results_data', merged).catch(() => {});
+    }
+
+    return { imported, skippedFinal, skippedAnalyst };
+  };
+
+
   // "Setujui" pada tab Perlu Analisa Manual: barisnya dinyatakan beres, tetapi fase
   // ini belum diterima — ia pindah ke tab Berhasil Dianalisa pada fase yang sama.
   const handleBersihkanManualAnalyst = (rowIds: string[]) => {
@@ -1334,6 +1382,7 @@ export const App: React.FC = () => {
             onReturnAll={handleReturnFinalToAnalyst}
             onReturnRow={handleReviseFinalRow}
             onDeleteRow={handleDeleteFinalRow}
+            onImportRows={handleImportFinalToAnalyst}
           />
           )}
 
