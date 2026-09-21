@@ -4,7 +4,6 @@ import {
   RotateCcw,
   Zap,
   Check,
-  Edit,
   Search,
   X,
   FileSpreadsheet,
@@ -1406,9 +1405,13 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                   <th style={{ width: '90px', textAlign: 'center' }}>Sandi Cabang</th>
                   <th style={{ width: '95px', textAlign: 'center' }}>Branch Code</th>
                   <th style={{ width: '85px', textAlign: 'center' }}>Kode Cabang</th>
-                  {thSort('namaOutlet', 'Nama Outlet Master', { minWidth: '180px' })}
+                  {/* Nama Outlet & Alamat Cabang sengaja TIDAK ditampilkan di sini: keduanya
+                      milik cabang hasil rekomendasi, bukan data baris ini. Yang dibutuhkan
+                      operator untuk memutuskan adalah identitas wilayah barisnya. */}
+                  {thSort('kelurahan', 'Kelurahan', { minWidth: '140px' })}
+                  {thSort('kecamatan', 'Kecamatan', { minWidth: '140px' })}
                   <th style={{ minWidth: '150px' }} title="Wajib dari kolom PTEN &quot;KOTA/KABUPATEN MAX 15 DIGIT&quot;">Kota / Kab (MAX 15 Digit)</th>
-                  <th style={{ minWidth: '220px' }}>ALAMAT Cabang</th>
+                  <th style={{ width: '95px', textAlign: 'center' }} title="Kode pos dari data PTEN (hasil tabrakan Fase 1)">Kode Pos</th>
                   <th style={{ width: '95px', textAlign: 'center' }}>Aksi Review</th>
                 </tr>
               )}
@@ -1812,9 +1815,10 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                           <td className="code-cell" style={{ textAlign: 'center' }}>{r.sandiCabang}</td>
                           <td className="code-cell" style={{ textAlign: 'center' }}>{r.branchCode || '-'}</td>
                           <td className="code-cell" style={{ textAlign: 'center' }}>{r.kodeCabang || '-'}</td>
-                          <td style={{ fontWeight: 700, color: '#405189' }}>{r.namaOutlet}</td>
+                          <td style={{ fontWeight: 700 }}>{r.kelurahan}</td>
+                          <td>{r.kecamatan}</td>
                           <td style={{ fontWeight: 600 }} title="Kolom PTEN KOTA/KABUPATEN MAX 15 DIGIT">{r.kotaPtenMax15 || r.kotaPten}</td>
-                          <td title={r.alamat}>{r.alamat}</td>
+                          <td className="code-cell" style={{ textAlign: 'center', fontWeight: 700 }} title={r.kodePosKelurahan && r.kodePosKelurahan !== r.kodePosPten ? `Kode pos kelurahan ini sendiri: ${r.kodePosKelurahan}` : undefined}>{r.kodePosPten || r.kodePosKelurahan || '-'}</td>
                         </>
                       )}
 
@@ -2005,34 +2009,9 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                               </button>
                             );
                           })()}
-                          {viewTab === 'fase2' && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingRow(r);
-                                setIsEditModalOpen(true);
-                              }}
-                              title="Edit / Revisi Manual Baris Ini"
-                              style={{
-                                background: 'rgba(64, 81, 137, 0.1)',
-                                border: '1px solid rgba(64, 81, 137, 0.3)',
-                                color: '#405189',
-                                borderRadius: '4px',
-                                padding: '0.22rem 0.55rem',
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '0.25rem',
-                                fontSize: '0.72rem',
-                                fontWeight: 700,
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              <Edit size={12} />
-                              <span>Edit</span>
-                            </button>
-                          )}
+                          {/* N0: tidak ada tombol Edit di Fase 1/2/3 — yang tersedia hanya
+                              Setujui, Revisi (tab Berhasil), dan aksi kandidat. Mengubah data
+                              dilakukan di menu Data Master, lalu analisa dijalankan ulang. */}
                           {innerTab === 'BERES' && (
                             <button
                               type="button"
