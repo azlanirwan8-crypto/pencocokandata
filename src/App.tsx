@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
+import { useNotification } from './components/Notification/NotificationContext';
 import { MetricCards } from './components/Dashboard/MetricCards';
 import { RegionalAnalyticsCharts } from './components/Dashboard/RegionalAnalyticsCharts';
 import { MasterDuplicateChart } from './components/Dashboard/MasterDuplicateChart';
@@ -50,6 +51,7 @@ import { DEFAULT_WILAYAH_DATA, normalizeWilayahItem } from './utils/defaultWilay
 import { Filter } from 'lucide-react';
 
 export const App: React.FC = () => {
+  const { add: notify } = useNotification();
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [isNeonModalOpen, setIsNeonModalOpen] = useState<boolean>(false);
   const [isSnapshotModalOpen, setIsSnapshotModalOpen] = useState<boolean>(false);
@@ -639,7 +641,9 @@ export const App: React.FC = () => {
     } catch (err: any) {
       setIsAnalyzing(false);
       setCurrentActivePhase(0);
-      alert('Terjadi kesalahan saat menjalankan analisa: ' + err?.message);
+      // Bukan error fatal: analisanya berhenti rapi & state sudah dikembalikan,
+      // jadi cukup notifikasi yang tidak hilang sendiri.
+      notify('Terjadi kesalahan saat menjalankan analisa: ' + err?.message, 'error');
     }
   };
 
@@ -795,6 +799,15 @@ export const App: React.FC = () => {
     setItem('analyst_results_data', merged).catch(() => {});
   };
 
+  // "Hapus" satu baris Final Data: hilang permanen. Karena `excludeFinalKeys`
+  // dihitung dari `finalRows` saat analisa dijalankan, baris yang dihapus otomatis
+  // bisa diproses ulang dari awal pada analisa berikutnya.
+  const handleDeleteFinalRow = (rowId: string) => {
+    const remaining = finalRows.filter((r) => r.id !== rowId);
+    setFinalRows(remaining);
+    setItem('analyst_final_data', remaining).catch(() => {});
+  };
+
   // "Setujui" pada tab Perlu Analisa Manual: barisnya dinyatakan beres, tetapi fase
   // ini belum diterima — ia pindah ke tab Berhasil Dianalisa pada fase yang sama.
   const handleBersihkanManualAnalyst = (rowIds: string[]) => {
@@ -823,7 +836,21 @@ export const App: React.FC = () => {
   };
 
   // Master Actions (Appends new rows to existing master data with strict deduplication)
-  const handleMasterLoaded = async (newRows: MasterRow[], fileName: string) => {
+  const handleMasterLoaded = async (newRows: MasterRow[], fileName: string, mode?: 'replace' | 'append' | 'update') => {
+    // mode 'update' (edit/hapus manual di menu Data Cabang): `newRows` adalah daftar
+    // LENGKAP hasil perubahan — terapkan apa adanya. Jangan merge/dedup, karena
+    // seluruh barisnya memang sudah ada di data lama sehingga akan dianggap duplikat
+    // dan perubahan (edit/hapus) hilang diam-diam.
+    if (mode === 'update') {
+      setMasterRows(newRows);
+      setItem('master_data', { rows: newRows, fileName });
+      try {
+        saveMasterToNeon(newRows, fileName);
+      } catch (e) {
+        console.warn('Neon auto-save skipped:', e);
+      }
+      return;
+    }
     setMasterRows((prev) => {
       // Indeks kunci unik dari data master yang sudah tersimpan
       const existingKeys = new Set<string>();
@@ -1193,7 +1220,12 @@ export const App: React.FC = () => {
 
           {/* MENU FINAL DATA (hasil analisa yang telah disetujui) */}
           {activeTab === 'final' && (
-            <FinalDataManager rows={finalRows} onReturnAll={handleReturnFinalToAnalyst} onReturnRow={handleReviseFinalRow} />
+          <FinalDataManager
+            rows={finalRows}
+            onReturnAll={handleReturnFinalToAnalyst}
+            onReturnRow={handleReviseFinalRow}
+            onDeleteRow={handleDeleteFinalRow}
+          />
           )}
 
           {/* MENU MASTER: SETTING WILAYAH */}

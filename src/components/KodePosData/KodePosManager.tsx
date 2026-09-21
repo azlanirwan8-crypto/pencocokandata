@@ -45,6 +45,7 @@ import {
 import { getStoredGoogleApiKey } from '../../utils/onlineGeoCoder';
 import { KodePosSyncModal } from './KodePosSyncModal';
 import { useGeoTooltip } from '../GeoTooltip';
+import { useNotification } from '../Notification/NotificationContext';
 
 interface KodePosManagerProps {
   onKodePosCountChange?: (count: number) => void;
@@ -53,6 +54,7 @@ interface KodePosManagerProps {
 export const KodePosManager: React.FC<KodePosManagerProps> = ({
   onKodePosCountChange,
 }) => {
+  const { add: notify } = useNotification();
   // Server-driven data (Neon Postgres adalah satu-satunya sumber data)
   const [rows, setRows] = useState<KodePosRow[]>([]);
   const [total, setTotal] = useState<number>(0);
@@ -409,11 +411,11 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     e.preventDefault();
     if (modalMode !== 'edit' || editingId === null) return;
     if (!formData.kodePos.trim()) {
-      alert('Kode Pos wajib diisi!');
+      notify('Kode Pos wajib diisi!', 'warning');
       return;
     }
     if (!formData.kelurahan.trim() && !formData.kecamatan.trim()) {
-      alert('Kelurahan atau Kecamatan wajib diisi!');
+      notify('Kelurahan atau Kecamatan wajib diisi!', 'warning');
       return;
     }
 

@@ -6,9 +6,11 @@ import {
   UploadCloud,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   Clock,
 } from 'lucide-react';
 import type { MasterRow, TargetRow } from '../types';
+import { ConfirmDialog } from './WorkingEngine/ConfirmDialog';
 
 export interface WorkspaceSnapshot {
   app: 'tools-data-matcher';
@@ -56,6 +58,8 @@ export const SnapshotModal: React.FC<SnapshotModalProps> = ({
 }) => {
   const [note, setNote] = useState<string>('');
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  // Isi cadangan yang sudah terbaca tapi belum dipulihkan — menunggu konfirmasi.
+  const [pendingRestore, setPendingRestore] = useState<WorkspaceSnapshot | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
@@ -134,22 +138,9 @@ export const SnapshotModal: React.FC<SnapshotModalProps> = ({
           throw new Error('Format file cadangan tidak valid atau bukan dari aplikasi ini.');
         }
 
-        const confirmMsg = `Pulihkan cadangan tanggal ${new Date(parsed.createdAt).toLocaleString('id-ID')}?\n` +
-          `• Master Cabang: ${parsed.summary?.totalMaster || parsed.masterData?.rows?.length || 0} Baris\n` +
-          `• Target Data: ${parsed.summary?.totalTarget || parsed.targetData?.rows?.length || 0} Baris\n` +
-          `• Data Match: ${parsed.summary?.totalMatched || 0} Baris\n\n` +
-          `Data di aplikasi akan diperbarui dengan isi cadangan ini.`;
-
-        if (window.confirm(confirmMsg)) {
-          onRestoreSnapshot(parsed);
-          setAlert({
-            type: 'success',
-            message: 'Cadangan berhasil dipulihkan ke aplikasi!',
-          });
-          setTimeout(() => {
-            onClose();
-          }, 1200);
-        }
+        // Konfirmasi ditunda ke ConfirmDialog (A2) — file sudah terbaca valid,
+        // isinya disimpan di state sampai operator menekan "Ya, Pulihkan".
+        setPendingRestore(parsed);
       } catch (err: any) {
         setAlert({
           type: 'error',
@@ -163,8 +154,18 @@ export const SnapshotModal: React.FC<SnapshotModalProps> = ({
     reader.readAsText(file);
   };
 
+  const ringkas = pendingRestore
+    ? {
+        master: pendingRestore.summary?.totalMaster ?? pendingRestore.masterData?.rows?.length ?? 0,
+        target: pendingRestore.summary?.totalTarget ?? pendingRestore.targetData?.rows?.length ?? 0,
+        matched: pendingRestore.summary?.totalMatched ?? 0,
+        wilayah: pendingRestore.summary?.wilayahCount ?? 0,
+      }
+    : null;
+
   return (
-    <div className="modal-backdrop">
+    <>
+      <div className="modal-backdrop">
       <div
         className="glass-card modal-container"
         style={{
@@ -393,6 +394,37 @@ export const SnapshotModal: React.FC<SnapshotModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+      </div>
+
+      <ConfirmDialog
+        isOpen={pendingRestore !== null}
+        icon={<AlertTriangle size={20} />}
+        accent="#f7b84b"
+        title="Pulihkan Cadangan Sesi?"
+        message={
+          pendingRestore ? (
+            <div>
+              <div>Cadangan dibuat {new Date(pendingRestore.createdAt).toLocaleString('id-ID')}.</div>
+              <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.15rem', lineHeight: 1.75 }}>
+                <li>Master Cabang: {ringkas?.master.toLocaleString('id-ID')} baris</li>
+                <li>Target Data: {ringkas?.target.toLocaleString('id-ID')} baris</li>
+                <li>Data Match: {ringkas?.matched.toLocaleString('id-ID')} baris</li>
+                <li>Wilayah terpakai: {ringkas?.wilayah.toLocaleString('id-ID')}</li>
+              </ul>
+            </div>
+          ) : null
+        }
+        detail="Isi cadangan ini akan menimpa data yang sedang terbuka di aplikasi."
+        confirmLabel="Ya, Pulihkan"
+        onConfirm={() => {
+          if (!pendingRestore) return;
+          onRestoreSnapshot(pendingRestore);
+          setPendingRestore(null);
+          setAlert({ type: 'success', message: 'Cadangan berhasil dipulihkan ke aplikasi!' });
+          setTimeout(() => onClose(), 1200);
+        }}
+        onClose={() => setPendingRestore(null)}
+      />
+    </>
   );
 };

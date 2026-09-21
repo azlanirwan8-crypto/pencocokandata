@@ -107,7 +107,9 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
         {/* Body */}
         <div style={{ padding: '0.5rem 1.4rem 0.25rem' }}>
-          <p style={{ fontSize: '0.85rem', color: '#5c636a', lineHeight: 1.55, margin: 0 }}>{message}</p>
+          {/* `message` boleh berisi blok (<div>/<ul>) — jangan dibungkus <p> agar tidak
+              jadi HTML invalid (div di dalam p memicu error hidrasi React). */}
+          <div style={{ fontSize: '0.85rem', color: '#5c636a', lineHeight: 1.55, margin: 0 }}>{message}</div>
           {detail && (
             <div
               style={{

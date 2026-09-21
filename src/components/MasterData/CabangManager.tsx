@@ -28,10 +28,11 @@ import type { MasterRow, MasterHealth, WilayahSetting } from '../../types';
 import { parseExcelFile, validateMasterHeaders, downloadMasterTemplate } from '../../utils/excel';
 import { MasterHealthCard } from './MasterHealthCard';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
+import { useNotification } from '../Notification/NotificationContext';
 
 interface CabangManagerProps {
   masterRows: MasterRow[];
-  onMasterLoaded: (rows: MasterRow[], fileName: string, mode?: 'replace' | 'append') => void;
+  onMasterLoaded: (rows: MasterRow[], fileName: string, mode?: 'replace' | 'append' | 'update') => void;
   onResetMaster: () => void;
   masterHealth: MasterHealth;
   wilayahSettings?: WilayahSetting[];
@@ -43,6 +44,7 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
   onResetMaster,
   masterHealth,
 }) => {
+  const { add: notify } = useNotification();
   const [activeSubTab, setActiveSubTab] = useState<'list' | 'health'>('list');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const deferredSearch = useDeferredValue(searchTerm);
@@ -306,7 +308,7 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
   const handleSubmitForm = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData['Nama Outlet']?.trim() || !formData['KODE POS']?.trim()) {
-      alert('Nama Outlet dan KODE POS wajib diisi!');
+      notify('Nama Outlet dan KODE POS wajib diisi!', 'warning');
       return;
     }
 
@@ -317,7 +319,9 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
       updatedList = [formData, ...masterRows];
     }
 
-    onMasterLoaded(updatedList, 'Master_Data_Manual.xlsx', 'replace');
+    // 'update' = kirim daftar LENGKAP hasil create/edit; App.tsx menerapkan apa adanya
+    // (mode 'replace' artinya impor Excel yang di-merge+dedup terhadap data lama).
+    onMasterLoaded(updatedList, 'Master_Data_Manual.xlsx', 'update');
     setModalMode(null);
     setSuccessMsg('Data master cabang berhasil diperbarui.');
     setTimeout(() => setSuccessMsg(null), 4000);
@@ -327,7 +331,7 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
   const handleConfirmDelete = () => {
     if (deleteTargetIndex === null) return;
     const updated = masterRows.filter((_, idx) => idx !== deleteTargetIndex);
-    onMasterLoaded(updated, 'Master_Data_Updated.xlsx', 'replace');
+    onMasterLoaded(updated, 'Master_Data_Updated.xlsx', 'update');
     setDeleteTargetIndex(null);
     setSuccessMsg('Data cabang berhasil dihapus.');
     setTimeout(() => setSuccessMsg(null), 4000);

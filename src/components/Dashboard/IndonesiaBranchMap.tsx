@@ -51,6 +51,7 @@ import { get, keys } from 'idb-keyval';
 import { GoogleApiKeyModal } from '../GoogleApiKeyModal';
 import { cleanDati, cleanProvinsi } from '../../utils/normalizer';
 import { getUnitCategory } from '../RoleMapping/RoleMappingManager';
+import { useNotification } from '../Notification/NotificationContext';
 
 // ── Ikon penanda peta: bentuk = JENIS titik, warna = STATUS (agar user langsung tahu
 //    "ini KC / KCP / Kode Pos / Multi-Outlet" tanpa harus klik). ──
@@ -201,6 +202,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   onNavigateToMaster,
   onNavigateToEngine,
 }) => {
+  const { add: notify } = useNotification();
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const canvasRendererRef = useRef<L.Canvas | null>(null);
@@ -1302,7 +1304,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   const startAcehKimTracking = () => {
     const kimPin = findKimPin(allPins);
     if (!kimPin) {
-      alert('Cabang KIM tidak ditemukan di master data cabang.');
+      notify('Cabang KIM tidak ditemukan di master data cabang.', 'error');
       return;
     }
     setTrackingMode('aceh_kim');
@@ -1707,7 +1709,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                     type="button"
                     onClick={() => {
                       if (opt.value === 'SELECTED_ONLY' && !selectedPin) {
-                        alert('Klik salah satu titik cabang di peta terlebih dahulu.');
+                        notify('Klik salah satu titik cabang di peta terlebih dahulu.', 'warning');
                         return;
                       }
                       setTrackingMode('none');

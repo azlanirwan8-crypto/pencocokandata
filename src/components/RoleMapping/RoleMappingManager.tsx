@@ -25,6 +25,7 @@ import {
 import * as XLSX from 'xlsx';
 import { getItem, setItem } from '../../utils/storage';
 import { loadRoleMappingFromNeon, saveRoleMappingToNeon } from '../../utils/neonSync';
+import { useNotification } from '../Notification/NotificationContext';
 
 export interface RoleMappingRecord {
   id?: string;
@@ -318,6 +319,7 @@ interface RoleMappingManagerProps {
 export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
   onRoleMappingCountChange,
 }) => {
+  const { add: notify } = useNotification();
   const [activeSubTab, setActiveSubTab] = useState<'list' | 'wondr'>('list');
   const [roleList, setRoleList] = useState<RoleMappingRecord[]>(DEFAULT_ROLE_MAPPING_DATA);
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -506,7 +508,7 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
         const rawJson: any[] = XLSX.utils.sheet_to_json(ws);
 
         if (!rawJson || rawJson.length === 0) {
-          alert('Berkas Excel kosong atau tidak terbaca.');
+          notify('Berkas Excel kosong atau tidak terbaca.', 'error');
           return;
         }
 
@@ -541,7 +543,7 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
         }).filter((item) => Boolean(item.organisasiTujuan));
 
         if (imported.length === 0) {
-          alert('Tidak ada baris data organisasi valid yang berhasil dibaca dari berkas Excel.');
+          notify('Tidak ada baris data organisasi valid yang berhasil dibaca dari berkas Excel.', 'error');
           return;
         }
 
@@ -551,7 +553,7 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
         setSuccessMsg(`Berhasil mengimpor ${imported.length.toLocaleString('id-ID')} baris data mapping role!`);
         setTimeout(() => setSuccessMsg(null), 4000);
       } catch (err: any) {
-        alert('Gagal membaca format file Excel: ' + err.message);
+        notify('Gagal membaca format file Excel: ' + err.message, 'error');
       }
     };
     reader.readAsBinaryString(file);
@@ -653,7 +655,7 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
   const handleSubmitForm = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.organisasiTujuan.trim()) {
-      alert('Nama Organisasi Tujuan wajib diisi!');
+      notify('Nama Organisasi Tujuan wajib diisi!', 'warning');
       return;
     }
 

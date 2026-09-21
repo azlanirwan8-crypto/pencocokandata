@@ -43,6 +43,7 @@ import { formatWilayahName, cleanKelurahan, cleanKecamatan } from '../../utils/n
 import { formatWilayahCode, applyStandardSheetStyle } from '../../utils/excel';
 import { exportAnalystExecutivePdf } from '../../utils/pdfExport';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
+import { useNotification } from '../Notification/NotificationContext';
 
 // Posisi antrean kerja satu baris: baris HANYA tampil di tab fase yang belum disetujui.
 // Fase 1 = menunggu setujui PTEN; Fase 2 = menunggu wilayah/cabang; Fase 3 = menunggu role;
@@ -128,6 +129,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   masterRows = [],
   roleMappingList = [],
 }) => {
+  const { add: notify } = useNotification();
   const [activeSubTab, setActiveSubTab] = useState<'all' | 'fase1' | 'fase2' | 'fase3'>('fase1');
   const [selectedWilayah, setSelectedWilayah] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -153,6 +155,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
 
   // Dialog konfirmasi sebelum menyetujui tiap fase / final analisa
   const [confirmKind, setConfirmKind] = useState<null | 'fase1' | 'fase2' | 'fase3' | 'final'>(null);
+  // Konfirmasi "Revisi ke Perlu Analisa Manual" per baris (menggantikan window.confirm).
+  const [confirmManualRow, setConfirmManualRow] = useState<AnalystRow | null>(null);
 
   // Pagination states
   const [page, setPage] = useState<number>(1);
@@ -337,13 +341,9 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   };
 
 
-  // Success Notification
-  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
-
-  const showToast = (message: string, type: 'success' | 'info' = 'success') => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification(null), 4000);
-  };
+  // Notifikasi grid dialirkan ke provider global (A1) — tidak ada lagi `setTimeout`
+  // tanpa cleanup dan banner yang menempati ruang kerja operator.
+  const showToast = (message: string, type: 'success' | 'info' = 'success') => notify(message, type);
 
   // Jalankan aksi setujui setelah operator mengonfirmasi dialog
   const handleConfirmApprove = () => {
@@ -664,7 +664,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       XLSX.writeFile(wb, `Laporan_Final_Data_Analyst_${new Date().toISOString().slice(0, 10)}.xlsx`);
       showToast(`Berhasil mengunduh ${rows.length.toLocaleString('id-ID')} baris data ke Excel Multi-Sheet!`);
     } catch (e: any) {
-      alert('Gagal mengekspor berkas Excel: ' + e.message);
+      notify('Gagal mengekspor berkas Excel: ' + e.message, 'error');
     }
   };
 
@@ -673,7 +673,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     if (result.success) {
       showToast(`Berhasil mengunduh laporan PDF: ${result.filename}`);
     } else {
-      alert('Gagal membuat dokumen PDF: ' + result.error);
+      notify('Gagal membuat dokumen PDF: ' + result.error, 'error');
     }
   };
 
@@ -819,30 +819,6 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
             </table>
           </div>
         </details>
-      )}
-
-      {notification && (
-        <div
-          style={{
-            background: notification.type === 'success' ? '#e8f7f5' : '#eff2f7',
-            color: notification.type === 'success' ? '#0ab39c' : '#405189',
-            border: `1px solid ${notification.type === 'success' ? '#b7ebe4' : '#dce4f5'}`,
-            padding: '0.75rem 1.25rem',
-            borderRadius: '6px',
-            fontSize: '0.84rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <CheckCircle2 size={16} />
-            <span>{notification.message}</span>
-          </div>
-          <button type="button" onClick={() => setNotification(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-            <X size={14} />
-          </button>
-        </div>
       )}
 
       {/* ────────────────────────────────────────────────────────────────────────── */}
@@ -1885,11 +1861,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                           {innerTab === 'BERES' && (
                             <button
                               type="button"
-                              onClick={() => {
-                                if (!window.confirm('Revisi baris ini? Baris dikembalikan ke tab Perlu Analisa Manual pada fase yang sama.')) return;
-                                onUpdateRow({ ...r, perluManual: true });
-                                showToast(`Baris #${r.no} dikembalikan ke tab Perlu Analisa Manual.`, 'info');
-                              }}
+                              onClick={() => setConfirmManualRow(r)}
                               title="Kembalikan baris ini ke tab Perlu Analisa Manual"
                               style={{
                                 background: 'rgba(240, 101, 72, 0.1)',
@@ -2106,6 +2078,22 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
           />
         );
       })()}
+      {/* Konfirmasi revisi ke Perlu Analisa Manual (menggantikan window.confirm) */}
+      <ConfirmDialog
+        isOpen={confirmManualRow !== null}
+        icon={<AlertTriangle size={20} />}
+        accent="#f7b84b"
+        title="Revisi Baris?"
+        message={confirmManualRow ? `Baris #${confirmManualRow.no} (${confirmManualRow.namaOutlet || confirmManualRow.kelurahan}) akan dikembalikan ke tab “Perlu Analisa Manual” pada fase yang sama.` : ''}
+        confirmLabel="Ya, Revisi"
+        onConfirm={() => {
+          if (!confirmManualRow) return;
+          onUpdateRow({ ...confirmManualRow, perluManual: true });
+          showToast(`Baris #${confirmManualRow.no} dikembalikan ke tab Perlu Analisa Manual.`, 'info');
+          setConfirmManualRow(null);
+        }}
+        onClose={() => setConfirmManualRow(null)}
+      />
     </div>
   );
 };

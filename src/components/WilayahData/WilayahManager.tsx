@@ -29,6 +29,7 @@ import * as XLSX from 'xlsx';
 import type { WilayahSetting } from '../../types';
 import { DEFAULT_WILAYAH_DATA, normalizeWilayahItem } from '../../utils/defaultWilayah';
 import { loadWilayahFromNeon, saveWilayahToNeon, checkNeonStatus } from '../../utils/neonSync';
+import { useNotification } from '../Notification/NotificationContext';
 
 interface WilayahManagerProps {
   initialSettings?: WilayahSetting[];
@@ -39,6 +40,7 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
   initialSettings,
   onSettingsSaved,
 }) => {
+  const { add: notify } = useNotification();
   const [settings, setSettings] = useState<WilayahSetting[]>(() => {
     if (initialSettings && initialSettings.length > 0) {
       return initialSettings.map((s, idx) => normalizeWilayahItem(s, idx));
@@ -290,7 +292,7 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
   const handleSubmitForm = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.wilayah.trim() || !formData.namaOutlet.trim()) {
-      alert('Kolom Wilayah dan Nama Outlet wajib diisi!');
+      notify('Kolom Wilayah dan Nama Outlet wajib diisi!', 'warning');
       return;
     }
 
@@ -363,7 +365,7 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
         const rawJson: any[] = XLSX.utils.sheet_to_json(ws);
 
         if (!rawJson || rawJson.length === 0) {
-          alert('Berkas Excel kosong atau tidak terbaca.');
+          notify('Berkas Excel kosong atau tidak terbaca.', 'error');
           return;
         }
 
@@ -389,7 +391,7 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
         handleSaveToDatabase(imported);
         if (fileInputRef.current) fileInputRef.current.value = '';
       } catch (err: any) {
-        alert('Gagal membaca format file Excel: ' + err.message);
+        notify('Gagal membaca format file Excel: ' + err.message, 'error');
       }
     };
     reader.readAsBinaryString(file);

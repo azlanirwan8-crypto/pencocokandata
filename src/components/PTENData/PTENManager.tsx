@@ -26,6 +26,7 @@ import { loadPtenFromNeon, savePtenToNeon } from '../../utils/neonSync';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
 
 import { DEFAULT_PTEN_DATA } from './defaultPtenData';
+import { useNotification } from '../Notification/NotificationContext';
 
 interface PTENManagerProps {
   targetRows?: TargetRow[];
@@ -45,6 +46,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
   targetRows = [],
   onPtenCountChange,
 }) => {
+  const { add: notify } = useNotification();
   const [ptenList, setPtenList] = useState<PTENRecord[]>(DEFAULT_PTEN_DATA);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const deferredSearch = useDeferredValue(searchTerm);
@@ -233,7 +235,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
         const rawJson: any[] = XLSX.utils.sheet_to_json(ws);
 
         if (!rawJson || rawJson.length === 0) {
-          alert('Berkas Excel kosong atau tidak terbaca.');
+          notify('Berkas Excel kosong atau tidak terbaca.', 'error');
           return;
         }
 
@@ -289,7 +291,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
         }).filter((item) => Boolean(item.kodePosPten && item.kodePosPten !== '00000'));
 
         if (imported.length === 0) {
-          alert('Tidak ada baris data valid yang berhasil dibaca dari berkas Excel.');
+          notify('Tidak ada baris data valid yang berhasil dibaca dari berkas Excel.', 'error');
           return;
         }
 
@@ -299,7 +301,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
         setSuccessMsg(`Berhasil mengimpor ${imported.length.toLocaleString('id-ID')} baris data master PTEN!`);
         setTimeout(() => setSuccessMsg(null), 4000);
       } catch (err: any) {
-        alert('Gagal membaca format file Excel: ' + err.message);
+        notify('Gagal membaca format file Excel: ' + err.message, 'error');
       }
     };
     reader.readAsBinaryString(file);
@@ -382,7 +384,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
   const handleSubmitForm = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.kodePosPten.trim() || !formData.kotaPten.trim()) {
-      alert('Kolom Kode Pos PTEN dan Kota/Kabupaten wajib diisi!');
+      notify('Kolom Kode Pos PTEN dan Kota/Kabupaten wajib diisi!', 'warning');
       return;
     }
 

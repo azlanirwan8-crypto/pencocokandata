@@ -1,24 +1,47 @@
-import React, { useMemo, useState, useDeferredValue } from 'react';
-import { ClipboardCheck, Search, FileSpreadsheet, Undo2, RotateCcw } from 'lucide-react';
+import React, { useEffect, useMemo, useState, useDeferredValue } from 'react';
+import { ClipboardCheck, Search, FileSpreadsheet, Undo2, RotateCcw, Eye, Trash2, X, Building2, ShieldCheck, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import type { AnalystRow } from '../../utils/analystPipeline';
 import { formatWilayahCode, applyStandardSheetStyle } from '../../utils/excel';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface FinalDataManagerProps {
   rows: AnalystRow[];
   onReturnAll: () => void;
   onReturnRow: (rowId: string) => void;
+  onDeleteRow: (rowId: string) => void;
 }
 
 const PAGE_SIZE = 25;
 
 // Final Data: hasil analisa 3 fase yang sudah disetujui operator.
 // Baris dipindah dari Data Analyst ke sini (IndexedDB `analyst_final_data`).
-export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onReturnAll, onReturnRow }) => {
+export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onReturnAll, onReturnRow, onDeleteRow }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const deferredSearch = useDeferredValue(searchTerm);
   const [wilayahFilter, setWilayahFilter] = useState('ALL');
   const [page, setPage] = useState(1);
+  // Aksi yang butuh konfirmasi (menggantikan window.confirm native).
+  const [confirmAction, setConfirmAction] = useState<{ kind: 'returnAll' | 'revise' | 'delete'; row?: AnalystRow } | null>(null);
+  // Modal Detail (View) per baris.
+  const [detailRow, setDetailRow] = useState<AnalystRow | null>(null);
+
+  // Escape menutup modal Detail.
+  useEffect(() => {
+    if (!detailRow) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDetailRow(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [detailRow]);
+
+  // Card informasi ringkas (kebutuhan BRD 5d).
+  const metrics = useMemo(() => ({
+    total: rows.length,
+    kc: rows.filter((r) => r.tipeUnit === 'KC').length,
+    kcp: rows.filter((r) => r.tipeUnit === 'KCP').length,
+    roleLengkap: rows.filter((r) => r.is3RoleLengkap).length,
+    wilayah: new Set(rows.map((r) => r.wilayah).filter(Boolean)).size,
+  }), [rows]);
 
   const wilayahOptions = useMemo(() => {
     const s = new Set<string>();
@@ -101,7 +124,7 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
               className="btn btn-outline btn-sm"
               onClick={() => {
                 if (rows.length === 0) return;
-                if (window.confirm(`Kembalikan ${rows.length.toLocaleString('id-ID')} baris ke Data Analyst? Final Data akan kosong.`)) onReturnAll();
+                setConfirmAction({ kind: 'returnAll' });
               }}
               disabled={rows.length === 0}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.76rem' }}
@@ -119,6 +142,23 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
               <FileSpreadsheet size={13} /> Export Excel
             </button>
           </div>
+        </div>
+
+        {/* Card informasi ringkas */}
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.8rem' }}>
+          {[
+            { icon: <ClipboardCheck size={13} />, label: 'Total Baris', value: metrics.total, color: '#405189' },
+            { icon: <Building2 size={13} />, label: 'KC', value: metrics.kc, color: '#0ab39c' },
+            { icon: <Building2 size={13} />, label: 'KCP', value: metrics.kcp, color: '#f7b84b' },
+            { icon: <ShieldCheck size={13} />, label: '3 Role Lengkap', value: metrics.roleLengkap, color: '#7048e8' },
+            { icon: <ClipboardCheck size={13} />, label: 'Wilayah', value: metrics.wilayah, color: '#299cdb' },
+          ].map((m, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', border: '1px solid #e9ebec', borderRadius: '6px', padding: '0.4rem 0.7rem', background: '#fbfcfd' }}>
+              <span style={{ color: m.color }}>{m.icon}</span>
+              <span style={{ fontSize: '0.7rem', color: '#64748b' }}>{m.label}</span>
+              <strong style={{ fontSize: '0.8rem', color: '#212529' }}>{m.value.toLocaleString('id-ID')}</strong>
+            </div>
+          ))}
         </div>
 
         <div style={{ display: 'flex', gap: '0.6rem', marginBottom: '0.8rem', flexWrap: 'wrap' }}>
@@ -206,17 +246,35 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
                       </span>
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      <button
-                        type="button"
-                        className="btn btn-outline btn-sm"
-                        onClick={() => {
-                          if (window.confirm(`Revisi baris ini? Data akan keluar dari Final Data dan kembali ke Fase 1 untuk diproses ulang.`)) onReturnRow(r.id);
-                        }}
-                        title="Kembalikan ke Fase 1 untuk diproses ulang"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.7rem', padding: '0.25rem 0.5rem', color: '#f06548', borderColor: 'rgba(240,101,72,0.4)' }}
-                      >
-                        <RotateCcw size={12} /> Revisi
-                      </button>
+                      <div style={{ display: 'inline-flex', gap: '0.3rem', alignItems: 'center' }}>
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-sm"
+                          onClick={() => setDetailRow(r)}
+                          title="Lihat detail lengkap baris ini"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.7rem', padding: '0.25rem 0.5rem', color: '#405189', borderColor: 'rgba(64,81,137,0.4)' }}
+                        >
+                          <Eye size={12} /> Detail
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-sm"
+                          onClick={() => setConfirmAction({ kind: 'revise', row: r })}
+                          title="Kembalikan ke Data Analyst mulai Fase 1"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.7rem', padding: '0.25rem 0.5rem', color: '#d97706', borderColor: 'rgba(217,119,6,0.4)' }}
+                        >
+                          <RotateCcw size={12} /> Revisi
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-sm"
+                          onClick={() => setConfirmAction({ kind: 'delete', row: r })}
+                          title="Hapus permanen dari Final Data"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.7rem', padding: '0.25rem 0.5rem', color: '#f06548', borderColor: 'rgba(240,101,72,0.4)' }}
+                        >
+                          <Trash2 size={12} /> Hapus
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -234,6 +292,98 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
               <button type="button" className="btn btn-outline btn-sm" disabled={hal <= 1} onClick={() => setPage(hal - 1)}>← Prev</button>
               <span style={{ alignSelf: 'center', fontSize: '0.74rem', color: '#878a99' }}>Hal {hal} / {totalHal}</span>
               <button type="button" className="btn btn-outline btn-sm" disabled={hal >= totalHal} onClick={() => setPage(hal + 1)}>Next →</button>
+            </div>
+          </div>
+        )}
+
+        <ConfirmDialog
+          isOpen={confirmAction !== null}
+          icon={<AlertTriangle size={20} />}
+          accent={confirmAction?.kind === 'delete' ? '#f06548' : '#f7b84b'}
+          title={
+            confirmAction?.kind === 'delete' ? 'Hapus Data Final?'
+              : confirmAction?.kind === 'revise' ? 'Revisi Baris?'
+                : 'Kembalikan ke Data Analyst?'
+          }
+          message={
+            confirmAction?.kind === 'delete' && confirmAction.row
+              ? `Baris #${confirmAction.row.no} (${confirmAction.row.kelurahan}, ${confirmAction.row.kotaPtenMax15 || confirmAction.row.kotaPten}) akan DIHAPUS PERMANEN dari Final Data. Baris ini bisa dianalisa ulang dari awal bila diperlukan.`
+                : confirmAction?.kind === 'revise' && confirmAction.row
+                  ? `Baris #${confirmAction.row.no} (${confirmAction.row.namaOutlet}) akan keluar dari Final Data dan kembali ke Data Analyst mulai Fase 1 untuk diproses ulang.`
+                    : `${rows.length.toLocaleString('id-ID')} baris akan dikembalikan ke Data Analyst. Final Data akan kosong.`
+          }
+          confirmLabel={confirmAction?.kind === 'delete' ? 'Ya, Hapus Permanen' : 'Ya, Lanjutkan'}
+          onConfirm={() => {
+            if (!confirmAction) return;
+            if (confirmAction.kind === 'returnAll') onReturnAll();
+            else if (confirmAction.kind === 'revise' && confirmAction.row) onReturnRow(confirmAction.row.id);
+            else if (confirmAction.kind === 'delete' && confirmAction.row) onDeleteRow(confirmAction.row.id);
+            setConfirmAction(null);
+          }}
+          onClose={() => setConfirmAction(null)}
+        />
+
+        {detailRow && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Detail baris Final Data"
+            style={{ position: 'fixed', inset: 0, zIndex: 1070, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', padding: '1rem' }}
+            onClick={() => setDetailRow(null)}
+          >
+            <div
+              style={{ width: '100%', maxWidth: '860px', maxHeight: '86vh', overflowY: 'auto', background: '#ffffff', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.18)', border: '1px solid #e9ebec' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ padding: '1.1rem 1.4rem 0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #eef1f4' }}>
+                <div>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#212529', margin: 0 }}>
+                    Detail Baris #{detailRow.no} — {detailRow.namaOutlet}
+                  </h3>
+                  <span style={{ fontSize: '0.74rem', color: '#878a99' }}>
+                    {detailRow.kelurahan}, {detailRow.kotaPtenMax15 || detailRow.kotaPten} · Kode Pos {detailRow.kodePosPten}
+                  </span>
+                </div>
+                <button type="button" onClick={() => setDetailRow(null)} aria-label="Tutup detail" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#adb5bd', padding: '0.2rem', display: 'flex' }}>
+                  <X size={18} />
+                </button>
+              </div>
+              <div style={{ padding: '0.9rem 1.4rem 1.2rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '0.55rem 1.1rem', fontSize: '0.78rem' }}>
+                {([
+                  ['Fase 1 — Kota/Kabupaten', detailRow.kotaPtenMax15 || detailRow.kotaPten],
+                  ['Fase 1 — Kode Pos PTEN', detailRow.kodePosPten],
+                  ['Fase 1 — Kelurahan', detailRow.kelurahan],
+                  ['Fase 1 — Kecamatan', detailRow.kecamatan],
+                  ['Fase 1 — Provinsi', detailRow.provinsi],
+                  ['Fase 1 — Status PTEN', detailRow.statusPten],
+                  ['Fase 1 — Penempatan', detailRow.placementStatus],
+                  ['Fase 1 — Metode', detailRow.placementMethod],
+                  ['Fase 2 — Wilayah', detailRow.wilayah],
+                  ['Fase 2 — Sandi Cabang', detailRow.sandiCabang],
+                  ['Fase 2 — Cabang', detailRow.cabang],
+                  ['Fase 2 — Branch Code', detailRow.branchCode],
+                  ['Fase 2 — Kode Cabang', detailRow.kodeCabang],
+                  ['Fase 2 — Status Outlet', detailRow.statusOutlet],
+                  ['Fase 2 — ALAMAT', detailRow.alamat],
+                  ['Fase 3 — Organisasi Tujuan', detailRow.organisasiTujuan],
+                  ['Fase 3 — Tipe Unit', detailRow.tipeUnit],
+                  ['Fase 3 — CABSAL / CABAPV1 / CABAPV2', `${detailRow.roleCabsal} / ${detailRow.roleCabapv1} / ${detailRow.roleCabapv2}`],
+                  ['Fase 3 — 3 Role Lengkap', detailRow.is3RoleLengkap ? 'LENGKAP' : 'BELUM'],
+                  ['Fase 3 — Alur Wondr', detailRow.alurWondr],
+                  ['Fase 3 — Skor Keyakinan', `${detailRow.confidenceScore}%`],
+                  ['Status Analisa', detailRow.isFinalApproved ? 'FINAL' : detailRow.statusAnalisa],
+                ] as [string, string | number][]).map(([label, value]) => (
+                  <div key={label} style={{ borderBottom: '1px dashed #eef1f4', paddingBottom: '0.3rem' }}>
+                    <div style={{ fontSize: '0.66rem', color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{label}</div>
+                    <div style={{ color: '#212529', fontWeight: 600, wordBreak: 'break-word' }}>{String(value || '-')}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ padding: '0.9rem 1.4rem', borderTop: '1px solid #eef1f4', display: 'flex', justifyContent: 'flex-end' }}>
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => setDetailRow(null)} style={{ padding: '0.45rem 1.1rem', fontSize: '0.8rem' }}>
+                  Tutup
+                </button>
+              </div>
             </div>
           </div>
         )}
