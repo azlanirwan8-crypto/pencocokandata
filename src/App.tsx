@@ -16,7 +16,7 @@ import { KodePosManager } from './components/KodePosData/KodePosManager';
 import { AnalystCanvas } from './components/WorkingEngine/AnalystCanvas';
 import { AnalystResultsGrid } from './components/WorkingEngine/AnalystResultsGrid';
 import { FinalDataManager } from './components/WorkingEngine/FinalDataManager';
-import { executeAnalystPipeline, cityMatchKey, makeFinalKey, hitungBit, bitTemuanBaris, type AnalystRow, type AnalystCoverage } from './utils/analystPipeline';
+import { executeAnalystPipeline, cityMatchKey, makeFinalKey, hitungBit, bitTemuanBaris, AnalisaDibatalkan, type AnalystRow, type AnalystCoverage } from './utils/analystPipeline';
 import { SinyalTemuanModal } from './components/WorkingEngine/SinyalTemuanModal';
 import { detectFinalAnomalies } from './utils/finalAnomaly';
 import type { ActiveTab } from './components/Sidebar';
@@ -512,6 +512,18 @@ export const App: React.FC = () => {
     return { finalCount, distinctKodePos, totalKodePos, belumDikerjakan, anomali, top };
   }, [finalRows, kodePosMasterRows, kodePosCount, masterRows]);
 
+  // ✋ Pembatalan analisa (A4): flag bersama yang dibaca pipeline tiap `tick()`.
+  // Hasil run baru ditulis setelah pipeline kembali, jadi membatalkan tidak pernah
+  // meninggalkan hasil setengah jadi.
+  const pembatalAnalisaRef = useRef<{ batal: boolean }>({ batal: false });
+  const [isCancelling, setIsCancelling] = useState<boolean>(false);
+
+  const handleBatalkanAnalisa = () => {
+    if (!isAnalyzing) return;
+    pembatalAnalisaRef.current.batal = true;
+    setIsCancelling(true);
+  };
+
   // Execution Trigger for New Data Analyst Engine (3-Phase Pipeline)
   // `overrides` dipakai saat re-run langsung setelah Setujui/Batalkan — state
   // cityOverrides belum ter-update di render ini, jadi kirim nilainya eksplisit.
@@ -523,6 +535,8 @@ export const App: React.FC = () => {
   ) => {
     const targetFase = sampaiFase ?? faseBerikutnya;
     const lama = analystRows;
+    pembatalAnalisaRef.current = { batal: false };
+    setIsCancelling(false);
     setIsAnalyzing(true);
     setAnalystProgress(10);
     setAnalystMessage(`Menyiapkan 5 Data Master & indeks memori O(1)... (Fase ${targetFase})`);
@@ -603,16 +617,17 @@ export const App: React.FC = () => {
         reRunAnomaliesOnly,
         analystRows,
         // Analisis inkremental: kelurahan yang sudah ada di Final Data tidak diulang.
-        new Set(finalRows.map((fr) => makeFinalKey(fr.kodePosPten, fr.kelurahan))),
-        targetFase
+        new Set(finalRows.map((fr) => makeFinalKey(fr.kodePosPten, fr.kelurahan, fr.kecamatan, fr.kotaPten))),
+        targetFase,
+        pembatalAnalisaRef.current
       );
 
       // Persetujuan fase sebelumnya ikut dipindah ke baris hasil baru — kunci baris
-      // = kode pos PTEN + kelurahan (sama seperti kunci Final Data).
+      // = kode pos PTEN + kelurahan + kecamatan + kota (sama seperti kunci Final Data).
       const persetujuanLama = new Map<string, AnalystRow>();
-      lama.forEach((r) => persetujuanLama.set(makeFinalKey(r.kodePosPten, r.kelurahan), r));
+      lama.forEach((r) => persetujuanLama.set(makeFinalKey(r.kodePosPten, r.kelurahan, r.kecamatan, r.kotaPten), r));
       const hasil = results.map((r) => {
-        const l = persetujuanLama.get(makeFinalKey(r.kodePosPten, r.kelurahan));
+        const l = persetujuanLama.get(makeFinalKey(r.kodePosPten, r.kelurahan, r.kecamatan, r.kotaPten));
         if (!l) return r;
         return {
           ...r,
@@ -641,6 +656,15 @@ export const App: React.FC = () => {
     } catch (err: any) {
       setIsAnalyzing(false);
       setCurrentActivePhase(0);
+      setIsCancelling(false);
+      if (err instanceof AnalisaDibatalkan) {
+        // Tidak ada yang ditulis: `analystRows` lama masih utuh karena hasil baru
+        // baru disimpan setelah pipeline selesai.
+        setAnalystProgress(0);
+        setAnalystMessage('Analisa dibatalkan — hasil tidak disimpan.');
+        notify('Analisa dibatalkan. Data sebelumnya masih utuh, tidak ada hasil setengah jadi yang disimpan.', 'info');
+        return;
+      }
       // Bukan error fatal: analisanya berhenti rapi & state sudah dikembalikan,
       // jadi cukup notifikasi yang tidak hilang sendiri.
       notify('Terjadi kesalahan saat menjalankan analisa: ' + err?.message, 'error');
@@ -1170,6 +1194,8 @@ export const App: React.FC = () => {
                 progressMessage={analystMessage}
                 onStartAnalysis={() => handleStartAnalystPipeline(false)}
                 onResetAnalysis={handleResetAnalyst}
+                onBatalkanAnalysis={handleBatalkanAnalisa}
+                isCancelling={isCancelling}
                 hasExistingResults={analystRows.length > 0}
                 masterCounts={{
                   pten: ptenList.length,

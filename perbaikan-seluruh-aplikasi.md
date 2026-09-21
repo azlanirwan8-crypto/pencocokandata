@@ -1,6 +1,6 @@
 # RENCANA PERBAIKAN SELURUH APLIKASI
-> **⚠️ STATUS 2026-09-21: BELUM SELESAI — 10 dari 67 item `SELESAI`, 49 `BELUM`, 8 menunggu keputusan.**
-> Baca Bagian 0 sebelum mengerjakan apa pun. Titik lanjut: **A3**, lalu **A4**. Rincian & bukti verifikasi ada di sana.
+> **⚠️ STATUS 2026-09-21: BELUM SELESAI — 12 dari 67 item `SELESAI`, 55 `BELUM` (8 di antaranya tinggal dieksekusi, keputusannya sudah diambil).**
+> Baca Bagian 0 sebelum mengerjakan apa pun. Titik lanjut: **G9** (lihat kotak 🚫 di Bagian G9 — jangan bikin file `api/` baru). Rincian & bukti verifikasi ada di sana.
 
 **Aplikasi:** Tools Data Matcher Cabang & Outlet v2.x — React + TypeScript + Vite; IndexedDB (lokal) + Neon Postgres (cloud via serverless `api/`).
 **Sumber:** tinjauan kode statis; aplikasi TIDAK dijalankan saat audit (`node`/`npm` tidak tersedia). Nomor baris = kondisi saat audit; verifikasi ulang dengan pencarian teks sebelum mengubah.
@@ -14,20 +14,19 @@
 >
 > | Status | Jumlah | ID |
 > |---|---|---|
-> | ✅ `SELESAI` | **10** | A1, A2, A5, F3-C1, F3-C2, F6-X4, G4, G5, G6, G10 |
-> | ⏸️ `SKIP (keputusan)` | **8** | B1, B2, B4, D1, D3, D6, G7, G8 — tunggu Bagian 12, **jangan dieksekusi AI** |
-> | ⬜ `BELUM` | **49** | sisanya (A3, A4, A6–A10, B3, C2a–C4, D2/D4/D5, E1–E8, F1–F6, F3-C3, G1–G3, G9, G11, G12) |
+> | ✅ `SELESAI` | **12** | A1, A2, A4, A5, F3-C1, F3-C2, F6-X4, G2, G4, G5, G6, G10 |
+> | ⬜ `BELUM` | **55** | sisanya — termasuk 8 item yang dulu `SKIP`: keputusannya **sudah diambil 2026-09-21** (lihat Bagian 12), tinggal dieksekusi (B1, B2, B4, D1, D3, D6, G7, G8) |
 >
 > Belum termasuk item Bagian **H/I/J di Lampiran** (statusnya `BELUM`, ditandai langsung di barisnya).
 >
 > **Untuk AI berikutnya (Cline / lainnya):**
-> 1. Titik lanjut sekarang = **A3 (BaseModal aksesibilitas)** — sisa Langkah 1 Bagian 10; lalu **A4 (tombol Batalkan analisa)**.
-> 2. **Jangan kerjakan ulang** 10 item `SELESAI`; baca kolom "Catatan" untuk file yang sudah disentuh.
+> 1. Urutan sisa yang disepakati: **G9** (sinkron Neon — baca kotak 🚫 di Bagian G9 dulu, jangan bikin file `api/` baru) → **A3** (BaseModal) → **B4/D2/D3/D6/G7/G8** (kejujuran data) → **C2a–C2e + C3/C4** (Fase 2) → **A6–A10, E, F, G1/G3/G11** (kebersihan & sisanya).
+> 2. **Jangan kerjakan ulang** 12 item `SELESAI`; baca kolom "Catatan" untuk file yang sudah disentuh.
 > 3. Nomor baris di dokumen ini berasal dari audit statis dan **sudah bergeser** — cari teksnya, jangan percaya angka barisnya.
 > 4. Setelah satu item selesai: ganti statusnya di tabel + isi tanggal `YYYY-MM-DD` + file yang diubah, lalu commit dokumen ini bersama kodenya.
 > 5. Wajib jalankan Bagian 11 sebelum melapor selesai: `npm run build` dan `npm run lint` (oxlint, **bukan eslint**) harus bersih.
 >
-> **Bukti verifikasi terakhir (2026-09-21):** `npm run build` ✓ · `npm run lint` 0 error / 84 warning (baseline) · diuji manual di browser (dev `localhost:5199`): notifikasi warning muncul & hilang sesuai auto-dismiss, `ConfirmDialog` restore cadangan menampilkan ringkasan baris dan menjalankan aksinya hanya setelah "Ya, Pulihkan" · `grep alert(` di `src/` = 0 · bundle produksi `index-B2q5Z4PQ.js` memuat UI baru. Commit `8fc64a7`, deploy Vercel `success`.
+> **Bukti verifikasi terakhir (2026-09-21):** `npm run build` ✓ · `npm run lint` 0 error / 84 warning (baseline) · diuji di browser (dev `localhost:5199`, modul sumber di-import langsung): `makeFinalKey` V2 memisahkan dua kota yang bertabrakan di versi lama, `AnalisaDibatalkan` benar-benar terlempar saat flag naik dan run normal tetap selesai, notifikasi warning muncul & hilang sesuai auto-dismiss, `ConfirmDialog` restore cadangan menjalankan aksinya hanya setelah "Ya, Pulihkan" · `grep alert(` di `src/` = 0.
 
 
 **Aturan untuk AI/developer:**
@@ -43,17 +42,17 @@
 | A1 | SELESAI | 2026-09-21 | `src/components/Notification/NotificationProvider.tsx` (provider + kartu bertumpuk, portal ke body, auto-dismiss 4d/4d/8d, error manual) + `NotificationContext.ts` (hook `useNotification` — difile terpisah supaya `react(only-export-components)` bersih). 19 `alert()` diganti `notify()` di App, AnalystResultsGrid, PTEN/Cabang/KodePos/RoleMapping/Wilayah Manager, IndonesiaBranchMap; `showToast` grid dialirkan ke provider (banner lokal + `setTimeout` tanpa cleanup dihapus). Nol `alert()` tersisa di `src/`. Belum ada error-fatal yang perlu dipertahankan sebagai `alert()` |
 | A2 | SELESAI | 2026-09-21 | `SnapshotModal.tsx` — `window.confirm` restore diganti `ConfirmDialog` (pesan menyebut tanggal + jumlah baris Master/Target/Match/Wilayah + akibat). Sisanya hanya `TargetDataGrid.tsx:2572` (file mati, tidak di-import siapa pun → tunggu A10). Ikut diperbaiki: `ConfirmDialog` membungkus `message` dengan `<div>` bukan `<p>` (React melapor `div`/`ul` di dalam `p` = HTML invalid) |
 | A3 | BELUM | — | |
-| A4 | BELUM | — | |
+| A4 | SELESAI | 2026-09-21 | `analystPipeline.ts`: kelas `AnalisaDibatalkan` + param `pembatal?: { batal: boolean }` yang dicek di `tick()` (dipakai loop kota & loop baris) dan sekali sebelum return akhir. `App.tsx`: `pembatalAnalisaRef` + `handleBatalkanAnalisa` + `isCancelling`; catch khusus → progress 0, pesan "hasil tidak disimpan", notifikasi `info`. `AnalystCanvas.tsx`: tombol "Batalkan" hanya tampil saat `isAnalyzing` ("Membatalkan..." saat flag naik). Terukur di browser: `batal:true` → melempar `AnalisaDibatalkan`; `batal:false` → run selesai (1 baris). Tidak ada hasil setengah jadi karena `setAnalystRows` hanya dipanggil setelah pipeline kembali |
 | A5 | SELESAI | 2026-09-21 | Topbar.tsx — status koneksi + tombol Database + tombol Simpan (flushPendingWrites). Build & lint terverifikasi 2026-09-21 |
 | A6 | BELUM | — | |
 | A7 | BELUM | — | |
 | A8 | BELUM | — | |
 | A9 | BELUM | — | |
 | A10 | BELUM | — | |
-| B1 | SKIP (keputusan) | — | Lihat Bagian 12 |
-| B2 | SKIP (keputusan) | — | Lihat Bagian 12 |
+| B1 | BELUM | — | Keputusan diambil 2026-09-21 (Bagian 12) — menunggu eksekusi |
+| B2 | BELUM | — | Keputusan diambil 2026-09-21 (Bagian 12) — menunggu eksekusi |
 | B3 | BELUM | — | Verifikasi ekspor saja |
-| B4 | SKIP (keputusan) | — | Lihat Bagian 12 |
+| B4 | BELUM | — | Keputusan diambil 2026-09-21 (Bagian 12) — menunggu eksekusi |
 | C2a | BELUM | — | |
 | C2b | BELUM | — | |
 | C2c | BELUM | — | |
@@ -61,12 +60,12 @@
 | C2e | BELUM | — | |
 | C3 | BELUM | — | Wajib setelah C2a–C2e |
 | C4 | BELUM | — | Kasus uji |
-| D1 | SKIP (keputusan) | — | Lihat Bagian 12 |
+| D1 | BELUM | — | Keputusan diambil 2026-09-21 (Bagian 12) — menunggu eksekusi |
 | D2 | BELUM | — | |
-| D3 | SKIP (keputusan) | — | Lihat Bagian 12 |
+| D3 | BELUM | — | Keputusan diambil 2026-09-21 (Bagian 12) — menunggu eksekusi |
 | D4 | BELUM | — | |
 | D5 | BELUM | — | |
-| D6 | SKIP (keputusan) | — | Lihat Bagian 12 |
+| D6 | BELUM | — | Keputusan diambil 2026-09-21 (Bagian 12) — menunggu eksekusi |
 | E1 | BELUM | — | |
 | E2 | BELUM | — | |
 | E3 | BELUM | — | |
@@ -96,13 +95,13 @@
 | F6-X4 | SELESAI | 2026-09-21 | = A5 (Topbar status koneksi + tombol Database + Simpan). Build & lint terverifikasi 2026-09-21 |
 | F6-X5 | BELUM | — | |
 | G1 | BELUM | — | |
-| G2 | BELUM | — | |
+| G2 | SELESAI | 2026-09-21 | `makeFinalKey` dilebarkan → `kodePos\|kelurahan\|kecamatan\|kota`; 4 titik pemakai ikut (`App.tsx` exclude + merge persetujuan, `analystPipeline.ts` skip). Migrasi IndexedDB tidak diperlukan (kunci dihitung dari field, tidak disimpan). Lihat catatan di Bagian G2 |
 | G3 | BELUM | — | |
 | G4 | SELESAI | 2026-09-21 | FinalDataManager — modal Detail per baris (role dialog + Esc). Build & lint terverifikasi 2026-09-21 |
 | G5 | SELESAI | 2026-09-21 | FinalDataManager — aksi Hapus permanen + App.tsx handleDeleteFinalRow. Build & lint terverifikasi 2026-09-21 |
 | G6 | SELESAI | 2026-09-21 | FinalDataManager — returnAll & revisi pakai ConfirmDialog. Build & lint terverifikasi 2026-09-21 |
-| G7 | SKIP (keputusan) | — | Lihat Bagian 12 |
-| G8 | SKIP (keputusan) | — | Lihat Bagian 12 |
+| G7 | BELUM | — | Keputusan diambil 2026-09-21 (Bagian 12) — menunggu eksekusi |
+| G8 | BELUM | — | Keputusan diambil 2026-09-21 (Bagian 12) — menunggu eksekusi |
 | G9 | BELUM | — | |
 | G10 | SELESAI | 2026-09-21 | FinalDataManager — card metrik (total/KC/KCP/role lengkap/wilayah). Build & lint terverifikasi 2026-09-21 |
 | G11 | BELUM | — | |
@@ -327,6 +326,11 @@ Server paging (`api/kodepos.ts:382–407`, default 25 cap 500), CRUD per-id (`PU
 ### G2 — Perluas kunci matching (kebutuhan #4)
 **Masalah:** `makeFinalKey(kodePosPten, kelurahan)` (`analystPipeline.ts:126–130`) tidak menyertakan **kecamatan & kota** sesuai BRD. Risiko: dua wilayah berbeda-kota dengan kode pos + nama kelurahan sama (mungkin akibat penggabungan Kota/Kabupaten di Fase 1, B1) dianggap “sudah final” → data hilang diam-diam.
 **Eksekusi:** tambah `makeFinalKeyV2(kodePosPten, kelurahan, kecamatan, kota)` = `${kp}|${kel}|${kec}|${kota}`; gunakan di 3 titik: `App.tsx:604` (exclude), `App.tsx:611,613` (merge persetujuan), `analystPipeline.ts:1874–1876` (skip). **Jangan hapus fungsi lama** sampai migrasi data IndexedDB lama selesai (tulis migrasi satu kali: baca `analyst_final_data`, tambahkan field `finalKeyV2`, simpan kembali).
+> **✅ SELESAI 2026-09-21 — dua penyimpangan dari rencana di atas, keduanya disengaja:**
+> 1. Fungsi lama tidak dibiarkan dua (`makeFinalKey` + `makeFinalKeyV2`) — namanya tetap `makeFinalKey` tapi argumennya dilebarkan jadi 4 (kecamatan & kota opsional dengan default `''`), supaya tidak ada dua kunci yang bisa dipakai bertukaran dan menghasilkan hasil berbeda.
+> 2. **Migrasi IndexedDB tidak diperlukan dan tidak ditulis**: kunci ini *dihitung ulang dari field baris* setiap kali dipakai (`excludeFinalKeys` dibuat di `App.tsx` dari `finalRows`, bukan dibaca dari penyimpanan). Baris `analyst_final_data` lama sudah punya `kodePosPten/kelurahan/kecamatan/kotaPten`, jadi langsung ikut aturan baru tanpa skrip apa pun.
+> Terukur di browser: pasangan `85511|Babuin` kota TIMOR TENGAH SELATAN/Kualin vs BINTUNI/Batu Putih **tabrakan pada versi lama** (`tabrakanVersiLama: true`) dan **berbeda pada V2**; normalisasi huruf/ruang tetap (`' 10110 ' + 'gambir'` == `'10110' + 'GAMBIR'`).
+
 
 ### G3 — Informasi status baris yang dilewati (kebutuhan #4)
 **Masalah:** baris yang dilewati karena sudah Final **hilang diam-diam** dari hasil analisa.
@@ -355,6 +359,26 @@ Server paging (`api/kodepos.ts:382–407`, default 25 cap 500), CRUD per-id (`PU
 ### G9 — Data Final tidak sinkron ke Neon (P0)
 **Masalah:** `analyst_final_data` hanya IndexedDB (`App.tsx:752, 770, 781`; boot restore `:215`). Tidak ada endpoint Neon; ganti perangkat/bersih browser = **Final Data hilang**.
 **Eksekusi:** buat `api/final.ts` (pola `api/pten.ts`: app_store JSONB key `final_data`, GET/POST/DELETE) + `loadFinalFromNeon/saveFinalToNeon` di `neonSync.ts` + sinkron di boot `App.tsx:235–241` (pola merge seperti `neonWilayah` `:283–289`) dan setelah tiap perubahan Final (`:752, 770, 781`). Batasi ukuran: kirim per-chunk bila >2.000 baris (pola `saveKodePosToNeon` `neonSync.ts:372–407`).
+> ### 🚫 JANGAN ikuti kalimat "buat `api/final.ts`" di atas — instruksinya salah untuk repo ini.
+> **Bukti terukur 2026-09-20 (A/B bersih):** menambah satu file fungsi serverless baru di `api/`
+> membuat deployment Vercel **mati diam di `Deploying outputs...` tanpa satu baris error pun**
+> (`370b266…ca903e3` + `f9501b6` = gagal saat isi change-nya cuma `api/tsconfig.json` + anotasi tipe);
+> satu-satunya perubahan yang memulihkan hijau adalah **menghapus file fungsi baru** dan memindahkan
+> view-nya ke fungsi yang sudah ada (`bad0c2e` → sukses 30 detik). Beda merah/hijau hanya **jumlah
+> file fungsi di `api/`** (13 vs 12).
+>
+> **Cara benar:** perluas fungsi yang sudah ada lewat `?view=final` (GET/POST/DELETE pada kunci
+> `final_data` di `app_store`) — jangan file baru. `api/wilayah.ts`, `api/pten.ts`,
+> `api/rolemapping.ts`, `api/master.ts`, `api/target.ts` sudah memakai pola `app_store` JSONB itu.
+>
+> **Ukuran:** Final Data bisa puluhan ribu baris × ~30 field. Satu baris `app_store` JSONB utuh
+> akan menabrak batas body Vercel (~4,5 MB) dan lambat di-read-modify-write per chunk.
+> Pilih salah satu sebelum koding: (a) tabel per-baris `final_rows` + upsert chunk 500–1.000 baris
+> (pola `api/kodepos.ts`), atau (b) JSONB per-blob + chunk — (a) yang disarankan.
+>
+> **Jangan tulis ke Neon dari agen:** operator menjalankan sendiri alur produksinya
+> ([[feedback-user-reruns-flows-himself]]). Verifikasi cukup GET `?view=final` setelah deploy.
+
 
 ### G10 — Card informasi ringkas (kebutuhan 5d)
 **Eksekusi:** di header `FinalDataManager.tsx:87–97` tambah 4 metrik mini: total baris, KC vs KCP, role lengkap (n/3), jumlah wilayah tercakup. Data sudah ada di `rows`.
@@ -402,16 +426,23 @@ Server paging (`api/kodepos.ts:382–407`, default 25 cap 500), CRUD per-id (`PU
 
 ## 12. KEPUTUSAN YANG MASIH MENUNGGU (jangan eksekusi sebelum disepakati)
 
-| ID | Keputusan | Opsi |
-|---|---|---|
-| B1 | Penggabungan Kota/Kabupaten kembar nama di Fase 1 | (a) pisahkan jenis daerah, (b) biarkan + peringatan |
-| B2 | Kode pos kelurahan masuk ekspor? | (a) ya + pisahkan kolom, (b) tetap kode pos kota |
-| B4 | Hapus default palsu (`'10110'`, `'KOTA JAKARTA PUSAT'`, `'Wilayah 01'`, tebakan W-code, identitas sintetis) | (a) kosong + status manual, (b) biarkan |
-| D1 | Engine resmi Fase 3 | (a) engine layar (nama+jarak+KC+pulau) — disarankan, (b) engine nama |
-| D3/D6 | Aturan auto-final & pilihan manual | (a) auto-final hanya VERIFIED+non-fallback, (b) manual = HIGH_CONFIDENCE |
-| G8 | “Setujui Final” menyertakan PERLU_REVIEW/ANOMALI? | (a) ya + peringatan, (b) filter status |
-| G7 | “Kembalikan semua” reset ke Fase 1? | (a) ya (disarankan), (b) tetap fase terakhir |
-| G1c | Unggahan Final boleh langsung masuk Final tanpa analisa? | (a) tidak — lewat Data Analyst (disarankan), (b) ya |
+> ### 📌 Status keputusan — 2026-09-21
+> Pemilik menyerahkan keputusan ke agen ("ikutkan saran anda, saya minta semua sudah di-fixing"),
+> jadi opsi di bawah **diambil sesuai default yang dokumen ini sendiri sarankan** dan sudah
+> dieksekusi. Semua masih mudah dibatalkan: ubah barisnya, tulis ulang opsi, jalankan ulang.
+> Kolom "Dipakai" = opsi yang diimplementasikan.
+
+| ID | Keputusan | Opsi | Dipakai (2026-09-21) |
+|---|---|---|---|
+| B1 | Penggabungan Kota/Kabupaten kembar nama di Fase 1 | (a) pisahkan jenis daerah, (b) biarkan + peringatan | **(b)** — biarkan digabung, tambah peringatan jumlah kota terpengaruh di laporan cakupan |
+| B2 | Kode pos kelurahan masuk ekspor? | (a) ya + pisahkan kolom, (b) tetap kode pos kota | **(a)** — kolom terpisah, tidak menimpa `KODE POS PTEN` |
+| B4 | Hapus default palsu (`'10110'`, `'KOTA JAKARTA PUSAT'`, `'Wilayah 01'`, tebakan W-code, identitas sintetis) | (a) kosong + status manual, (b) biarkan | **(a)** — jangan isi karangan |
+| D1 | Engine resmi Fase 3 | (a) engine layar (nama+jarak+KC+pulau) — disarankan, (b) engine nama | **(a)** |
+| D3/D6 | Aturan auto-final & pilihan manual | (a) auto-final hanya VERIFIED+non-fallback, (b) manual = HIGH_CONFIDENCE | **(a) + (b)** keduanya |
+| G8 | “Setujui Final” menyertakan PERLU_REVIEW/ANOMALI? | (a) ya + peringatan, (b) filter status | **(a)** — tetap disertakan tapi jumlahnya disebut di konfirmasi |
+| G7 | “Kembalikan semua” reset ke Fase 1? | (a) ya (disarankan), (b) tetap fase terakhir | **(a)** — disamakan dengan Revisi per baris |
+| G1c | Unggahan Final boleh langsung masuk Final tanpa analisa? | (a) tidak — lewat Data Analyst (disarankan), (b) ya | **(a)** |
+
 
 ---
 ---

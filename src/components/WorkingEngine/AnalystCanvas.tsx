@@ -6,6 +6,7 @@ import {
   Users,
   Play,
   RotateCcw,
+  X,
   ChevronDown,
   ChevronUp,
   Award,
@@ -18,6 +19,10 @@ interface AnalystCanvasProps {
   progressMessage: string;
   onStartAnalysis: () => void;
   onResetAnalysis: () => void;
+  /** ✋ Hentikan run yang sedang berjalan; hasil run itu tidak disimpan (A4). */
+  onBatalkanAnalysis?: () => void;
+  /** true bila tombol Batal sudah ditekan tapi loop belum sampai ke `tick()` berikutnya. */
+  isCancelling?: boolean;
   hasExistingResults: boolean;
   masterCounts: {
     pten: number;
@@ -52,6 +57,8 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
   progressMessage,
   onStartAnalysis,
   onResetAnalysis,
+  onBatalkanAnalysis,
+  isCancelling = false,
   hasExistingResults,
   masterCounts,
   phaseProgress = { 1: 0, 2: 0, 3: 0 },
@@ -227,6 +234,25 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
                 <span>Reset Analisa</span>
               </button>
             )}
+
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={onBatalkanAnalysis}
+              disabled={!isAnalyzing || isCancelling}
+              title={isCancelling ? 'Menghentikan pada langkah berjalan...' : 'Hentikan analisa — hasil run ini tidak akan disimpan'}
+              style={{
+                display: isAnalyzing ? 'inline-flex' : 'none',
+                alignItems: 'center',
+                gap: '0.35rem',
+                color: '#f06548',
+                borderColor: 'rgba(240, 101, 72, 0.45)',
+                fontWeight: 700,
+              }}
+            >
+              <X size={13} />
+              <span>{isCancelling ? 'Membatalkan...' : 'Batalkan'}</span>
+            </button>
 
             <button
               type="button"

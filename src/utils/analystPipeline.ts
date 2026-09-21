@@ -121,12 +121,17 @@ export function penjelasanFase1(r: {
   return { label: 'PERLU DICEK', alasan, nada: 'waspada' };
 }
 
-// Kunci identitas baris Final Data: kode pos PTEN + nama kelurahan ternormalisasi.
-// Dipakai analisis inkremental agar kelurahan yang sudah final tidak diproses ulang.
-export function makeFinalKey(kodePosPten: string, kelurahan: string): string {
-  const kp = String(kodePosPten || '').replace(/\D/g, '').trim();
-  const kel = String(kelurahan || '').trim().toUpperCase().replace(/\s+/g, ' ');
-  return `${kp}|${kel}`;
+/**
+ * Kunci identitas baris Final Data — kode pos PTEN + kelurahan + kecamatan + kota.
+ * Dipakai analisis inkremental (lewati yang sudah final) dan pemindahan persetujuan
+ * antar-run. Kecamatan & kota ikut karena dua kota berbeda bisa punya kode pos dan
+ * nama kelurahan yang sama; kalau keduanya tidak dihitung, baris kota B dianggap
+ * "sudah final" dan hilang diam-diam dari hasil analisa.
+ */
+export function makeFinalKey(kodePosPten: string, kelurahan: string, kecamatan = '', kota = ''): string {
+  const norm = (s: unknown) => String(s || '').trim().toUpperCase().replace(/\s+/g, ' ');
+  const kp = norm(kodePosPten).replace(/\D/g, '');
+  return `${kp}|${norm(kelurahan)}|${norm(kecamatan)}|${norm(kota)}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -937,6 +942,18 @@ export interface AnalystCoverage {
 }
 
 /**
+ * Dilempar pipeline ketika operator menekan "Batalkan". `App.tsx` menangkapnya dan
+ * TIDAK menyimpan apa pun — hasil run memang baru ditulis setelah pipeline selesai,
+ * jadi membatalkan selalu meninggalkan data sebelumnya utuh.
+ */
+export class AnalisaDibatalkan extends Error {
+  constructor() {
+    super('Analisa dibatalkan');
+    this.name = 'AnalisaDibatalkan';
+  }
+}
+
+/**
  * Menjalankan Pipeline Analisis 3 Fase langsung dari 5 Data Master
  */
 export async function executeAnalystPipeline(
@@ -954,7 +971,9 @@ export async function executeAnalystPipeline(
   excludeFinalKeys?: Set<string>,
   // 🚦 Alur bertahap: 1 = hanya Fase 1 yang dihitung & ditampilkan, lalu berhenti
   // untuk direview; 2 menambah Fase 2; 3 (default) menyelesaikan semuanya.
-  sampaiFase: 1 | 2 | 3 = 3
+  sampaiFase: 1 | 2 | 3 = 3,
+  // ✋ Ditulis `true` oleh tombol "Batalkan"; dicek tiap `tick()` di dalam loop.
+  pembatal?: { batal: boolean }
 ): Promise<{ rows: AnalystRow[]; coverage: AnalystCoverage }> {
   const startTime = performance.now();
   // 🚦 Alur bertahap: fase di atas `sampaiFase` tidak dihitung (Fase 3 = bagian termahal)
@@ -1414,7 +1433,10 @@ export async function executeAnalystPipeline(
   };
 
   // Non-blocking helpers: yield to browser event loop so progress bar can render
-  const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+  const tick = async () => {
+    if (pembatal?.batal) throw new AnalisaDibatalkan();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  };
   // Memo caches — fuzzy matching is O(n*m) and expensive; identical inputs repeat heavily
   const ptenFuzzyCache = new Map<string, { rec: PTENRecord | null; sinyal: number; catatan: Record<number, string[]> }>();
   const kodePosCityCache = new Map<string, { rows: KodePosRow[]; status: 'VERIFIED' | 'REVIEW'; method: string }>();
@@ -1871,7 +1893,7 @@ export async function executeAnalystPipeline(
       const provinsi = kpEntry.provinsi || meta.matchedProvinsi;
 
       // Analisis inkremental: lewati kelurahan yang SUDAH final (jangan diulang dari awal)
-      if (excludeFinalKeys && excludeFinalKeys.has(makeFinalKey(meta.finalKodePosPten, kelurahan))) {
+      if (excludeFinalKeys && excludeFinalKeys.has(makeFinalKey(meta.finalKodePosPten, kelurahan, kecamatan, meta.finalKotaPten))) {
         return;
       }
 
@@ -2041,6 +2063,10 @@ export async function executeAnalystPipeline(
       `${reviewCityCount > 0 ? `. Kota perlu review manual: ${reviewCityCount}` : ''}` +
       `${fallbackCityCount > 0 ? `. Kota tanpa data kodepos (baris fallback): ${fallbackCityCount}` : ''}.`);
   }
+
+  // Bagian akhir (jaring pengaman & laporan cakupan) tidak selalu melewati `tick()`,
+  // jadi batal masih dihormati sampai di sini.
+  if (pembatal?.batal) throw new AnalisaDibatalkan();
 
   return { rows: results, coverage };
 }
