@@ -1346,10 +1346,10 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                     </th>
                     <th colSpan={3} style={{ textAlign: 'center', background: '#eefaf6', color: '#0ab39c', borderLeft: '2px solid #b7ebe4' }}>
                       {innerTab === 'MANUAL'
-                        ? '🛡️ DATA PTEN (belum terpetakan — isi manual lewat Edit)'
+                        ? '🛡️ DATA PTEN (belum terpetakan)'
                         : '🛡️ DATA PTEN (Kota / Provinsi / Kode Pos)'}
                     </th>
-                    <th rowSpan={2} style={{ width: '165px', textAlign: 'center', verticalAlign: 'middle' }}>Aksi Review</th>
+                    <th rowSpan={2} style={{ width: '110px', textAlign: 'center', verticalAlign: 'middle' }}>Aksi Review</th>
                   </tr>
                   <tr>
                     {thSort('kelurahan', 'Kelurahan', { minWidth: '140px', borderLeft: '2px solid #d5e7f2' })}
@@ -1960,7 +1960,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                               </button>
                             );
                           })()}
-                          {(viewTab === 'fase1' || viewTab === 'fase2') && (
+                          {viewTab === 'fase2' && (
                             <button
                               type="button"
                               onClick={() => {
