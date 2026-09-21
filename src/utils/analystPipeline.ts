@@ -244,6 +244,17 @@ const BIT_URUT = [
 export const bitUntuk = (no: number): number => BIT_URUT[no - 1] || 0;
 export const hitungBit = (bitmask: number): number[] =>
   BIT_URUT.map((b, i) => ((bitmask & b) !== 0 ? i + 1 : 0)).filter(Boolean);
+
+/**
+ * E4: "bunyinya sama" bukan bukti identitas. Dua nama yang HANYA bertemu lewat
+ * transkripsi fonetik — tanpa satu pun sinyal kemiripan huruf/token — tidak boleh
+ * meloloskan baris ke penyetujuan otomatis.
+ */
+const BIT_NAMA =
+  SINYAL_BIT.jaccard | SINYAL_BIT.jaro | SINYAL_BIT.damerau | SINYAL_BIT.trigram |
+  SINYAL_BIT.lcs | SINYAL_BIT.gestalt | SINYAL_BIT.containment | SINYAL_BIT.initialism;
+export const hanyaBuktiFonetik = (bitmask: number): boolean =>
+  (bitmask & SINYAL_BIT.fonetik) !== 0 && (bitmask & BIT_NAMA) === 0;
 /**
  * Semua bit yang menangkap baris ini: bukti Fase 1 (kota/wilayah) + Fase 2 (nama kota
  * cabang terpilih, M5) + Fase 3 (role). Ketiganya disimpan TERPISAH supaya bisa dihitung
@@ -336,6 +347,9 @@ export function cleanAndStandardizeText(str: string): string {
 const ADMIN_NOISE_TOKENS = new Set([
   'KOTA', 'KABUPATEN', 'KAB', 'KODYA', 'KOTAMADYA', 'ADMINISTRASI', 'ADM', 'DAERAH', 'KHUSUS', 'I',
   'KECAMATAN', 'KEC', 'KELURAHAN', 'KEL', 'DESA', 'DUSUN', 'DUKUH',
+  // 'PROVINSI'/'PROV' cuma gelar administrasi; tanpanya "PROV KALIMANTAN TIMUR"
+  // gagal dikenali sebagai "KALIMANTAN TIMUR" (terukur di tests/uji-akurasi-nama.mjs).
+  'PROV', 'PROVINSI',
 ]);
 // Normalisasi pakar: canonical + buang token administratif. Dipakai SEMUA mesin
 // similarity (kota, kabupaten, kecamatan, kelurahan, provinsi, alamat, organisasi).
@@ -1017,6 +1031,10 @@ export interface AnalystCoverage {
   // Grup yang menampung "KOTA X" sekaligus "KABUPATEN X" (26 grup pada data kode pos
   // nasional 2026-09-21). Kelurahan keduanya disatukan di satu kota PTEN.
   mergedCities: Array<{ kota: string; kabupaten: string; rows: number }>;
+  // G3: baris yang dilewati karena kuncinya sudah ada di Final Data.
+  // Dipakai laporan cakupan: "X baris dilewati karena sudah ada di Final Data".
+  skippedFinalRows: number;
+  skippedFinalSamples: Array<{ kelurahan: string; kodePos: string; kota: string }>;
 }
 
 /**
@@ -2023,6 +2041,11 @@ export async function executeAnalystPipeline(
 
       // Analisis inkremental: lewati kelurahan yang SUDAH final (jangan diulang dari awal)
       if (excludeFinalKeys && excludeFinalKeys.has(makeFinalKey(meta.finalKodePosPten, kelurahan, kecamatan, meta.finalKotaPten))) {
+        // G3: catat baris yang dilewati agar laporan cakupan bisa melaporkan jumlahnya.
+        skippedFinalCount++;
+        if (skippedFinalSampleList.length < 20) {
+          skippedFinalSampleList.push({ kelurahan, kodePos: meta.finalKodePosPten, kota: meta.finalKotaPten });
+        }
         return;
       }
 
@@ -2092,6 +2115,7 @@ export async function executeAnalystPipeline(
           statusBaris === 'EXACT_MATCH' &&
           fase2Status === 'OTOMATIS_VALID' &&
           meta.placementStatus === 'VERIFIED' &&
+          !hanyaBuktiFonetik(meta.citySinyalBit) &&
           !meta.usedFallback,
       });
     });
@@ -2197,6 +2221,9 @@ export async function executeAnalystPipeline(
     unmappedCities,
     includedCities: Array.from(includedCityMap.values()).sort((a, b) => b.rows - a.rows),
     mergedCities: Array.from(mergedCityMap.values()).sort((a, b) => b.rows - a.rows),
+    // G3: baris yang dilewati karena sudah ada di Final Data.
+    skippedFinalRows: skippedFinalCount,
+    skippedFinalSamples: skippedFinalSampleList,
   };
   unanalysedRows.forEach((r) => { r.no = globalRowNo++; });
   results.push(...unanalysedRows);

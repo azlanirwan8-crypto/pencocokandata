@@ -14,9 +14,9 @@
 >
 > | Status | Jumlah | ID |
 > |---|---|---|
-> | SELESAI | **44** | A1, A2, A3, A4, A5, A6, A7, A8, B1, B2, B4, C2a, C2b, C2c, C2d, C2e, C3, C4, C5*, C6*, D1, D2, D3, D4, D5, D6, E1, E6, W1, W3, P1, F3-C1, F3-C2, R1, F6-X4, X5, G2, G4, G5, G6, G7, G8, G9, G10 |
+> | SELESAI | **48** | A1, A2, A3, A4, A5, A6, A7, A8, B1, B2, B4, C2a, C2b, C2c, C2d, C2e, C3, C4, C5*, C6*, D1, D2, D3, D4, D5, D6, E1, E2, E4, E5, E6, E8, W1, W3, P1, F3-C1, F3-C2, R1, F6-X4, X5, G2, G4, G5, G6, G7, G8, G9, G10 |
 > | SEDANG | **1** | A9 — breakpoint responsivitas belum; CSS mati menunggu konfirmasi hapus |
-> | BELUM | **24** | A10, B3, E2, E3, E4, E5, E7, E8, F1-W2, F2-P2, F2-P3, F3-C3, F4-R2, F4-R3, F5-K1, F5-K2, F5-K3, F6-X1, F6-X2, F6-X3, G1, G3, G11, G12 |
+> | BELUM | **20** | A10, B3, E3, E7, F1-W2, F2-P2, F2-P3, F3-C3, F4-R2, F4-R3, F5-K1, F5-K2, F5-K3, F6-X1, F6-X2, F6-X3, G1, G3, G11, G12 |
 >
 > \* C5 & C6 = dua temuan BARU dari screenshot operator (bug substring "KIM" & banjir antrean manual), ditambahkan 2026-09-21 sehingga total item jadi **69**.
 >
@@ -80,13 +80,13 @@
 | D5 | SELESAI | 2026-09-21 | `roleRecommender.ts`: `sameIsland` tidak lagi bernilai `true` saat salah satu pulau `"Lainnya"`. Ditambah flag `islandUnknown` — kandidat tetap dinilai (tidak dibuang, karena datanya memang tidak lengkap) tapi adaptor Fase 3 memotong keyakinannya ke 60 = `PERLU_REVIEW` + catatan sinyal 11 "pulau tidak dikenali — tidak dianggap satu pulau". Teruji: KCP tanpa provinsi/ Dati II dengan record "JAKARTA BRANCH OFFICE" â†' 60/PERLU_REVIEW, bukan 95/EXACT_MATCH |
 | D6 | SELESAI | 2026-09-21 | Opsi (b): `applyFase3Role` (pilihan manual operator) tidak lagi menulis `EXACT_MATCH` â€” sekarang `HIGH_CONFIDENCE`, jadi akurasi mesin tidak naik oleh keputusan manusia dan barisnya tidak lolos ke Final tanpa diperiksa |
 | E1 | SELESAI | 2026-09-21 | Dikerjakan lewat M5: Fase 2 kini dinilai `calculateCityMatchScore` (ensemble yang sama dengan Fase 1) dan buktinya disimpan di `sinyalF2Bit` + ikut `bitTemuanBaris`, jadi tidak ada lagi fase yang tampil memakai 12 sinyal padahal tidak. Teruji di `tests/uji-fase2-status.mjs` |
-| E2 | BELUM | â€” | |
+| E2 | SELESAI | 2026-09-21 | Label kartu "12 Sinyal" di `AnalystCanvas.tsx` kini menyebut cakupan sebenarnya: Fase 1 &amp; 2 memakai ensemble sinyal nama kota, Fase 3 memakai mesin nama+jarak+KC satu pulau (bukan ensemble), dan angka akurasinya diganti ke hasil ukur baru |
 | E3 | BELUM | â€” | |
-| E4 | BELUM | â€” | |
-| E5 | BELUM | â€” | |
+| E4 | SELESAI | 2026-09-21 | `hanyaBuktiFonetik(bit)` (analisPipeline) menguji apakah satu-satunya bukti kemiripan adalah transkripsi bunyi; `isFinalApproved` sekarang menolaknya. Fonetik tetap boleh MENAWARKAN pasangan (skor tinggi), hanya tidak lagi lolos ke Final tanpa mata manusia |
+| E5 | SELESAI | 2026-09-21 | Didokumentasikan (bukan disamaratakan, karena tiap ambang memang mengurusi hal berbeda) — lihat kotak "AMBANG RESMI" di bawah Bagian E |
 | E6 | SELESAI | 2026-09-21 | Satu sumber definisi pulau: `roleMatcher.getIslandFromProvinsi`. Salinan di `roleRecommender.ts` dihapus (sekarang import), dan `getIslandFromProvince` di `analystPipeline.ts` (nilai "JAWA"/"INDONESIA", tidak pernah dipanggil) ikut dihapus. `finalAnomaly.ts` dialihkan ke sumber yang sama |
 | E7 | BELUM | â€” | |
-| E8 | BELUM | â€” | |
+| E8 | SELESAI | 2026-09-21 | Himpunan berlabel dinaikkan 27 â†' **72 pasangan** (33 harus cocok, 39 harus beda, tanpa pasangan identik) di `tests/uji-akurasi-nama.mjs` yang memanggil mesin asli. **Terukur: 88,9% (64/72)** vs Levenshtein saja 77,8%; 6 pasangan masih salah gabung (semuanya bukan nama kota: `KCP 001/002`, `MALANG/MALANG KECAMATAN`, `ALAM SUTRA/ALAM SUTRA UTARA`, `JL MELAWAI/JL MELAWAI RAYA`, `SUMATERA UTARA/SUMATERA UTARA BARAT`, `SRI SAWALJO/SRI SAWARJO`) dan 2 ejaan Belanda lama belum tembus (`TJUNG PANDANG/UJUNG PANDANG`, `TJINIAN/CIANJUR`). Temuan ini juga menambal token `PROV/PROVINSI` yang belum dibuang (87,5% â†’ 88,9%). Klaim lama "96,3% pada 27 pasangan" ditarik dari UI |
 | W1 | SELESAI | 2026-09-21 | Opsi "peringatan": baris Fase 2 yang Branch Code-nya tidak menghasilkan wilayah (mis. `JKT-THM-01`) kini membawa `fase2Temuan` "wilayah tidak terbaca dari Branch Code …" → muncul di antrean manual + kartu Fase 2. Terukur: 1 baris pengujian dengan kode alfanumerik tertandai, baris berkode numerik bersih |
 | F1-W2 | BELUM | â€” | |
 | W3 | SELESAI | 2026-09-21 | `WilayahManager.handleSaveToDatabase` sudah melapor (batch A1). Untuk PTEN & Mapping Role, pemanggilan `save*ToNeon(...).catch(() => undefined)` yang membungkam kegagalan kini melapor "tersimpan di browser, GAGAL dikirim ke cloud" (warning) |
@@ -252,6 +252,19 @@ Kota **Bandung**: baris **Braga** (40111, Sumur Bandung) â†’ P1 Asia Afrika
 | D6 | âœ… SELESAI 2026-09-21 â€” pilihan manual selalu `EXACT_MATCH` + confidence 100 | `AnalystResultsGrid.tsx` `applyFase3Role` | Sekarang `HIGH_CONFIDENCE`: akurasi mesin tidak lagi naik oleh keputusan manusia, dan baris hasil pilihan manual tidak ikut lolos gerbang auto-final |
 
 ## BAGIAN E â€” TINJAUAN 12 SINYAL
+
+> **AMBANG RESMI (E5, dokumentasi 2026-09-21 — tiga angka ini memang beda tugas):**
+>
+> | Ambang | Nilai | Tugasnya | Dipakai di |
+> |---|---|---|---|
+> | bukti sebuah sinyal ikut tercatat | skor bagian â‰¥ **0,75** | menyalakan SATU BIT pada kartu sinyal (pembuktian, bukan keputusan) | `catat()` di `calculateCityMatchScore` / `calculateUnifiedPrecisionScore` |
+> | suara kuat (strong votes) | â‰¥ **0,85** | pasangan dianggap "didukung beberapa algoritma sekaligus" sehingga layak diterima walau nama panjang | gerbang penerimaan internal mesin kota |
+> | terima kota | skor gabungan â‰¥ **0,88** | KEPUTUSAN: kota PTEN dianggap sama dengan kota master | jalur penerimaan Fase 1 |
+>
+> Jadi "kartu sinyal menyala" TIDAK berarti pasangan diterima; satu bit bisa bernyanyi
+> sendiri sementara keputusannya jatuh di 0,88. Yang diubah 2026-09-21: angka akurasi di UI
+> tidak lagi menyebut 27 pasangan (lihat E8), dan fonetik semata tidak bisa lagi
+> meloloskan auto-final (lihat E4).
 
 | ID | Temuan | Lokasi | Perbaikan |
 |---|---|---|---|
