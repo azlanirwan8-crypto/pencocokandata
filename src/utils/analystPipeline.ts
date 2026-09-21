@@ -1,5 +1,7 @@
 import type { MasterRow, TargetRow, WilayahSetting } from '../types';
-import { isAcehRegion, findKimBranch } from './recommender';
+import { isAcehRegion, findKimBranch, buildMasterProximityIndex, findClosestMasterRecommendation, adalahKcFase2 } from './recommender';
+import type { MasterProximityIndex } from './recommender';
+import { calculateRealDistance } from './geoDistance';
 import type { PTENRecord } from '../components/PTENData/PTENManager';
 import type { RoleMappingRecord } from '../components/RoleMapping/RoleMappingManager';
 import { getUnitCategory, getWondrRecommendation } from '../components/RoleMapping/RoleMappingManager';
@@ -47,6 +49,12 @@ export interface AnalystRow {
   statusOutlet: string;
   alamat: string;
   fase2Approved: boolean;
+  /** Peringkat jarak (km) baris INI ke cabang terpilih (model jarak administratif). */
+  fase2JarakKm: number;
+  /** 1 = cabang sekota, 2 = sepulau/seprovinsi, 3 = di luar provinsi target. */
+  fase2Tier: 1 | 2 | 3;
+  /** Alasan baris ini perlu diputuskan manual di Fase 2 (kosong = hasil mesin mantap). */
+  fase2Temuan: string[];
 
   // Fase 3: Mapping Role & Wondr
   organisasiTujuan: string;
@@ -1057,39 +1065,41 @@ export async function executeAnalystPipeline(
     if (namaKota && namaKab) mergedCityMap.set(key, { kota: namaKota, kabupaten: namaKab, rows: rows.length });
   });
 
+  // Cabang per kota/kabupaten — dipakai loop kota (representasi Fase 2) DAN perhitungan
+  // Rank-1 per kelurahan di bagian expand, jadi dipromosikan ke cakupan pipeline.
+  const masterByCity = new Map<string, MasterRow[]>();
+  masterCabangRows.forEach((m) => {
+    const k = cityMatchKey(String(m['Dati II'] || m.Kota || m.Kelurahan || ''));
+    if (!k) return;
+    if (!masterByCity.has(k)) masterByCity.set(k, []);
+    masterByCity.get(k)!.push(m);
+  });
+  const masterCityFuzzyCache = new Map<string, MasterRow[]>();
+  const findMasterByCity = (cityKey: string): MasterRow[] => {
+    const exact = masterByCity.get(cityKey);
+    if (exact) return exact;
+    const cached = masterCityFuzzyCache.get(cityKey);
+    if (cached) return cached;
+    let best: MasterRow[] = [];
+    let bestScore = 0;
+    for (const [mKey, mVals] of masterByCity.entries()) {
+      const { score } = calculateCityMatchScore(cityKey, mKey);
+      if (score > bestScore && score >= 0.88) {
+        bestScore = score;
+        best = mVals;
+      }
+    }
+    masterCityFuzzyCache.set(cityKey, best);
+    return best;
+  };
+
   // ── DRIVER FASE 1 = KOTA/KABUPATEN UNIK DARI DATA PTEN (grouping berdasar PTEN) ──
   // Setiap kota unik di PTEN → SEMUA kelurahan/kecamatan dari Master KodePos kota itu
   // di-mapping ke kota tersebut, memakai kode pos PTEN dari kota yang sama.
   // Master Cabang se-kota (jika ada) jadi representasi data Fase 2 & 3.
   let itemsToProcess: MasterRow[];
   if (ptenCityMap.size > 0) {
-    const masterByCity = new Map<string, MasterRow[]>();
-    masterCabangRows.forEach((m) => {
-      const k = cityMatchKey(String(m['Dati II'] || m.Kota || m.Kelurahan || ''));
-      if (!k) return;
-      if (!masterByCity.has(k)) masterByCity.set(k, []);
-      masterByCity.get(k)!.push(m);
-    });
-
-    const masterCityFuzzyCache = new Map<string, MasterRow[]>();
-    const findMasterByCity = (cityKey: string): MasterRow[] => {
-      const exact = masterByCity.get(cityKey);
-      if (exact) return exact;
-      const cached = masterCityFuzzyCache.get(cityKey);
-      if (cached) return cached;
-      let best: MasterRow[] = [];
-      let bestScore = 0;
-      for (const [mKey, mVals] of masterByCity.entries()) {
-        const { score } = calculateCityMatchScore(cityKey, mKey);
-        if (score > bestScore && score >= 0.88) {
-          bestScore = score;
-          best = mVals;
-        }
-      }
-      masterCityFuzzyCache.set(cityKey, best);
-      return best;
-    };
-
+    // Urutkan grup kota berdasarkan nama Kota/Kabupaten PTEN (A→Z)
     // Urutkan grup kota berdasarkan nama Kota/Kabupaten PTEN (A→Z)
     itemsToProcess = Array.from(ptenCityMap.entries())
       .sort((a, b) =>
@@ -1145,6 +1155,10 @@ export async function executeAnalystPipeline(
     finalKodePosPten: string;
     statusPten: 'SAME' | 'DIFFERENT' | 'PTEN FOUND' | 'UNCHECKED';
     matchedKodePosEntries: KodePosRow[];
+    /** Cabang master di kota ini (dipakai Rank-1 per kelurahan; boleh kosong). */
+    masterKota: MasterRow[];
+    /** Cabang KIM untuk aturan khusus Aceh — bila terisi, dia menang mutlak. */
+    kimCabang?: MasterRow | null;
     matchedProvinsi: string;
     usedFallback?: boolean;
     placementStatus: 'VERIFIED' | 'REVIEW' | 'FALLBACK';
@@ -1657,11 +1671,11 @@ export async function executeAnalystPipeline(
     );
     const sandiCabang =
       rawFase2['Sandi Cabang'] ||
-      (rawFase2.Sandi && rawFase2.Cabang ? `${rawFase2.Sandi} - ${rawFase2.Cabang}` : rawFase2.Cabang || rawFase2.Sandi || `00${(i % 99) + 1}`);
+      (rawFase2.Sandi && rawFase2.Cabang ? `${rawFase2.Sandi} - ${rawFase2.Cabang}` : rawFase2.Cabang || rawFase2.Sandi || '');
     // B4: nama outlet = data asli atau kosong; "BNI KCP <kota>" bukan temuan, itu karangan.
     const namaOutlet = rawFase2['Nama Outlet'] || rawFase2.Cabang || '';
-    const statusOutlet = rawFase2['Status Outlet'] || 'Aktif';
-    const alamat = rawFase2.ALAMAT || `Jl. Protokol No. ${i + 1}, ${finalKotaPten}`;
+    const statusOutlet = rawFase2['Status Outlet'] || '';
+    const alamat = rawFase2.ALAMAT || '';
 
     // ── Fase 3: Mapping Role & 3 Role Lengkap ──
     // Hanya dihitung saat giliran Fase 3 — inilah bagian termahal (setiap nama outlet
@@ -1746,6 +1760,8 @@ export async function executeAnalystPipeline(
     rowMetaCache.push({
       finalKotaPten, finalKodePosPten, statusPten,
       matchedKodePosEntries, matchedProvinsi, usedFallback,
+      masterKota: kimAceh ? [kimAceh] : findMasterByCity(ptenCleanCity),
+      kimCabang: kimAceh,
       placementStatus, placementMethod,
       cityKey: ptenCleanCity, cityRawName: finalKotaPten,
       kotaPtenMax15: finalKotaPtenMax15,
@@ -1885,6 +1901,104 @@ export async function executeAnalystPipeline(
       true);
   });
 
+  // ── C2a/C2d: Rank-1 Fase 2 dihitung PER KELURAHAN memakai mesin kandidat yang SAMA
+  // dengan layar review. Sebelumnya satu kota hanya memandang baris master pertamanya,
+  // sehingga Braga dan Lebak Siliwangi (kota sama) pasti dapat outlet yang sama. ──
+  const indeksProximity: MasterProximityIndex | null =
+    fase2Jalan && masterCabangRows.length > 0 ? buildMasterProximityIndex(masterCabangRows) : null;
+
+  /** Bentuk TargetRow minimal untuk mesin kandidat — kolom master sengaja kosong. */
+  const targetKandidatFase2 = (meta: RowMetaCache, kelurahan: string, kecamatan: string, kodePos: string, provinsi: string): TargetRow =>
+    ({
+      No: 0,
+      Wilayah: '',
+      'Sandi Cabang': '',
+      'Branch Code': '',
+      'Kode Cabang': '',
+      'Nama Outlet': '',
+      'Status Outlet': '',
+      // ALAMAT kosong SENGAJA: kalau alamat cabang yang sedang terpasang ikut dikirim,
+      // cabang itu "satu jalur" dengan dirinya sendiri dan menang terus — bukan karena
+      // lebih dekat.
+      ALAMAT: '',
+      'KODE POS': kodePos || meta.finalKodePosPten,
+      Kelurahan: kelurahan,
+      Kecamatan: kecamatan,
+      'Dati II': meta.cityRawName,
+      'Kode Dati II': '',
+      Provinsi: provinsi,
+    } as unknown as TargetRow);
+
+  const tierCabang = (meta: RowMetaCache, m: MasterRow): 1 | 2 | 3 => {
+    if (cityMatchKey(String(m['Dati II'] || '')) === meta.cityKey) return 1;
+    return expertNormalize(String(m.Provinsi || '')) === expertNormalize(meta.matchedProvinsi) ? 2 : 3;
+  };
+
+  type Rank1 = { master: MasterRow | null; km: number; tier: 1 | 2 | 3; alasan: string };
+  const cacheRank1 = new Map<string, Rank1>();
+  const rank1Fase2 = (meta: RowMetaCache, kelurahan: string, kecamatan: string, kodePos: string, provinsi: string): Rank1 => {
+    const kunci = `${meta.cityKey}|${kodePos}|${kelurahan}|${kecamatan}`;
+    const lalu = cacheRank1.get(kunci);
+    if (lalu) return lalu;
+    const target = targetKandidatFase2(meta, kelurahan, kecamatan, kodePos, provinsi);
+    let hasil: Rank1;
+    if (meta.kimCabang) {
+      // Aturan Aceh: seluruh penempatan provinsi Aceh dilayani Cabang KIM.
+      hasil = {
+        master: meta.kimCabang,
+        km: calculateRealDistance(target, meta.kimCabang).distanceKm,
+        tier: 1,
+        alasan: 'Aturan Aceh → Cabang KIM',
+      };
+    } else if (!indeksProximity || meta.masterKota.length === 0) {
+      hasil = { master: null, km: 999, tier: 3, alasan: 'kota tidak punya cabang di Data Master' };
+    } else if (meta.masterKota.length === 1) {
+      const m = meta.masterKota[0];
+      hasil = { master: m, km: calculateRealDistance(target, m).distanceKm, tier: 1, alasan: 'Satu-satunya cabang di kota ini' };
+    } else {
+      const rec = findClosestMasterRecommendation(target, indeksProximity);
+      const c = rec?.candidates[0];
+      hasil = c
+        ? { master: c.master, km: c.distanceKm ?? 0, tier: tierCabang(meta, c.master), alasan: c.reason }
+        : { master: meta.masterKota[0], km: calculateRealDistance(target, meta.masterKota[0]).distanceKm, tier: 1, alasan: '' };
+    }
+    cacheRank1.set(kunci, hasil);
+    return hasil;
+  };
+
+  /** Field Fase 2 sebuah baris, diambil apa adanya dari baris master terpilih (tidak dikarang). */
+  const paketFase2 = (m: MasterRow | null) => {
+    if (!m) {
+      return { wilayah: '', sandiCabang: '', branchCode: '', kodeCabang: '', sandi: '', cabang: '', namaOutlet: '', statusOutlet: '', alamat: '' };
+    }
+    const branchCode = String(m['Branch Code'] || m['Kode Cabang'] || '').trim();
+    const resolved = extractWilayahFromBranchCode(branchCode, wilayahSettings, m.Wilayah || '');
+    return {
+      wilayah: resolved.wilayahName !== '-' ? resolved.wilayahName : '',
+      sandiCabang: String(m['Sandi Cabang'] || (m.Sandi && m.Cabang ? `${m.Sandi} - ${m.Cabang}` : m.Cabang || m.Sandi || '')),
+      branchCode,
+      kodeCabang: String(m['Kode Cabang'] || branchCode),
+      sandi: String(m.Sandi || m['Sandi Cabang'] || ''),
+      cabang: String(m.Cabang || m['Sandi Cabang'] || ''),
+      namaOutlet: String(m['Nama Outlet'] || m.Cabang || ''),
+      statusOutlet: String(m['Status Outlet'] || ''),
+      alamat: String(m.ALAMAT || ''),
+    };
+  };
+
+  // Fase 3 ikut per baris karena nama outlet kini bisa beda antar kelurahan.
+  const cacheRoleBaris = new Map<string, ReturnType<typeof matchRoleForOutlet>>();
+  const roleUntukBaris = (namaOutlet: string, cityKey: string) => {
+    const kunci = `${cityKey}|${cleanAndStandardizeText(namaOutlet)}`;
+    const lalu = cacheRoleBaris.get(kunci);
+    if (lalu) return lalu;
+    const hasil = matchRoleForOutlet(namaOutlet, cityKey, roleMappingList);
+    cacheRoleBaris.set(kunci, hasil);
+    return hasil;
+  };
+
+  const JARAK_MANUAL_KM = 16;
+
   // ── EXPAND: Hasilkan 1 baris per kelurahan/kecamatan per Kota PTEN ──
   if (onProgress) onProgress(2, 35, 0, total, 'Fase 2: Menyusun data Wilayah & Cabang...');
 
@@ -1942,6 +2056,33 @@ export async function executeAnalystPipeline(
       const kelurahan = kpEntry.kelurahan || meta.finalKotaPten;
       const kecamatan = kpEntry.kecamatan || meta.finalKotaPten;
       const provinsi = kpEntry.provinsi || meta.matchedProvinsi;
+      const kodePosBaris = String(kpEntry.kodePos || '').trim();
+
+      // Mesin kandidat per kelurahan (C2a) → paket field Fase 2 apa adanya dari
+      // baris master terpilih, lalu Fase 3 dihitung ulang untuk outlet itu.
+      const r1 = fase2Jalan ? rank1Fase2(meta, kelurahan, kecamatan, kodePosBaris, provinsi) : null;
+      const f2 = paketFase2(r1?.master || null);
+      const roleBaris = fase3Jalan && f2.namaOutlet ? roleUntukBaris(f2.namaOutlet, meta.cityKey) : null;
+
+      // C3: penanda "perlu diputuskan operator" versi baru. Yang lama (audit
+      // "nilai awal sudah rank-1") tidak berlaku lagi karena Fase 2 kini dihitung
+      // per kelurahan, jadi gerbangnya diganti empat penanda konkret ini.
+      const temuanFase2: string[] = [];
+      if (r1) {
+        if (!r1.master) {
+          temuanFase2.push('kota ini tidak punya cabang di Data Master');
+        } else {
+          if (r1.tier === 2) temuanFase2.push('cabang terpilih di luar kota (masih satu provinsi)');
+          else if (r1.tier === 3) temuanFase2.push('cabang terpilih di luar provinsi');
+          if (r1.km > JARAK_MANUAL_KM) temuanFase2.push(`jarak perkiraan ${r1.km.toLocaleString('id-ID')} km`);
+          if (r1.tier === 1 && !adalahKcFase2(r1.master) && !meta.masterKota.some(adalahKcFase2)) {
+            temuanFase2.push('tidak ada KC di kota ini — KCP yang terpilih');
+          }
+        }
+      }
+      const statusBaris = roleBaris
+        ? roleBaris.statusAnalisa
+        : fase3Jalan ? 'ANOMALI' : 'MENUNGGU';
 
       // Analisis inkremental: lewati kelurahan yang SUDAH final (jangan diulang dari awal)
       if (excludeFinalKeys && excludeFinalKeys.has(makeFinalKey(meta.finalKodePosPten, kelurahan, kecamatan, meta.finalKotaPten))) {
@@ -1954,7 +2095,7 @@ export async function executeAnalystPipeline(
         // Fase 1
         kotaPten: meta.finalKotaPten,
         kodePosPten: meta.finalKodePosPten, // SAMA untuk semua kelurahan dalam 1 kota PTEN
-        kodePosKelurahan: String(kpEntry.kodePos || '').trim(), // kode pos kelurahan ini sendiri
+        kodePosKelurahan: kodePosBaris, // kode pos kelurahan ini sendiri
         kelurahan,
         kecamatan,
         provinsi,
@@ -1969,45 +2110,48 @@ export async function executeAnalystPipeline(
         kelurahanSeq: seq + 1,
 
         // Fase 2 — kosong selama Fase 1 belum disetujui (alur bertahap)
-        wilayah: fase2Jalan ? (meta.resolvedWilayah.wilayahName !== '-' ? meta.resolvedWilayah.wilayahName : '') : '',
+        wilayah: f2.wilayah,
         kotaPtenMax15: fase2Jalan ? meta.kotaPtenMax15 : '',
-        sandiCabang: fase2Jalan ? String(meta.sandiCabang) : '',
-        sandi: fase2Jalan ? meta.sandi : '',
-        cabang: fase2Jalan ? meta.cabang : '',
-        branchCode: fase2Jalan ? meta.branchCode : '',
-        kodeCabang: fase2Jalan ? meta.kodeCabang : '',
-        namaOutlet: fase2Jalan ? meta.namaOutlet : '',
-        statusOutlet: fase2Jalan ? meta.statusOutlet : '',
-        alamat: fase2Jalan ? meta.alamat : '',
+        sandiCabang: f2.sandiCabang,
+        sandi: f2.sandi,
+        cabang: f2.cabang,
+        branchCode: f2.branchCode,
+        kodeCabang: f2.kodeCabang,
+        namaOutlet: f2.namaOutlet,
+        statusOutlet: f2.statusOutlet,
+        alamat: f2.alamat,
         fase2Approved: false,
+        fase2JarakKm: r1?.km ?? 0,
+        fase2Tier: r1?.tier ?? 3,
+        fase2Temuan: temuanFase2,
 
-        // Fase 3 — kosong sampai Fase 2 disetujui
-        organisasiTujuan: fase3Jalan ? meta.organisasiTujuan : '',
-        tipeUnit: fase3Jalan ? meta.tipeUnit : 'OUTLET',
-        is3RoleLengkap: fase3Jalan ? meta.is3RoleLengkap : false,
-        roleCabsal: fase3Jalan ? meta.roleCabsal : 0,
-        roleCabapv1: fase3Jalan ? meta.roleCabapv1 : 0,
-        roleCabapv2: fase3Jalan ? meta.roleCabapv2 : 0,
-        roleGrandTotal: fase3Jalan ? (meta.matchedRole?.grandTotal || (meta.is3RoleLengkap ? 3 : 2)) : 0,
-        alurWondr: fase3Jalan ? meta.alurWondr : '',
-        flowDescription: fase3Jalan ? meta.flowDescription : '',
+        // Fase 3 — kosong sampai Fase 2 disetujui; dihitung dari outlet baris ini
+        organisasiTujuan: roleBaris?.organisasiTujuan || '',
+        tipeUnit: roleBaris?.tipeUnit || 'OUTLET',
+        is3RoleLengkap: roleBaris?.is3RoleLengkap || false,
+        roleCabsal: roleBaris?.roleCabsal || 0,
+        roleCabapv1: roleBaris?.roleCabapv1 || 0,
+        roleCabapv2: roleBaris?.roleCabapv2 || 0,
+        roleGrandTotal: roleBaris?.roleGrandTotal || 0,
+        alurWondr: roleBaris?.alurWondr || '',
+        flowDescription: roleBaris?.flowDescription || '',
         fase3Approved: false,
 
         // Overall
-        confidenceScore: fase3Jalan ? meta.confidenceScore : 0,
-        matchingAlgorithm: fase3Jalan ? meta.chosenAlgorithm : '',
+        confidenceScore: roleBaris?.confidenceScore || 0,
+        matchingAlgorithm: roleBaris?.matchingAlgorithm || '',
         sinyalBit: meta.citySinyalBit,
-        sinyalRoleBit: fase3Jalan ? meta.roleSinyalBit : 0,
-        temuanCatatan: gabungCatatanTemuan(meta.cityCatatan, fase3Jalan ? meta.roleCatatan : undefined),
-        statusAnalisa: fase3Jalan ? meta.statusAnalisa : 'MENUNGGU',
-        // D3: otomatis-final hanya yang penempatannya TERBUKTI (kode pos + kecamatan)
-        // dan bukan hasil fallback. Status Fase 3 saja tidak cukup — baris kota yang
-        // salah tempel bisa tetap skor 90-an.
+        sinyalRoleBit: roleBaris?.sinyalRoleBit || 0,
+        temuanCatatan: gabungCatatanTemuan(meta.cityCatatan, roleBaris?.temuanCatatan),
+        statusAnalisa: statusBaris,
+        // D3 + C3: otomatis-final hanya bila penempatan TERBUKTI (kode pos + kecamatan),
+        // bukan hasil fallback, dan Fase 2 baris ini tidak menyisakan penanda manual.
         isFinalApproved:
           fase3Jalan &&
-          meta.statusAnalisa === 'EXACT_MATCH' &&
+          statusBaris === 'EXACT_MATCH' &&
           meta.placementStatus === 'VERIFIED' &&
-          !meta.usedFallback,
+          !meta.usedFallback &&
+          temuanFase2.length === 0,
       });
     });
   }
@@ -2078,6 +2222,9 @@ export async function executeAnalystPipeline(
         statusOutlet: '',
         alamat: '',
         fase2Approved: false,
+        fase2JarakKm: 0,
+        fase2Tier: 3,
+        fase2Temuan: [],
         organisasiTujuan: '',
         tipeUnit: 'OUTLET',
         is3RoleLengkap: false,

@@ -20,8 +20,12 @@ export function normalizeKodePos(val: unknown): string {
 /**
  * Clean and standardize general text for comparison
  * Removes brackets, quotes, punctuation, and extra whitespace
+ *
+ * Dibungkus cache: fungsi ini dipanggil jutaan kali (setiap kandidat dibandingkan
+ * ulang ke banyak baris), padahal nilainya berulang dan murni.
  */
-export function cleanText(val: unknown): string {
+const cacheCleanText = new Map<string, string>();
+function cleanTextMentah(val: unknown): string {
   if (val === null || val === undefined) return '';
   return String(val)
     .trim()
@@ -29,6 +33,16 @@ export function cleanText(val: unknown): string {
     .replace(/[\(\)\[\]\{\}'"`:;*#~]+/g, ' ')
     .replace(/[\s\-_/\\,.]+/g, ' ')
     .trim();
+}
+export function cleanText(val: unknown): string {
+  if (val === null || val === undefined) return '';
+  const kunci = typeof val === 'string' ? val : String(val);
+  const lalu = cacheCleanText.get(kunci);
+  if (lalu !== undefined) return lalu;
+  const hasil = cleanTextMentah(kunci);
+  if (cacheCleanText.size > 60000) cacheCleanText.clear();
+  cacheCleanText.set(kunci, hasil);
+  return hasil;
 }
 
 /**
@@ -333,6 +347,17 @@ export function normalizeNumerals(text: string): string {
  *   "KOTA ADM. JAKARTA PUSAT" -> "jakarta pusat"
  */
 export function stripAdminNoise(val: unknown): string {
+  if (val === null || val === undefined) return '';
+  const kunci = typeof val === 'string' ? val : String(val);
+  const lalu = cacheStripAdmin.get(kunci);
+  if (lalu !== undefined) return lalu;
+  const hasil = stripAdminNoiseMentah(kunci);
+  if (cacheStripAdmin.size > 60000) cacheStripAdmin.clear();
+  cacheStripAdmin.set(kunci, hasil);
+  return hasil;
+}
+const cacheStripAdmin = new Map<string, string>();
+function stripAdminNoiseMentah(val: unknown): string {
   if (val === null || val === undefined) return '';
   let s = cleanText(val);
   if (!s) return '';

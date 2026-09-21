@@ -275,18 +275,18 @@ function evaluateMasterCandidate(
   // Proteksi mutlak hierarki administratif Indonesia:
   // 1. Jika terbukti berbeda Provinsi, kelurahan/kecamatan sama adalah homonim/kebetulan nama sama!
   const isDiffProv = Boolean(
-    targetProv && masterProv && 
-    targetProv !== masterProv && 
-    !provMatch && 
-    textSimilarityScore(target.Provinsi || '', m.Provinsi || '') < 0.6
+    targetProv && masterProv &&
+    targetProv !== masterProv &&
+    !provMatch &&
+    provSim < 0.6
   );
 
   // 2. Jika terbukti berbeda Dati II:
   const isDiffDati = Boolean(
-    targetDati && masterDati && 
-    targetDati !== masterDati && 
-    !datiMatch && 
-    textSimilarityScore(target['Dati II'] || '', m['Dati II'] || '') < 0.6
+    targetDati && masterDati &&
+    targetDati !== masterDati &&
+    !datiMatch &&
+    datiSim < 0.6
   );
 
   // Kelurahan & Kecamatan HANYA valid jika tidak berkonflik provinsi atau Dati II
@@ -294,7 +294,7 @@ function evaluateMasterCandidate(
   const kecMatch = isDiffProv || (isDiffDati && !provMatch) ? false : rawKecMatch;
 
   // Analisis Alamat Layaknya Auditor Manusia:
-  const targetAddrClean = cleanText(target.ALAMAT);
+  const targetAddrClean = target.ALAMAT ? cleanText(target.ALAMAT) : '';
   const targetHasKel = Boolean(targetKel && targetKel !== '-' && targetKel.length >= 2);
   const targetHasKec = Boolean(targetKec && targetKec !== '-' && targetKec.length >= 2);
 
@@ -312,9 +312,14 @@ function evaluateMasterCandidate(
     targetAddrClean.includes(masterKecCore)
   );
 
-  // Deteksi kecocokan koridor nama jalan / gedung / landmark utama
-  const streetMatch = findSharedStreetOrLandmark(target.ALAMAT || '', m.ALAMAT || '');
-  const addrSim = textSimilarityScore(cleanText(target.ALAMAT), cleanText(m.ALAMAT));
+  // Deteksi kecocokan koridor nama jalan / gedung / landmark utama.
+  // Tanpa alamat target, kedua pemeriksaan ini tidak mungkin cocok — lewati saja
+  // (mesin kini memanggil kandidat per kelurahan, jadi penghematannya terasa).
+  const adaAlamat = Boolean(targetAddrClean && m.ALAMAT);
+  const streetMatch = adaAlamat
+    ? findSharedStreetOrLandmark(target.ALAMAT || '', m.ALAMAT || '')
+    : { isMatch: false };
+  const addrSim = adaAlamat ? textSimilarityScore(targetAddrClean, cleanText(m.ALAMAT)) : 0;
 
   let score = 50;
   let reason = '';
@@ -424,6 +429,12 @@ function evaluateMasterCandidate(
 /**
  * Temukan 2 hingga 3 cabang terdekat murni dari Data Master real dengan proteksi wilayah ketat
  */
+/** KC Fase 2 HANYA dari kolom "Status Outlet" master (persis 'KC'). Mapping Role
+ *  bukan penentu KC di fase ini — lihat dokumen perbaikan Bagian C2c. */
+export function adalahKcFase2(m: MasterRow): boolean {
+  return String(m['Status Outlet'] || '').trim().toUpperCase() === 'KC';
+}
+
 export function findClosestMasterRecommendation(
   target: TargetRow,
   index: MasterProximityIndex
@@ -502,14 +513,19 @@ export function findClosestMasterRecommendation(
   const targetProvRaw = cleanText(target.Provinsi);
 
   // Helper proteksi batas wilayah administratif:
-  const matchesProvince = (m: MasterRow) => {
+  // Satu cabang diuji berkali-kali dalam satu pencarian (filter kandidat + hard gate
+  // di akhir), jadi hasilnya diingat per baris master — bukan dihitung ulang.
+  const cacheProv = new Map<MasterRow, boolean>();
+  const cacheDati = new Map<MasterRow, boolean>();
+
+  const cocokProvinsi = (m: MasterRow) => {
     if (!targetProv) return true;
     const mProv = cleanProvinsi(m.Provinsi);
     if (!mProv) return true;
     return mProv === targetProv || (!hasDirectionalConflict(m.Provinsi || '', target.Provinsi || '') && textSimilarityScore(m.Provinsi || '', target.Provinsi || '') >= 0.75);
   };
 
-  const matchesDati = (m: MasterRow) => {
+  const cocokDati = (m: MasterRow) => {
     if (!targetDati) return matchesProvince(m);
     const mDati = cleanDati(m['Dati II']);
     const mDatiCore = stripAdminNoise(m['Dati II']);
@@ -521,6 +537,22 @@ export function findClosestMasterRecommendation(
         (mDati.length >= 4 && targetDati.length >= 4 && (mDati.includes(targetDati) || targetDati.includes(mDati)))
       ))
     );
+  };
+
+  const matchesProvince = (m: MasterRow): boolean => {
+    const lalu = cacheProv.get(m);
+    if (lalu !== undefined) return lalu;
+    const hasil = cocokProvinsi(m);
+    cacheProv.set(m, hasil);
+    return hasil;
+  };
+
+  const matchesDati = (m: MasterRow): boolean => {
+    const lalu = cacheDati.get(m);
+    if (lalu !== undefined) return lalu;
+    const hasil = cocokDati(m);
+    cacheDati.set(m, hasil);
+    return hasil;
   };
 
   const isGeographicallyCompatible = (m: MasterRow): boolean => {
@@ -665,6 +697,37 @@ export function findClosestMasterRecommendation(
 
   // Urutkan berdasarkan skor tertinggi (lalu jarak terpendek)
   scored.sort((a, b) => b.score - a.score || a.distance - b.distance);
+
+  // C2b/C2e: yang masih bisa berebut Rank 1 (skor dalam pita pemimpin, maks 6) diukur
+  // JARAK NYATA-nya — nomor kode pos cuma proxy yang tidak linear di lapangan. Sisanya
+  // tidak mungkin naik, jadi tidak perlu dibayar biayanya.
+  const pemimpin = scored[0];
+  if (pemimpin) {
+    const perebut = scored.filter((s) => s.score >= pemimpin.score - 5).slice(0, 6);
+    const km = new Map<MasterRow, number>();
+    perebut.forEach((s) => km.set(s.master, calculateRealDistance(target, s.master).distanceKm));
+    const jarak = (s: typeof pemimpin) => km.get(s.master) ?? 9999;
+    perebut.sort((a, b) => b.score - a.score || jarak(a) - jarak(b));
+
+    // Seri jarak ≤2 km: KC didahulukan. Sumber KC = kolom "Status Outlet" master
+    // (persis 'KC'), bukan Mapping Role. Dikerjakan setelah sort supaya urutan tetap
+    // deterministik — pembanding non-transitif bikin hasil acak.
+    const utama = perebut[0];
+    if (utama && !adalahKcFase2(utama.master)) {
+      const kc = perebut.find(
+        (s) => s !== utama && adalahKcFase2(s.master) && jarak(s) - jarak(utama) <= 2
+      );
+      if (kc) {
+        perebut.splice(perebut.indexOf(kc), 1);
+        perebut.unshift(kc);
+      }
+    }
+    if (perebut.length && perebut[0] !== scored[0]) {
+      const sisanya = scored.filter((s) => !perebut.includes(s));
+      scored.length = 0;
+      scored.push(...perebut, ...sisanya);
+    }
+  }
 
   // Ambil hingga 3 kandidat terbaik
   let topList = scored.slice(0, 3);

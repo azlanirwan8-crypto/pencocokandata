@@ -153,13 +153,20 @@ export function calculateHaversineDistanceKm(
 }
 
 /**
- * Temukan koordinat kota dari nama Dati II / Wilayah
+ * Temukan koordinat kota dari nama Dati II / Wilayah.
+ * Dicache per nama kota: pemindaian daftar + normalisasi namanya mahal dan berulang
+ * sekali (mesin kandidat memanggil jarak ini untuk banyak cabang di kota yang sama).
  */
+const CITY_COORD_ENTRI = Object.entries(CITY_COORDINATES);
+const cacheCityCoord = new Map<string, GeoCoord | null>();
 function findCityCoord(cityName: string): GeoCoord | null {
   if (!cityName) return null;
+  const lalu = cacheCityCoord.get(cityName);
+  if (lalu !== undefined) return lalu;
   const clean = cleanDati(cityName).toUpperCase();
   const norm = cleanText(cityName).toUpperCase();
-  for (const [key, coord] of Object.entries(CITY_COORDINATES)) {
+  let hasil: GeoCoord | null = null;
+  for (const [key, coord] of CITY_COORD_ENTRI) {
     const cleanKey = cleanDati(key).toUpperCase();
     if (
       clean === cleanKey ||
@@ -167,10 +174,12 @@ function findCityCoord(cityName: string): GeoCoord | null {
       key.includes(norm) ||
       (!hasDirectionalConflict(cityName, key) && (clean.length >= 4 && (cleanKey.includes(clean) || clean.includes(cleanKey))))
     ) {
-      return coord;
+      hasil = coord;
+      break;
     }
   }
-  return null;
+  cacheCityCoord.set(cityName, hasil);
+  return hasil;
 }
 
 export interface RealDistanceInfo {

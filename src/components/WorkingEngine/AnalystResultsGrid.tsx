@@ -229,54 +229,21 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     'Kode Cabang': r.kodeCabang,
     'Nama Outlet': r.namaOutlet,
     'Status Outlet': r.statusOutlet,
-    ALAMAT: r.alamat,
-    'KODE POS': r.kodePosPten,
+    'KODE POS': r.kodePosKelurahan || r.kodePosPten,
     Kelurahan: r.kelurahan,
     Kecamatan: r.kecamatan,
     'Dati II': r.groupKota,
     'Kode Dati II': '',
     Provinsi: r.provinsi,
+    // ALAMAT sengaja tidak ikut: nilai itu adalah alamat cabang yang SEDANG terpasang,
+    // kalau dikirim mesin akan menganggapnya "satu jalur" dengan dirinya sendiri.
+    ALAMAT: '',
     _originalFilledSandiCabang: r.sandiCabang,
     _originalFilledNamaOutlet: r.namaOutlet,
   } as unknown as TargetRow);
-  // Cache per kota: rekomendasi hanya dihitung ulang bila field Fase 2 kota itu berubah
+  // Cache rekomendasi Fase 2: kunci alami baris (kode pos + kelurahan + kecamatan).
+  // Dipakai `fase2Recs` di bawah, setelah baris yang tampil diketahui.
   const fase2RecCacheRef = useRef(new Map<string, { sig: string; rec: RecommendationResult | null }>());
-  const fase2Recs = useMemo(() => {
-    const m = new Map<string, { rec: RecommendationResult | null; target: TargetRow }>();
-    if (!masterIndex) return m;
-    const cache = fase2RecCacheRef.current;
-    rows.forEach((r) => {
-      if (r.kategori === 'TIDAK_ANALISA') return;
-      const ck = cityMatchKey(r.groupKota);
-      if (!ck || m.has(ck)) return;
-      const target = targetFromAnalystRow(r);
-      const sig = `${r.sandiCabang}|${r.namaOutlet}|${r.branchCode}`;
-      const cached = cache.get(ck);
-      let rec: RecommendationResult | null;
-      if (cached && cached.sig === sig) {
-        rec = cached.rec;
-      } else {
-        try {
-          rec = findClosestMasterRecommendation(target, masterIndex);
-        } catch {
-          rec = null;
-        }
-        cache.set(ck, { sig, rec });
-      }
-      m.set(ck, { rec, target });
-    });
-    return m;
-  }, [rows, masterIndex]);
-  // "Sudah tervalidasi" = cabang yang terlanjur terisi di data ikut masuk Top-3
-  // rekomendasi jarak (audit flow lama); selain itu → validasi manual operator.
-  const fase2ValidCities = useMemo(() => {
-    const s = new Set<string>();
-    fase2Recs.forEach((v, k) => {
-      const st = v.rec?.userPrefilledAudit?.status;
-      if (st === 'match_top1' || st === 'match_top2' || st === 'match_top3') s.add(k);
-    });
-    return s;
-  }, [fase2Recs]);
   const applyFase2Candidate = (r: AnalystRow, master: MasterRow) => {
     const branchCode = String(master['Branch Code'] || master['Kode Cabang'] || '').trim();
     const resolved = extractWilayahFromBranchCode(branchCode, wilayahSettings, r.wilayah);
@@ -498,11 +465,11 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     (r: AnalystRow, stage: 1 | 2 | 3 | 4): boolean => {
       if (r.perluManual) return true;
       if (stage === 1) return r.kategori === 'TIDAK_ANALISA';
-      if (stage === 2) return !fase2ValidCities.has(cityMatchKey(r.groupKota));
+      if (stage === 2) return (r.fase2Temuan?.length || 0) > 0;
       if (stage === 3) return r.statusAnalisa === 'PERLU_REVIEW' || r.statusAnalisa === 'ANOMALI';
       return false;
     },
-    [fase2ValidCities]
+    []
   );
 
   // Filtered rows
@@ -623,6 +590,35 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   });
   const renderedRows = win.active ? paginatedRows.slice(win.start, win.end) : paginatedRows;
   const rowOffset = win.active ? win.start : 0;
+
+  // C2d: kandidat Fase 2 dihitung PER BARIS (kelurahan), bukan per kota, dan hanya
+  // untuk baris yang sedang tampil — dulu satu kota = satu daftar kandidat sehingga
+  // semua kelurahan di kota itu melihat (dan otomatis dapat) cabang yang sama.
+  const fase2Recs = useMemo(() => {
+    const m = new Map<string, { rec: RecommendationResult | null; target: TargetRow }>();
+    if (!masterIndex) return m;
+    const cache = fase2RecCacheRef.current;
+    renderedRows.forEach((r) => {
+      if (r.kategori === 'TIDAK_ANALISA') return;
+      const target = targetFromAnalystRow(r);
+      const kunci = `${r.kodePosKelurahan || r.kodePosPten}|${r.kelurahan}|${r.kecamatan}`;
+      const sig = `${r.sandiCabang}|${r.namaOutlet}|${r.branchCode}`;
+      const cached = cache.get(kunci);
+      let rec: RecommendationResult | null;
+      if (cached && cached.sig === sig) {
+        rec = cached.rec;
+      } else {
+        try {
+          rec = findClosestMasterRecommendation(target, masterIndex);
+        } catch {
+          rec = null;
+        }
+        cache.set(kunci, { sig, rec });
+      }
+      m.set(r.id, { rec, target });
+    });
+    return m;
+  }, [renderedRows, masterIndex]);
 
   useEffect(() => {
     tableScrollRef.current?.scrollTo({ top: 0 });
@@ -1510,7 +1506,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                         <>
                           <td style={{ textAlign: 'center', color: '#878a99', position: 'sticky', left: 0, background: '#fff', zIndex: 5, borderRight: '1px solid #e9ebec' }}>{displayIdx}</td>
                           {(() => {
-                            const entry = fase2Recs.get(cityMatchKey(r.groupKota));
+                            const entry = fase2Recs.get(r.id);
                             const cands = entry?.rec?.candidates || [];
                             const tdStyle: React.CSSProperties = {
                               position: 'sticky',
@@ -1545,6 +1541,25 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                             return (
                               <td style={tdStyle}>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                  {(r.fase2Temuan?.length || 0) > 0 && (
+                                    <div
+                                      title={r.fase2Temuan.join(' · ')}
+                                      style={{
+                                        padding: '0.2rem 0.45rem',
+                                        borderRadius: '4px',
+                                        fontSize: '0.68rem',
+                                        fontWeight: 600,
+                                        background: 'rgba(240,101,72,0.1)',
+                                        color: '#c0392b',
+                                        border: '1px solid rgba(240,101,72,0.3)',
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                      }}
+                                    >
+                                      Perlu diputuskan: {r.fase2Temuan.join(' · ')}
+                                    </div>
+                                  )}
                                   {audit && audit.hasPrefilled && (
                                     <div
                                       title={`Di data terisi: "${audit.prefilledText}". ${audit.message}`}

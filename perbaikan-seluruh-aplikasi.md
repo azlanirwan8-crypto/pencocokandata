@@ -1,5 +1,5 @@
 ﻿# RENCANA PERBAIKAN SELURUH APLIKASI
-> **âš ï¸ STATUS 2026-09-21: BELUM SELESAI â€” 25 dari 67 item `SELESAI`, 1 `SEDANG` (A9), 41 `BELUM` (D1 masih tinggal dari keputusan yang sudah diambil).**
+> **STATUS 2026-09-21: BELUM SELESAI — 33 dari 67 item `SELESAI`, 1 `SEDANG` (A9), 33 `BELUM`. Sisa terberat: D1 (engine resmi Fase 3), G1/G3/G11 (unggah & status lewati Data Final), F1–F6, H1–H5 (Dashboard), A9/A10, E, B3, D5.**
 > Baca Bagian 0 sebelum mengerjakan apa pun. Titik lanjut: **A3** (BaseModal). Rincian & bukti verifikasi ada di sana.
 
 **Aplikasi:** Tools Data Matcher Cabang & Outlet v2.x â€” React + TypeScript + Vite; IndexedDB (lokal) + Neon Postgres (cloud via serverless `api/`).
@@ -14,9 +14,9 @@
 >
 > | Status | Jumlah | ID |
 > |---|---|---|
-> | âœ… `SELESAI` | **25** | A1, A2, A3, A4, A5, A6, A7, A8, B1, B2, B4,
-> | ðŸŸ¨ `SEDANG` | **1** | A9 (responsivitas breakpoint; CSS mati menunggu konfirmasi hapus) |
-> | â¬œ `BELUM` | **41** | sisanya â€” termasuk 1 item yang dulu
+> | SELESAI | **33** | A1, A2, A3, A4, A5, A6, A7, A8, B1, B2, B4, C2a, C2b, C2c, C2d, C2e, C3, C4, D2, D3, D4, D6, F3-C1, F3-C2, F6-X4, G2, G4, G5, G6, G7, G8, G9, G10 |
+> | SEDANG | **1** | A9 — breakpoint responsivitas belum; CSS mati menunggu konfirmasi hapus |
+> | BELUM | **33** | A10, B3, D1, D5, E1, E2, E3, E4, E5, E6, E7, E8, F1-W1, F1-W2, F1-W3, F2-P1, F2-P2, F2-P3, F3-C3, F4-R1, F4-R2, F4-R3, F5-K1, F5-K2, F5-K3, F6-X1, F6-X2, F6-X3, F6-X5, G1, G3, G11, G12 |
 >
 > Belum termasuk item Bagian **H/I/J/K di Lampiran** (statusnya `BELUM`, ditandai langsung di barisnya; khusus Bagian K: K1â€“K3 sudah dikerjakan & build-verified 2026-09-21, K4â€“K5 `BELUM`).
 >
@@ -58,17 +58,17 @@
 | B2 | SELESAI | 2026-09-21 | Opsi (a): field baru `AnalystRow.kodePosKelurahan` (kode pos baris KodePos-nya sendiri). Kolom "Kode Pos" pindah ke grup DATA POS di tab Fase 1 + bisa disortir + ikut pencarian; grup PTEN diganti label "Kode Pos PTEN"; baris `TIDAK_ANALISA` menampilkan "â€”" di kolom PTEN karena tidak punya kode pos PTEN. Ikut di ekspor Excel (2 sheet), PDF, modal Edit, tabel & modal Detail Data Final. `targetFromAnalystRow` (suara mesin Fase 2) SENGAJA masih pakai `kodePosPten` â€” berubahnya itu bagian C2d |
 | B3 | BELUM | â€” | Verifikasi ekspor saja |
 | B4 | SELESAI | 2026-09-21 | Opsi (a): semua karangan di `analystPipeline.ts` dihapus (dua tambahan ketahuan oleh pengukuran, bukan pembacaan kode: `namaOutlet` fallback `BNI KCP <kota>` :1625 dan label `Wilayah <kota>` dari `formatWilayahName(finalKotaPten)` :1620) â€” fallback kota "KOTA JAKARTA PUSAT" & kode pos "10110" jadi kosong, label "Wilayah 01" jadi kosong, dan baris penanda "kota PTEN tanpa cabang di master" tidak lagi mengarang W-code (tabel modulo) / `CABANG x` / `KCP x` / `Jl. Protokol x` / `Status Outlet: Aktif`. Sisa karangan di mesin role dicatat sebagai bagian D2 |
-| C2a | BELUM | â€” | |
-| C2b | BELUM | â€” | |
-| C2c | BELUM | â€” | |
-| C2d | BELUM | â€” | |
-| C2e | BELUM | â€” | |
-| C3 | BELUM | â€” | Wajib setelah C2aâ€“C2e |
-| C4 | BELUM | â€” | Kasus uji |
+| C2a | SELESAI | 2026-09-21 | Fase 2 otomatis kini memakai MESIN KANDIDAT YANG SAMA dengan layar review (`findClosestMasterRecommendation`), dipanggil PER KELURAHAN, lalu Rank-1 ditulis ke field Fase 2 baris itu. Diukur pada data produksi nyata (6 kota besar, 985 baris): **892 dari 985 baris (90,6%) kini mendapat outlet yang BERBEDA** dari "cabang pertama kota" (perilaku lama); rata-rata 28,8 outlet unik per kota, dulu selalu 1 |
+| C2b | SELESAI | 2026-09-21 | Di `recommender.ts`: setelah sort skor, kandidat dalam pita skor ≤5 poin diukur JARAK NYATA-nya (maks 6), lalu bila pemimpin bukan KC dan ada KC yang tidak lebih dari 2 km lebih jauh → KC diangkat ke Rank 1. Dikerjakan POST-sort (bukan lewat comparator) supaya urutannya deterministik. Terbukti di kasus Bandung: Lebak Siliwangi → KC "PERGURUAN TINGGI BANDUNG" menang atas KCP "GANESHA" pada jarak seri 0,8 km |
+| C2c | SELESAI | 2026-09-21 | `adalahKcFase2(m)` = kolom **Status Outlet** master, `trim().toUpperCase() === 'KC'`. Mapping Role tidak dipakai untuk menentukan KC di Fase 2. Pada data produksi nyata kolom ini berisi `KC` / `KCP` / `KCP d/h KK` sehingga perbandingan persis itu benar |
+| C2d | SELESAI | 2026-09-21 | Pipeline: Rank-1 per kelurahan (cache kunci `kota|kodePos|kelurahan|kecamatan`). Grid: `fase2Recs` tidak lagi dikunci `cityMatchKey(groupKota)` tapi per baris dan hanya untuk baris yang tampil (dulu memaksa menghitung semua 83rb baris lewat satu kunci kota), cache memakai kunci alami baris. `fase2ValidCities` dihapus |
+| C2e | SELESAI | 2026-09-21 | Urutan kandidat memakai `calculateRealDistance().distanceKm`; proxy `postalDiff*2+4000` tetap dihitung `evaluateMasterCandidate` tapi tidak lagi menentukan siapa Rank 1. `findCityCoord` di-cache per nama kota (2,8 ms → 0,2 ms per panggilan) supaya pengukuran jarak nyata terjangkau |
+| C3 | SELESAI | 2026-09-21 | Gerbang baru = field baris `fase2Tier` + `fase2JarakKm` + `fase2Temuan[]`: (a) kandidat luar kota/provinsi, (b) jarak > 16 km, (c) tidak ada KC di kota itu tapi KCP terpilih, (d) kota tidak punya cabang di master. Grid `butuhManual(stage 2)` membaca `fase2Temuan`, kartu Fase 2 menampilkan alasannya, dan `isFinalApproved` otomatis menolak baris bertemuan. Audit lama `match_top1/2/3` tidak lagi jadi gerbang (alasan: ia membandingkan nilai lama dengan kandidat per-kota) |
+| C4 | SELESAI | 2026-09-21 | Dijalankan nyata di browser dev dengan 43 cabang asli Kota Bandung dari produksi: Braga (40111, Sumur Bandung) → **JL. BRAGA D/H CIKAPUNDUNG** 0,8 km; Lebak Siliwangi (40132, Coblong) → **PERGURUAN TINGGI BANDUNG** (KC) 0,8 km; Cijaura (40262, Coblong) → PT BANDUNG 3,6 km. **Tiga baris wajib BEDA: terpenuhi.** KOREKSI kasus uji: harapan lama "Lebak Siliwangi → Dago ±1,4 km" tidak berlaku pada data sekarang karena master punya 2 cabang di kelurahan Lebak Siliwangi sendiri (PT BANDUNG KC + GANESHA), jadi Dago (Tamansari) bukan yang terdekat |
 | D1 | BELUM | â€” | Keputusan diambil 2026-09-21 (Bagian 12) â€” menunggu eksekusi |
 | D2 | SELESAI | 2026-09-21 | Opsi "kosongkan + lempar manual": fallback `completeRoles[0]` / `completeRoleList[0]` (skor 0,70) dihapus di kedua mesin (`matchRoleForOutlet` :916 dan jalur pipeline :1682). Tanpa kecocokan nyata sekarang menghasilkan `organisasiTujuan` kosong, `tipeUnit: OUTLET` (bukan KC karangan), role 0/0/0 (`is3RoleLengkap` false), `alurWondr`/`flowDescription` kosong, status ANOMALI â†’ masuk antrean review. Varian "kandidat terdekat satu pulau" TIDAK dibuat â€” butuh mesin jarak baru |
 | D3 | SELESAI | 2026-09-21 | `isFinalApproved` otomatis sekarang butuh `statusAnalisa===EXACT_MATCH` **dan** `placementStatus===VERIFIED` **dan** `!usedFallback` (`analystPipeline.ts` blok hasil) |
-| D4 | BELUM | â€” | |
+| D4 | SELESAI | 2026-09-21 | `analystPipeline.ts` `alurWondr` kini memakai `wondr?.tier` (kosakata sama dengan `getWondrRecommendation`, tidak ada lagi label generik Tier 1/Tier 2) |
 | D5 | BELUM | â€” | |
 | D6 | SELESAI | 2026-09-21 | Opsi (b): `applyFase3Role` (pilihan manual operator) tidak lagi menulis `EXACT_MATCH` â€” sekarang `HIGH_CONFIDENCE`, jadi akurasi mesin tidak naik oleh keputusan manusia dan barisnya tidak lolos ke Final tanpa diperiksa |
 | E1 | BELUM | â€” | |
@@ -517,7 +517,7 @@ Server paging (`api/kodepos.ts:382â€“407`, default 25 cap 500), CRUD per-id
 | ANI-2 | ✅ SELESAI 2026-09-21 | Titik anomali digambar di CANVAS sehingga class CSS tidak menular; radiusnya dirampungkan 3→11 dalam ~8 frame `requestAnimationFrame`, dilewati saat `prefers-reduced-motion` |
 | ANI-3 | ✅ SELESAI 2026-09-21 | Class baru `.bni-pop` (`qdrScaleIn .22s`) dipakai legenda, panel anomali, drawer pin, dan pil progres geocoding. Kartu luar peta sudah memakai `glass-card`/`qdrFade` |
 | ANI-4 | ✅ SELESAI 2026-09-21 | Pil geocoding memakai `animation: spin` yang TIDAK PERNAH ada di CSS mana pun → spinner diam; diganti `qdrSpin`. Teks jadi "Mencari titik X dari Y" (+ catatan tanpa kunci Google). Lapisan global `prefers-reduced-motion` tetap mematikan animasinya |
-| ANI-5 | SELESAI | Angka KPI berubah mendadak â†’ count-up ~0,4 dtk (ease-out, hormati `prefers-reduced-motion`). File baru `src/components/Dashboard/AnimatedMetricValue.tsx` + 5 kartu di `src/components/Dashboard/MetricCards.tsx` memakainya. Tidak mengubah rumus/perhitungan. âš ï¸ build belum diverifikasi |
+| ANI-5 | SELESAI | Angka KPI berubah mendadak → count-up ~0,4 dtk (ease-out, hormati `prefers-reduced-motion`). File baru `src/components/Dashboard/AnimatedMetricValue.tsx` + 5 kartu di `src/components/Dashboard/MetricCards.tsx` memakainya. Tidak mengubah rumus/perhitungan. ✅ build diverifikasi (Sesi 2 qoder: `tsc -b --force` 0 error) |
 
 ## BAGIAN K â€” KARTU â€œTITIK KOORDINATâ€ (Data Kode Pos) terlihat aneh/macet
 
@@ -555,8 +555,8 @@ Verifikasi konsistensi: `83.361 + 401 = 83.762` = total baris master â†’ pe
 
 | # | File | Perubahan | Item | Verifikasi build |
 |---|---|---|---|---|
-| 8 | `src/components/Dashboard/AnimatedMetricValue.tsx` (**file baru**) | Komponen `AnimatedMetricValue`: count-up/down ~400 ms (ease-out kubik, rAF), hormati `prefers-reduced-motion` (langsung ke nilai akhir). Presentasi saja â€” **tidak mengubah data/rumus** | ANI-5 | âš ï¸ BELUM |
-| 9 | `src/components/Dashboard/MetricCards.tsx` | 5 angka KPI memakai `AnimatedMetricValue` (`stats.totalProcessed`, `fm.distinctKodePos`, `fm.belumDikerjakan`, `fm.anomali`, `fm.top.count`). Teks kecil footer tetap `fmt(...)` | ANI-5 | âš ï¸ BELUM |
+| 8 | `src/components/Dashboard/AnimatedMetricValue.tsx` (**file baru**) | Komponen `AnimatedMetricValue`: count-up/down ~400 ms (ease-out kubik, rAF), hormati `prefers-reduced-motion` (langsung ke nilai akhir). Presentasi saja — **tidak mengubah data/rumus** | ANI-5 | ✅ 2026-09-21 |
+| 9 | `src/components/Dashboard/MetricCards.tsx` | 5 angka KPI memakai `AnimatedMetricValue` (`stats.totalProcessed`, `fm.distinctKodePos`, `fm.belumDikerjakan`, `fm.anomali`, `fm.top.count`). Teks kecil footer tetap `fmt(...)` | ANI-5 | ✅ 2026-09-21 |
 
 **Batas kerja Sesi 2 (sesuai kesepakatan anti-bentrok):** hanya kedua file di atas. File yang TIDAK disentuh: `IndonesiaBranchMap.tsx`, `styles/index.css`, `App.tsx`, `perbaikan-seluruh-aplikasi.md` (kecuali log ini). Pekerjaan animasi peta (ANI-1â€¦ANI-4) tetap milik qoder.
 
@@ -621,6 +621,7 @@ Lalu uji manual minimal: (1) edit & hapus 1 baris di menu Data Cabang â†’ r
 | 16 | `src/utils/analystPipeline.ts`, `AnalystResultsGrid.tsx`, `FinalDataManager.tsx`, `AnalystRowEditModal.tsx`, `pdfExport.ts` | B1: `coverage.mergedCities` + pesan fase + blok laporan cakupan. B2: `kodePosKelurahan` di baris, grid, sort, cari, ekspor Excel/PDF, modal Edit & Detail Final | B1, B2 | âœ… 2026-09-21 â€” dijalankan nyata di browser dev dengan 5 baris kodepos "Kota Bogor"+"Kabupaten Bogor"+"Kota Bandung": mergedCities=1 grup 4 baris, tiap baris bawa kode pos kelurahannya sendiri (16112/16121/16810/16811) sementara `kodePosPten` tetap 16121 |
 | 17 | `src/components/Dashboard/IndonesiaBranchMap.tsx`, `src/styles/index.css`, `src/components/Topbar.tsx` | MAP-3/4/6/7/8 + ANI-1/2/3/4: reset pin saat data berubah, chip status kunci Google, panel anomali bisa ditutup/Esc, tile default OSM tanpa kunci, aria-label + tabindex peta, fade layer pin, ramp radius titik anomali, class `.bni-pop`, spinner geocoding yang selama ini diam (keyframes `spin` tidak pernah ada) | MAP, ANI | ✅ tipe/build/lint (83 warning, sama seperti baseline) + terukur di browser dev: chip "Google ✗", tile `openstreetmap.org`, aria-label & tabindex terpasang |
 | 18 | `api/kodepos-geo.ts`, `src/utils/neonSync.ts`, `src/components/KodePosData/KodePosManager.tsx` | K4 (kode pos tak bersumber tidak ditawarkan ulang lagi) + K5 (angka Google terlihat di kartu) | K4, K5 | ✅ tipe/build/lint. ⚠️ `takBersumber` & filter baru di `ulang` baru berlaku setelah deploy Vercel; angka produksi sebelum deploy diukur dari `menungguUlang` |
+| 19 | `src/utils/analystPipeline.ts`, `src/utils/recommender.ts`, `src/utils/normalizer.ts`, `src/utils/geoDistance.ts`, `AnalystResultsGrid.tsx` | C2a–C2e + C3 + C4: Fase 2 otomatis dihitung per kelurahan dengan mesin kandidat yang sama seperti layar (Rank-1 = skor lalu jarak nyata, KC menang dalam seri ≤2 km), penanda manual baru (`fase2Tier`/`fase2JarakKm`/`fase2Temuan`), gerbang auto-final ikut menolak baris bertemuan, cache `cleanText`/`stripAdminNoise`/`findCityCoord` + memo `matchesDati`/`matchesProvince` + `ALAMAT` target tidak lagi dihitung dari alamat cabang lama. B4 lanjutan: `Jl. Protokol No. n`, sandi `00n`, dan `Status Outlet: Aktif` dikosongkan | C2, C3, C4, B4 | ✅ 2026-09-21 — terukur di browser dev: 43 cabang asli Kota Bandung, 3 kelurahan → 3 outlet berbeda & rank-1 = terdekat; agregat 6 kota besar/985 baris: 90,6% baris berubah outlet, 0 anomali tier>1; biaya mesin 5,07 → 3,57 ms/baris (proyeksi ±5 menit untuk 83.762 baris) |
 | â€” | `src/App.css`, `src/index.css` | A9 (sebagian): dua file CSS mati terverifikasi tidak diimpor siapa pun. **Penghapusannya tidak dilakukan** â€” diblokir kebijakan "jangan hapus file tanpa konfirmasi operator" | A9, A10 | â¸ menunggu konfirmasi |
 
 Yang **belum** diuji pada sesi 2: (a) SQL `final_rows` terhadap Postgres sungguhan (butuh tulis ke Neon â†’ aksi operator), (b) kartu Titik Koordinat di UI produksi untuk label `coba ulang 2.813 kode pos`.
@@ -793,7 +794,6 @@ Aturan tampilan — berlaku untuk grid Data Analyst, Final, dan semua menu:
 
 ---
 
-**Akhir dokumen.** Untuk konversi PDF: buka file ini di VS Code lalu ekspor Markdown ke PDF, atau salin ke Google Docs/Word lalu Export PDF; untuk Canva, salin bagian tabel per bagian karena Canva tidak merender tabel Markdown otomatis.
 
 ---
 
@@ -867,5 +867,32 @@ Kesimpulan: tampilan terasa **gemuk sekaligus kecil** — teks dipadatkan (8-10p
 - Tidak ada kartu yang lebih tinggi dari kontennya (ruang kosong di dalam kartu = salah padding).
 - `metrics-grid` menampilkan kartu dengan padding seragam 16px 20px dan gap 16px.
 - Tangkapan layar Dashboard, Fase 1/2/3, Final, dan 5 Data Master: perbandingan sebelum/sesudah harus terlihat lebih rapi, bukan lebih besar.
+
+
+---
+
+## BAGIAN P — ATURAN TITIK KOORDINAT: KOSONG = BELUM, TERISI = ADA
+
+> Ditambahkan 2026-09-21 atas permintaan pemilik produk. Status: BELUM. Berlaku untuk SEMUA pembacaan kolom `latitude`/`longitude` di aplikasi.
+
+### Aturan resmi (definisi tunggal)
+
+```
+baris ADA titik  <=>  kolom latitude milik baris itu TERISI (IS NOT NULL)
+baris BELUM ada  <=>  kolom latitude milik baris itu KOSONG (IS NULL)
+```
+
+**Wajib diikuti oleh:**
+1. KPI Data Kode Pos (`ber_titik): gunakan query yang SUDAH ADA di `api/kodepos.ts:273` — `COUNT(*) FILTER (WHERE d.latitude IS NOT NULL OR g.latitude IS NOT NULL)`. Jangan ubah (fallback ke titik kode pos tetap dihitung ada, sesuai aturan: yang kosong hanya yang benar-benar tidak punya sumber).
+2. Grid Data Kode Pos (kolom titik): tetap tampil memakai fallback `COALESCE(latitude, titik kode pos)` (`api/kodepos.ts:141`) agar baris tetap bisa dipetakan.
+3. Kartu KPI menu Kode Pos: angka BESAR = `stats.totalBerTitik`; footer = `total − totalBerTitik`; satuan ditulis eksplisit per BAGIAN K.
+4. Dashboard peta: urutan sumber tetap `row_data` > cache online > centroid Kanwil > Jakarta Pusat (`geoCoder.ts:207-277`) — tidak diubah.
+5. Fase 1/2/3: TIDAK membaca kolom ini (sudah terverifikasi). Jangan pernah menambahkan ketergantungan koordinat ke pipeline tanpa keputusan baru.
+
+### R-PETA1 dan R-PETA2 (masuk Bagian J)
+
+- **R-PETA1:** `calculateRealDistance` (`src/utils/geoDistance.ts:223-225`) bukan jarak GPS — isinya aturan (0,8 / 2,4 / 3,6 / selisih-kodepos / 42 km). Tambahkan komentar tegas di fungsi bahwa ia tidak membaca database koordinat, atau ganti nama.
+
+- **R-PETA2:** konstanta `CITY_COORDINATES` (`src/utils/geoDistance.ts:16`) adalah hardcode centroid kota. Kota yang tidak ada di konstanta selalu jatuh ke 42 km (Kasus 5). Bila suatu hari estimasi lintas-kota harus akurat, sambungkan ke tabel `kodepos_geo`. Untuk sekarang: tidak perlu diubah, cukup didokumentasikan.
 
 **Akhir dokumen.** Untuk konversi PDF: buka file ini di VS Code lalu ekspor Markdown ke PDF, atau salin ke Google Docs/Word lalu Export PDF; untuk Canva, salin bagian tabel per bagian karena Canva tidak merender tabel Markdown otomatis.
