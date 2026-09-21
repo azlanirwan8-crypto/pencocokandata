@@ -14,9 +14,9 @@
 >
 > | Status | Jumlah | ID |
 > |---|---|---|
-> | SELESAI | **49** | A1, A2, A3, A4, A5, A6, A7, A8, B1, B2, B4, C2a, C2b, C2c, C2d, C2e, C3, C4, B5, C5*, C6*, D1, D2, D3, D4, D5, D6, E1, E2, E4, E5, E6, E8, W1, W3, P1, F3-C1, F3-C2, R1, F6-X4, X5, G2, G4, G5, G6, G7, G8, G9, G10 |
+> | SELESAI | **51** | A1, A2, A3, A4, A5, A6, A7, A8, B1, B2, B4, C2a, C2b, C2c, C2d, C2e, C3, C4, B5, C5*, C6*, D1, D2, D3, D4, D5, D6, E1, E2, E4, E5, E6, E8, W1, W3, P1, F3-C1, F3-C2, R1, F6-X4, X5, G2, G4, G5, G6, G7, G8, G9, G10 |
 > | SEDANG | **1** | A9 — breakpoint responsivitas belum; CSS mati menunggu konfirmasi hapus |
-> | BELUM | **20** | A10, B3, E3, E7, F1-W2, F2-P2, F2-P3, F3-C3, F4-R2, F4-R3, F5-K1, F5-K2, F5-K3, F6-X1, F6-X2, F6-X3, G1, G3, G11, G12 |
+> | BELUM | **18** | A10, B3, E3, E7, F1-W2, F2-P2, F2-P3, F3-C3, F4-R2, F4-R3, F5-K1, F5-K2, F5-K3, F6-X1, F6-X2, F6-X3, G1, G3, G11, G12 |
 >
 > \* C5 & C6 = dua temuan BARU dari screenshot operator (bug substring "KIM" & banjir antrean manual), ditambahkan 2026-09-21 sehingga total item jadi **70**.
 >
