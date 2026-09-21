@@ -26,6 +26,7 @@ import {
 import * as XLSX from 'xlsx-js-style';
 import type { AnalystRow, AnalystCoverage } from '../../utils/analystPipeline';
 import { cityMatchKey, matchRoleForOutlet, penjelasanFase1 } from '../../utils/analystPipeline';
+import { useTampilanTersimpan } from '../../utils/useTampilanTersimpan';
 import type { KodePosRow } from '../../utils/neonSync';
 import type { PTENRecord } from '../PTENData/PTENManager';
 import type { MasterRow, TargetRow, WilayahSetting } from '../../types';
@@ -95,6 +96,9 @@ interface AnalystResultsGridProps {
   onApproveFase: (fase: 1 | 2 | 3) => void;
   /** "Setujui semua" pada tab manual: baris dianggap bersih, tetap di fase yang sama. */
   onBersihkanManual: (rowIds: string[]) => void;
+  /** A7: disaring ke baris yang belum disetujui pada fase ini (null = tanpa saringan). */
+  filterBelumSetuju?: 1 | 2 | 3 | null;
+  onResetBelumSetuju?: () => void;
   onReRunAll: () => void;
   onReRunAnomaliesOnly: () => void;
   isProcessing: boolean;
@@ -116,6 +120,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   onApproveAllFinal,
   onApproveFase,
   onBersihkanManual,
+  filterBelumSetuju = null,
+  onResetBelumSetuju,
   onReRunAll,
   onReRunAnomaliesOnly,
   isProcessing,
@@ -130,18 +136,21 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   roleMappingList = [],
 }) => {
   const { add: notify } = useNotification();
-  const [activeSubTab, setActiveSubTab] = useState<'all' | 'fase1' | 'fase2' | 'fase3'>('fase1');
-  const [selectedWilayah, setSelectedWilayah] = useState<string>('ALL');
-  const [searchTerm, setSearchTerm] = useState<string>('');
+  // A6: tampilan (tab/filter/cari/urut/halaman) bertahan saat pindah menu — komponen ini
+  // di-unmount oleh App saat tab lain aktif. Pilihan kandidat (fase2Choice/fase3RoleChoice)
+  // sengaja TIDAK disimpan: kuncinya `id` baris yang berubah tiap kali analisa dijalankan.
+  const [activeSubTab, setActiveSubTab] = useTampilanTersimpan<'all' | 'fase1' | 'fase2' | 'fase3'>('tampilan.analyst.subTab', 'fase1');
+  const [selectedWilayah, setSelectedWilayah] = useTampilanTersimpan<string>('tampilan.analyst.wilayah', 'ALL');
+  const [searchTerm, setSearchTerm] = useTampilanTersimpan<string>('tampilan.analyst.cari', '');
   // Pencarian 83 ribu baris: biarkan input langsung, saring di nilai tertunda
   const deferredSearch = useDeferredValue(searchTerm);
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ANOMALI' | 'EXACT_MATCH' | 'HIGH_CONFIDENCE' | 'PENEMPATAN_REVIEW'>('ALL');
+  const [statusFilter, setStatusFilter] = useTampilanTersimpan<'ALL' | 'ANOMALI' | 'EXACT_MATCH' | 'HIGH_CONFIDENCE' | 'PENEMPATAN_REVIEW'>('tampilan.analyst.status', 'ALL');
   // Inner tab pada tiap fase: hasil mesin yang siap disetujui vs yang masih butuh
   // kerja operator. Satu state untuk semua fase — hanya labelnya yang berbeda.
-  const [innerTab, setInnerTab] = useState<'BERES' | 'MANUAL'>('BERES');
+  const [innerTab, setInnerTab] = useTampilanTersimpan<'BERES' | 'MANUAL'>('tampilan.analyst.innerTab', 'BERES');
   // Urutan kolom — dikerjakan lokal karena seluruh baris fase ini sudah ada di memori.
-  const [sortKolom, setSortKolom] = useState<SortKolom | null>(null);
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [sortKolom, setSortKolom] = useTampilanTersimpan<SortKolom | null>('tampilan.analyst.sortKolom', null);
+  const [sortDir, setSortDir] = useTampilanTersimpan<'asc' | 'desc'>('tampilan.analyst.sortDir', 'asc');
   // Pilihan kandidat aktif per baris (rank 1-3) + modal detail kandidat
   const [fase2Choice, setFase2Choice] = useState<Record<string, number>>({});
   const [fase2Detail, setFase2Detail] = useState<{
@@ -159,8 +168,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   const [confirmManualRow, setConfirmManualRow] = useState<AnalystRow | null>(null);
 
   // Pagination states
-  const [page, setPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number | 'ALL'>(15);
+  const [page, setPage] = useTampilanTersimpan<number>('tampilan.analyst.page', 1);
+  const [pageSize, setPageSize] = useTampilanTersimpan<number | 'ALL'>('tampilan.analyst.pageSize', 15);
 
   // Edit Modal
   const [editingRow, setEditingRow] = useState<AnalystRow | null>(null);
@@ -499,6 +508,14 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   const filteredRows = useMemo(() => {
     const q = deferredSearch.trim().toLowerCase();
     const hasil = rows.filter((r) => {
+      // A7: penanda "N baris belum disetujui" di kartu fase — saringan ini menembus
+      // antrean fase supaya jumlah yang tampil sama persis dengan angkanya.
+      if (filterBelumSetuju) {
+        if (r.kategori === 'TIDAK_ANALISA') return false;
+        const sudah =
+          filterBelumSetuju === 1 ? r.fase1Approved : filterBelumSetuju === 2 ? r.fase2Approved : r.fase3Approved;
+        return !sudah;
+      }
       // Antrean per-fase: baris hanya tampil di tab fase yang belum ia setujui.
       if (stageOf(r) !== stageTab) return false;
       if (butuhManual(r, stageTab) !== (innerTab === 'MANUAL')) return false;
@@ -529,7 +546,14 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       return true;
     });
     return terapkanSort(hasil, sortKolom, sortDir);
-  }, [rows, selectedWilayah, statusFilter, deferredSearch, stageTab, innerTab, butuhManual, sortKolom, sortDir]);
+  }, [rows, selectedWilayah, statusFilter, deferredSearch, stageTab, innerTab, butuhManual, sortKolom, sortDir, filterBelumSetuju]);
+
+  // A7: penanda fase diklik → tab ikut pindah ke fase itu agar konteks kolomnya cocok.
+  useEffect(() => {
+    if (!filterBelumSetuju) return;
+    setActiveSubTab(`fase${filterBelumSetuju}` as 'fase1' | 'fase2' | 'fase3');
+    setPage(1);
+  }, [filterBelumSetuju, setActiveSubTab, setPage]);
 
   // Jumlah per inner tab pada fase yang sedang dibuka (dipakai label tombol)
   const hitunganInner = useMemo(() => {
@@ -587,7 +611,14 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   // Windowing: "Semua" pada puluhan ribu baris hanya boleh memasukkan baris
   // yang terlihat ke DOM, sisanya diwakili dua <tr> spacer.
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
-  const win = useVirtualWindow({ containerRef: tableScrollRef, itemCount: paginatedRows.length });
+  // A8: tab Fase 2/3 menampilkan kartu kandidat tinggi tak seragam. Mengukur tinggi dari
+  // baris pertama (fallback 44px) membuat scroll melompat di sana, jadi windowing hanya
+  // dipakai pada tabel baris datar (Fase 1 / ringkasan).
+  const win = useVirtualWindow({
+    containerRef: tableScrollRef,
+    itemCount: paginatedRows.length,
+    minRowsToWindow: activeSubTab === 'fase2' || activeSubTab === 'fase3' ? Number.POSITIVE_INFINITY : 200,
+  });
   const renderedRows = win.active ? paginatedRows.slice(win.start, win.end) : paginatedRows;
   const rowOffset = win.active ? win.start : 0;
 
@@ -1118,6 +1149,18 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
               {stats.placementReview > 0 && <option value="PENEMPATAN_REVIEW">Penempatan Belum Terverifikasi ({stats.placementReview})</option>}
             </select>
           </div>
+
+          {filterBelumSetuju && (
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={onResetBelumSetuju}
+              title="Tampilkan kembali semua baris fase ini"
+              style={{ color: '#b06f0f', borderColor: 'rgba(240, 173, 78, 0.5)', fontWeight: 700, whiteSpace: 'nowrap' }}
+            >
+              Hanya baris Fase {filterBelumSetuju} yang belum disetujui — tampilkan semua
+            </button>
+          )}
 
           <div className="filter-group">
             <span style={{ fontSize: '0.78rem', color: '#878a99' }}>Tampilkan:</span>

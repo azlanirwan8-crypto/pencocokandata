@@ -5,6 +5,7 @@ import type { AnalystRow } from '../../utils/analystPipeline';
 import { formatWilayahCode, applyStandardSheetStyle } from '../../utils/excel';
 import { ConfirmDialog } from './ConfirmDialog';
 import { DialogPanel } from '../BaseModal';
+import { useTampilanTersimpan } from '../../utils/useTampilanTersimpan';
 
 interface FinalDataManagerProps {
   rows: AnalystRow[];
@@ -18,10 +19,11 @@ const PAGE_SIZE = 25;
 // Final Data: hasil analisa 3 fase yang sudah disetujui operator.
 // Baris dipindah dari Data Analyst ke sini (IndexedDB `analyst_final_data`).
 export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onReturnAll, onReturnRow, onDeleteRow }) => {
-  const [searchTerm, setSearchTerm] = useState('');
+  // A6: filter & halaman bertahan saat operator pindah menu lalu kembali.
+  const [searchTerm, setSearchTerm] = useTampilanTersimpan('tampilan.final.cari', '');
   const deferredSearch = useDeferredValue(searchTerm);
-  const [wilayahFilter, setWilayahFilter] = useState('ALL');
-  const [page, setPage] = useState(1);
+  const [wilayahFilter, setWilayahFilter] = useTampilanTersimpan('tampilan.final.wilayah', 'ALL');
+  const [page, setPage] = useTampilanTersimpan('tampilan.final.page', 1);
   // Aksi yang butuh konfirmasi (menggantikan window.confirm native).
   const [confirmAction, setConfirmAction] = useState<{ kind: 'returnAll' | 'revise' | 'delete'; row?: AnalystRow } | null>(null);
   // Modal Detail (View) per baris.

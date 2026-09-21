@@ -1,5 +1,5 @@
 # RENCANA PERBAIKAN SELURUH APLIKASI
-> **⚠️ STATUS 2026-09-21: BELUM SELESAI — 20 dari 67 item `SELESAI`, 47 `BELUM` (3 di antaranya tinggal dieksekusi, keputusannya sudah diambil).**
+> **⚠️ STATUS 2026-09-21: BELUM SELESAI — 23 dari 67 item `SELESAI`, 1 `SEDANG` (A9), 43 `BELUM` (3 di antaranya tinggal dieksekusi, keputusannya sudah diambil).**
 > Baca Bagian 0 sebelum mengerjakan apa pun. Titik lanjut: **A3** (BaseModal). Rincian & bukti verifikasi ada di sana.
 
 **Aplikasi:** Tools Data Matcher Cabang & Outlet v2.x — React + TypeScript + Vite; IndexedDB (lokal) + Neon Postgres (cloud via serverless `api/`).
@@ -14,8 +14,9 @@
 >
 > | Status | Jumlah | ID |
 > |---|---|---|
-> | ✅ `SELESAI` | **20** | A1, A2, A3, A4, A5, B4, D2, D3, D6, F3-C1, F3-C2, F6-X4, G2, G4, G5, G6, G7, G8, G9, G10 |
-> | ⬜ `BELUM` | **47** | sisanya — termasuk 3 item yang dulu `SKIP`: keputusannya **sudah diambil 2026-09-21** (lihat Bagian 12), tinggal dieksekusi (B1, B2, D1) |
+> | ✅ `SELESAI` | **23** | A1, A2, A3, A4, A5, A6, A7, A8, B4, D2, D3, D6, F3-C1, F3-C2, F6-X4, G2, G4, G5, G6, G7, G8, G9, G10 |
+> | 🟨 `SEDANG` | **1** | A9 (responsivitas breakpoint; CSS mati menunggu konfirmasi hapus) |
+> | ⬜ `BELUM` | **43** | sisanya — termasuk 3 item yang dulu
 >
 > Belum termasuk item Bagian **H/I/J/K di Lampiran** (statusnya `BELUM`, ditandai langsung di barisnya; khusus Bagian K: K1–K3 sudah dikerjakan & build-verified 2026-09-21, K4–K5 `BELUM`).
 >
@@ -48,11 +49,11 @@
 | A3 | SELESAI | 2026-09-21 | `src/components/BaseModal.tsx` (`DialogPanel` = perilaku murni tanpa mengubah tampilan, `BaseModal` = + tata letak standar) + `src/components/useDialogBehavior.ts`. 31 dialog dibungkus. Bukti: `grep role="dialog" src` = 0 di luar BaseModal; `grep modal-backdrop` = 0 di luar BaseModal; `grep "Escape" src` = 0 handler lokal tersisa. Dialog persetujuan (`ConfirmDialog`) tidak lagi tertutup klik-luar |
 | A4 | SELESAI | 2026-09-21 | `analystPipeline.ts`: kelas `AnalisaDibatalkan` + param `pembatal?: { batal: boolean }` yang dicek di `tick()` (dipakai loop kota & loop baris) dan sekali sebelum return akhir. `App.tsx`: `pembatalAnalisaRef` + `handleBatalkanAnalisa` + `isCancelling`; catch khusus → progress 0, pesan "hasil tidak disimpan", notifikasi `info`. `AnalystCanvas.tsx`: tombol "Batalkan" hanya tampil saat `isAnalyzing` ("Membatalkan..." saat flag naik). Terukur di browser: `batal:true` → melempar `AnalisaDibatalkan`; `batal:false` → run selesai (1 baris). Tidak ada hasil setengah jadi karena `setAnalystRows` hanya dipanggil setelah pipeline kembali |
 | A5 | SELESAI | 2026-09-21 | Topbar.tsx — status koneksi + tombol Database + tombol Simpan (flushPendingWrites). Build & lint terverifikasi 2026-09-21 |
-| A6 | BELUM | — | |
-| A7 | BELUM | — | |
-| A8 | BELUM | — | |
-| A9 | BELUM | — | |
-| A10 | BELUM | — | |
+| A6 | SELESAI | 2026-09-21 | `src/utils/useTampilanTersimpan.ts` (useState + sessionStorage). Dipakai untuk 9 state tampilan grid Data Analyst (subTab, wilayah, cari, status, innerTab, sortKolom, sortDir, page, pageSize) + 3 di Data Final (cari, wilayah, page). **Diuji nyata di browser dev:** ketik "KCP" → pindah ke Dashboard → kembali → isi input masih "KCP", 9 kunci `tampilan.analyst.*` ada di sessionStorage. Pilihan kandidat (fase2Choice/fase3RoleChoice) sengaja tidak disimpan: kuncinya `id` baris yang berubah tiap run |
+| A7 | SELESAI | 2026-09-21 | `phaseApproval` (App.tsx) menambah `sisa` per fase; `AnalystCanvas` menampilkan tombol "N baris belum disetujui" di samping tombol utama saat terkunci; klik → grid membuka sub-tab fase itu + menyaring HANYA baris yang belum disetujui (menembus antrean fase, jadi angkanya sama dengan penandanya) dan menampilkan tombol "tampilkan semua" untuk melepas. Build/tipe hijau; tombolnya belum diklik pada data produksi karena butuh hasil analisa milik operator |
+| A8 | SELESAI | 2026-09-21 | Windowing dinonaktifkan pada tab Fase 2 & Fase 3 (`minRowsToWindow: Infinity`) — di tab itu barisnya kartu kandidat tinggi tak seragam sehingga pengukuran tinggi dari baris pertama bikin scroll melompat. Tabel datar (Fase 1/ringkasan) tetap di-window |
+| A9 | SEDANG | — | Sisa yang BELUM: breakpoint 1280/1024/768 untuk sidebar & tabel (butuh cek visual per lebar layar, jangan dikarang). Dua file CSS mati (`src/App.css`, `src/index.css`) sudah dipastikan TIDAK diimpor (hanya `src/styles/index.css` yang dimuat `main.tsx:3`) — penghapusannya dibloker kebijakan agen, butuh konfirmasi operator; lihat juga A10 |
+| A10 | BELUM | — | Ditunda sesuai aturannya sendiri ("hapus/arsip setelah F1–F4 selesai") — F1–F4 belum selesai. Daftar kandidat mati tetap sama: `TargetDataGrid.tsx`, `MasterUploadModal.tsx`, `MasterDataGrid.tsx`, `ProximityGuideModal.tsx`, `MasterUpload.tsx`, `FilterToolbar.tsx`, `Navbar.tsx`, `ProgressBar.tsx`, `App.css`, `index.css`, fungsi `matcher.ts` |
 | B1 | BELUM | — | Keputusan diambil 2026-09-21 (Bagian 12) — menunggu eksekusi |
 | B2 | BELUM | — | Keputusan diambil 2026-09-21 (Bagian 12) — menunggu eksekusi |
 | B3 | BELUM | — | Verifikasi ekspor saja |
@@ -179,19 +180,19 @@
 **Masalah:** `Topbar.tsx:6–11` mendeklarasikan `isNeonConnected`, `lastSyncedAt`, `onOpenNeonModal`, `onOpenSupabaseModal` tetapi tidak dirender. Tidak ada indikator “menyimpan/belum tersimpan” padahal `storage.ts:82` punya `flushPendingWrites()`.
 **Eksekusi:** render badge koneksi (“Terhubung · disinkron HH:MM” / “Offline”), tombol buka `NeonDatabaseModal`, indikator pending-write + tombol “Simpan sekarang” (`flushPendingWrites()`).
 
-### A6 — State hilang saat pindah menu
+### A6 — State hilang saat pindah menu ✅ SELESAI 2026-09-21
 **Masalah:** `App.tsx` merender hanya tab aktif (mis. `:1138`) → filter/pencarian/urutan/halaman/pilihan kandidat (`fase2Choice`, `fase3RoleChoice`) reset tiap pindah menu.
 **Eksekusi:** angkat state grid ke `App.tsx` atau simpan di `sessionStorage` (minimal: filter wilayah/status, halaman, pageSize).
 
-### A7 — Penanda “N baris belum disetujui”
+### A7 — Penanda “N baris belum disetujui” ✅ SELESAI 2026-09-21
 **Masalah:** tombol terkunci saat fase sudah dieksekusi tapi belum disetujui (`App.tsx:676–682`) tanpa info sisa & tanpa lompat.
 **Eksekusi:** hitung per fase baris `!faseNApproved && kategori!=='TIDAK_ANALISA'`; tampilkan “N baris belum disetujui” yang bisa diklik → filter/scroll ke baris pertama.
 
-### A8 — Virtualisasi vs baris kartu
+### A8 — Virtualisasi vs baris kartu ✅ SELESAI 2026-09-21
 **Masalah:** `useVirtualWindow.ts:63–70` mengukur tinggi dari baris pertama (fallback 44 px, ambang 200 baris `:32`); tab Fase 2/3 berisi kartu kandidat tinggi tak seragam → scroll melompat saat `pageSize='ALL'`.
 **Eksekusi:** nonaktifkan windowing untuk tab Fase 2/3, atau tinggi baris tetap + area kartu scroll internal.
 
-### A9 — Responsivitas & CSS mati
+### A9 — Responsivitas & CSS mati 🟨 SEDANG (breakpoint belum; penghapusan CSS mati menunggu konfirmasi)
 **Masalah:** stylesheet aktif hanya `src/styles/index.css` dengan 1 media query (`:704`); kolom sticky lebar tetap (340–420 px). `src/App.css` & `src/index.css` tidak diimpor (`main.tsx:3`).
 **Eksekusi:** breakpoint 1280/1024/768 untuk sidebar & tabel (scroll horizontal + indikator); hapus 2 file CSS mati.
 
@@ -612,8 +613,12 @@ Lalu uji manual minimal: (1) edit & hapus 1 baris di menu Data Cabang → refres
 | 8 | `src/App.tsx` | `handleReturnFinalToAnalyst` reset semua fase (disamakan dengan Revisi per baris) — keputusan Bagian 12 G7 opsi (a) | G7 | ✅ 2026-09-21 |
 | 9 | `src/components/WorkingEngine/AnalystResultsGrid.tsx` | `stats` memisahkan `perluReview`/`anomali`; konfirmasi “Pindahkan ke Final Analisa?” menyebut kedua jumlah itu — keputusan G8 opsi (a) | G8 | ✅ 2026-09-21 |
 | 10 | `src/components/BaseModal.tsx`, `src/components/useDialogBehavior.ts` (baru) + 20 file dialog | A3: `DialogPanel` (perilaku dialog: portal ke body, `role=dialog`/`aria-modal`/`aria-labelledby` otomatis dari judul yang terlihat, Esc, fokus masuk & kembali ke pemicu, Tab tertahan, klik-luar bisa dimatikan) dan `BaseModal` ( DialogPanel + header/body/footer `.modal-*`). 31 dialog dibungkus tanpa mengubah tampilan; `ConfirmDialog` tidak lagi menutup saat klik latar | A3 | ✅ 2026-09-21 (tsc 0 error, lint 0 error, diuji nyata di browser dev: Esc menutup, fokus kembali ke pemicu, Tab wrap dua arah) |
-| 12 | `src/utils/analystPipeline.ts`, `AnalystResultsGrid.tsx` | D2 (fallback role arbitrer + tujuan role/label Tier karangan dikosongkan), D3 (auto-final butuh VERIFIED & non-fallback), D6 (pilihan manual = HIGH_CONFIDENCE), + dua karangan B4 lagi yang ketahuan dari pengukuran (`BNI KCP <kota>`, `Wilayah <kota>`) | D2, D3, D6, B4 | ✅ 2026-09-21 — diukur nyata di browser dev: pipeline dijalankan atas 25 kota PTEN tanpa role mapping → 152 baris, semuanya `organisasiTujuan`/`namaOutlet`/`wilayah`/`alurWondr` kosong, `is3RoleLengkap=true` 0 baris, `isFinalApproved=true` 0 baris, status hanya ANOMALI/PERLU_REVIEW |
 | 11 | `src/utils/analystPipeline.ts` | B4: fallback kota/kode pos karangan ("KOTA JAKARTA PUSAT", "10110"), label "Wilayah 01", dan seluruh identitas sintetis baris penanda (W-code modulo, `CABANG x`, `KCP x`, `Jl. Protokol x`, `Status Outlet: Aktif`, `Provinsi: INDONESIA`) dihapus → jadi kosong | B4 | ✅ 2026-09-21 (build). **Angka hasil analisa bisa berubah — operator perlu menjalankan ulang Analisa untuk membandingkan** |
+| 12 | `src/utils/analystPipeline.ts`, `AnalystResultsGrid.tsx` | D2 (fallback role arbitrer + tujuan role/label Tier karangan dikosongkan), D3 (auto-final butuh VERIFIED & non-fallback), D6 (pilihan manual = HIGH_CONFIDENCE), + dua karangan B4 lagi yang ketahuan dari pengukuran (`BNI KCP <kota>`, `Wilayah <kota>`) | D2, D3, D6, B4 | ✅ 2026-09-21 — diukur nyata di browser dev: pipeline dijalankan atas 25 kota PTEN tanpa role mapping → 152 baris, semuanya `organisasiTujuan`/`namaOutlet`/`wilayah`/`alurWondr` kosong, `is3RoleLengkap=true` 0 baris, `isFinalApproved=true` 0 baris, status hanya ANOMALI/PERLU_REVIEW |
+| 13 | `src/utils/useTampilanTersimpan.ts` (baru), `AnalystResultsGrid.tsx`, `FinalDataManager.tsx` | A6: filter/pencarian/urutan/halaman bertahan saat pindah menu (sessionStorage). Dua setter sengaja tidak disentuh: `fase2Choice`/`fase3RoleChoice` karena kuncinya `id` baris yang berubah tiap run | A6 | ✅ 2026-09-21 — diuji nyata: "KCP" bertahan setelah pindah menu, 9 kunci sessionStorage terbentuk |
+| 14 | `src/App.tsx`, `AnalystCanvas.tsx`, `AnalystResultsGrid.tsx` | A7: `phaseApproval.sisa` + tombol "N baris belum disetujui" yang menyaring grid ke baris belum setuju pada fase itu (dengan tombol lepas saringan) | A7 | ✅ build & tipe; klik pada data produksi BELUM diuji (butuh hasil analisa operator) |
+| 15 | `src/components/WorkingEngine/AnalystResultsGrid.tsx` | A8: windowing dimatikan di tab Fase 2/3 (barisnya kartu tinggi tak seragam) | A8 | ✅ build & tipe; efek scroll BELUM diuji visual |
+| — | `src/App.css`, `src/index.css` | A9 (sebagian): dua file CSS mati terverifikasi tidak diimpor siapa pun. **Penghapusannya tidak dilakukan** — diblokir kebijakan "jangan hapus file tanpa konfirmasi operator" | A9, A10 | ⏸ menunggu konfirmasi |
 
 Yang **belum** diuji pada sesi 2: (a) SQL `final_rows` terhadap Postgres sungguhan (butuh tulis ke Neon → aksi operator), (b) kartu Titik Koordinat di UI produksi untuk label `coba ulang 2.813 kode pos`.
 

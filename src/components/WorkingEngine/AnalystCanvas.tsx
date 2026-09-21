@@ -37,6 +37,8 @@ interface AnalystCanvasProps {
   /** Persentase baris yang sudah di-approve per fase + status selesai ketat (tanpa pembulatan). */
   phaseApproval?: {
     pct: { 1: number; 2: number; 3: number };
+    /** A7: jumlah baris fase itu yang BELUM di-approve (baris `TIDAK_ANALISA` tidak dihitung). */
+    sisa?: { 1: number; 2: number; 3: number };
     selesai: { 1: boolean; 2: boolean; 3: boolean };
   };
   /** Fase pertama yang belum disetujui penuh — yang dijalankan tombol utama. */
@@ -47,6 +49,8 @@ interface AnalystCanvasProps {
   temuanSinyal?: Record<number, number>;
   /** Buka modal detail temuan satu sinyal. */
   onLihatTemuan?: (no: number) => void;
+  /** A7: penanda "N baris belum disetujui" diklik → grid menyaring fase itu. */
+  onLihatBelumSetuju?: (fase: 1 | 2 | 3) => void;
   /** Ada hasil analisa lama yang belum menyimpan bitmask sinyal (sebelum fitur ini dibuat). */
   bitmaskBelumAda?: boolean;
 }
@@ -64,11 +68,12 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
   phaseProgress = { 1: 0, 2: 0, 3: 0 },
   currentActivePhase = 0,
   completedPhases = new Set(),
-  phaseApproval = { pct: { 1: 0, 2: 0, 3: 0 }, selesai: { 1: false, 2: false, 3: false } },
+  phaseApproval = { pct: { 1: 0, 2: 0, 3: 0 }, sisa: { 1: 0, 2: 0, 3: 0 }, selesai: { 1: false, 2: false, 3: false } },
   faseBerikutnya = 1,
   terkunciMenungguPersetujuan = false,
   temuanSinyal = {},
   onLihatTemuan,
+  onLihatBelumSetuju,
   bitmaskBelumAda = false,
 }) => {
   const [showTheories, setShowTheories] = useState<boolean>(true);
@@ -295,6 +300,27 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
                 </>
               )}
             </button>
+
+            {/* A7: tombol terkunci tanpa keterangan bikin operator bingung — sebut
+                sisa barisnya dan buka daftarnya sekali klik. */}
+            {!isAnalyzing && terkunciMenungguPersetujuan && (phaseApproval.sisa?.[faseBerikutnya] ?? 0) > 0 && (
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => onLihatBelumSetuju?.(faseBerikutnya)}
+                title={`Tampilkan hanya baris Fase ${faseBerikutnya} yang belum disetujui`}
+                style={{
+                  marginLeft: '0.6rem',
+                  color: '#b06f0f',
+                  borderColor: 'rgba(240, 173, 78, 0.5)',
+                  fontWeight: 700,
+                  fontSize: '0.78rem',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {phaseApproval.sisa?.[faseBerikutnya]?.toLocaleString('id-ID')} baris belum disetujui
+              </button>
+            )}
           </div>
         </div>
 

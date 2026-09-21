@@ -105,6 +105,8 @@ export const App: React.FC = () => {
   const [cityOverrides, setCityOverrides] = useState<Record<string, string>>({});
   // Kartu sinyal yang sedang dibuka detail temuannya (nomor 1..13, null = tertutup).
   const [sinyalDibuka, setSinyalDibuka] = useState<number | null>(null);
+  // A7: penanda "N baris belum disetujui" yang bisa diklik — fase yang sedang disaring.
+  const [lihatBelumSetuju, setLihatBelumSetuju] = useState<null | 1 | 2 | 3>(null);
   // Full Master Kode Pos list (loaded once from Neon, cached in memory for pipeline runs)
   const kodePosListRef = useRef<KodePosRow[] | null>(null);
   // Cerminan reaktif dari kodePosListRef agar Dashboard bisa menghitung cakupan kode pos.
@@ -729,6 +731,8 @@ export const App: React.FC = () => {
     const pct = (n: number) => (total ? Math.floor((n / total) * 100) : 0);
     return {
       pct: { 1: pct(a), 2: pct(b), 3: pct(c) } as { 1: number; 2: number; 3: number },
+      // A7: angka mentah "masih berapa baris" — dipakai penanda yang bisa diklik.
+      sisa: { 1: total - a, 2: total - b, 3: total - c } as { 1: number; 2: number; 3: number },
       selesai: { 1: total > 0 && a === total, 2: total > 0 && b === total, 3: total > 0 && c === total } as {
         1: boolean;
         2: boolean;
@@ -1288,6 +1292,7 @@ export const App: React.FC = () => {
                 terkunciMenungguPersetujuan={tombolAnalisaTerkunci}
                 temuanSinyal={temuanSinyal}
                 onLihatTemuan={setSinyalDibuka}
+                onLihatBelumSetuju={setLihatBelumSetuju}
                 bitmaskBelumAda={analystRows.length > 0 && Object.keys(temuanSinyal).length === 0}
               />
 
@@ -1303,6 +1308,8 @@ export const App: React.FC = () => {
                   onApproveAllFinal={handleApproveAllAnalystFinal}
                   onApproveFase={handleApproveAnalystFase}
                   onBersihkanManual={handleBersihkanManualAnalyst}
+                  filterBelumSetuju={lihatBelumSetuju}
+                  onResetBelumSetuju={() => setLihatBelumSetuju(null)}
                   onReRunAll={() => handleStartAnalystPipeline(false)}
                   onReRunAnomaliesOnly={() => handleStartAnalystPipeline(true)}
                   isProcessing={isAnalyzing}
