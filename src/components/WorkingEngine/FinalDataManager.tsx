@@ -317,7 +317,7 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
         </div>
 
         <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', maxHeight: '580px', overflow: 'auto' }}>
-          <table className="modern-table" style={{ width: '100%', minWidth: '1450px', fontSize: '0.76rem' }}>
+          <table className="modern-table" style={{ width: 'max-content', minWidth: '1450px', fontSize: '0.76rem' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
               <tr>
                 <th style={{ width: '70px', textAlign: 'center' }}>Wilayah</th>

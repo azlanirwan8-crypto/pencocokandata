@@ -1489,7 +1489,9 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
         />
 
         <div ref={tableScrollRef} className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', maxHeight: '600px', overflow: 'auto' }}>
-          <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
+          {/* N1: `max-content` + wadah scroll = tidak ada nilai yang dipotong jadi
+              elipsis; sel tetap satu baris dan tabel digeser horizontal. */}
+          <table className="modern-table" style={{ width: 'max-content', minWidth: '100%', fontSize: '0.78rem' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
               {/* TAB 1: ALL COLUMNS */}
               {viewTab === 'all' && (
@@ -1730,6 +1732,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                 <>
                                   <span className={`badge ${cls}`}>{p.label}</span>
                                   <div
+                                    title={p.alasan}
                                     style={{
                                       fontSize: '0.62rem',
                                       color: '#878a99',
@@ -1946,7 +1949,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                       </div>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem', marginBottom: '0.1rem' }}>
-                                      <div style={{ fontSize: '0.81rem', fontWeight: 600, color: '#212529', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      <div style={{ fontSize: '0.81rem', fontWeight: 600, color: '#212529', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${m['Sandi Cabang'] || m.Cabang || m.Sandi || '-'}${m['Nama Outlet'] ? ` • ${m['Nama Outlet']}` : ''}${m.ALAMAT ? ` — ${m.ALAMAT}` : ''}`}>
                                         {m['Sandi Cabang'] || m.Cabang || m.Sandi || '-'}
                                         {m['Nama Outlet'] && (
                                           <span style={{ fontSize: '0.73rem', color: '#405189', fontWeight: 500, marginLeft: '0.35rem' }}>• {m['Nama Outlet']}</span>

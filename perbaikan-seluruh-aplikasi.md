@@ -768,7 +768,7 @@ Di luar itu — termasuk baris Aceh dan baris yang cabangnya sudah Rank-1 — **
 
 ## BAGIAN N — ATURAN EDIT/REVISI & TABEL YANG TIDAK TERPOTONG
 
-> Ditambahkan 2026-09-21 atas permintaan pemilik produk. Status per bagian: **N0 SELESAI 2026-09-22** (butir 4 belum), **N3 SELESAI 2026-09-22**, N1 & N2 masih `BELUM`.
+> Ditambahkan 2026-09-21 atas permintaan pemilik produk. Status per bagian: **N0 SELESAI 2026-09-22** (butir 4 belum), **N1 SELESAI 2026-09-22** (kontrol densitas ditunda dengan alasan), **N3 SELESAI 2026-09-22**, N2 masih `BELUM`.
 
 ### N0 — ATURAN PRODUK: FASE 1/2/3 TIDAK ADA EDIT, HANYA REVISI (status `SELESAI 2026-09-22` kecuali butir 4)
 
@@ -801,9 +801,43 @@ Di luar itu — termasuk baris Aceh dan baris yang cabangnya sudah Rank-1 — **
 
 **Uji:** buka Fase 1/2/3, tombol Edit tidak ada; tombol Revisi tetap ada; mengubah data hanya bisa dari menu Data Master.
 
-### N1 — KOLOM TABEL TERPOTONG (nilai tidak muncul semua)
+### N1 — KOLOM TABEL TERPOTONG (nilai tidak muncul semua) — status `SELESAI 2026-09-22` untuk pemotongan; kontrol densitas sengaja ditunda (lihat catatan)
 
-**Bukti kode:**
+**Akar masalah terukur (bukan 24 lokasi acak):** `.modern-table td` di `src/styles/index.css:848-856` memakai
+`white-space: nowrap; overflow: hidden; text-overflow: ellipsis`. Menurut CSS 2.1 ukuran minimum otomatis sel
+tabel HANYA berlaku kalau `overflow: visible` — jadi begitu `overflow: hidden` dipasang, browser boleh
+**memampatkan kolom** sampai tabel muat `width: 100%`. Itulah sebabnya nilai hilang tanpa bisa dibaca,
+dan itu terjadi di SEMUA kolom teks sekaligus, bukan per kolom.
+
+**Perbaikan yang dipakai (aturan pemilik produk: sel satu baris, jangan dilipat, geser horizontal):**
+- `AnalystResultsGrid.tsx:1494` dan `FinalDataManager.tsx:320`: `width: '100%'` → `width: 'max-content'`
+  (+ `minWidth` lama dipertahankan). Tabel tidak pernah lebih sempit dari isi kolomnya; wadah
+  `.table-container` (`overflow: auto`) yang menambah scroll horizontal. Tidak ada lagi elipsis pada
+  kolom data, dan offset kolom sticky Fase 2 (0 / 34px / 74px) tetap akurat karena kolom tidak bisa menyusut.
+- 4 elipsis yang memang disengaja (di luar kolom data) kini semua punya `title` berisi nilai penuh:
+  alasan Fase 1 (`:1735`), banner audit nilai prefill (`:1816`), dan judul kartu kandidat
+  `Sandi Cabang • Nama Outlet — ALAMAT` (`:1952`).
+  **Terukur:** elipsis tanpa tooltip di grid = 4 → 0 (semua 5 lokasi `textOverflow: 'ellipsis'` kini
+  ber-`title`; 2 lokasi di antaranya satu elemen yang sama dengan yang lain).
+- Kelas `.modern-table` TIDAK diubah global: 19 tabel di 8 menu memakainya, dan Bagian ini hanya
+  menuntut tabel Data Analyst + Final. Perubahan global menunggu Bagian O.
+
+**Aturan 4 (kontrol densitas Ringkas|Normal|Lebar) — DITUNDA dengan alasan.** Setelah `max-content`,
+satu-satunya sisa "terpotong" adalah lebar tabel yang memang harus digeser; tiga mode densitas hanya
+mengubah skala font/padding dan justru bertabrakan dengan Bagian O yang menetapkan SATU skala token
+(12/14/16 + grid 4px) dan tinggi baris resmi 40px/32px. Menambah saklar densitas sekarang berarti
+membuat dua sumber kebenaran tampilan yang harus diruntuhkan lagi saat O dikerjakan. Keputusan ini
+bisa dibalik oleh pemilik produk kalau setelah O dijalankan tabelnya masih terasa sesak.
+
+**Cara menguji (butuh data nyata di browser operator):** Fase 1/2/3 dan Final — arahkan kursor ke kolom
+mana pun yang isinya panjang (ALAMAT, ORGANISASI TUJUAN, Kelurahan); nilainya harus tampil penuh di
+layar, dan kalau belum, tooltip `title` menyebut isinya lengkap; tabel boleh digeser horizontal, sel
+tidak boleh melipat jadi dua baris.
+
+
+**Rencana awal (audit statis 2026-09-21, dipakai sebagai latar saja).** Aturan 2 lama minta kolom teks
+bebas dilipat maksimal 2 baris — **dibatalkan** oleh aturan pemilik produk "sel tabel harus satu baris,
+teks panjang menggeser tabel, tidak dilipat". Angka lokasi pada daftar di bawah juga sudah bergeser.
 - 24 pola pemotongan di `AnalystResultsGrid.tsx` (hasil grep `textOverflow`, `whiteSpace: nowrap`, `overflow: hidden`).
 - Contoh lokasi: `:1496`, `:1573`, `:1583`.
 - Header Fase 1 memakai lebar tetap (`:1298-1308`): No 40px, Wilayah 70px, Sandi 85px, Branch Code 90px, Kode Pos 75px, Kode Pos PTEN 100px — sehingga nama/alamat panjang terpotong.
