@@ -83,18 +83,17 @@ export function isAcehRegion(target: TargetRow): boolean {
 }
 
 /**
- * Cabang KIM = layanan khusus Provinsi Aceh. Dua syarat harus bersamaan terpenuhi:
- * nama/sandi memuat kata utuh 'KIM' DAN barisnya memang berada di Aceh.
- * Tanpa penjaga ini, 'AR HAKIM' (Medan) ikut tertangkap sebagai "KIM" lewat
- * pencocokan substring, lalu seluruh penempatan provinsi Aceh dilayani cabang
- * Sumatera Utara itu dengan alasan yang salah.
+ * Cabang KIM = layanan khusus Provinsi Aceh.
+ * Diidentifikasi dari Kode Cabang / Branch Code (KIM) atau nama cabang memuat kata utuh 'KIM'.
  */
 export function isKimBranchAceh(m: MasterRow): boolean {
-  const combined = [m.Cabang, m['Sandi Cabang'], m.Sandi, m['Nama Outlet']]
+  const code = String(m['Kode Cabang'] || m['Branch Code'] || m['Sandi Cabang'] || m.Sandi || '').trim().toUpperCase();
+  if (code === 'KIM' || /\bKIM\b/.test(code)) return true;
+  const combined = [m.Cabang, m['Nama Outlet']]
     .filter(Boolean)
     .join(' ')
     .toUpperCase();
-  if (!/\bKIM\b/.test(combined)) return false;
+  if (/\bKIM\b/.test(combined)) return true;
   const lokasi = `${m.Provinsi || ''} ${m['Dati II'] || ''} ${m['Kota/Dati II'] || ''} ${m.ALAMAT || ''}`.toUpperCase();
   return lokasi.includes('ACEH');
 }
@@ -103,6 +102,12 @@ export function isKimBranchAceh(m: MasterRow): boolean {
  * Cari cabang berlabel 'KIM' di master (khusus baris yang berada di Aceh)
  */
 export function findKimBranch(masterRows: MasterRow[]): MasterRow | null {
+  // 1. Prioritas 1: Kode Cabang / Branch Code persis 'KIM' atau mengandung kata KIM
+  for (let i = 0; i < masterRows.length; i++) {
+    const code = String(masterRows[i]['Kode Cabang'] || masterRows[i]['Branch Code'] || masterRows[i]['Sandi Cabang'] || masterRows[i].Sandi || '').trim().toUpperCase();
+    if (code === 'KIM' || /\bKIM\b/.test(code)) return masterRows[i];
+  }
+  // 2. Prioritas 2: Nama Cabang / Outlet memuat kata KIM
   for (let i = 0; i < masterRows.length; i++) {
     if (isKimBranchAceh(masterRows[i])) return masterRows[i];
   }

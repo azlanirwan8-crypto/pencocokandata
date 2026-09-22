@@ -66,12 +66,16 @@ export function validatePtenForTarget(
   const pten = ptenIndex.get(kp)!;
   const cleanTargetCity = cleanDati(targetDati2 || '');
   const cleanPtenCity = cleanDati(pten.kotaPten || '');
+  const cleanPtenMax15 = cleanDati(pten.kotaPtenMax15 || '');
 
-  // Compare cities
+  // Compare cities considering 15-character truncation and prefix/contains
   const isCityMatch =
     !cleanTargetCity ||
     !cleanPtenCity ||
     cleanTargetCity === cleanPtenCity ||
+    (cleanPtenMax15 && cleanTargetCity.startsWith(cleanPtenMax15)) ||
+    (cleanPtenMax15 && cleanPtenMax15.startsWith(cleanTargetCity.slice(0, 15))) ||
+    cleanTargetCity.slice(0, 15) === cleanPtenCity.slice(0, 15) ||
     cleanTargetCity.includes(cleanPtenCity) ||
     cleanPtenCity.includes(cleanTargetCity);
 

@@ -1654,7 +1654,11 @@ export async function executeAnalystPipeline(
     // Yield every 20 rows so the browser can repaint the progress bar
     if (i % 20 === 0) await tick();
 
-    const cityRaw = String(raw['Dati II'] || raw.Kota || raw.Kelurahan || '').trim();
+    // Ekstraksi nama kota/dati2 dari berbagai variasi kolom (termasuk kolom k2/K2 dan kolom samping)
+    const k2Raw = String(raw.k2 || raw.K2 || raw['k2'] || raw['K2'] || '').trim();
+    const cityRaw = String(
+      raw['Dati II'] || raw.Kota || raw.KOTA || raw.Kabupaten || raw.KABUPATEN || raw['KOTA/KABUPATEN'] || k2Raw || raw.Kelurahan || raw.Kecamatan || ''
+    ).trim();
     const cityClean = cityMatchKey(cityRaw);
     const kpRaw = String(raw['KODE POS'] || '').trim();
     // Sinyal yang ikut membuktikan penempatan wilayah baris ini (bitmask, lihat SINYAL_BIT),
@@ -1687,11 +1691,18 @@ export async function executeAnalystPipeline(
       let bestScore = 0;
       let bestCitySinyal = 0;
       let bestCityCatat: Record<number, string[]> = {};
+      // Saring juga bila nama PTEN terpotong 15 karakter (contoh: 15 digit PTEN max15)
+      const cityClean15 = cityClean.slice(0, 15);
+
       for (const [ptenCityKey, candidates] of ptenCityMap.entries()) {
         const { score, sinyal, catatan } = calculateCityMatchScore(cityClean, ptenCityKey);
-        if (score > bestScore && score >= 0.88) {
-          bestScore = score;
-          matchedPtenRecord = candidates[0];
+        const ptenKey15 = ptenCityKey.slice(0, 15);
+        const is15Match = cityClean15.length >= 5 && (cityClean15 === ptenKey15 || ptenCityKey.startsWith(cityClean15) || cityClean.startsWith(ptenKey15));
+        
+        const effectiveScore = is15Match ? Math.max(score, 0.9) : score;
+        if (effectiveScore > bestScore && effectiveScore >= 0.85) {
+          bestScore = effectiveScore;
+          matchedPtenRecord = candidates.find((c) => c.kodePosPten === kpRaw) || candidates[0];
           bestCitySinyal = sinyal;
           bestCityCatat = catatan;
         }

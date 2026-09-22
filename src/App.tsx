@@ -47,6 +47,7 @@ import {
   saveFinalToNeon,
   deleteFinalKeysInNeon,
   clearFinalInNeon,
+  clearTargetFromNeon,
   fetchKodePosExport,
   fetchKodePosStats,
   type KodePosRow,
@@ -488,34 +489,36 @@ export const App: React.FC = () => {
     const finalKodePosSet = new Set(finalRows.map((r) => normKp(r.kodePosPten)).filter(Boolean));
     const distinctKodePos = finalKodePosSet.size; // kartu "sudah disesuaikan" (kode pos unik)
 
-    // Kartu "belum dikerjakan": kode pos di Master yang belum ada di Data Final.
+    // Kartu "belum dikerjakan": jika data final kosong/direset, set ke 0.
     const fullMaster = kodePosMasterRows.length > DEFAULT_KODEPOS_DATA.length ? kodePosMasterRows : null;
-    let totalKodePos: number;
-    let belumDikerjakan: number;
-    if (fullMaster) {
-      const masterKodePosSet = new Set(fullMaster.map((kp) => normKp(kp.kodePos)).filter(Boolean));
-      let doneInMaster = 0;
-      finalKodePosSet.forEach((k) => { if (masterKodePosSet.has(k)) doneInMaster++; });
-      totalKodePos = masterKodePosSet.size;
-      belumDikerjakan = Math.max(0, masterKodePosSet.size - doneInMaster);
-    } else {
-      // Master penuh belum termuat → taksiran dari jumlah baris (footer tetap jujur).
-      totalKodePos = kodePosCount;
-      belumDikerjakan = Math.max(0, kodePosCount - distinctKodePos);
+    let totalKodePos = 0;
+    let belumDikerjakan = 0;
+    if (finalCount > 0) {
+      if (fullMaster) {
+        const masterKodePosSet = new Set(fullMaster.map((kp) => normKp(kp.kodePos)).filter(Boolean));
+        let doneInMaster = 0;
+        finalKodePosSet.forEach((k) => { if (masterKodePosSet.has(k)) doneInMaster++; });
+        totalKodePos = masterKodePosSet.size;
+        belumDikerjakan = Math.max(0, masterKodePosSet.size - doneInMaster);
+      } else {
+        totalKodePos = kodePosCount;
+        belumDikerjakan = Math.max(0, kodePosCount - distinctKodePos);
+      }
     }
 
-    // Kartu anomali: SATU definisi (detectFinalAnomalies) — sama persis dgn panel Peta
-    // dan tabel bawah, dihitung sekali di `finalAnomali`.
-    const anomali = finalAnomali.length;
+    // Kartu anomali: SATU definisi (detectFinalAnomalies), bernilai 0 bila data kosong.
+    const anomali = finalCount > 0 ? finalAnomali.length : 0;
 
     // Kartu "kode pos dengan cabang terbanyak" di Data Final.
     const byKode = new Map<string, { count: number; kota: string }>();
-    for (const r of finalRows) {
-      const kp = normKp(r.kodePosPten);
-      if (!kp) continue;
-      const e = byKode.get(kp);
-      if (e) e.count++;
-      else byKode.set(kp, { count: 1, kota: r.kotaPtenMax15 || r.kotaPten || r.groupKota || '-' });
+    if (finalCount > 0) {
+      for (const r of finalRows) {
+        const kp = normKp(r.kodePosPten);
+        if (!kp) continue;
+        const e = byKode.get(kp);
+        if (e) e.count++;
+        else byKode.set(kp, { count: 1, kota: r.kotaPtenMax15 || r.kotaPten || r.groupKota || '-' });
+      }
     }
     let top = { kodePos: '-', count: 0, kota: '-' };
     for (const [kp, v] of byKode) if (v.count > top.count) top = { kodePos: kp, count: v.count, kota: v.kota };
@@ -892,18 +895,26 @@ export const App: React.FC = () => {
       void deleteFinalKeysInNeon([...ids]).then((ok) => laporkanSinkronFinal(ok, `hapus ${ids.size} baris`));
   };
 
-  // "Reset Data" di menu Final Data: kosongkan seluruh Final (lokal + cloud) TANPA
-  // memindahkan apa pun ke Data Analyst — beda dari "Kembalikan Semua".
+  // "Reset Data": kosongkan seluruh Final, Target, dan Analyst (lokal + cloud) secara total.
   const handleResetFinalData = () => {
-    const n = finalRows.length;
-    if (n === 0) return;
+    const totalRemoved = finalRows.length + targetRows.length + analystRows.length;
     setFinalRows([]);
-    setItem('analyst_final_data', []).catch(() => {});
-    // Penanda bahwa pengosongan ini disengaja — jalur muat awal tidak boleh menanamkan
-    // lagi salinan lama dari browser/tab lain.
-    setItem('final_data_direset', Date.now()).catch(() => {});
-    if (isNeonConnected) void clearFinalInNeon().then((ok) => laporkanSinkronFinal(ok, 'dikosongkan (reset)'));
-    notify(`Final Data direset — ${n.toLocaleString('id-ID')} baris dihapus permanen. Data Analyst tidak ikut berubah.`, 'info');
+    setTargetRows([]);
+    setAnalystRows([]);
+    setTargetFileName('');
+    setInitialTargetCount(0);
+    setMatchedDone(false);
+
+    void deleteKey('analyst_final_data');
+    void deleteKey('target_data');
+    void deleteKey('analyst_results_data');
+    void setItem('final_data_direset', Date.now());
+
+    if (isNeonConnected) {
+      void clearFinalInNeon().then((ok) => laporkanSinkronFinal(ok, 'dikosongkan (reset final)'));
+      void clearTargetFromNeon().then((ok) => laporkanSinkronFinal(ok, 'dikosongkan (reset target)'));
+    }
+    notify(`Reset Berhasil — Seluruh data (${totalRemoved.toLocaleString('id-ID')} baris total) telah dihapus dari sistem (lokal & cloud).`, 'info');
   };
 
   // G1: Impor baris dari Excel di menu Final Data
