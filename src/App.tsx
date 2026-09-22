@@ -1268,6 +1268,7 @@ export const App: React.FC = () => {
                 masterRows={masterRows}
                 targetRows={targetRows}
                 finalRows={finalRows}
+                kodePosRows={kodePosMasterRows}
                 selectedWilayah={dashboardWilayahFilter}
                 onNavigateToMaster={() => setActiveTab('master')}
                 onNavigateToEngine={() => {

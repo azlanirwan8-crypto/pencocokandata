@@ -22,6 +22,8 @@ import {
 } from 'lucide-react';
 import type { MasterRow, TargetRow } from '../../types';
 import type { AnalystRow } from '../../utils/analystPipeline';
+import type { KodePosRow } from '../../utils/neonSync';
+import { kunciKelKec, kotaCocok } from '../../utils/geoTitik';
 import { detectFinalAnomalies } from '../../utils/finalAnomaly';
 import { formatWilayahName } from '../../utils/normalizer';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
@@ -57,6 +59,8 @@ import { DialogPanel } from '../BaseModal';
 // ── Ikon penanda peta: bentuk = JENIS titik, warna = STATUS (agar user langsung tahu
 //    "ini KC / KCP / Kode Pos / Multi-Outlet" tanpa harus klik). ──
 type PinKind = 'KODEPOS' | 'KC' | 'KCP' | 'MULTI';
+// Kunci cadangan penentuan titik: kelurahan+kecamatan+kota (lihat `geoTitik.ts`).
+
 const PIN_GLYPH: Record<PinKind, string> = { KODEPOS: '📮', KC: '🏦', KCP: '🏬', MULTI: '🏢' };
 const PIN_LABEL: Record<PinKind, string> = { KODEPOS: 'Kode Pos', KC: 'KC (Cabang)', KCP: 'KCP (Outlet)', MULTI: 'Multi-Outlet' };
 
@@ -89,6 +93,8 @@ interface IndonesiaBranchMapProps {
   masterRows: MasterRow[];
   targetRows?: TargetRow[];
   finalRows?: AnalystRow[];
+  /** Tabel Data Kode Pos — dipakai sebagai kunci cadangan penentuan titik (lihat `kunciTitikNama`). */
+  kodePosRows?: KodePosRow[];
   selectedWilayah?: string;
   onNavigateToMaster?: () => void;
   onNavigateToEngine?: (searchFilter?: string) => void;
@@ -205,6 +211,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   masterRows,
   targetRows = [],
   finalRows = [],
+  kodePosRows = [],
   selectedWilayah = 'ALL',
   onNavigateToMaster,
   onNavigateToEngine,
@@ -263,6 +270,41 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   // Indeks titik kode pos tersimpan (Neon kodepos_geo): kodePos(5 digit) → {lat,lng,sumber}.
   // Dipakai layer Final Data agar tidak men-geocode ulang dari nol.
   const [titikKodePos, setTitikKodePos] = useState<Record<string, { lat: number; lng: number; sumber?: string }>>({});
+
+  // Cadangan penentuan titik: kelurahan+kecamatan -> koordinat. Sumbernya TETAP tabel
+  // Data Kode Pos (bukan geocoder internet); yang berubah cuma caranya mencari.
+  const titikByNama = useMemo(() => {
+    const m = new Map<string, { lat: number; lng: number; sumber?: string; kode: string; kota: string }[]>();
+    for (const r of kodePosRows) {
+      const lat = Number(r.latitude);
+      const lng = Number(r.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      const kode = String(r.kodePos || '').trim();
+      const t = titikKodePos[kode];
+      if (!t) continue;
+      const k = kunciKelKec(r.kelurahan, r.kecamatan);
+      const titik = { lat: t.lat, lng: t.lng, sumber: t.sumber, kode, kota: r.kabupatenKota || '' };
+      const daftar = m.get(k);
+      if (!daftar) m.set(k, [titik]);
+      else if (!daftar.some((d) => d.kode === kode)) daftar.push(titik);
+    }
+    return m;
+  }, [kodePosRows, titikKodePos]);
+
+  /** Titik satu baris Data Final: kode posnya dulu, kalau gagal pakai nama wilayah. */
+  const titikUntukBaris = useMemo(() => (r: AnalystRow) => {
+    const kp = String(r.kodePosPten || '').replace(/\D/g, '').trim();
+    const viaKode = kp ? titikKodePos[kp] : undefined;
+    if (viaKode) return { lat: viaKode.lat, lng: viaKode.lng, kode: kp, sumber: viaKode.sumber, viaNama: false };
+    const daftar = titikByNama.get(kunciKelKec(r.kelurahan, r.kecamatan));
+    if (!daftar?.length) return null;
+    // Kota hanya jadi pemecah: nama kota PTEN bisa berprefiks beda atau terpotong
+    // (kolom MAX 15), jadi kalau tidak ada yang cocok tapi alternatifnya tunggal,
+    // titik itu tetap aman dipakai. Banyak alternatif tanpa kecocokan kota -> jangan menebak.
+    const cocok = daftar.find((d) => kotaCocok(d.kota, r.kotaPtenMax15 || r.kotaPten || ''));
+    const pilih = cocok || (daftar.length === 1 ? daftar[0] : null);
+    return pilih ? { ...pilih, viaNama: true } : null;
+  }, [titikKodePos, titikByNama]);
   const lastAutoFitKeyRef = useRef('');
   const mapInteractionRef = useRef(false);
   const mapInteractionHandlersRef = useRef<{
@@ -507,17 +549,19 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   // Baris dikelompokkan per kode pos PTEN; status pin = terburuk di antara barisnya.
   const finalPins = useMemo<PlottedBranchPin[]>(() => {
     if (!finalRows || finalRows.length === 0) return [];
-    const groups = new Map<string, AnalystRow[]>();
+    // Dikelompokkan per TITIK hasil pencocokan, bukan per kode pos mentah: satu kode pos
+    // PTEN bisa mewakili banyak kelurahan, dan sebaliknya.
+    const groups = new Map<string, { titik: { lat: number; lng: number; kode: string; viaNama: boolean }; rows: AnalystRow[] }>();
     for (const r of finalRows) {
-      const kp = String(r.kodePosPten || '').replace(/\D/g, '').trim();
-      if (!kp) continue;
-      if (!groups.has(kp)) groups.set(kp, []);
-      groups.get(kp)!.push(r);
+      const t = titikUntukBaris(r);
+      if (!t) continue;
+      const key = `${t.kode}|${t.viaNama ? 'nama' : 'kode'}`;
+      if (!groups.has(key)) groups.set(key, { titik: t, rows: [] });
+      groups.get(key)!.rows.push(r);
     }
     const pins: PlottedBranchPin[] = [];
-    groups.forEach((rows, kp) => {
-      const titik = titikKodePos[kp];
-      if (!titik) return; // tanpa titik kodepos nyata → jangan menebak koordinat
+    groups.forEach(({ titik, rows }, key) => {
+      const kp = titik.kode;
       let status: 'OK' | 'REVIEW' | 'ANOMALI' = 'OK';
       for (const r of rows) {
         if (r.statusAnalisa === 'ANOMALI') { status = 'ANOMALI'; break; }
@@ -525,7 +569,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       }
       const first = rows[0];
       pins.push({
-        id: `final-${kp}`,
+        id: `final-${key}`,
         lat: titik.lat,
         lng: titik.lng,
         kodePos: kp,
@@ -542,17 +586,14 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       });
     });
     return pins;
-  }, [finalRows, titikKodePos]);
+  }, [finalRows, titikUntukBaris]);
 
-  // Baris Data Final yang TIDAK muncul di peta: kode posnya belum punya titik
-  // kodepos nyata. Dulu didiamkan, jadi jumlah pin tidak pernah sama dengan jumlah baris.
+  // Baris Data Final yang TIDAK muncul di peta: tidak dapat titik dari tabel kode pos,
+  // baik lewat kode posnya maupun lewat nama kelurahan+kecamatan+kota.
   const finalBelumTerpetakan = useMemo<AnalystRow[]>(() => {
     if (!finalRows || finalRows.length === 0) return [];
-    return finalRows.filter((r) => {
-      const kp = String(r.kodePosPten || '').replace(/\D/g, '').trim();
-      return !kp || !titikKodePos[kp];
-    });
-  }, [finalRows, titikKodePos]);
+    return finalRows.filter((r) => !titikUntukBaris(r));
+  }, [finalRows, titikUntukBaris]);
 
   // 2. Filter pins based on Display Scope (Semua vs Hanya Terpilih vs Final vs Multi)
   const filteredPins = useMemo(() => {
@@ -752,8 +793,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     if (!showAnomalyPanel) return [];
     const detected = detectFinalAnomalies(finalRows || [], masterRows || []);
     return detected.map(({ row: r, primary, reasons }) => {
-      const kp = String(r.kodePosPten || '').replace(/\D/g, '').trim();
-      const titik = kp ? titikKodePos[kp] : undefined;
+      const titik = titikUntukBaris(r) || undefined;
 
       let anomalyTitle = 'Anomali Status Analisa';
       let anomalyBadge: { text: string; bg: string; color: string; border: string } = { text: r.statusAnalisa, bg: '#fee2e2', color: '#991b1b', border: '#f87171' };
@@ -782,7 +822,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         reasons,
       };
     });
-  }, [finalRows, masterRows, titikKodePos, showAnomalyPanel]);
+  }, [finalRows, masterRows, titikUntukBaris, showAnomalyPanel]);
 
   const filteredAnomalyRows = useMemo(() => {
     if (anomalyTypeFilter === 'ALL') return anomalyRows;
@@ -792,11 +832,10 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   // Fly ke titik anomali ketika dipilih dari panel
   useEffect(() => {
     if (!selectedAnomalyRow || cameraLocked) return;
-    const kp = String(selectedAnomalyRow.kodePosPten || '').replace(/\D/g, '').trim();
-    const titik = kp ? titikKodePos[kp] : undefined;
+    const titik = titikUntukBaris(selectedAnomalyRow);
     const map = mapInstanceRef.current;
     if (map && titik) map.flyTo([titik.lat, titik.lng], Math.max(map.getZoom(), 11), { duration: 0.6 });
-  }, [selectedAnomalyRow, titikKodePos, cameraLocked]);
+  }, [selectedAnomalyRow, titikUntukBaris, cameraLocked]);
 
 
   // Filtered rows inside the Matched Detail Modal
@@ -1124,8 +1163,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     }
 
     if (selectedAnomalyRow) {
-      const kp = String(selectedAnomalyRow.kodePosPten || '').replace(/\D/g, '').trim();
-      const titik = kp ? titikKodePos[kp] : undefined;
+      const titik = titikUntukBaris(selectedAnomalyRow);
       if (titik) {
         const anomalyMarker = L.circleMarker([titik.lat, titik.lng], {
           pane: 'markersPane',
@@ -1154,7 +1192,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         }
       }
     }
-    }, [filteredPins, selectedPin, showAllMatchMarkers, resolvedCoords, selectedAnomalyRow, titikKodePos, mapInteractionTick]);
+    }, [filteredPins, selectedPin, showAllMatchMarkers, resolvedCoords, selectedAnomalyRow, titikUntukBaris, mapInteractionTick]);
 
   // Canvas hit-testing can miss a marker while thousands of points are being redrawn.
   // A pixel-distance fallback keeps the map clickable even when a marker event is missed.
@@ -2171,7 +2209,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
             <div style={{ height: 1, background: '#e2e8f0' }} />
             {finalBelumTerpetakan.length > 0 ? (
               <span style={{ color: '#c2410c', fontWeight: 600, lineHeight: 1.35 }}>
-                {finalBelumTerpetakan.length.toLocaleString('id-ID')} baris Data Final belum terpetakan — kode posnya belum punya titik (menu Data Kode Pos)
+                {finalBelumTerpetakan.length.toLocaleString('id-ID')} baris Data Final belum terpetakan — tidak ketemu di Data Kode Pos lewat kode pos MAUPUN kelurahan+kecamatan+kota
               </span>
             ) : (
               <span style={{ color: '#0ab39c', fontWeight: 600 }}>

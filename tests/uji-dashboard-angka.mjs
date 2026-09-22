@@ -5,7 +5,7 @@
 //   npx vite build --ssr tests/entry-uji.ts --outDir tests/out
 //   node tests/uji-dashboard-angka.mjs
 import { existsSync, rmSync } from 'node:fs';
-import { detectFinalAnomalies, formatWilayahCode, formatWilayahName, exportFinalRowsToExcel, exportFinalRowsToPdf, JUDUL_KOLOM_FINAL } from './out/entry-uji.js';
+import { detectFinalAnomalies, formatWilayahCode, formatWilayahName, exportFinalRowsToExcel, exportFinalRowsToPdf, JUDUL_KOLOM_FINAL, kunciKelKec, kotaCocok } from './out/entry-uji.js';
 
 let gagal = 0;
 const asa = (label, dapat, harus) => {
@@ -102,6 +102,15 @@ if (!pdf.success && /is not a constructor/.test(pdf.error || '')) {
 
 asa('DA16 kolom laporan = 13 kolom Data Final', JUDUL_KOLOM_FINAL.length, 13);
 asa('DA17 tidak ada kolom duplikat di laporan', new Set(JUDUL_KOLOM_FINAL).size, 13);
+
+// Kunci cadangan titik peta (kasus nyata dari data produksi 2026-09-22):
+// kode pos PTEN 37259 tidak ada di tabel kode pos, tapi "Kemantan, Tebo Ilir, TEBO"
+// ada di sana dengan kode 37572 + titik. Kuncinya harus mempertemukan keduanya.
+asa('DA18 kelurahan+kecamatan jadi kunci (Tebo)', kunciKelKec('Kemantan', 'tebo ilir'), kunciKelKec('KEMANTAN', 'TEBO ILIR'));
+asa('DA19 prefiks KABUPATEN/KOTA dilepas saat membanding kota', kotaCocok('KABUPATEN SERAM BAGIAN TIMUR', 'SERAM BAGIAN T'), true);
+asa('DA20 nama kota terpotong 15 karakter tetap bertemu (Bula)', kotaCocok('Kabupaten Seram Bagian Timur', 'SERAM BAGIAN TI'), true);
+asa('DA21 kota beda benar tidak dianggap sama', kotaCocok('KABUPATEN TEBO', 'KOTA BANDAR LAMPUNG'), false);
+asa('DA22 kecamatan beda tidak boleh tertukar', kunciKelKec('Bula', 'Bula') === kunciKelKec('Bula', 'Bula Barat'), false);
 
 // bersihkan artefak uji kalau berkasnya benar-benar tertulis
 for (const f of [xlsx.filename, pdf.filename]) {

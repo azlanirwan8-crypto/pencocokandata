@@ -6,3 +6,5 @@ export { isKimBranchAceh, findKimBranch, findClosestMasterRecommendation, buildM
 export { KOLOM_FINAL, JUDUL_KOLOM_FINAL, barisKeExcelFinal } from '../src/utils/finalColumns';
 export { detectFinalAnomalies } from '../src/utils/finalAnomaly';
 export { formatWilayahName } from '../src/utils/normalizer';
+
+export { kunciKelKec, kotaCocok } from '../src/utils/geoTitik';
