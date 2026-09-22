@@ -1,19 +1,19 @@
 import React from 'react';
 import { BarChart3, TrendingUp } from 'lucide-react';
-import type { WilayahStat, MatchingStats } from '../../types';
-import { MatchCompositionDonut } from './MatchCompositionDonut';
+import type { WilayahStat } from '../../types';
+import { MatchCompositionDonut, type KomposisiDashboard } from './MatchCompositionDonut';
 import { formatWilayahName } from '../../utils/normalizer';
 
 interface RegionalAnalyticsChartsProps {
   stats: WilayahStat[];
-  matchingStats: MatchingStats;
-  totalDataCount?: number;
+  /** Angka donut — sumbernya sama dengan kartu TOTAL ANOMALI (`detectFinalAnomalies`). */
+  komposisi: KomposisiDashboard;
   selectedWilayah?: string;
 }
 
 export const RegionalAnalyticsCharts: React.FC<RegionalAnalyticsChartsProps> = ({
   stats,
-  matchingStats,
+  komposisi,
   selectedWilayah = 'ALL',
 }) => {
   // Filter ketat: jika difilter, hanya tampilkan wilayah yang dipilih
@@ -60,7 +60,7 @@ export const RegionalAnalyticsCharts: React.FC<RegionalAnalyticsChartsProps> = (
           Grafik Analisis Wilayah Belum Tersedia
         </h4>
         <p style={{ fontSize: '0.78rem', color: '#878a99', maxWidth: '420px', margin: '0 auto' }}>
-          Unggah data target operasional di menu <strong>Data Cek</strong> untuk memvisualisasikan volume data serta perbandingan status pencocokan per wilayah.
+          Setujui data di menu <strong>Data Analyst</strong> atau unggah di menu <strong>Final Data</strong> untuk memvisualisasikan volume serta kebersihan data per wilayah.
         </p>
       </div>
     );
@@ -74,8 +74,8 @@ export const RegionalAnalyticsCharts: React.FC<RegionalAnalyticsChartsProps> = (
         gap: '0.85rem',
       }}
     >
-      {/* 1. KOLOM KIRI: GRAFIK DONUT DEKOMPOSISI KUALITAS PENCOCOKAN */}
-      <MatchCompositionDonut stats={matchingStats} />
+      {/* 1. KOLOM KIRI: GRAFIK DONUT KOMPOSISI DATA FINAL */}
+      <MatchCompositionDonut komposisi={komposisi} />
 
       {/* 2. KOLOM KANAN: PERINGKAT & DISTRIBUSI KINERJA PER WILAYAH */}
       <div
@@ -119,10 +119,10 @@ export const RegionalAnalyticsCharts: React.FC<RegionalAnalyticsChartsProps> = (
             </div>
             <div>
               <h4 style={{ fontSize: '0.88rem', fontWeight: 600, color: '#212529', margin: 0 }}>
-                Kinerja Pencocokan per Wilayah
+                Komposisi Data Final per Wilayah
               </h4>
               <span style={{ fontSize: '0.71rem', color: '#878a99' }}>
-                Perbandingan volume input vs keberhasilan mapping master
+                Perbandingan baris bersih vs total data final
               </span>
             </div>
           </div>
@@ -226,7 +226,7 @@ export const RegionalAnalyticsCharts: React.FC<RegionalAnalyticsChartsProps> = (
                     overflow: 'hidden',
                     display: 'flex',
                   }}
-                  title={`${item.wilayah}: ${item.matched} Cocok, ${item.unmatched} Belum Cocok`}
+                  title={`${formatWilayahName(item.wilayah)}: ${item.matched} bersih, ${item.unmatched} anomali`}
                 >
                   <div
                     style={{

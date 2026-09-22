@@ -6,7 +6,6 @@ import {
   Clock,
   MapPin,
 } from 'lucide-react';
-import type { MatchingStats } from '../../types';
 import { AnimatedMetricValue } from './AnimatedMetricValue';
 
 interface FinalMetrics {
@@ -19,16 +18,14 @@ interface FinalMetrics {
 }
 
 interface MetricCardsProps {
-  stats: MatchingStats;
   finalMetrics: FinalMetrics;
-  masterCount?: number;
-  multiCabangCount?: number;
+  wilayahCount?: number;
 }
 
 // `fmt` dipertahankan untuk angka yang bukan inti animasi (teks kecil/persen).
 const fmt = (n: number) => n.toLocaleString('id-ID');
 
-export const MetricCards: React.FC<MetricCardsProps> = ({ stats, finalMetrics }) => {
+export const MetricCards: React.FC<MetricCardsProps> = ({ finalMetrics, wilayahCount = 0 }) => {
   const fm = finalMetrics;
 
   return (
@@ -39,18 +36,18 @@ export const MetricCards: React.FC<MetricCardsProps> = ({ stats, finalMetrics })
         gap: '0.65rem',
       }}
     >
-      {/* 1. TOTAL DATA TARGET */}
+      {/* 1. TOTAL BARIS DATA FINAL */}
       <div className="metric-card blue">
         <div className="metric-header">
-          <span className="metric-title">TOTAL DATA TARGET</span>
+          <span className="metric-title">TOTAL DATA FINAL</span>
           <div className="metric-icon-bubble">
             <Layers size={14} />
           </div>
         </div>
-        <div className="metric-value"><AnimatedMetricValue value={stats.totalProcessed} /></div>
+        <div className="metric-value"><AnimatedMetricValue value={fm.finalCount} /></div>
         <div className="metric-footer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ color: '#405189', fontWeight: 600 }}>Volume Input</span>
-          <span style={{ color: '#878a99', fontSize: '0.68rem' }}>100% Terindeks</span>
+          <span style={{ color: '#405189', fontWeight: 600 }}>{fm.finalCount > 0 ? 'Siap cetak' : 'Belum ada data'}</span>
+          <span style={{ color: '#878a99', fontSize: '0.68rem' }}>{fmt(wilayahCount)} Wilayah</span>
         </div>
       </div>
 
@@ -97,7 +94,7 @@ export const MetricCards: React.FC<MetricCardsProps> = ({ stats, finalMetrics })
         <div className="metric-value" style={{ color: fm.anomali > 0 ? '#f06548' : '#0ab39c' }}><AnimatedMetricValue value={fm.anomali} /></div>
         <div className="metric-footer">
           {fm.anomali > 0 ? (
-            <span style={{ color: '#f06548', fontWeight: 600 }}>Beda pulau / status / penempatan / role</span>
+            <span style={{ color: '#f06548', fontWeight: 600 }}>Beda pulau / provinsi / status / penempatan / role</span>
           ) : (
             <span style={{ color: '#0ab39c', fontWeight: 600 }}>Semua aturan penempatan bersih</span>
           )}

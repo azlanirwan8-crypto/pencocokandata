@@ -21,9 +21,10 @@ import { SinyalTemuanModal } from './components/WorkingEngine/SinyalTemuanModal'
 import { detectFinalAnomalies } from './utils/finalAnomaly';
 import type { ActiveTab } from './components/Sidebar';
 
-import type { MasterRow, TargetRow, MatchingStats, WilayahStat, WilayahSetting } from './types';
+import type { MasterRow, TargetRow, WilayahStat, WilayahSetting } from './types';
 import { buildMasterIndex, analyzeMasterHealth } from './utils/matcher';
 import { formatWilayahName } from './utils/normalizer';
+import { formatWilayahCode } from './utils/excel';
 import type { RoleMappingRecord } from './components/RoleMapping/RoleMappingManager';
 import { DEFAULT_ROLE_MAPPING_DATA } from './components/RoleMapping/RoleMappingManager';
 import type { PTENRecord } from './components/PTENData/PTENManager';
@@ -375,129 +376,85 @@ export const App: React.FC = () => {
     }
   };
 
-  // Compute Wilayah List from Target Data, Master Data, and Wilayah Settings (Exact 17 Kanwil)
+  // ── Dashboard = DATA FINAL + DATA CABANG ──
+  // Keputusan pemilik produk 2026-09-22 (menyelesaikan H3): seluruh angka dashboard
+  // dihitung dari `finalRows`, bukan `targetRows` (alur unggah Target lama). Selama
+  // masih memakai targetRows, kartu 1 / grafik / tabel bawah melaporkan berkas unggah
+  // lama sementara kartu lain dan peta melaporkan hasil analisa — tidak ada yang salah
+  // hitung, tapi keduanya tidak bisa dibandingkan.
+  /** Kunci wilayah kanonik ("W07"); kosong bila barisnya memang tanpa wilayah. */
+  const kunciWilayah = (v: unknown) => {
+    const s = String(v ?? '').trim();
+    return s && s !== '-' && s !== '0' ? formatWilayahCode(s) : '';
+  };
+
+  // Daftar wilayah untuk filter: dari Setting Wilayah, Data Cabang, dan Data Final.
   const wilayahList = useMemo(() => {
     const set = new Set<string>();
-    // 1. Dari Wilayah Settings (Setting Wilayah)
     wilayahSettings.forEach((s) => {
-      const w = s.wilayah || s.kodeWilayah || s.keterangan || s.namaOutlet;
-      if (w && String(w).trim()) {
-        const norm = formatWilayahName(String(w).trim());
-        if (norm && norm !== 'Tanpa Wilayah') set.add(norm);
-      }
+      const k = kunciWilayah(s.wilayah || s.kodeWilayah || s.keterangan || s.namaOutlet);
+      if (k) set.add(k);
     });
-    // 2. Dari Data Target
-    targetRows.forEach((r) => {
-      if (r.Wilayah && String(r.Wilayah).trim()) {
-        const norm = formatWilayahName(String(r.Wilayah).trim());
-        if (norm && norm !== 'Tanpa Wilayah') set.add(norm);
-      }
-    });
-    // 3. Dari Data Master
     masterRows.forEach((m) => {
-      if (m.Wilayah && String(m.Wilayah).trim()) {
-        const norm = formatWilayahName(String(m.Wilayah).trim());
-        if (norm && norm !== 'Tanpa Wilayah') set.add(norm);
-      }
+      const k = kunciWilayah(m.Wilayah);
+      if (k) set.add(k);
+    });
+    finalRows.forEach((r) => {
+      const k = kunciWilayah(r.wilayah);
+      if (k) set.add(k);
     });
     return Array.from(set)
-      .filter((w) => w && w !== 'Tanpa Wilayah')
-      .sort((a, b) => {
-        const numA = parseInt(a.replace(/\D/g, ''), 10) || 0;
-        const numB = parseInt(b.replace(/\D/g, ''), 10) || 0;
-        return numA - numB;
-      });
-  }, [targetRows, masterRows, wilayahSettings]);
+      .filter(Boolean)
+      .sort((a, b) => (parseInt(a.replace(/\D/g, ''), 10) || 0) - (parseInt(b.replace(/\D/g, ''), 10) || 0));
+  }, [wilayahSettings, masterRows, finalRows]);
 
-  // Pre-aggregated count of target rows per wilayah (O(N) single pass instead of O(N*M))
-  const targetWilayahCounts = useMemo(() => {
+  // Jumlah baris Data Final per wilayah (satu putaran, dipakai dropdown filter).
+  const finalWilayahCounts = useMemo(() => {
     const map = new Map<string, number>();
-    for (let i = 0; i < targetRows.length; i++) {
-      const w = String(targetRows[i].Wilayah || '').trim();
-      if (w) {
-        map.set(w, (map.get(w) || 0) + 1);
-      }
-    }
-    return map;
-  }, [targetRows]);
-
-
-  // Dashboard Filtered Rows by Wilayah
-  const dashboardFilteredRows = useMemo(() => {
-    if (dashboardWilayahFilter === 'ALL') return targetRows;
-    return targetRows.filter((r) => String(r.Wilayah || '').trim() === String(dashboardWilayahFilter).trim());
-  }, [targetRows, dashboardWilayahFilter]);
-
-  // Dashboard Aggregates & Metrics
-  const dashboardStats: MatchingStats = useMemo(() => {
-    const totalProcessed = dashboardFilteredRows.length;
-    let matchedCount = 0;
-    let level1Count = 0;
-    let level2Count = 0;
-    let recommendationCount = 0;
-    let ptenSameCount = 0;
-    let ptenDifferentCount = 0;
-    let ptenUncheckedCount = 0;
-
-    dashboardFilteredRows.forEach((r) => {
-      const isMatched = Boolean(r._isMatched);
-      if (isMatched) {
-        matchedCount++;
-        if (r._matchLevel === 'recommendation') {
-          recommendationCount++;
-        } else if (r._matchLevel === 'level2') {
-          level2Count++;
-        } else {
-          level1Count++;
-        }
-      }
-
-      const ptenStatus = String(r['CEK KODE POS + PTEN'] || '').trim().toUpperCase();
-      if (ptenStatus === 'SAME') {
-        ptenSameCount++;
-      } else if (ptenStatus === 'DIFFERENT') {
-        ptenDifferentCount++;
-      } else {
-        ptenUncheckedCount++;
-      }
+    finalRows.forEach((r) => {
+      const k = kunciWilayah(r.wilayah) || 'Tanpa Wilayah';
+      map.set(k, (map.get(k) || 0) + 1);
     });
+    return map;
+  }, [finalRows]);
 
-    const unmatchedCount = totalProcessed - matchedCount;
-    const matchingRate = totalProcessed > 0 ? (matchedCount / totalProcessed) * 100 : 0;
+  // Baris yang sedang dilihat di dashboard (filter wilayah pada toolbar).
+  const dashboardFilteredRows = useMemo(() => {
+    if (dashboardWilayahFilter === 'ALL') return finalRows;
+    const target = kunciWilayah(dashboardWilayahFilter);
+    return finalRows.filter((r) => (kunciWilayah(r.wilayah) || 'Tanpa Wilayah') === (target || 'Tanpa Wilayah'));
+  }, [finalRows, dashboardWilayahFilter]);
 
+  // SATU perhitungan anomali untuk seluruh dashboard (kartu, donut, grafik, tabel).
+  const finalAnomali = useMemo(() => detectFinalAnomalies(finalRows, masterRows), [finalRows, masterRows]);
+  const anomaliIds = useMemo(() => new Set(finalAnomali.map((a) => a.row.id)), [finalAnomali]);
+
+  // Komposisi donut: irisan harus berjumlah total baris, jadi kategori dihitung
+  // dari `primary` (kategori teratas tiap baris). Jumlah per kategori penuh ada di tooltip.
+  const dashboardKomposisi = useMemo(() => {
+    const perKategori: Record<string, number> = { PULAU: 0, PROVINSI: 0, STATUS: 0, PENEMPATAN: 0, ROLE: 0 };
+    finalAnomali.forEach((a) => {
+      perKategori[a.primary] = (perKategori[a.primary] || 0) + 1;
+    });
     return {
-      totalProcessed,
-      matchedCount,
-      unmatchedCount,
-      matchingRate,
-      level1Count,
-      level2Count,
-      recommendationCount,
-      ptenSameCount,
-      ptenDifferentCount,
-      ptenUncheckedCount,
+      total: dashboardFilteredRows.length,
+      bersih: dashboardFilteredRows.length - dashboardFilteredRows.filter((r) => anomaliIds.has(r.id)).length,
+      perKategori,
     };
-  }, [dashboardFilteredRows]);
+  }, [finalAnomali, dashboardFilteredRows, anomaliIds]);
 
-  // Regional Stats for Widget Distribusi Wilayah (Mengikuti Filter Dashboard)
+  // Regional Stats untuk widget distribusi wilayah: `matched` = baris bersih,
+  // `unmatched` = baris beranomali (definisi yang sama dengan kartu TOTAL ANOMALI).
   const regionalStats: WilayahStat[] = useMemo(() => {
     const map = new Map<string, { total: number; matched: number; unmatched: number }>();
-
     dashboardFilteredRows.forEach((r) => {
-      const rawW = String(r.Wilayah || 'Wilayah Tidak Terdaftar').trim();
-      if (dashboardWilayahFilter !== 'ALL' && rawW !== String(dashboardWilayahFilter).trim()) {
-        return;
-      }
-      const isMatched = r._isMatched ?? (r.Sandi !== '');
-      const current = map.get(rawW) || { total: 0, matched: 0, unmatched: 0 };
-
+      const k = kunciWilayah(r.wilayah) || 'Tanpa Wilayah';
+      const current = map.get(k) || { total: 0, matched: 0, unmatched: 0 };
       current.total++;
-      if (isMatched) current.matched++;
-      else current.unmatched++;
-
-      map.set(rawW, current);
+      if (anomaliIds.has(r.id)) current.unmatched++;
+      else current.matched++;
+      map.set(k, current);
     });
-
     return Array.from(map.entries())
       .map(([wilayah, data]) => ({
         wilayah,
@@ -506,12 +463,8 @@ export const App: React.FC = () => {
         unmatched: data.unmatched,
         rate: data.total > 0 ? (data.matched / data.total) * 100 : 0,
       }))
-      .sort((a, b) => {
-        const nameA = formatWilayahName(a.wilayah);
-        const nameB = formatWilayahName(b.wilayah);
-        return nameA.localeCompare(nameB, 'id', { numeric: true, sensitivity: 'base' });
-      });
-  }, [dashboardFilteredRows, dashboardWilayahFilter]);
+      .sort((a, b) => (parseInt(a.wilayah.replace(/\D/g, ''), 10) || 0) - (parseInt(b.wilayah.replace(/\D/g, ''), 10) || 0));
+  }, [dashboardFilteredRows, anomaliIds]);
 
   // ── Metrik Dashboard berbasis DATA FINAL (real, bukan dummy) ──
   // SATUAN = KODE POS (5 digit, distinct), sesuai keputusan Anda.
@@ -537,8 +490,9 @@ export const App: React.FC = () => {
       belumDikerjakan = Math.max(0, kodePosCount - distinctKodePos);
     }
 
-    // Kartu anomali: SATU definisi (detectFinalAnomalies) — sama persis dgn panel Peta.
-    const anomali = detectFinalAnomalies(finalRows, masterRows).length;
+    // Kartu anomali: SATU definisi (detectFinalAnomalies) — sama persis dgn panel Peta
+    // dan tabel bawah, dihitung sekali di `finalAnomali`.
+    const anomali = finalAnomali.length;
 
     // Kartu "kode pos dengan cabang terbanyak" di Data Final.
     const byKode = new Map<string, { count: number; kota: string }>();
@@ -553,7 +507,7 @@ export const App: React.FC = () => {
     for (const [kp, v] of byKode) if (v.count > top.count) top = { kodePos: kp, count: v.count, kota: v.kota };
 
     return { finalCount, distinctKodePos, totalKodePos, belumDikerjakan, anomali, top };
-  }, [finalRows, kodePosMasterRows, kodePosCount, masterRows]);
+  }, [finalRows, kodePosMasterRows, kodePosCount, finalAnomali]);
 
   // ✋ Pembatalan analisa (A4): flag bersama yang dibaca pipeline tiap `tick()`.
   // Hasil run baru ditulis setelah pipeline kembali, jadi membatalkan tidak pernah
@@ -1264,8 +1218,8 @@ export const App: React.FC = () => {
                       </span>
                       <span style={{ fontSize: '0.74rem', color: '#878a99', marginLeft: '0.5rem' }}>
                         {dashboardWilayahFilter === 'ALL'
-                          ? `Menampilkan seluruh ${targetRows.length.toLocaleString('id-ID')} data (${wilayahList.length} Wilayah)`
-                          : `Menampilkan khusus ${formatWilayahName(dashboardWilayahFilter)} (${dashboardFilteredRows.length.toLocaleString('id-ID')} data)`}
+                          ? `Menampilkan seluruh ${finalRows.length.toLocaleString('id-ID')} baris Data Final (${wilayahList.length} Wilayah)`
+                          : `Menampilkan khusus ${formatWilayahName(dashboardWilayahFilter)} (${dashboardFilteredRows.length.toLocaleString('id-ID')} baris)`}
                       </span>
                     </div>
                   </div>
@@ -1281,9 +1235,9 @@ export const App: React.FC = () => {
                         value={dashboardWilayahFilter}
                         onChange={(e) => setDashboardWilayahFilter(e.target.value)}
                       >
-                        <option value="ALL">Semua Wilayah ({targetRows.length.toLocaleString('id-ID')} Data)</option>
+                        <option value="ALL">Semua Wilayah ({finalRows.length.toLocaleString('id-ID')} Data)</option>
                         {wilayahList.map((w) => {
-                          const countW = targetWilayahCounts.get(String(w).trim()) || 0;
+                          const countW = finalWilayahCounts.get(w) || 0;
                           return (
                             <option key={w} value={w}>
                               {formatWilayahName(w)} ({countW.toLocaleString('id-ID')} Data)
@@ -1296,12 +1250,7 @@ export const App: React.FC = () => {
                 </div>
               )}
 
-              <MetricCards
-                stats={dashboardStats}
-                finalMetrics={finalMetrics}
-                masterCount={masterRows.length}
-                multiCabangCount={masterHealth.multiOutletCount}
-              />
+              <MetricCards finalMetrics={finalMetrics} wilayahCount={regionalStats.length} />
 
               {/* URUTAN KE-2: Peta Tracking Penyebaran Cabang BNI di Indonesia (GIS & Google Maps Direct Link) */}
               <IndonesiaBranchMap
@@ -1318,8 +1267,7 @@ export const App: React.FC = () => {
               {/* Visual Analisis: Dekomposisi Donut Chart & Kinerja Wilayah */}
               <RegionalAnalyticsCharts
                 stats={regionalStats}
-                matchingStats={dashboardStats}
-                totalDataCount={dashboardFilteredRows.length}
+                komposisi={dashboardKomposisi}
                 selectedWilayah={dashboardWilayahFilter}
               />
 
@@ -1331,9 +1279,10 @@ export const App: React.FC = () => {
                 onNavigateToMaster={() => setActiveTab('master')}
               />
 
-              {/* Rekapitulasi Data Match per Wilayah & Download Laporan Excel/PDF */}
+              {/* Rekapitulasi Data Final per Wilayah & Download Laporan Excel/PDF */}
               <DashboardMatchTable
-                allTargetRows={targetRows}
+                finalRows={finalRows}
+                anomaliIds={anomaliIds}
                 regionalStats={regionalStats}
                 selectedWilayah={dashboardWilayahFilter}
               />

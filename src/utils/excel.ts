@@ -1,5 +1,7 @@
 import XLSX from 'xlsx-js-style';
 import type { TargetRow, WilayahSetting } from '../types';
+import type { AnalystRow } from './analystPipeline';
+import { barisKeExcelFinal, JUDUL_KOLOM_FINAL } from './finalColumns';
 import { SAMPLE_MASTER_ROWS, SAMPLE_TARGET_ROWS } from './sampleData';
 import { formatWilayahName } from './normalizer';
 import { loadWilayahFromNeon } from './neonSync';
@@ -712,6 +714,35 @@ export function exportCleanMatchedToExcel(
       filename,
       rowCount: rows.length,
     };
+  } catch (err: any) {
+    return {
+      success: false,
+      filename: '',
+      rowCount: 0,
+      error: err?.message || 'Gagal mengekspor file Excel.',
+    };
+  }
+}
+
+/**
+ * Ekspor baris DATA FINAL — 13 kolom yang sama persis dengan tabel menu Final Data
+ * (utils/finalColumns). Dipakai tombol Excel di dashboard. Urutan baris TIDAK diubah:
+ * nomor 1..n mengikuti posisi pada daftar yang diberikan.
+ */
+export function exportFinalRowsToExcel(
+  rows: AnalystRow[],
+  wilayahLabel: string
+): { success: boolean; filename: string; rowCount: number; error?: string } {
+  try {
+    const sheetName = (wilayahLabel.replace(/[:\\/?*[\]]/g, '_').replace(/\s+/g, '_') || 'FINAL').slice(0, 31);
+    const data = rows.map((r, i) => barisKeExcelFinal(r, i + 1));
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(data, { header: JUDUL_KOLOM_FINAL });
+    applyStandardSheetStyle(worksheet, JUDUL_KOLOM_FINAL, data.length);
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+    const filename = `Final_Data_${sheetName}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(workbook, filename);
+    return { success: true, filename, rowCount: rows.length };
   } catch (err: any) {
     return {
       success: false,

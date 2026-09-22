@@ -1,32 +1,39 @@
 import React, { useState } from 'react';
-import { PieChart, CheckCircle2, Sparkles, Layers, AlertCircle, ShieldCheck } from 'lucide-react';
-import type { MatchingStats } from '../../types';
+import { PieChart, ShieldCheck, Globe2, MapPin, Building2, Move, Users } from 'lucide-react';
 
-interface MatchCompositionDonutProps {
-  stats: MatchingStats;
+export interface KomposisiDashboard {
+  /** Total baris Data Final yang sedang dilihat (sudah kena filter wilayah). */
+  total: number;
+  /** Baris yang lolos semua cek anomali. */
+  bersih: number;
+  /** Jumlah per kategori, dihitung dari kategori utama tiap baris — jadi irisan = total. */
+  perKategori: Record<string, number>;
 }
 
-export const MatchCompositionDonut: React.FC<MatchCompositionDonutProps> = ({ stats }) => {
+interface MatchCompositionDonutProps {
+  komposisi: KomposisiDashboard;
+}
+
+const SEGEMEN: { id: string; label: string; color: string; icon: React.ElementType; ket: string }[] = [
+  { id: 'PULAU', label: 'Keluar Pulau', color: '#f06548', icon: Globe2, ket: 'Cabangmaster dan kode pos berada di pulau berbeda' },
+  { id: 'PROVINSI', label: 'Beda Provinsi', color: '#e8833a', icon: MapPin, ket: 'Provinsi cabang master berbeda dari provinsi kode pos' },
+  { id: 'STATUS', label: 'Status Outlet', color: '#f7b84b', icon: Building2, ket: 'Status outlet tidak sesuai aturan penempatan' },
+  { id: 'PENEMPATAN', label: 'Penempatan', color: '#3577f1', icon: Move, ket: 'Kota/kabupaten tidak cocok dengan wilayah penugasannya' },
+  { id: 'ROLE', label: 'Role Mapping', color: '#6559cc', icon: Users, ket: 'Role mapping cabang belum lengkap atau bertentangan' },
+];
+
+export const MatchCompositionDonut: React.FC<MatchCompositionDonutProps> = ({ komposisi }) => {
   const [hoveredSegment, setHoveredSegment] = useState<string | null>(null);
 
-  const total = stats.totalProcessed || 0;
-  const l1 = stats.level1Count || 0;
-  const l2 = stats.level2Count || 0;
-  const rec = stats.recommendationCount || 0;
-  const unmatch = stats.unmatchedCount || 0;
-
-  const ptenSame = stats.ptenSameCount || 0;
-  const ptenDiff = stats.ptenDifferentCount || 0;
-  const ptenOther = Math.max(0, total - ptenSame - ptenDiff);
+  const total = komposisi.total || 0;
+  const bersih = komposisi.bersih || 0;
+  const anomali = Math.max(0, total - bersih);
 
   const segments = [
-    { id: 'l1', label: 'Match L1 (Otomatis Sempurna)', count: l1, color: '#0ab39c', icon: CheckCircle2 },
-    { id: 'l2', label: 'Match L2 (Tie-Breaker Pos/Kec)', count: l2, color: '#f7b84b', icon: Sparkles },
-    { id: 'rec', label: 'Match Rekomendasi (Disetujui)', count: rec, color: '#3577f1', icon: Layers },
-    { id: 'unmatch', label: 'Belum Cocok (Unmatched)', count: unmatch, color: '#f06548', icon: AlertCircle },
+    { id: 'BERSIH', label: 'Bersih (Siap Cetak)', count: bersih, color: '#0ab39c', icon: ShieldCheck, ket: 'Lolos semua cek anomali' },
+    ...SEGEMEN.map((s) => ({ ...s, count: komposisi.perKategori[s.id] || 0 })),
   ];
 
-  // Calculate SVG stroke dashes for a donut chart
   const radius = 62;
   const circumference = 2 * Math.PI * radius;
   let accumulatedAngle = 0;
@@ -36,15 +43,11 @@ export const MatchCompositionDonut: React.FC<MatchCompositionDonutProps> = ({ st
     const strokeDasharray = `${fraction * circumference} ${circumference}`;
     const strokeDashoffset = -accumulatedAngle * circumference;
     accumulatedAngle += fraction;
-    return {
-      ...seg,
-      fraction,
-      strokeDasharray,
-      strokeDashoffset,
-    };
+    return { ...seg, fraction, strokeDasharray, strokeDashoffset };
   });
 
   const activeSeg = hoveredSegment ? segments.find((s) => s.id === hoveredSegment) : null;
+  const pctBersih = total > 0 ? (bersih / total) * 100 : 0;
 
   return (
     <div
@@ -88,10 +91,10 @@ export const MatchCompositionDonut: React.FC<MatchCompositionDonutProps> = ({ st
           </div>
           <div>
             <h4 style={{ fontSize: '0.88rem', fontWeight: 600, color: '#212529', margin: 0 }}>
-              Dekomposisi Kualitas Pencocokan
+              Komposisi Kualitas Data Final
             </h4>
             <span style={{ fontSize: '0.71rem', color: '#878a99' }}>
-              Proporsi metode pencocokan data target terhadap master
+              Baris bersih vs temuan anomali (satu baris dihitung pada kategori teratasnya)
             </span>
           </div>
         </div>
@@ -102,18 +105,18 @@ export const MatchCompositionDonut: React.FC<MatchCompositionDonutProps> = ({ st
             fontWeight: 700,
             padding: '0.12rem 0.5rem',
             borderRadius: '4px',
-            background: 'rgba(10, 179, 156, 0.1)',
-            color: '#0ab39c',
-            border: '1px solid rgba(10, 179, 156, 0.25)',
+            background: anomali > 0 ? 'rgba(240, 101, 72, 0.1)' : 'rgba(10, 179, 156, 0.1)',
+            color: anomali > 0 ? '#f06548' : '#0ab39c',
+            border: `1px solid ${anomali > 0 ? 'rgba(240, 101, 72, 0.25)' : 'rgba(10, 179, 156, 0.25)'}`,
           }}
         >
-          {stats.matchingRate.toFixed(1)}% Terpetakan
+          {pctBersih.toFixed(1)}% Bersih
         </span>
       </div>
 
       {total === 0 ? (
         <div style={{ padding: '2.5rem 1rem', textAlign: 'center', color: '#878a99', fontSize: '0.78rem' }}>
-          Belum ada data target untuk divisualisasikan.
+          Belum ada Data Final untuk divisualisasikan. Setujui data di menu <strong>Data Analyst</strong> atau unggah di menu <strong>Final Data</strong>.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1 }}>
@@ -130,16 +133,7 @@ export const MatchCompositionDonut: React.FC<MatchCompositionDonutProps> = ({ st
             {/* SVG Donut */}
             <div style={{ position: 'relative', width: '160px', height: '160px', flexShrink: 0 }}>
               <svg width="160" height="160" viewBox="0 0 160 160" style={{ transform: 'rotate(-90deg)' }}>
-                {/* Background Ring */}
-                <circle
-                  cx="80"
-                  cy="80"
-                  r={radius}
-                  fill="transparent"
-                  stroke="#f1f3f5"
-                  strokeWidth="20"
-                />
-                {/* Slices */}
+                <circle cx="80" cy="80" r={radius} fill="transparent" stroke="#f1f3f5" strokeWidth="20" />
                 {donutSlices.map((slice) => {
                   if (slice.count === 0) return null;
                   const isHovered = hoveredSegment === slice.id;
@@ -180,15 +174,13 @@ export const MatchCompositionDonut: React.FC<MatchCompositionDonutProps> = ({ st
                 }}
               >
                 <span style={{ fontSize: '0.66rem', color: '#878a99', fontWeight: 600, textTransform: 'uppercase' }}>
-                  {activeSeg ? activeSeg.id.toUpperCase() : 'TOTAL'}
+                  {activeSeg ? activeSeg.label.split(' ')[0] : 'TOTAL'}
                 </span>
                 <span style={{ fontSize: '1.25rem', fontWeight: 700, color: activeSeg ? activeSeg.color : '#212529', lineHeight: 1.1 }}>
                   {activeSeg ? activeSeg.count.toLocaleString('id-ID') : total.toLocaleString('id-ID')}
                 </span>
                 <span style={{ fontSize: '0.67rem', color: '#878a99', fontWeight: 500 }}>
-                  {activeSeg
-                    ? `${((activeSeg.count / total) * 100).toFixed(1)}%`
-                    : 'Baris Data'}
+                  {activeSeg ? `${((activeSeg.count / total) * 100).toFixed(1)}%` : 'Baris Final'}
                 </span>
               </div>
             </div>
@@ -205,6 +197,7 @@ export const MatchCompositionDonut: React.FC<MatchCompositionDonutProps> = ({ st
                     key={seg.id}
                     onMouseEnter={() => setHoveredSegment(seg.id)}
                     onMouseLeave={() => setHoveredSegment(null)}
+                    title={seg.ket}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -238,7 +231,7 @@ export const MatchCompositionDonut: React.FC<MatchCompositionDonutProps> = ({ st
             </div>
           </div>
 
-          {/* Bottom Half: PTEN Compliance Verification Gauge */}
+          {/* Bottom Half: ringkasan anomali */}
           <div
             style={{
               background: '#f8f9fb',
@@ -246,62 +239,24 @@ export const MatchCompositionDonut: React.FC<MatchCompositionDonutProps> = ({ st
               borderRadius: '5px',
               padding: '0.6rem 0.75rem',
               display: 'flex',
-              flexDirection: 'column',
-              gap: '0.35rem',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '0.75rem',
+              flexWrap: 'wrap',
+              fontSize: '0.72rem',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.72rem' }}>
-              <span style={{ fontWeight: 600, color: '#495057', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                <ShieldCheck size={13} color="#405189" />
-                Integritas Kode Pos vs PTEN:
+            <span style={{ fontWeight: 600, color: '#495057', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              <ShieldCheck size={13} color="#405189" />
+              {anomali > 0
+                ? `${anomali.toLocaleString('id-ID')} baris perlu dicek ulang di menu Final Data`
+                : 'Semua baris lolos cek pulau, provinsi, status, penempatan & role'}
+            </span>
+            <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.69rem' }}>
+              <span style={{ color: '#0ab39c', fontWeight: 600 }}>Bersih: {bersih.toLocaleString('id-ID')}</span>
+              <span style={{ color: anomali > 0 ? '#f06548' : '#878a99', fontWeight: 600 }}>
+                Anomali: {anomali.toLocaleString('id-ID')}
               </span>
-              <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.69rem' }}>
-                <span style={{ color: '#0ab39c', fontWeight: 600 }}>
-                  Same: {ptenSame} ({((ptenSame / total) * 100).toFixed(0)}%)
-                </span>
-                <span style={{ color: ptenDiff > 0 ? '#f06548' : '#878a99', fontWeight: 600 }}>
-                  Diff: {ptenDiff} ({((ptenDiff / total) * 100).toFixed(0)}%)
-                </span>
-              </div>
-            </div>
-
-            {/* Split Progress Track */}
-            <div
-              style={{
-                height: '5px',
-                background: '#e9ebec',
-                borderRadius: '9999px',
-                overflow: 'hidden',
-                display: 'flex',
-              }}
-            >
-              <div
-                style={{
-                  width: `${(ptenSame / total) * 100}%`,
-                  height: '100%',
-                  background: '#0ab39c',
-                  transition: 'width 0.5s ease',
-                }}
-                title={`PTEN Sesuai: ${ptenSame}`}
-              />
-              <div
-                style={{
-                  width: `${(ptenDiff / total) * 100}%`,
-                  height: '100%',
-                  background: '#f06548',
-                  transition: 'width 0.5s ease',
-                }}
-                title={`PTEN Berbeda: ${ptenDiff}`}
-              />
-              <div
-                style={{
-                  width: `${(ptenOther / total) * 100}%`,
-                  height: '100%',
-                  background: '#ced4da',
-                  transition: 'width 0.5s ease',
-                }}
-                title={`Belum Ditentukan: ${ptenOther}`}
-              />
             </div>
           </div>
         </div>

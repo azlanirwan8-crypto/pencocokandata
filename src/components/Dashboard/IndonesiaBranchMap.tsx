@@ -140,7 +140,7 @@ export function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lo
   return Math.round(R * c * 10) / 10;
 }
 
-export type AnomalyType = 'PULAU' | 'STATUS' | 'PENEMPATAN' | 'ROLE';
+export type AnomalyType = 'PULAU' | 'PROVINSI' | 'STATUS' | 'PENEMPATAN' | 'ROLE';
 
 export interface AnomalyItem {
   row: AnalystRow;
@@ -544,6 +544,16 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     return pins;
   }, [finalRows, titikKodePos]);
 
+  // Baris Data Final yang TIDAK muncul di peta: kode posnya belum punya titik
+  // kodepos nyata. Dulu didiamkan, jadi jumlah pin tidak pernah sama dengan jumlah baris.
+  const finalBelumTerpetakan = useMemo<AnalystRow[]>(() => {
+    if (!finalRows || finalRows.length === 0) return [];
+    return finalRows.filter((r) => {
+      const kp = String(r.kodePosPten || '').replace(/\D/g, '').trim();
+      return !kp || !titikKodePos[kp];
+    });
+  }, [finalRows, titikKodePos]);
+
   // 2. Filter pins based on Display Scope (Semua vs Hanya Terpilih vs Final vs Multi)
   const filteredPins = useMemo(() => {
     if (displayScope === 'SELECTED_ONLY') {
@@ -555,9 +565,10 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     if (displayScope === 'MULTI_ONLY') {
       return allPins.filter(isMultiOutletPin);
     }
-    return allPins;
+    // 'ALL' = kedua lapisan sekaligus, supaya "semua data termapping" benar-benar semua:
+    // cabang master (ungu/teal) + data final (teal/amber/coral) digambar bersama.
+    return finalPins.length > 0 ? [...allPins, ...finalPins] : allPins;
   }, [allPins, finalPins, displayScope, selectedPin, multiOutletKodePos]);
-
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
 
   // Debounce search query so typing isn't lagging on large datasets
@@ -749,6 +760,9 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       if (primary === 'PULAU') {
         anomalyTitle = 'Penempatan Beda Pulau';
         anomalyBadge = { text: 'Beda Pulau', bg: '#fee2e2', color: '#991b1b', border: '#f87171' };
+      } else if (primary === 'PROVINSI') {
+        anomalyTitle = 'Penempatan Beda Provinsi';
+        anomalyBadge = { text: 'Beda Provinsi', bg: '#ffedd5', color: '#9a3412', border: '#fb923c' };
       } else if (primary === 'PENEMPATAN') {
         anomalyTitle = 'Penempatan Belum Terverifikasi';
         anomalyBadge = { text: `Penempatan ${r.placementStatus}`, bg: '#ffedd5', color: '#9a3412', border: '#fb923c' };
@@ -1686,7 +1700,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <Filter size={12} color="#878a99" />
               {displayScope === 'ALL' && (
-                <><span style={{ width: 9, height: 9, borderRadius: '50%', background: '#6366f1', display: 'inline-block', flexShrink: 0 }} /><span>Data Master ({allPins.length})</span></>
+                <><span style={{ width: 9, height: 9, borderRadius: '50%', background: '#6366f1', display: 'inline-block', flexShrink: 0 }} /><span>Master + Final ({allPins.length + finalPins.length})</span></>
               )}
               {displayScope === 'FINAL_ONLY' && (
                 <><span style={{ width: 9, height: 9, borderRadius: '50%', background: '#0ab39c', display: 'inline-block', flexShrink: 0 }} /><span>Data Final ({finalPins.length})</span></>
@@ -1729,9 +1743,9 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 {
                   value: 'ALL' as DisplayScope,
                   dot: '#6366f1',
-                  label: 'Data Master',
-                  count: allPins.length,
-                  desc: 'Semua titik cabang',
+                  label: 'Master + Final',
+                  count: allPins.length + finalPins.length,
+                  desc: 'Titik cabang master dan titik Data Final digambar bersama',
                   icon: '🏦',
                 },
                 {
@@ -2024,6 +2038,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
               {[
                 { id: 'ALL', label: `Semua (${anomalyRows.length})` },
                 { id: 'PULAU', label: `Beda Pulau (${anomalyRows.filter((r) => r.anomalyType === 'PULAU').length})` },
+                { id: 'PROVINSI', label: `Beda Provinsi (${anomalyRows.filter((r) => r.anomalyType === 'PROVINSI').length})` },
                 { id: 'STATUS', label: `Status (${anomalyRows.filter((r) => r.anomalyType === 'STATUS').length})` },
                 { id: 'PENEMPATAN', label: `Penempatan (${anomalyRows.filter((r) => r.anomalyType === 'PENEMPATAN').length})` },
                 { id: 'ROLE', label: `Role (${anomalyRows.filter((r) => r.anomalyType === 'ROLE').length})` },
@@ -2118,7 +2133,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         <div
           className="bni-map-container"
           role="region"
-          aria-label={`Peta sebaran cabang dan outlet — ${allPins.length} titik, ${filteredPins.length} tampil`}
+          aria-label={`Peta sebaran cabang dan outlet — ${allPins.length} titik master, ${finalPins.length} titik data final, ${filteredPins.length} tampil`}
           tabIndex={0}
           style={{ position: 'relative' }}
         >
@@ -2153,6 +2168,16 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
               <span><span style={{ marginRight: 4 }}>🏢</span>Multi-Outlet (banyak cabang 1 titik)</span>
               <span><span style={{ marginRight: 4 }}>📮</span>Kode Pos (Data Final)</span>
             </div>
+            <div style={{ height: 1, background: '#e2e8f0' }} />
+            {finalBelumTerpetakan.length > 0 ? (
+              <span style={{ color: '#c2410c', fontWeight: 600, lineHeight: 1.35 }}>
+                {finalBelumTerpetakan.length.toLocaleString('id-ID')} baris Data Final belum terpetakan — kode posnya belum punya titik (menu Data Kode Pos)
+              </span>
+            ) : (
+              <span style={{ color: '#0ab39c', fontWeight: 600 }}>
+                Seluruh baris Data Final terpetakan
+              </span>
+            )}
             <div style={{ height: 1, background: '#e2e8f0' }} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
               <span style={{ fontWeight: 700, color: '#405189', marginBottom: '0.05rem' }}>Status Titik</span>

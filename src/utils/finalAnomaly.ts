@@ -1,14 +1,16 @@
 import type { AnalystRow } from './analystPipeline';
 import type { MasterRow } from '../types';
 import { getIslandFromProvinsi } from './roleMatcher';
+import { cleanProvinsi } from './normalizer';
 
 // ─── SATU definisi anomali Final Data, dipakai kartu Dashboard & panel Peta ───
 // Sebuah baris dianggap anomali bila melanggar salah satu aturan penempatan:
 //  • PULAU      → cabang penempatan beda pulau dengan asal data (Aceh→KIM dikecualikan)
+//  • PROVINSI   → cabang penempatan beda provinsi (masih satu pulau pun tetap dilaporkan)
 //  • STATUS     → status analisa ANOMALI / PERLU_REVIEW
 //  • PENEMPATAN → kelurahan/kecamatan→kota belum terbukti / pakai fallback
 //  • ROLE       → cabang 3 role belum lengkap
-export type AnomalyCategory = 'PULAU' | 'STATUS' | 'PENEMPATAN' | 'ROLE';
+export type AnomalyCategory = 'PULAU' | 'PROVINSI' | 'STATUS' | 'PENEMPATAN' | 'ROLE';
 
 export interface FinalAnomaly {
   row: AnalystRow;
@@ -18,20 +20,30 @@ export interface FinalAnomaly {
   reasons: string[];
 }
 
-const PRIORITY: AnomalyCategory[] = ['PULAU', 'STATUS', 'PENEMPATAN', 'ROLE'];
+const PRIORITY: AnomalyCategory[] = ['PULAU', 'PROVINSI', 'STATUS', 'PENEMPATAN', 'ROLE'];
 
 const isAcehText = (s: string) => /ACEH|NANGGROE|\bNAD\b/.test(String(s || '').toUpperCase());
 
 export function detectFinalAnomalies(finalRows: AnalystRow[], masterRows: MasterRow[]): FinalAnomaly[] {
-  // Peta pulau cabang di-resolusi dari Master (baris final tidak menyimpan provinsi cabang).
+  // Peta pulau & provinsi cabang di-resolusi dari Master (baris final tidak menyimpan
+  // provinsi cabang — yang tersimpan hanya nama outlet / kode cabangnya).
   const islandByOutlet = new Map<string, string>();
   const islandByKode = new Map<string, string>();
+  const provinsiByOutlet = new Map<string, string>();
+  const provinsiByKode = new Map<string, string>();
   for (const m of masterRows) {
     const island = getIslandFromProvinsi(m.Provinsi, m['Dati II'], `${m.Kelurahan} ${m.Kecamatan}`);
+    const provinsi = cleanProvinsi(m.Provinsi);
     const no = String(m['Nama Outlet'] || '').trim().toUpperCase();
-    if (no && !islandByOutlet.has(no)) islandByOutlet.set(no, island);
+    if (no && !islandByOutlet.has(no)) {
+      islandByOutlet.set(no, island);
+      provinsiByOutlet.set(no, provinsi);
+    }
     const kc = String(m['Kode Cabang'] || m['Branch Code'] || '').trim();
-    if (kc && !islandByKode.has(kc)) islandByKode.set(kc, island);
+    if (kc && !islandByKode.has(kc)) {
+      islandByKode.set(kc, island);
+      provinsiByKode.set(kc, provinsi);
+    }
   }
 
   const out: FinalAnomaly[] = [];
@@ -39,15 +51,26 @@ export function detectFinalAnomalies(finalRows: AnalystRow[], masterRows: Master
     const cats: AnomalyCategory[] = [];
     const reasons: string[] = [];
 
-    // PULAU — kecuali Aceh (penempatan ke Cabang KIM memang lintas kota)
-    if (!isAcehText(`${r.provinsi} ${r.kotaPten} ${r.kotaPtenMax15} ${r.kelurahan} ${r.kecamatan}`)) {
-      const branchIsland =
-        islandByOutlet.get(String(r.namaOutlet || '').trim().toUpperCase()) ??
-        islandByKode.get(String(r.kodeCabang || r.branchCode || '').trim());
+    const outletKey = String(r.namaOutlet || '').trim().toUpperCase();
+    const kodeKey = String(r.kodeCabang || r.branchCode || '').trim();
+    const cabangIsland = islandByOutlet.get(outletKey) ?? islandByKode.get(kodeKey);
+    const cabangProvinsi = provinsiByOutlet.get(outletKey) ?? provinsiByKode.get(kodeKey);
+    // Aceh dikecualikan dari dua aturan wilayah: penempatan ke Cabang KIM memang lintas kota.
+    const bukanAceh = !isAcehText(`${r.provinsi} ${r.kotaPten} ${r.kotaPtenMax15} ${r.kelurahan} ${r.kecamatan}`);
+
+    if (bukanAceh) {
       const rowIsland = getIslandFromProvinsi(r.provinsi, r.kotaPtenMax15 || r.kotaPten, `${r.kelurahan} ${r.kecamatan}`);
-      if (branchIsland && rowIsland !== 'Lainnya' && branchIsland !== 'Lainnya' && rowIsland !== branchIsland) {
+      if (cabangIsland && rowIsland !== 'Lainnya' && cabangIsland !== 'Lainnya' && rowIsland !== cabangIsland) {
         cats.push('PULAU');
-        reasons.push(`Penempatan beda pulau: asal ${rowIsland} → cabang ${branchIsland}`);
+        reasons.push(`Penempatan beda pulau: asal ${rowIsland} → cabang ${cabangIsland}`);
+      }
+
+      // Lebih spesifik dari PULAU: beda provinsi tapi masih satu pulau (mis. Jawa Barat
+      // → Jawa Tengah) selama ini lolos, padahal itu justru yang mau dilihat operator.
+      const rowProvinsi = cleanProvinsi(r.provinsi);
+      if (cabangProvinsi && rowProvinsi && cabangProvinsi !== rowProvinsi) {
+        cats.push('PROVINSI');
+        reasons.push(`Penempatan beda provinsi: asal ${rowProvinsi.toUpperCase()} → cabang ${cabangProvinsi.toUpperCase()}`);
       }
     }
 

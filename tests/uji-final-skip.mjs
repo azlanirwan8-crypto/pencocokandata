@@ -2,7 +2,7 @@
 // kecuali dikembalikan (revisi)". Dijalankan:
 //   npx vite build --ssr tests/entry-uji.ts --outDir tests/out
 //   node tests/uji-final-skip.mjs
-import { executeAnalystPipeline, makeFinalKey, getHeaderStyle, getDataCellStyle, KOLOM_FINAL, barisKeExcel } from './out/entry-uji.js';
+import { executeAnalystPipeline, makeFinalKey, getHeaderStyle, getDataCellStyle, KOLOM_FINAL, barisKeExcelFinal } from './out/entry-uji.js';
 
 let gagal = 0;
 const asa = (label, dapat, harus) => {
@@ -109,7 +109,7 @@ asa('FS5 sel data pakai Calibri 10 (rapi, tidak melar)', getDataCellStyle('ALAMA
 const JUDUL_HARUS = ['No', 'Wilayah', 'Sandi Cabang', 'Branch Code', 'Kode Cabang', 'Nama Outlet', 'Status Outlet',
   'ALAMAT', 'KODE POS', 'Kelurahan', 'Kecamatan', 'Dati II', 'Provinsi'];
 asa('FS6 13 kolom, urutan persis permintaan operator', KOLOM_FINAL.map((k) => k.judul), JUDUL_HARUS);
-const contohEkspor = barisKeExcel(bersih[2], 3);
+const contohEkspor = barisKeExcelFinal(bersih[2], 3);
 asa('FS6 kunci baris ekspor = judul kolom (tanpa kolom aksi)', Object.keys(contohEkspor), JUDUL_HARUS);
 asa('FS6 No ditulis ulang sesuai posisi ekspor', contohEkspor.No, 3);
 asa('FS6 baris ke-i tetap baris ke-i (ekspor tidak menukar urutan)', contohEkspor.Kelurahan, bersih[2].kelurahan);

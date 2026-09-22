@@ -7,62 +7,51 @@ import {
   AlertCircle,
   Layers,
 } from 'lucide-react';
-import type { TargetRow, WilayahStat } from '../../types';
+import type { AnalystRow } from '../../utils/analystPipeline';
+import type { WilayahStat } from '../../types';
 import { formatWilayahName } from '../../utils/normalizer';
-import { exportCleanMatchedToExcel } from '../../utils/excel';
-import { exportMatchedDataToPdf } from '../../utils/pdfExport';
+import { exportFinalRowsToExcel, formatWilayahCode } from '../../utils/excel';
+import { exportFinalRowsToPdf } from '../../utils/pdfExport';
 
 interface DashboardMatchTableProps {
-  allTargetRows: TargetRow[];
+  /** Baris Data Final — bukan alur unggah Target lama. */
+  finalRows: AnalystRow[];
+  /** Id baris yang ber-anomali, dari `detectFinalAnomalies` (satu definisi dgn kartu). */
+  anomaliIds: Set<string>;
   regionalStats: WilayahStat[];
   selectedWilayah?: string;
 }
 
+/** Kunci wilayah kanonik, sama seperti yang dipakai `regionalStats`. */
+const kunciW = (v: unknown) => {
+  const s = String(v ?? '').trim();
+  return (s && s !== '-' && s !== '0' ? formatWilayahCode(s) : '') || 'Tanpa Wilayah';
+};
+
 export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
-  allTargetRows,
+  finalRows,
+  anomaliIds,
   regionalStats,
   selectedWilayah = 'ALL',
 }) => {
   const [alertInfo, setAlertInfo] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  // Helper to determine if a row is clean matched data
-  const isRowMatched = (r: TargetRow) =>
-    Boolean(r._isMatched) || Boolean(r.Sandi) || Boolean(r['Sandi Cabang']) || Boolean(r.Cabang);
+  // Baris final tanpa anomali — inilah yang bisa diunduh sebagai "data bersih".
+  const allMatchedRows = useMemo(() => finalRows.filter((r) => !anomaliIds.has(r.id)), [finalRows, anomaliIds]);
 
-  // Filter matched data
-  const allMatchedRows = useMemo(() => {
-    return allTargetRows.filter(isRowMatched);
-  }, [allTargetRows]);
-
-  // Group matched rows by Wilayah
-  const matchedByWilayah = useMemo(() => {
-    const map = new Map<string, TargetRow[]>();
-    allMatchedRows.forEach((r) => {
-      const w = String(r.Wilayah || 'Tanpa Wilayah').trim();
-      let arr = map.get(w);
-      if (!arr) {
-        arr = [];
-        map.set(w, arr);
-      }
+  const groupByWilayah = (rows: AnalystRow[]) => {
+    const map = new Map<string, AnalystRow[]>();
+    rows.forEach((r) => {
+      const w = kunciW(r.wilayah);
+      const arr = map.get(w) || [];
       arr.push(r);
+      map.set(w, arr);
     });
     return map;
-  }, [allMatchedRows]);
+  };
 
-  // Group ALL target rows by Wilayah (for totals)
-  const allByWilayah = useMemo(() => {
-    const map = new Map<string, TargetRow[]>();
-    allTargetRows.forEach((r) => {
-      const w = String(r.Wilayah || 'Tanpa Wilayah').trim();
-      let arr = map.get(w);
-      if (!arr) {
-        arr = [];
-        map.set(w, arr);
-      }
-      arr.push(r);
-    });
-    return map;
-  }, [allTargetRows]);
+  const matchedByWilayah = useMemo(() => groupByWilayah(allMatchedRows), [allMatchedRows]);
+  const allByWilayah = useMemo(() => groupByWilayah(finalRows), [finalRows]);
 
   // Sorting state for table (Default: urut berdasarkan Wilayah W1, W2, W3... secara natural)
   const [sortField, setSortField] = useState<'wilayah' | 'matched' | 'total' | 'rate'>('wilayah');
@@ -108,23 +97,23 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
     });
   }, [regionalStats, selectedWilayah, sortField, sortDirection, matchedByWilayah]);
 
-  // Handler: Download Excel per Wilayah
+  // Handler: Download Excel per Wilayah (isi = kolom Data Final menu Final Data)
   const handleDownloadExcel = (wilayahKey: string) => {
     setAlertInfo(null);
     const rows = matchedByWilayah.get(wilayahKey) || [];
     if (rows.length === 0) {
       setAlertInfo({
         type: 'error',
-        message: `Belum ada data match (bersih) untuk ${formatWilayahName(wilayahKey)}.`,
+        message: `Belum ada data final bersih untuk ${formatWilayahName(wilayahKey)}.`,
       });
       return;
     }
 
-    const res = exportCleanMatchedToExcel(rows, wilayahKey);
+    const res = exportFinalRowsToExcel(rows, formatWilayahName(wilayahKey));
     if (res.success) {
       setAlertInfo({
         type: 'success',
-        message: `Berhasil mengunduh ${res.rowCount.toLocaleString('id-ID')} data match ke file "${res.filename}".`,
+        message: `Berhasil mengunduh ${res.rowCount.toLocaleString('id-ID')} baris data final ke file "${res.filename}".`,
       });
     } else {
       setAlertInfo({
@@ -143,21 +132,21 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
     if (rows.length === 0) {
       setAlertInfo({
         type: 'error',
-        message: `Belum ada data match (bersih) untuk ${formatWilayahName(wilayahKey)}.`,
+        message: `Belum ada data final bersih untuk ${formatWilayahName(wilayahKey)}.`,
       });
       return;
     }
 
-    const res = exportMatchedDataToPdf({
+    const res = exportFinalRowsToPdf({
       wilayahLabel: wilayahKey,
       rows,
-      totalTargetRows: totalRows,
+      totalRows,
     });
 
     if (res.success) {
       setAlertInfo({
         type: 'success',
-        message: `Berhasil mencetak laporan PDF profesional: "${res.filename}".`,
+        message: `Berhasil mencetak laporan PDF: "${res.filename}" (${rows.length.toLocaleString('id-ID')} dari ${totalRows.toLocaleString('id-ID')} baris wilayah ini).`,
       });
     } else {
       setAlertInfo({
@@ -173,16 +162,16 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
     if (allMatchedRows.length === 0) {
       setAlertInfo({
         type: 'error',
-        message: 'Belum ada data match yang tersedia untuk diunduh.',
+        message: 'Belum ada data final bersih yang tersedia untuk diunduh.',
       });
       return;
     }
 
-    const res = exportCleanMatchedToExcel(allMatchedRows, 'Semua_Wilayah');
+    const res = exportFinalRowsToExcel(allMatchedRows, 'Semua_Wilayah');
     if (res.success) {
       setAlertInfo({
         type: 'success',
-        message: `Berhasil mengunduh seluruh ${res.rowCount.toLocaleString('id-ID')} data match ke file "${res.filename}".`,
+        message: `Berhasil mengunduh seluruh ${res.rowCount.toLocaleString('id-ID')} baris data final bersih ke file "${res.filename}".`,
       });
     } else {
       setAlertInfo({
@@ -198,15 +187,15 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
     if (allMatchedRows.length === 0) {
       setAlertInfo({
         type: 'error',
-        message: 'Belum ada data match yang tersedia untuk diunduh.',
+        message: 'Belum ada data final bersih yang tersedia untuk diunduh.',
       });
       return;
     }
 
-    const res = exportMatchedDataToPdf({
+    const res = exportFinalRowsToPdf({
       wilayahLabel: 'Semua Wilayah',
       rows: allMatchedRows,
-      totalTargetRows: allTargetRows.length,
+      totalRows: finalRows.length,
     });
 
     if (res.success) {
@@ -264,10 +253,10 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
           </div>
           <div>
             <h4 style={{ fontSize: '0.88rem', fontWeight: 600, color: '#212529', margin: 0 }}>
-              Rekapitulasi Data Match per Wilayah (Data Bersih)
+              Rekapitulasi Data Final per Wilayah
             </h4>
             <span style={{ fontSize: '0.71rem', color: '#878a99' }}>
-              Daftar data target yang telah berhasil cocok per wilayah (Menampilkan 5 wilayah teratas & scroll ke bawah)
+              Baris Data Final yang bersih dari anomali, per wilayah (5 wilayah teratas tampil, scroll ke bawah)
             </span>
           </div>
         </div>
@@ -292,7 +281,7 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
               borderRadius: '4px',
               cursor: allMatchedRows.length === 0 ? 'not-allowed' : 'pointer',
             }}
-            title="Unduh seluruh data match semua wilayah dalam 1 file Excel"
+            title="Unduh seluruh baris data final bersih (semua wilayah) dalam 1 file Excel"
           >
             <FileSpreadsheet size={13} />
             <span>Unduh Semua (.xlsx)</span>
@@ -316,7 +305,7 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
               borderRadius: '4px',
               cursor: allMatchedRows.length === 0 ? 'not-allowed' : 'pointer',
             }}
-            title="Unduh dokumen laporan PDF eksekutif untuk semua wilayah"
+            title="Unduh laporan PDF data final bersih untuk semua wilayah"
           >
             <FileText size={13} />
             <span>Laporan Lengkap (.pdf)</span>
@@ -333,7 +322,7 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
               border: allMatchedRows.length > 0 ? '1px solid rgba(10, 179, 156, 0.25)' : '1px solid #e9ebec',
             }}
           >
-            {allMatchedRows.length.toLocaleString('id-ID')} Data Match
+            {allMatchedRows.length.toLocaleString('id-ID')} Data Final Bersih
           </span>
         </div>
       </div>
@@ -389,10 +378,10 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
               <th
                 onClick={() => toggleSort('matched')}
                 style={{ minWidth: '140px', textAlign: 'center', color: '#405189', cursor: 'pointer', userSelect: 'none', position: 'sticky', top: 0, zIndex: 3, background: '#f3f6f9' }}
-                title="Klik untuk mengurutkan berdasarkan Data Match"
+                title="Klik untuk mengurutkan berdasarkan jumlah baris bersih"
               >
                 <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-                  Data Match (Bersih)
+                  Data Final Bersih
                   <span style={{ fontSize: '0.75rem', color: sortField === 'matched' ? '#405189' : '#adb5bd' }}>
                     {sortField === 'matched' ? (sortDirection === 'asc' ? '▲' : '▼') : '⇅'}
                   </span>
@@ -401,10 +390,10 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
               <th
                 onClick={() => toggleSort('total')}
                 style={{ minWidth: '120px', textAlign: 'center', color: '#405189', cursor: 'pointer', userSelect: 'none', position: 'sticky', top: 0, zIndex: 3, background: '#f3f6f9' }}
-                title="Klik untuk mengurutkan berdasarkan Total Target"
+                title="Klik untuk mengurutkan berdasarkan jumlah baris data final wilayah ini"
               >
                 <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-                  Total Target
+                  Total Data Final
                   <span style={{ fontSize: '0.75rem', color: sortField === 'total' ? '#405189' : '#adb5bd' }}>
                     {sortField === 'total' ? (sortDirection === 'asc' ? '▲' : '▼') : '⇅'}
                   </span>
@@ -413,10 +402,10 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
               <th
                 onClick={() => toggleSort('rate')}
                 style={{ minWidth: '180px', color: '#405189', cursor: 'pointer', userSelect: 'none', position: 'sticky', top: 0, zIndex: 3, background: '#f3f6f9' }}
-                title="Klik untuk mengurutkan berdasarkan Tingkat Keberhasilan"
+                title="Klik untuk mengurutkan berdasarkan persentase baris bersih"
               >
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                  Tingkat Keberhasilan
+                  % Bersih
                   <span style={{ fontSize: '0.75rem', color: sortField === 'rate' ? '#405189' : '#adb5bd' }}>
                     {sortField === 'rate' ? (sortDirection === 'asc' ? '▲' : '▼') : '⇅'}
                   </span>
@@ -432,9 +421,9 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
                 <td colSpan={7} style={{ textAlign: 'center', padding: '2.5rem 1rem', color: '#878a99' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem' }}>
                     <Layers size={28} color="#adb5bd" />
-                    <strong style={{ fontSize: '0.9rem', color: '#212529' }}>Belum Ada Data Target</strong>
+                    <strong style={{ fontSize: '0.9rem', color: '#212529' }}>Belum Ada Data Final</strong>
                     <span style={{ fontSize: '0.75rem', color: '#878a99' }}>
-                      Unggah data target di menu Data Cek untuk menampilkan rekapitulasi data match.
+                      Setujui data di menu Data Analyst atau unggah di menu Final Data untuk menampilkan rekapitulasi per wilayah.
                     </span>
                   </div>
                 </td>
@@ -481,7 +470,7 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
                       </div>
                     </td>
 
-                    {/* 3. Jumlah Data Match */}
+                    {/* 3. Jumlah baris bersih */}
                     <td style={{ textAlign: 'center' }}>
                       <span
                         style={{
@@ -502,20 +491,20 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
                       </span>
                     </td>
 
-                    {/* 4. Total Target */}
+                    {/* 4. Total baris Data Final wilayah ini */}
                     <td style={{ textAlign: 'center', fontSize: '0.78rem', color: '#495057', fontWeight: 500 }}>
                       {totalCount.toLocaleString('id-ID')} Data
                     </td>
 
-                    {/* 5. Tingkat Keberhasilan (Progress Bar) */}
+                    {/* 5. Persentase baris bersih */}
                     <td>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
                           <span style={{ fontWeight: 600, color: isOptimal ? '#0ab39c' : isGood ? '#d97706' : '#f06548' }}>
-                            {rate.toFixed(1)}% Cocok
+                            {rate.toFixed(1)}% Bersih
                           </span>
                           <span style={{ color: '#878a99', fontSize: '0.67rem' }}>
-                            {matchedCount} dari {totalCount}
+                            {matchedCount} bersih dari {totalCount}
                           </span>
                         </div>
                         <div
@@ -555,7 +544,7 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
                           color: rate === 100 ? '#0ab39c' : rate > 0 ? '#d97706' : '#f06548',
                         }}
                       >
-                        {rate === 100 ? 'Lengkap 100%' : rate > 0 ? 'Sebagian Cocok' : 'Belum Cocok'}
+                        {rate === 100 ? 'Bersih Semua' : rate > 0 ? 'Ada Anomali' : 'Semua Anomali'}
                       </span>
                     </td>
 
@@ -582,7 +571,7 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
                             fontWeight: 600,
                             transition: 'all 0.15s ease',
                           }}
-                          title={`Unduh Data Match ${formatWilayahName(region.wilayah)} format Excel`}
+                          title={`Unduh Data Final Bersih ${formatWilayahName(region.wilayah)} format Excel`}
                         >
                           <FileSpreadsheet size={13} />
                           <span>Excel</span>
@@ -608,7 +597,7 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
                             fontWeight: 600,
                             transition: 'all 0.15s ease',
                           }}
-                          title={`Unduh Laporan PDF ${formatWilayahName(region.wilayah)}`}
+                          title={`Unduh Laporan PDF ${formatWilayahName(region.wilayah)} (baris bersih)`}
                         >
                           <FileText size={13} />
                           <span>PDF</span>

@@ -366,3 +366,136 @@ export function exportAnalystExecutivePdf({
     return { success: false, filename: '', error: err?.message || 'Gagal membuat dokumen PDF.' };
   }
 }
+
+interface FinalPdfOptions {
+  wilayahLabel: string;
+  rows: AnalystRow[];
+  /** Jumlah baris wilayah itu SEBELUM disaring bersih — untuk kartu persentase. */
+  totalRows?: number;
+}
+
+/**
+ * PDF per wilayah dari DATA FINAL: 13 kolom yang sama dengan tabel menu Final Data.
+ * (Laporan lama `exportMatchedDataToPdf` memakai kolom alur Target dan dua kali
+  * mencetak alamat yang sama — kolom itu dihapus di sini.)
+ */
+export function exportFinalRowsToPdf({
+  wilayahLabel,
+  rows,
+  totalRows = rows.length,
+}: FinalPdfOptions): { success: boolean; filename: string; error?: string } {
+  try {
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const cleanWilayahName = formatWilayahName(wilayahLabel);
+    const dateStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    doc.setFillColor(30, 41, 59);
+    doc.rect(0, 0, pageWidth, 24, 'F');
+    doc.setFillColor(10, 179, 156);
+    doc.rect(0, 24, pageWidth, 1.5, 'F');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(255, 255, 255);
+    doc.text('LAPORAN DATA FINAL — PENEMPATAN CABANG PER KELURAHAN', 14, 11);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(203, 213, 225);
+    doc.text('Hasil analisa 3 fase yang sudah disetujui (Data Final)', 14, 18);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(255, 255, 255);
+    doc.text(cleanWilayahName.toUpperCase(), pageWidth - 14, 11, { align: 'right' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(203, 213, 225);
+    doc.text(`Dicetak: ${dateStr}`, pageWidth - 14, 18, { align: 'right' });
+
+    const share = totalRows > 0 ? ((rows.length / totalRows) * 100).toFixed(1) : '100.0';
+    const cardY = 30;
+    const cardH = 14;
+    const cardGap = 4;
+    const cardW = (pageWidth - 28 - cardGap * 2) / 3;
+    const cards = [
+      { label: 'WILAYAH LINGKUP', val: cleanWilayahName, textCol: [30, 41, 59] },
+      { label: 'BARIS TERCETAK', val: `${rows.length.toLocaleString('id-ID')} Baris`, textCol: [13, 148, 136] },
+      { label: 'TOTAL BARIS WILAYAH', val: `${totalRows.toLocaleString('id-ID')} Baris · ${share}%`, textCol: [51, 65, 85] },
+    ];
+    cards.forEach((c, idx) => {
+      const cx = 14 + idx * (cardW + cardGap);
+      doc.setFillColor(248, 250, 252);
+      doc.setDrawColor(226, 232, 240);
+      doc.roundedRect(cx, cardY, cardW, cardH, 1.5, 1.5, 'FD');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text(c.label, cx + 4, cardY + 5);
+      doc.setFontSize(9.5);
+      doc.setTextColor(c.textCol[0], c.textCol[1], c.textCol[2]);
+      doc.text(c.val, cx + 4, cardY + 11);
+    });
+
+    const tableRows = rows.map((r, i) => ({
+      no: i + 1,
+      wilayah: r.wilayah || '-',
+      sandi: r.sandiCabang || '-',
+      branch: r.branchCode || '-',
+      kode: r.kodeCabang || '-',
+      outlet: r.namaOutlet || '-',
+      status: r.statusOutlet || '-',
+      alamat: r.alamat || '-',
+      kodepos: r.kodePosKelurahan || r.kodePosPten || '-',
+      kelurahan: r.kelurahan || '-',
+      kecamatan: r.kecamatan || '-',
+      dati: r.kotaPtenMax15 || r.kotaPten || '-',
+      provinsi: r.provinsi || '-',
+    }));
+
+    autoTable(doc, {
+      startY: cardY + cardH + 5,
+      head: [[
+        'No', 'Wilayah', 'Sandi Cabang', 'Branch Code', 'Kode Cabang', 'Nama Outlet', 'Status Outlet',
+        'ALAMAT', 'KODE POS', 'Kelurahan', 'Kecamatan', 'Dati II', 'Provinsi',
+      ]],
+      body: tableRows,
+      theme: 'grid',
+      styles: { fontSize: 6.4, font: 'helvetica', cellPadding: 1.4, lineColor: [226, 232, 240], lineWidth: 0.1, textColor: [30, 41, 59] },
+      headStyles: { fillColor: [54, 96, 146], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 6.6 },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: {
+        0: { cellWidth: 7, halign: 'center' },
+        1: { cellWidth: 13, halign: 'center' },
+        2: { cellWidth: 19 },
+        3: { cellWidth: 17, halign: 'center' },
+        4: { cellWidth: 17, halign: 'center' },
+        5: { cellWidth: 30 },
+        6: { cellWidth: 13, halign: 'center' },
+        7: { cellWidth: 44 },
+        8: { cellWidth: 14, halign: 'center' },
+        9: { cellWidth: 24 },
+        10: { cellWidth: 22 },
+        11: { cellWidth: 20 },
+        12: { cellWidth: 'auto' },
+      },
+      margin: { left: 14, right: 14, bottom: 14 },
+      didDrawPage: (data) => {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(148, 163, 184);
+        doc.text('Data Final — penempatan kelurahan ke cabang hasil analisa 3 fase • Data Matcher System', 14, pageHeight - 6);
+        doc.text(`Halaman ${data.pageNumber}`, pageWidth - 14, pageHeight - 6, { align: 'right' });
+      },
+    });
+
+    const filename = `Data_Final_${cleanWilayahName.replace(/\s+/g, '_')}.pdf`;
+    doc.save(filename);
+    return { success: true, filename };
+  } catch (err: any) {
+    console.error('Final PDF export error:', err);
+    return { success: false, filename: '', error: err?.message || 'Gagal membuat dokumen PDF.' };
+  }
+}

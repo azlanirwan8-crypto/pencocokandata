@@ -534,6 +534,8 @@ export function formatWilayahName(val: unknown): string {
   if (val === null || val === undefined) return 'Tanpa Wilayah';
   const str = String(val).trim();
   if (!str || str === '-' || str === '0') return 'Tanpa Wilayah';
+  // 'Tanpa Wilayah' dipakai sebagai kunci wilayah kanonik di dashboard — jangan diprefiksi lagi.
+  if (/^tanpa wilayah$/i.test(str)) return 'Tanpa Wilayah';
 
   // Extract canonical digit number (e.g. "WILAYAH 01 - MEDAN" -> "Wilayah 1", "01" -> "Wilayah 1", "W01" -> "Wilayah 1")
   const match = str.match(/\d+/);

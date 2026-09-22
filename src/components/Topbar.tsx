@@ -62,7 +62,7 @@ export const Topbar: React.FC<TopbarProps> = ({
             }}
           >
             <Database size={12} />
-            {isNeonConnected ? `Terhubung${lastSyncedAt ? ` · ${lastSyncedAt}` : ''}` : 'Offline'}
+            {isNeonConnected ? 'Terhubung' : 'Offline'}
           </span>
         )}
         <span

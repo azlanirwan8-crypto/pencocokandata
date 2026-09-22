@@ -21,6 +21,7 @@ import {
 import * as XLSX from 'xlsx-js-style';
 import type { AnalystRow } from '../../utils/analystPipeline';
 import { formatWilayahCode, applyStandardSheetStyle } from '../../utils/excel';
+import { WARNA_TH, KOLOM_FINAL, CONTOH_KOLOM_FINAL, barisKeExcelFinal } from '../../utils/finalColumns';
 import { ConfirmDialog } from './ConfirmDialog';
 import { DialogPanel } from '../BaseModal';
 import { useTampilanTersimpan } from '../../utils/useTampilanTersimpan';
@@ -37,71 +38,8 @@ interface FinalDataManagerProps {
   onImportRows?: (rows: AnalystRow[]) => { imported: number; skippedFinal: number; skippedAnalyst: number };
 }
 
-/**
- * Satu-satunya sumber kebenaran untuk tabel, ekspor, DAN template Excel menu ini.
- * Urutan & nama kolom = permintaan pemilik produk 2026-09-22 (gambar header):
- * identitas cabang (navy) → alamat & wilayah data (hijau) → Dati II (oranye).
- * `grup` dipakai sebagai warna <th> di layar supaya layar dan berkas bicara bahasa yang sama.
- */
-type GrupWarna = 'navy' | 'hijau' | 'oranye';
-const WARNA_TH: Record<GrupWarna, string> = { navy: '#366092', hijau: '#47D359', oranye: '#E97132' };
-
-type KolomFinal = {
-  judul: string;
-  grup: GrupWarna;
-  style?: React.CSSProperties;
-  tengah?: boolean;
-  mono?: boolean;
-  nilai: (r: AnalystRow) => string | number;
-  judulExcel?: string;
-};
-
-export const KOLOM_FINAL: KolomFinal[] = [
-  { judul: 'No', grup: 'navy', tengah: true, style: { width: '54px' }, nilai: () => '' },
-  { judul: 'Wilayah', grup: 'navy', tengah: true, style: { width: '92px' }, nilai: (r) => r.wilayah || '-' },
-  { judul: 'Sandi Cabang', grup: 'navy', tengah: true, mono: true, style: { width: '110px' }, nilai: (r) => r.sandiCabang || '-' },
-  { judul: 'Branch Code', grup: 'navy', tengah: true, mono: true, style: { width: '95px' }, nilai: (r) => r.branchCode || '-' },
-  { judul: 'Kode Cabang', grup: 'navy', tengah: true, mono: true, style: { width: '95px' }, nilai: (r) => r.kodeCabang || '-' },
-  { judul: 'Nama Outlet', grup: 'navy', style: { minWidth: '170px' }, nilai: (r) => r.namaOutlet || '-' },
-  { judul: 'Status Outlet', grup: 'navy', tengah: true, style: { width: '95px' }, nilai: (r) => r.statusOutlet || '-' },
-  { judul: 'ALAMAT', grup: 'hijau', style: { minWidth: '220px' }, nilai: (r) => r.alamat || '-' },
-  { judul: 'KODE POS', grup: 'hijau', tengah: true, mono: true, style: { width: '90px' }, nilai: (r) => r.kodePosKelurahan || r.kodePosPten || '-' },
-  { judul: 'Kelurahan', grup: 'hijau', style: { minWidth: '140px' }, nilai: (r) => r.kelurahan || '-' },
-  { judul: 'Kecamatan', grup: 'hijau', style: { minWidth: '140px' }, nilai: (r) => r.kecamatan || '-' },
-  {
-    judul: 'Dati II',
-    grup: 'oranye',
-    style: { minWidth: '140px' },
-    judulExcel: 'Dati II',
-    nilai: (r) => r.kotaPtenMax15 || r.kotaPten || '-',
-  },
-  { judul: 'Provinsi', grup: 'hijau', style: { minWidth: '130px' }, nilai: (r) => r.provinsi || '-' },
-];
-
-/** Baris contoh pada "Template Excel" — hanya contoh isi, bukan data. */
-const CONTOH_KOLOM: Record<string, string> = {
-  Wilayah: '011',
-  'Sandi Cabang': '01100001',
-  'Branch Code': '01100001',
-  'Kode Cabang': '01100001',
-  'Nama Outlet': 'CONTOH NAMA OUTLET',
-  'Status Outlet': 'KC',
-  ALAMAT: 'JL CONTOH NO 1',
-  'KODE POS': '40111',
-  Kelurahan: 'CONTOH KELURAHAN',
-  Kecamatan: 'CONTOH KECAMATAN',
-  'Dati II': 'CONTOHKOTA',
-  Provinsi: 'JAWA BARAT',
-};
-
-/** Baris → objek Excel/Template: kolom yang sama, urutan yang sama, tanpa aksi. */
-export function barisKeExcel(r: AnalystRow, noEkspor: number): Record<string, string | number> {
-  const item: Record<string, string | number> = {};
-  KOLOM_FINAL.forEach((k) => {
-    item[k.judulExcel || k.judul] = k.judul === 'No' ? noEkspor : k.nilai(r);
-  });
-  return item;
-}
+/* Kolom, warna kepala tabel, dan pemetaan baris→Excel tinggal di satu modul:
+   utils/finalColumns (dipakai juga ekspor Excel/PDF dashboard). */
 
 function parseFinalExcelRow(raw: Record<string, any>, idx: number): AnalystRow {
   const get = (keys: string[]): string => {
@@ -340,7 +278,7 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
   const handleUnduhTemplate = () => {
     const contoh: Record<string, string | number> = {};
     KOLOM_FINAL.forEach((k) => {
-      contoh[k.judul] = CONTOH_KOLOM[k.judul] ?? '';
+      contoh[k.judul] = CONTOH_KOLOM_FINAL[k.judul] ?? '';
     });
     const wb = XLSX.utils.book_new();
     const kolomJudul = KOLOM_FINAL.map((k) => k.judul);
@@ -355,7 +293,7 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
   // urutan baris tetap seperti saat data masuk (permintaan pemilik produk).
   const handleExport = () => {
     const kolomJudul = KOLOM_FINAL.map((k) => k.judul);
-    const data = tersaring.map((r, i) => barisKeExcel(r, i + 1));
+    const data = tersaring.map((r, i) => barisKeExcelFinal(r, i + 1));
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(data, { header: kolomJudul });
     applyStandardSheetStyle(ws, kolomJudul, data.length);
