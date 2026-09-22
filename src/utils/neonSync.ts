@@ -411,6 +411,37 @@ export async function deleteFinalRowInNeon(rowKey: string): Promise<boolean> {
   }
 }
 
+/**
+ * Hapus banyak baris Data Final di cloud sekali jalan (aksi massal "Kembalikan"/"Hapus").
+ * Lewat POST mode 'hapus' — body DELETE tidak selalu diparse platform. Server menolak
+ * >1000 kunci, jadi daftar besar di-chunk 500 di sini.
+ */
+export async function deleteFinalKeysInNeon(rowKeys: string[]): Promise<boolean> {
+  const unik = [...new Set(rowKeys.filter(Boolean))];
+  if (unik.length === 0) return true;
+  try {
+    for (let i = 0; i < unik.length; i += 500) {
+      const res = await fetchWithRetry(
+        '/api/target?view=final',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'hapus', keys: unik.slice(i, i + 500) }),
+        },
+        20000,
+        2
+      );
+      if (!res.ok) return false;
+      const json = await res.json().catch(() => null);
+      if (!json?.ok) return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Neon final bulk delete error:', err);
+    return false;
+  }
+}
+
 /** Kosongkan seluruh Data Final di cloud (aksi "Kembalikan ke Data Analyst"). */
 export async function clearFinalInNeon(): Promise<boolean> {
   try {

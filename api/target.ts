@@ -13,6 +13,7 @@ import { neon } from '@neondatabase/serverless';
  * GET    ?view=final&limit=N&offset=M → halaman baris + total (order = row_key agar paging stabil)
  * POST   ?view=final  body { rows, mode:'upsert'|'replace' } → upsert per baris, tanpa menghapus
  *        baris lain (kecuali mode 'replace'), jadi tidak ada jendela "cloud kosong".
+ * POST   ?view=final  body { mode:'hapus', keys:[...] } → hapus ≤1000 baris sekali jalan.
  * DELETE ?view=final&key=K  → hapus 1 baris | ?view=final&all=1 → kosongkan seluruh tabel
  *
  * Tabel per-baris (bukan 1 blob JSONB) karena Final Data bisa puluhan ribu baris × ~40 field:
@@ -268,6 +269,36 @@ export default async function handler(req: any, res: any) {
       // 2a. POST ?view=final → upsert baris Data Final. Default 'upsert' (tanpa DELETE),
       //     supaya kegagalan di tengah chunk tidak pernah meninggalkan cloud dalam keadaan kosong.
       if (viewPost === 'final') {
+        // 2a-0. mode 'hapus' → buang banyak baris sekali jalan (aksi massal Revisi/Hapus
+        //       di menu Final Data). Kunci dikirim sebagai parameter bertanda $1..$n,
+        //       bukan disisipkan ke teks SQL, jadi tidak ada jalur injeksi dari daftar id.
+        if (body?.mode === 'hapus') {
+          const mentah: unknown[] = Array.isArray(body.keys) ? body.keys : [];
+          const kunci = [...new Set(mentah.map((k) => String(k ?? '').trim()).filter(Boolean))];
+          if (kunci.length === 0) {
+            return res.status(400).json({ ok: false, configured: true, error: "mode 'hapus' membutuhkan body.keys berisi row_key." });
+          }
+          if (kunci.length > 1000) {
+            return res.status(400).json({
+              ok: false,
+              configured: true,
+              error: `Maksimal 1000 kunci per permintaan (diterima ${kunci.length}); kirim per chunk.`,
+            });
+          }
+          const tanda = kunci.map((_, i) => `$${i + 1}`).join(', ');
+          const deleted = (await sql.query(
+            `DELETE FROM final_rows WHERE row_key IN (${tanda}) RETURNING row_key;`,
+            kunci
+          )) as any[];
+          return res.status(200).json({
+            ok: true,
+            configured: true,
+            table: 'final_rows',
+            deleted: deleted?.length ?? 0,
+            diminta: kunci.length,
+            message: `${deleted?.length ?? 0} dari ${kunci.length} baris Data Final terhapus dari Neon Postgres.`,
+          });
+        }
         const fMode = body?.mode === 'replace' ? 'replace' : 'upsert';
         if (fMode === 'replace') {
           await sql`DELETE FROM final_rows;`;
@@ -416,6 +447,8 @@ export default async function handler(req: any, res: any) {
 
       // 3a. DELETE ?view=final → hapus 1 baris (?key=K) atau kosongkan (?all=1).
       //     Tanpa keduanya: tolak, agar satu DELETE lupa param tidak menghapus semua hasil.
+      //     (Hapus BANYAK baris lewat POST ?view=final mode 'hapus' — body DELETE tidak
+      //      selalu diparse platform, jadi jalur massal sengaja ditaruh ke POST.)
       if (viewDel === 'final') {
         const oneKey = (urlDel.searchParams.get('key') || '').trim();
         if (urlDel.searchParams.get('all') === '1') {

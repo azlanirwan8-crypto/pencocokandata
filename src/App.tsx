@@ -43,7 +43,7 @@ import {
   saveWilayahToNeon,
   loadFinalFromNeon,
   saveFinalToNeon,
-  deleteFinalRowInNeon,
+  deleteFinalKeysInNeon,
   clearFinalInNeon,
   fetchKodePosExport,
   fetchKodePosStats,
@@ -880,41 +880,46 @@ export const App: React.FC = () => {
     setActiveTab('working');
   };
 
-  // "Revisi" satu baris Final Data: keluarkan dari Final → kembali ke antrean Fase 1.
-  // Baris ini tidak lagi di-exclude, jadi Analisa berikutnya memprosesnya dari awal.
-  const handleReviseFinalRow = (rowId: string) => {
-    const target = finalRows.find((r) => r.id === rowId);
-    if (!target) return;
-    const remainingFinal = finalRows.filter((r) => r.id !== rowId);
+  // "Revisi" baris Final Data: keluarkan dari Final → kembali ke antrean Fase 1.
+  // Satu fungsi untuk tombol per baris DAN aksi massal: seluruh perubahan ditulis sekali,
+  // bukan N kali (83 ribu baris × N tulis = tab membeku).
+  const handleReviseFinalRows = (rowIds: string[]) => {
+    if (rowIds.length === 0) return;
+    const ids = new Set(rowIds);
+    const dipulihkan = finalRows.filter((r) => ids.has(r.id));
+    if (dipulihkan.length === 0) return;
+    const remainingFinal = finalRows.filter((r) => !ids.has(r.id));
     setFinalRows(remainingFinal);
     setItem('analyst_final_data', remainingFinal).catch(() => {});
     if (isNeonConnected)
-      void deleteFinalRowInNeon(rowId).then((ok) => laporkanSinkronFinal(ok, 'revisi 1 baris'));
+      void deleteFinalKeysInNeon([...ids]).then((ok) => laporkanSinkronFinal(ok, `revisi ${ids.size} baris`));
     // Kembalikan sebagai kandidat Fase 1 (belum disetujui) ke antrean Data Analyst.
-    const revived: AnalystRow = {
-      ...target,
-      fase1Approved: false,
-      fase2Approved: false,
-      fase3Approved: false,
-      isFinalApproved: false,
-    };
     const byId = new Map<string, AnalystRow>();
     for (const r of analystRows) byId.set(r.id, r);
-    byId.set(revived.id, revived);
+    for (const r of dipulihkan)
+      byId.set(r.id, {
+        ...r,
+        fase1Approved: false,
+        fase2Approved: false,
+        fase3Approved: false,
+        isFinalApproved: false,
+      });
     const merged = Array.from(byId.values());
     setAnalystRows(merged);
     setItem('analyst_results_data', merged).catch(() => {});
   };
 
-  // "Hapus" satu baris Final Data: hilang permanen. Karena `excludeFinalKeys`
+  // "Hapus" baris Final Data: hilang permanen. Karena `excludeFinalKeys`
   // dihitung dari `finalRows` saat analisa dijalankan, baris yang dihapus otomatis
   // bisa diproses ulang dari awal pada analisa berikutnya.
-  const handleDeleteFinalRow = (rowId: string) => {
-    const remaining = finalRows.filter((r) => r.id !== rowId);
+  const handleDeleteFinalRows = (rowIds: string[]) => {
+    if (rowIds.length === 0) return;
+    const ids = new Set(rowIds);
+    const remaining = finalRows.filter((r) => !ids.has(r.id));
     setFinalRows(remaining);
     setItem('analyst_final_data', remaining).catch(() => {});
     if (isNeonConnected)
-      void deleteFinalRowInNeon(rowId).then((ok) => laporkanSinkronFinal(ok, 'hapus 1 baris'));
+      void deleteFinalKeysInNeon([...ids]).then((ok) => laporkanSinkronFinal(ok, `hapus ${ids.size} baris`));
   };
 
   // G1: Impor baris dari Excel di menu Final Data
@@ -1415,8 +1420,8 @@ export const App: React.FC = () => {
           <FinalDataManager
             rows={finalRows}
             onReturnAll={handleReturnFinalToAnalyst}
-            onReturnRow={handleReviseFinalRow}
-            onDeleteRow={handleDeleteFinalRow}
+            onReturnRows={handleReviseFinalRows}
+            onDeleteRows={handleDeleteFinalRows}
             onImportRows={handleImportFinalToAnalyst}
           />
           )}

@@ -1,18 +1,106 @@
 import React, { useMemo, useState, useDeferredValue, useRef } from 'react';
-import { ClipboardCheck, Search, FileSpreadsheet, Undo2, RotateCcw, Eye, Trash2, X, Building2, ShieldCheck, AlertTriangle, Upload, CheckCircle2 } from 'lucide-react';
+import {
+  ClipboardCheck,
+  Search,
+  FileSpreadsheet,
+  Undo2,
+  RotateCcw,
+  Eye,
+  Trash2,
+  X,
+  Building2,
+  ShieldCheck,
+  AlertTriangle,
+  Upload,
+  Download,
+  CheckCircle2,
+  ArrowUp,
+  ArrowDown,
+  ChevronsUpDown,
+} from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import type { AnalystRow } from '../../utils/analystPipeline';
 import { formatWilayahCode, applyStandardSheetStyle } from '../../utils/excel';
 import { ConfirmDialog } from './ConfirmDialog';
 import { DialogPanel } from '../BaseModal';
 import { useTampilanTersimpan } from '../../utils/useTampilanTersimpan';
+import { useVirtualWindow } from '../../utils/useVirtualWindow';
+import { useNotification } from '../Notification/NotificationContext';
 
 interface FinalDataManagerProps {
   rows: AnalystRow[];
   onReturnAll: () => void;
-  onReturnRow: (rowId: string) => void;
-  onDeleteRow: (rowId: string) => void;
+  /** Revisi massal/per baris: ids keluar dari Final dan masuk lagi ke antrean Fase 1. */
+  onReturnRows: (rowIds: string[]) => void;
+  /** Hapus massal/per baris: ids hilang permanen dari Final Data. */
+  onDeleteRows: (rowIds: string[]) => void;
   onImportRows?: (rows: AnalystRow[]) => { imported: number; skippedFinal: number; skippedAnalyst: number };
+}
+
+/**
+ * Satu-satunya sumber kebenaran untuk tabel, ekspor, DAN template Excel menu ini.
+ * Urutan & nama kolom = permintaan pemilik produk 2026-09-22 (gambar header):
+ * identitas cabang (navy) → alamat & wilayah data (hijau) → Dati II (oranye).
+ * `grup` dipakai sebagai warna <th> di layar supaya layar dan berkas bicara bahasa yang sama.
+ */
+type GrupWarna = 'navy' | 'hijau' | 'oranye';
+const WARNA_TH: Record<GrupWarna, string> = { navy: '#366092', hijau: '#47D359', oranye: '#E97132' };
+
+type KolomFinal = {
+  judul: string;
+  grup: GrupWarna;
+  style?: React.CSSProperties;
+  tengah?: boolean;
+  mono?: boolean;
+  nilai: (r: AnalystRow) => string | number;
+  judulExcel?: string;
+};
+
+export const KOLOM_FINAL: KolomFinal[] = [
+  { judul: 'No', grup: 'navy', tengah: true, style: { width: '54px' }, nilai: () => '' },
+  { judul: 'Wilayah', grup: 'navy', tengah: true, style: { width: '92px' }, nilai: (r) => r.wilayah || '-' },
+  { judul: 'Sandi Cabang', grup: 'navy', tengah: true, mono: true, style: { width: '110px' }, nilai: (r) => r.sandiCabang || '-' },
+  { judul: 'Branch Code', grup: 'navy', tengah: true, mono: true, style: { width: '95px' }, nilai: (r) => r.branchCode || '-' },
+  { judul: 'Kode Cabang', grup: 'navy', tengah: true, mono: true, style: { width: '95px' }, nilai: (r) => r.kodeCabang || '-' },
+  { judul: 'Nama Outlet', grup: 'navy', style: { minWidth: '170px' }, nilai: (r) => r.namaOutlet || '-' },
+  { judul: 'Status Outlet', grup: 'navy', tengah: true, style: { width: '95px' }, nilai: (r) => r.statusOutlet || '-' },
+  { judul: 'ALAMAT', grup: 'hijau', style: { minWidth: '220px' }, nilai: (r) => r.alamat || '-' },
+  { judul: 'KODE POS', grup: 'hijau', tengah: true, mono: true, style: { width: '90px' }, nilai: (r) => r.kodePosKelurahan || r.kodePosPten || '-' },
+  { judul: 'Kelurahan', grup: 'hijau', style: { minWidth: '140px' }, nilai: (r) => r.kelurahan || '-' },
+  { judul: 'Kecamatan', grup: 'hijau', style: { minWidth: '140px' }, nilai: (r) => r.kecamatan || '-' },
+  {
+    judul: 'Dati II',
+    grup: 'oranye',
+    style: { minWidth: '140px' },
+    judulExcel: 'Dati II',
+    nilai: (r) => r.kotaPtenMax15 || r.kotaPten || '-',
+  },
+  { judul: 'Provinsi', grup: 'hijau', style: { minWidth: '130px' }, nilai: (r) => r.provinsi || '-' },
+];
+
+/** Baris contoh pada "Template Excel" — hanya contoh isi, bukan data. */
+const CONTOH_KOLOM: Record<string, string> = {
+  Wilayah: '011',
+  'Sandi Cabang': '01100001',
+  'Branch Code': '01100001',
+  'Kode Cabang': '01100001',
+  'Nama Outlet': 'CONTOH NAMA OUTLET',
+  'Status Outlet': 'KC',
+  ALAMAT: 'JL CONTOH NO 1',
+  'KODE POS': '40111',
+  Kelurahan: 'CONTOH KELURAHAN',
+  Kecamatan: 'CONTOH KECAMATAN',
+  'Dati II': 'CONTOHKOTA',
+  Provinsi: 'JAWA BARAT',
+};
+
+/** Baris → objek Excel/Template: kolom yang sama, urutan yang sama, tanpa aksi. */
+export function barisKeExcel(r: AnalystRow, noEkspor: number): Record<string, string | number> {
+  const item: Record<string, string | number> = {};
+  KOLOM_FINAL.forEach((k) => {
+    item[k.judulExcel || k.judul] = k.judul === 'No' ? noEkspor : k.nilai(r);
+  });
+  return item;
 }
 
 function parseFinalExcelRow(raw: Record<string, any>, idx: number): AnalystRow {
@@ -95,31 +183,36 @@ function parseFinalExcelRow(raw: Record<string, any>, idx: number): AnalystRow {
   };
 }
 
-const PAGE_SIZE = 25;
+type AksiKonfirmasi = { kind: 'returnAll' | 'return' | 'delete'; ids: string[] };
 
 // Final Data: hasil analisa 3 fase yang sudah disetujui operator.
 // Baris dipindah dari Data Analyst ke sini (IndexedDB `analyst_final_data`).
-export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onReturnAll, onReturnRow, onDeleteRow, onImportRows }) => {
+export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onReturnAll, onReturnRows, onDeleteRows, onImportRows }) => {
+  const { add: notify } = useNotification();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   // A6: filter & halaman bertahan saat operator pindah menu lalu kembali.
   const [searchTerm, setSearchTerm] = useTampilanTersimpan('tampilan.final.cari', '');
   const deferredSearch = useDeferredValue(searchTerm);
   const [wilayahFilter, setWilayahFilter] = useTampilanTersimpan('tampilan.final.wilayah', 'ALL');
   const [page, setPage] = useTampilanTersimpan('tampilan.final.page', 1);
+  const [pageSize, setPageSize] = useTampilanTersimpan<number | 'ALL'>('tampilan.final.pageSize', 25);
+  const [sortKolom, setSortKolom] = useTampilanTersimpan<string>('tampilan.final.sort', '');
+  const [sortNaik, setSortNaik] = useTampilanTersimpan<boolean>('tampilan.final.sortDir', true);
   // Aksi yang butuh konfirmasi (menggantikan window.confirm native).
-  const [confirmAction, setConfirmAction] = useState<{ kind: 'returnAll' | 'revise' | 'delete'; row?: AnalystRow } | null>(null);
+  const [konfirmasi, setKonfirmasi] = useState<AksiKonfirmasi | null>(null);
+  const [terpilih, setTerpilih] = useState<Set<string>>(() => new Set());
   // Modal Detail (View) per baris.
   const [detailRow, setDetailRow] = useState<AnalystRow | null>(null);
   // Laporan hasil impor Excel
   const [importSummary, setImportSummary] = useState<{ imported: number; skippedFinal: number; skippedAnalyst: number; fileName: string } | null>(null);
-
 
   // Card informasi ringkas (kebutuhan BRD 5d).
   const metrics = useMemo(() => ({
     total: rows.length,
     kc: rows.filter((r) => r.tipeUnit === 'KC').length,
     kcp: rows.filter((r) => r.tipeUnit === 'KCP').length,
-    roleLengkap: rows.filter((r) => r.is3RoleLengkap).length,
+    roleLengkap: rows.filter((r) => is3Role(r)).length,
     wilayah: new Set(rows.map((r) => r.wilayah).filter(Boolean)).size,
   }), [rows]);
 
@@ -129,7 +222,16 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
     return Array.from(s).sort((a, b) => (parseInt(a.replace(/\D/g, '')) || 0) - (parseInt(b.replace(/\D/g, '')) || 0));
   }, [rows]);
 
-  const filtered = useMemo(() => {
+  /** Nomor urut asli: posisi baris saat masuk (upload/setujui), bukan posisi hasil sortir. */
+  const nomorAsli = useMemo(() => {
+    const m = new Map<string, number>();
+    rows.forEach((r, i) => m.set(r.id, i + 1));
+    return m;
+  }, [rows]);
+
+  // Urutan tampil = urutan masuk. Ekspor memakai daftar ini (TANPA sort) supaya
+  // nomor 1..n di berkas sama dengan urutan saat data diunggah/dimasukkan.
+  const tersaring = useMemo(() => {
     const q = deferredSearch.trim().toLowerCase();
     return rows.filter((r) => {
       if (wilayahFilter !== 'ALL' && r.wilayah !== wilayahFilter) return false;
@@ -150,9 +252,57 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
     });
   }, [rows, deferredSearch, wilayahFilter]);
 
-  const totalHal = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const terurut = useMemo(() => {
+    const kolom = KOLOM_FINAL.find((k) => k.judul === sortKolom);
+    if (!kolom) return tersaring;
+    const ambil = kolom.judul === 'No' ? (r: AnalystRow) => nomorAsli.get(r.id) ?? 0 : kolom.nilai;
+    const tanda = sortNaik ? 1 : -1;
+    return [...tersaring].sort((a, b) => {
+      const x = ambil(a);
+      const y = ambil(b);
+      if (typeof x === 'number' && typeof y === 'number') return (x - y) * tanda;
+      return String(x).localeCompare(String(y), 'id') * tanda;
+    });
+  }, [tersaring, sortKolom, sortNaik, nomorAsli]);
+
+  const totalHal = Math.max(1, pageSize === 'ALL' ? 1 : Math.ceil(terurut.length / pageSize));
   const hal = Math.min(page, totalHal);
-  const tampil = filtered.slice((hal - 1) * PAGE_SIZE, hal * PAGE_SIZE);
+  const paginated = pageSize === 'ALL' ? terurut : terurut.slice((hal - 1) * pageSize, hal * pageSize);
+
+  // "Lihat Semua" sampai puluhan ribu baris tetap ringan: hanya baris yang terlihat
+  // yang masuk DOM (sama seperti grid Data Analyst).
+  const win = useVirtualWindow({ containerRef: scrollRef, itemCount: paginated.length });
+  const rendered = win.active ? paginated.slice(win.start, win.end) : paginated;
+  const offset = win.active ? win.start : 0;
+
+  const semuaHalamanTerpilih = paginated.length > 0 && paginated.every((r) => terpilih.has(r.id));
+  const idTerpilihAktif = useMemo(() => paginated.filter((r) => terpilih.has(r.id)).map((r) => r.id), [paginated, terpilih]);
+
+  const gantiPilihanSemua = () => {
+    setTerpilih((prev) => {
+      const next = new Set(prev);
+      if (semuaHalamanTerpilih) paginated.forEach((r) => next.delete(r.id));
+      else paginated.forEach((r) => next.add(r.id));
+      return next;
+    });
+  };
+  const toggleTerpilih = (id: string) => {
+    setTerpilih((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const gantiSort = (judul: string) => {
+    if (sortKolom === judul) setSortNaik(!sortNaik);
+    else {
+      setSortKolom(judul);
+      setSortNaik(true);
+    }
+    setPage(1);
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -164,7 +314,7 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
       const rawJson = XLSX.utils.sheet_to_json<Record<string, any>>(firstSheet);
 
       if (rawJson.length === 0) {
-        alert('File Excel kosong atau tidak memiliki baris data.');
+        notify('Berkas Excel kosong atau tidak memiliki baris data.', 'error');
         return;
       }
 
@@ -180,383 +330,546 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
       }
     } catch (err: any) {
       console.error('Gagal membaca berkas Excel:', err);
-      alert(`Gagal memproses berkas Excel: ${err?.message || 'Format tidak dikenali'}`);
+      notify(`Gagal memproses berkas Excel: ${err?.message || 'Format tidak dikenali'}`, 'error');
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
-  const handleExport = () => {
-    const columns = [
-      'No', 'Wilayah', 'Sandi Cabang', 'Branch Code', 'Kode Cabang', 'Nama Outlet', 'Status Outlet',
-      'ALAMAT', 'KODE POS', 'Kelurahan', 'Kecamatan', 'Dati II', 'Provinsi', 'KODE POS PTEN',
-      'ORGANISASI TUJUAN', 'Tipe Unit', '3 Role Lengkap', 'Status',
-    ];
-    const data = filtered.map((r, i) => ({
-      No: i + 1,
-      Wilayah: r.wilayah,
-      'Sandi Cabang': r.sandiCabang,
-      'Branch Code': r.branchCode,
-      'Kode Cabang': r.kodeCabang,
-      'Nama Outlet': r.namaOutlet,
-      'Status Outlet': r.statusOutlet,
-      ALAMAT: r.alamat,
-      'KODE POS': r.kodePosKelurahan || r.kodePosPten,
-      Kelurahan: r.kelurahan,
-      Kecamatan: r.kecamatan,
-      'Dati II': r.kotaPtenMax15 || r.kotaPten,
-      Provinsi: r.provinsi,
-      'KODE POS PTEN': r.kodePosPten,
-      'ORGANISASI TUJUAN': r.organisasiTujuan,
-      'Tipe Unit': r.tipeUnit,
-      '3 Role Lengkap': r.is3RoleLengkap ? 'LENGKAP' : `${r.roleGrandTotal}/3 BELUM`,
-      Status: r.isFinalApproved ? 'FINAL' : r.statusAnalisa,
-    }));
+  /** Berkas Excel berkepala warna + lebar kolom + satu baris contoh, siap diisi & diunggah balik. */
+  const handleUnduhTemplate = () => {
+    const contoh: Record<string, string | number> = {};
+    KOLOM_FINAL.forEach((k) => {
+      contoh[k.judul] = CONTOH_KOLOM[k.judul] ?? '';
+    });
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(data, { header: columns });
-    applyStandardSheetStyle(ws, columns, data.length);
-    XLSX.utils.book_append_sheet(wb, ws, 'FINAL_DATA');
-    XLSX.writeFile(wb, `Final_Data_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    const kolomJudul = KOLOM_FINAL.map((k) => k.judul);
+    const ws = XLSX.utils.json_to_sheet([contoh], { header: kolomJudul });
+    applyStandardSheetStyle(ws, kolomJudul, 1);
+    XLSX.utils.book_append_sheet(wb, ws, 'TEMPLATE_FINAL');
+    XLSX.writeFile(wb, 'Template_Final_Data.xlsx');
+    notify('Template terunduh — isi kolomnya (baris contoh boleh dihapus) lalu unggah kembali lewat "Unggah Excel".', 'info');
   };
+
+  // Ekspor mengikuti FILTER wilayah yang aktif, tapi TIDAK mengikuti sort layar:
+  // urutan baris tetap seperti saat data masuk (permintaan pemilik produk).
+  const handleExport = () => {
+    const kolomJudul = KOLOM_FINAL.map((k) => k.judul);
+    const data = tersaring.map((r, i) => barisKeExcel(r, i + 1));
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(data, { header: kolomJudul });
+    applyStandardSheetStyle(ws, kolomJudul, data.length);
+    XLSX.utils.book_append_sheet(wb, ws, 'FINAL_DATA');
+    const lingkup = wilayahFilter === 'ALL' ? 'Semua_Wilayah' : formatWilayahCode(wilayahFilter).replace(/\s+/g, '_');
+    XLSX.writeFile(wb, `Final_Data_${lingkup}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    notify(`Mengekspor ${data.length.toLocaleString('id-ID')} baris (${lingkup.replace('_', ' ')}) sesuai urutan data masuk.`, 'info');
+  };
+
+  const adaPilihan = idTerpilihAktif.length > 0;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '2rem' }}>
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileUpload}
-        accept=".xlsx,.xls"
-        style={{ display: 'none' }}
-      />
-      <div className="glass-card" style={{ padding: '1.15rem 1.35rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.9rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
-            <ClipboardCheck size={19} color="#0ab39c" />
-            <div>
-              <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#212529' }}>Final Data</div>
-              <div style={{ fontSize: '0.74rem', color: '#878a99' }}>
-                {rows.length.toLocaleString('id-ID')} baris hasil analisa yang telah disetujui
+      <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".xlsx,.xls" style={{ display: 'none' }} />
+
+      {/* 1. Header halaman — sama seperti menu Wilayah / PTEN / Cabang */}
+      <div className="glass-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.85rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+          <div
+            style={{
+              width: '42px',
+              height: '42px',
+              borderRadius: '8px',
+              background: 'linear-gradient(135deg, rgba(10, 179, 156, 0.15) 0%, rgba(64, 81, 137, 0.15) 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#0ab39c',
+              border: '1px solid rgba(10, 179, 156, 0.3)',
+              flexShrink: 0,
+            }}
+          >
+            <ClipboardCheck size={22} />
+          </div>
+          <div>
+            <h3 className="section-title" style={{ margin: 0 }}>Final Data (Hasil Analisa 3 Fase)</h3>
+            <div style={{ fontSize: '0.74rem', color: '#878a99', marginTop: '0.15rem' }}>
+              {rows.length.toLocaleString('id-ID')} baris tervalidasi · {wilayahOptions.length} wilayah ·
+              {' '}kode pos yang sudah ada di sini tidak dianalisa ulang sampai dikembalikan (Revisi)
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={() => {
+              if (rows.length === 0) return;
+              setKonfirmasi({ kind: 'returnAll', ids: rows.map((r) => r.id) });
+            }}
+            disabled={rows.length === 0}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.76rem' }}
+            title="Kembalikan SELURUH baris ke menu Data Analyst (mulai Fase 1)"
+          >
+            <Undo2 size={13} /> Kembalikan Semua
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={() => fileInputRef.current?.click()}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.76rem', color: '#405189', borderColor: '#405189' }}
+            title="Unggah berkas Excel (.xlsx) — baris baru masuk ke Data Analyst untuk divalidasi"
+          >
+            <Upload size={13} /> Unggah Excel
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={handleUnduhTemplate}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.76rem' }}
+            title="Unduh berkas Excel berkepala warna sesuai format kolom Final Data"
+          >
+            <Download size={13} /> Template Excel
+          </button>
+          <button
+            type="button"
+            className="btn btn-success btn-sm"
+            onClick={handleExport}
+            disabled={tersaring.length === 0}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.76rem', fontWeight: 700 }}
+            title={
+              wilayahFilter === 'ALL'
+                ? `Unduh semua ${rows.length.toLocaleString('id-ID')} baris, urutan sesuai data masuk`
+                : `Unduh ${tersaring.length.toLocaleString('id-ID')} baris wilayah ${formatWilayahCode(wilayahFilter)}, urutan sesuai data masuk`
+            }
+          >
+            <FileSpreadsheet size={13} /> Export Excel {wilayahFilter === 'ALL' ? '(Semua)' : `(${formatWilayahCode(wilayahFilter)})`}
+          </button>
+        </div>
+      </div>
+
+      {/* 2. Kartu metrik */}
+      <div className="metrics-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+        <div className="metric-card emerald">
+          <div className="metric-header">
+            <span className="metric-title">Total Baris Final</span>
+            <div className="metric-icon-bubble"><ClipboardCheck size={14} /></div>
+          </div>
+          <div className="metric-value">{metrics.total.toLocaleString('id-ID')}</div>
+          <div className="metric-footer">
+            {wilayahFilter === 'ALL' ? 'seluruh wilayah' : `filter aktif: ${formatWilayahCode(wilayahFilter)}`} · {tersaring.length.toLocaleString('id-ID')} tampil
+          </div>
+        </div>
+        <div className="metric-card cyan">
+          <div className="metric-header">
+            <span className="metric-title">Wilayah</span>
+            <div className="metric-icon-bubble"><Building2 size={14} /></div>
+          </div>
+          <div className="metric-value">{metrics.wilayah.toLocaleString('id-ID')}</div>
+          <div className="metric-footer">kanwil/cabang utama terdaftar</div>
+        </div>
+        <div className="metric-card blue">
+          <div className="metric-header">
+            <span className="metric-title">KC / KCP</span>
+            <div className="metric-icon-bubble"><ShieldCheck size={14} /></div>
+          </div>
+          <div className="metric-value">{metrics.kc.toLocaleString('id-ID')} / {metrics.kcp.toLocaleString('id-ID')}</div>
+          <div className="metric-footer">cabang utama vs outlet pembantu</div>
+        </div>
+        <div className="metric-card purple">
+          <div className="metric-header">
+            <span className="metric-title">3 Role Lengkap</span>
+            <div className="metric-icon-bubble"><CheckCircle2 size={14} /></div>
+          </div>
+          <div className="metric-value">{metrics.roleLengkap.toLocaleString('id-ID')}</div>
+          <div className="metric-footer">sales + 2 verifikator terisi</div>
+        </div>
+      </div>
+
+      {/* 3. Kartu tabel */}
+      {rows.length === 0 ? (
+        <div className="glass-card" style={{ padding: '3.5rem 2rem', textAlign: 'center', border: '1px dashed #ced4da', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(10,179,156,0.1)', color: '#0ab39c', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <ClipboardCheck size={28} />
+          </div>
+          <div>
+            <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#212529', margin: '0 0 0.4rem' }}>Belum Ada Final Data</h4>
+            <p style={{ fontSize: '0.82rem', color: '#878a99', maxWidth: '480px', margin: 0, lineHeight: 1.5 }}>
+              Setujui seluruh fase di menu Data Analyst lalu klik &quot;Saya Setuju (Masuk ke Final Analisa)&quot;, atau unggah berkas Excel lewat tombol di atas.
+            </p>
+          </div>
+          <button type="button" className="btn btn-outline" onClick={() => fileInputRef.current?.click()} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 1.25rem' }}>
+            <Upload size={16} /> Pilih Berkas Excel
+          </button>
+        </div>
+      ) : (
+        <div className="glass-card" style={{ padding: '1.15rem 1.35rem' }}>
+          <div className="filter-toolbar" style={{ marginBottom: '0.9rem' }}>
+            <div className="filter-group" style={{ flex: 1, minWidth: '260px' }}>
+              <div className="search-input-wrapper" style={{ flex: 1 }}>
+                <Search size={15} style={{ position: 'absolute', left: '0.65rem', color: '#878a99', pointerEvents: 'none' }} />
+                <input
+                  type="text"
+                  className="search-input"
+                  style={{ width: '100%' }}
+                  placeholder="Cari outlet, kelurahan, kecamatan, kota, kode pos, sandi..."
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setPage(1);
+                  }}
+                />
               </div>
+              <select
+                className="filter-select"
+                value={wilayahFilter}
+                onChange={(e) => {
+                  setWilayahFilter(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="ALL">Semua Wilayah ({wilayahOptions.length})</option>
+                {wilayahOptions.map((w) => (
+                  <option key={w} value={w}>
+                    {formatWilayahCode(w)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="filter-group">
+              <label style={{ fontSize: '0.78rem', color: '#878a99' }}>Tampilkan:</label>
+              <select
+                className="filter-select"
+                value={String(pageSize)}
+                onChange={(e) => {
+                  setPageSize(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value));
+                  setPage(1);
+                }}
+              >
+                <option value={25}>25 Baris</option>
+                <option value={50}>50 Baris</option>
+                <option value={100}>100 Baris</option>
+                <option value="ALL">Lihat Semua ({tersaring.length.toLocaleString('id-ID')})</option>
+              </select>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => {
-                if (rows.length === 0) return;
-                setConfirmAction({ kind: 'returnAll' });
-              }}
-              disabled={rows.length === 0}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.76rem' }}
-              title="Kembalikan seluruh baris ke menu Data Analyst"
-            >
-              <Undo2 size={13} /> Kembalikan ke Data Analyst
-            </button>
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => fileInputRef.current?.click()}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.76rem', color: '#405189', borderColor: '#405189' }}
-              title="Unggah berkas Excel (.xlsx) untuk menambahkan data ke Data Analyst"
-            >
-              <Upload size={13} /> Unggah Excel
-            </button>
-            <button
-              type="button"
-              className="btn btn-success btn-sm"
-              onClick={handleExport}
-              disabled={filtered.length === 0}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.76rem', fontWeight: 700 }}
-            >
-              <FileSpreadsheet size={13} /> Export Excel
-            </button>
-          </div>
-        </div>
 
-        {/* Card informasi ringkas */}
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.8rem' }}>
-          {[
-            { icon: <ClipboardCheck size={13} />, label: 'Total Baris', value: metrics.total, color: '#405189' },
-            { icon: <Building2 size={13} />, label: 'KC', value: metrics.kc, color: '#0ab39c' },
-            { icon: <Building2 size={13} />, label: 'KCP', value: metrics.kcp, color: '#f7b84b' },
-            { icon: <ShieldCheck size={13} />, label: '3 Role Lengkap', value: metrics.roleLengkap, color: '#7048e8' },
-            { icon: <ClipboardCheck size={13} />, label: 'Wilayah', value: metrics.wilayah, color: '#299cdb' },
-          ].map((m, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', border: '1px solid #e9ebec', borderRadius: '6px', padding: '0.4rem 0.7rem', background: '#fbfcfd' }}>
-              <span style={{ color: m.color }}>{m.icon}</span>
-              <span style={{ fontSize: '0.7rem', color: '#64748b' }}>{m.label}</span>
-              <strong style={{ fontSize: '0.8rem', color: '#212529' }}>{m.value.toLocaleString('id-ID')}</strong>
+          {adaPilihan && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                flexWrap: 'wrap',
+                marginBottom: '0.7rem',
+                padding: '0.5rem 0.7rem',
+                background: '#f6f9fc',
+                border: '1px solid #dfe7ef',
+                borderRadius: '6px',
+              }}
+            >
+              <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#405189' }}>
+                {idTerpilihAktif.length.toLocaleString('id-ID')} baris terpilih
+              </span>
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => setKonfirmasi({ kind: 'return', ids: idTerpilihAktif })} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem', color: '#d97706', borderColor: 'rgba(217,119,6,0.4)' }}>
+                <RotateCcw size={12} /> Kembalikan ke Data Analyst
+              </button>
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => setKonfirmasi({ kind: 'delete', ids: idTerpilihAktif })} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem', color: '#f06548', borderColor: 'rgba(240,101,72,0.4)' }}>
+                <Trash2 size={12} /> Hapus Terpilih
+              </button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setTerpilih(new Set())} style={{ fontSize: '0.75rem' }}>
+                Batalkan pilihan
+              </button>
+              <span style={{ fontSize: '0.72rem', color: '#878a99' }}>
+                (berlaku untuk {paginated.length.toLocaleString('id-ID')} baris yang sedang tampil)
+              </span>
             </div>
-          ))}
-        </div>
+          )}
 
-        <div style={{ display: 'flex', gap: '0.6rem', marginBottom: '0.8rem', flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative', flex: 1, minWidth: '240px' }}>
-            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#878a99' }} />
-            <input
-              type="text"
-              className="search-input"
-              style={{ paddingLeft: '1.9rem' }}
-              placeholder="Cari outlet, kota, kelurahan, kode pos, sandi, role..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setPage(1);
-              }}
-            />
-          </div>
-          <select className="filter-select" value={wilayahFilter} onChange={(e) => { setWilayahFilter(e.target.value); setPage(1); }}>
-            <option value="ALL">Semua Wilayah ({wilayahOptions.length})</option>
-            {wilayahOptions.map((w) => (
-              <option key={w} value={w}>
-                {formatWilayahCode(w)}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', maxHeight: '580px', overflow: 'auto' }}>
-          <table className="modern-table" style={{ width: 'max-content', minWidth: '1450px', fontSize: '0.76rem' }}>
-            <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
-              <tr>
-                <th style={{ width: '70px', textAlign: 'center' }}>Wilayah</th>
-                <th style={{ width: '90px', textAlign: 'center' }}>Sandi Cabang</th>
-                <th style={{ width: '90px', textAlign: 'center' }}>Branch Code</th>
-                <th style={{ width: '90px', textAlign: 'center' }}>Kode Cabang</th>
-                <th style={{ minWidth: '160px' }}>Nama Outlet</th>
-                <th style={{ width: '90px', textAlign: 'center' }}>Status Outlet</th>
-                <th style={{ minWidth: '200px' }}>ALAMAT</th>
-                <th style={{ width: '80px', textAlign: 'center' }} title="Kode pos dari data PTEN (hasil tabrakan Fase 1)">KODE POS</th>
-                <th style={{ minWidth: '130px' }}>Kelurahan</th>
-                <th style={{ minWidth: '130px' }}>Kecamatan</th>
-                <th style={{ minWidth: '150px' }} title="Kolom PTEN KOTA/KABUPATEN MAX 15 DIGIT">Dati II (Kota/Kab MAX 15)</th>
-                <th style={{ minWidth: '130px' }}>Provinsi</th>
-                <th style={{ width: '90px', textAlign: 'center' }}>Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tampil.length === 0 ? (
+          <div ref={scrollRef} className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', maxHeight: '580px', overflow: 'auto' }}>
+            <table className="modern-table" style={{ width: 'max-content', minWidth: '1500px', fontSize: '0.76rem' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
                 <tr>
-                  <td colSpan={13} style={{ textAlign: 'center', padding: '2rem', color: '#878a99' }}>
-                    {rows.length === 0
-                      ? 'Belum ada Final Data — setujui seluruh fase di menu Data Analyst lalu klik "Saya Setuju (Masuk ke Final Analisa)".'
-                      : 'Tidak ada baris yang cocok dengan pencarian/filter.'}
-                  </td>
+                  <th style={{ width: '34px', minWidth: '34px', textAlign: 'center', position: 'sticky', left: 0, background: '#f3f6f9', zIndex: 13, borderRight: '1px solid #e9ebec' }} title="Pilih semua baris pada halaman ini">
+                    <input type="checkbox" checked={semuaHalamanTerpilih} onChange={gantiPilihanSemua} aria-label="Pilih semua baris pada halaman ini" style={{ cursor: 'pointer' }} />
+                  </th>
+                  {KOLOM_FINAL.map((k) => {
+                    const aktif = sortKolom === k.judul;
+                    const Ikon = aktif ? (sortNaik ? ArrowUp : ArrowDown) : ChevronsUpDown;
+                    return (
+                      <th
+                        key={k.judul}
+                        onClick={() => gantiSort(k.judul)}
+                        title={`Klik untuk urutkan ${k.judul} ${aktif ? (sortNaik ? '(naik — klik untuk turun)' : '(turun — klik untuk naik)') : '(belum diurutkan)'}`}
+                        style={{
+                          ...k.style,
+                          background: WARNA_TH[k.grup],
+                          color: '#ffffff',
+                          textAlign: k.tengah ? 'center' : 'left',
+                          cursor: 'pointer',
+                          userSelect: 'none',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', justifyContent: k.tengah ? 'center' : 'flex-start' }}>
+                          {k.judul === 'No' ? '#' : k.judul}
+                          <Ikon size={11} style={{ opacity: aktif ? 1 : 0.55, flexShrink: 0 }} />
+                        </span>
+                      </th>
+                    );
+                  })}
+                  <th style={{ width: '210px', textAlign: 'center', background: '#f3f6f9', color: '#495057', position: 'sticky', right: 0, zIndex: 12, borderLeft: '1px solid #e9ebec' }}>Aksi</th>
                 </tr>
-              ) : (
-                tampil.map((r, i) => (
-                  <tr key={r.id || `${hal}-${i}`}>
-                    <td style={{ textAlign: 'center' }}>
-                      <span className="badge badge-level1">{r.wilayah}</span>
-                    </td>
-                    <td className="code-cell" style={{ textAlign: 'center' }}>{r.sandiCabang}</td>
-                    <td className="code-cell" style={{ textAlign: 'center' }}>{r.branchCode || '-'}</td>
-                    <td className="code-cell" style={{ textAlign: 'center' }}>{r.kodeCabang || '-'}</td>
-                    <td style={{ fontWeight: 600, color: '#405189' }}>{r.namaOutlet}</td>
-                    <td style={{ textAlign: 'center' }}>{r.statusOutlet || '-'}</td>
-                    <td style={{ maxWidth: '260px' }} title={r.alamat || ''}>{r.alamat || '-'}</td>
-                    <td className="code-cell" style={{ textAlign: 'center', color: '#0ab39c', fontWeight: 700 }} title={r.kodePosKelurahan && r.kodePosKelurahan !== r.kodePosPten ? `Kode pos kelurahan ini sendiri: ${r.kodePosKelurahan}` : undefined}>
-                      {r.kodePosPten || r.kodePosKelurahan || '-'}
-                    </td>
-                    <td>{r.kelurahan}</td>
-                    <td>{r.kecamatan}</td>
-                    <td>{r.kotaPtenMax15 || r.kotaPten}</td>
-                    <td>{r.provinsi}</td>
-                    <td style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'inline-flex', gap: '0.3rem', alignItems: 'center' }}>
-                        <button
-                          type="button"
-                          className="btn btn-outline btn-sm"
-                          onClick={() => setDetailRow(r)}
-                          title="Lihat detail lengkap baris ini"
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.7rem', padding: '0.25rem 0.5rem', color: '#405189', borderColor: 'rgba(64,81,137,0.4)' }}
-                        >
-                          <Eye size={12} /> Detail
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-outline btn-sm"
-                          onClick={() => setConfirmAction({ kind: 'revise', row: r })}
-                          title="Kembalikan ke Data Analyst mulai Fase 1"
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.7rem', padding: '0.25rem 0.5rem', color: '#d97706', borderColor: 'rgba(217,119,6,0.4)' }}
-                        >
-                          <RotateCcw size={12} /> Revisi
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-outline btn-sm"
-                          onClick={() => setConfirmAction({ kind: 'delete', row: r })}
-                          title="Hapus permanen dari Final Data"
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.7rem', padding: '0.25rem 0.5rem', color: '#f06548', borderColor: 'rgba(240,101,72,0.4)' }}
-                        >
-                          <Trash2 size={12} /> Hapus
-                        </button>
-                      </div>
+              </thead>
+              <tbody>
+                {paginated.length === 0 ? (
+                  <tr>
+                    <td colSpan={KOLOM_FINAL.length + 2} style={{ textAlign: 'center', padding: '2rem', color: '#878a99' }}>
+                      Tidak ada baris yang cocok dengan pencarian/filter.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {filtered.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.7rem' }}>
-            <span style={{ fontSize: '0.74rem', color: '#878a99' }}>
-              Menampilkan {(hal - 1) * PAGE_SIZE + 1}–{Math.min(hal * PAGE_SIZE, filtered.length)} dari {filtered.length.toLocaleString('id-ID')} baris
-            </span>
-            <div style={{ display: 'flex', gap: '0.35rem' }}>
-              <button type="button" className="btn btn-outline btn-sm" disabled={hal <= 1} onClick={() => setPage(hal - 1)}>← Prev</button>
-              <span style={{ alignSelf: 'center', fontSize: '0.74rem', color: '#878a99' }}>Hal {hal} / {totalHal}</span>
-              <button type="button" className="btn btn-outline btn-sm" disabled={hal >= totalHal} onClick={() => setPage(hal + 1)}>Next →</button>
-            </div>
+                ) : (
+                  <>
+                    {win.active && win.padTop > 0 && <tr aria-hidden="true" style={{ height: `${win.padTop}px` }} />}
+                    {rendered.map((r, i) => {
+                      const idx = offset + i;
+                      return (
+                        <tr key={r.id || `${hal}-${idx}`} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
+                          <td style={{ width: '34px', minWidth: '34px', textAlign: 'center', position: 'sticky', left: 0, zIndex: 6, background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd', borderRight: '1px solid #e9ebec' }}>
+                            <input type="checkbox" checked={terpilih.has(r.id)} onChange={() => toggleTerpilih(r.id)} aria-label={`Pilih baris ${nomorAsli.get(r.id) ?? r.no}`} style={{ cursor: 'pointer' }} />
+                          </td>
+                          {KOLOM_FINAL.map((k) => {
+                            const nilai = k.judul === 'No' ? (nomorAsli.get(r.id) ?? r.no) : k.nilai(r);
+                            const sel: React.CSSProperties = {
+                              ...(k.style || {}),
+                              textAlign: k.tengah ? 'center' : 'left',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              ...(k.mono ? { fontFamily: 'var(--font-mono)' } : {}),
+                              ...(k.judul === 'Nama Outlet' ? { fontWeight: 600, color: '#405189' } : {}),
+                              ...(k.judul === 'Wilayah' ? { fontWeight: 700, color: '#405189' } : {}),
+                            };
+                            const teks = String(nilai);
+                            return (
+                              <td key={k.judul} style={sel} title={teks.length > 18 ? teks : undefined}>
+                                {teks}
+                              </td>
+                            );
+                          })}
+                          <td style={{ textAlign: 'center', position: 'sticky', right: 0, background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd', borderLeft: '1px solid #e9ebec', zIndex: 6 }}>
+                            <div style={{ display: 'inline-flex', gap: '0.3rem', alignItems: 'center' }}>
+                              <button
+                                type="button"
+                                className="btn btn-outline btn-sm"
+                                onClick={() => setDetailRow(r)}
+                                title="Lihat detail lengkap baris ini"
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.7rem', padding: '0.25rem 0.5rem', color: '#405189', borderColor: 'rgba(64,81,137,0.4)' }}
+                              >
+                                <Eye size={12} /> Detail
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-outline btn-sm"
+                                onClick={() => setKonfirmasi({ kind: 'return', ids: [r.id] })}
+                                title="Kembalikan ke Data Analyst mulai Fase 1"
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.7rem', padding: '0.25rem 0.5rem', color: '#d97706', borderColor: 'rgba(217,119,6,0.4)' }}
+                              >
+                                <RotateCcw size={12} /> Revisi
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-outline btn-sm"
+                                onClick={() => setKonfirmasi({ kind: 'delete', ids: [r.id] })}
+                                title="Hapus permanen dari Final Data"
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.7rem', padding: '0.25rem 0.5rem', color: '#f06548', borderColor: 'rgba(240,101,72,0.4)' }}
+                              >
+                                <Trash2 size={12} /> Hapus
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {win.active && win.padBottom > 0 && <tr aria-hidden="true" style={{ height: `${win.padBottom}px` }} />}
+                  </>
+                )}
+              </tbody>
+            </table>
           </div>
-        )}
 
-        <ConfirmDialog
-          isOpen={confirmAction !== null}
-          icon={<AlertTriangle size={20} />}
-          accent={confirmAction?.kind === 'delete' ? '#f06548' : '#f7b84b'}
-          title={
-            confirmAction?.kind === 'delete' ? 'Hapus Data Final?'
-              : confirmAction?.kind === 'revise' ? 'Revisi Baris?'
-                : 'Kembalikan ke Data Analyst?'
-          }
-          message={
-            confirmAction?.kind === 'delete' && confirmAction.row
-              ? `Baris #${confirmAction.row.no} (${confirmAction.row.kelurahan}, ${confirmAction.row.kotaPtenMax15 || confirmAction.row.kotaPten}) akan DIHAPUS PERMANEN dari Final Data. Baris ini bisa dianalisa ulang dari awal bila diperlukan.`
-                : confirmAction?.kind === 'revise' && confirmAction.row
-                  ? `Baris #${confirmAction.row.no} (${confirmAction.row.namaOutlet}) akan keluar dari Final Data dan kembali ke Data Analyst mulai Fase 1 untuk diproses ulang.`
-                    : `${rows.length.toLocaleString('id-ID')} baris akan dikembalikan ke Data Analyst mulai Fase 1 (persetujuan tiap fase dilepas, sama seperti "Revisi" per baris). Final Data akan kosong.`
-          }
-          confirmLabel={confirmAction?.kind === 'delete' ? 'Ya, Hapus Permanen' : 'Ya, Lanjutkan'}
-          onConfirm={() => {
-            if (!confirmAction) return;
-            if (confirmAction.kind === 'returnAll') onReturnAll();
-            else if (confirmAction.kind === 'revise' && confirmAction.row) onReturnRow(confirmAction.row.id);
-            else if (confirmAction.kind === 'delete' && confirmAction.row) onDeleteRow(confirmAction.row.id);
-            setConfirmAction(null);
-          }}
-          onClose={() => setConfirmAction(null)}
-        />
-
-        {detailRow && (
-          <DialogPanel
-            onClose={() => setDetailRow(null)}
-            label="Detail baris Final Data"
-            backdropClassName=""
-            backdropStyle={{ position: 'fixed', inset: 0, zIndex: 1070, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', padding: '1rem' }}
-            className=""
-            style={{ width: '100%', maxWidth: '860px', maxHeight: '86vh', overflowY: 'auto', background: '#ffffff', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.18)', border: '1px solid #e9ebec' }}
-          >
-              <div style={{ padding: '1.1rem 1.4rem 0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #eef1f4' }}>
-                <div>
-                  <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#212529', margin: 0 }}>
-                    Detail Baris #{detailRow.no} — {detailRow.namaOutlet}
-                  </h3>
-                  <span style={{ fontSize: '0.74rem', color: '#878a99' }}>
-                    {detailRow.kelurahan}, {detailRow.kotaPtenMax15 || detailRow.kotaPten} · Kode Pos {detailRow.kodePosPten}
-                  </span>
+          {tersaring.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.7rem', gap: '0.6rem', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.74rem', color: '#878a99' }}>
+                {pageSize === 'ALL'
+                  ? `Menampilkan seluruh ${tersaring.length.toLocaleString('id-ID')} baris (urutan asli data masuk${sortKolom ? ` · sedang diurutkan: ${sortKolom}` : ''})`
+                  : `Menampilkan ${(hal - 1) * pageSize + 1}–${Math.min(hal * pageSize, tersaring.length)} dari ${tersaring.length.toLocaleString('id-ID')} baris`}
+              </span>
+              {pageSize !== 'ALL' && totalHal > 1 && (
+                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                  <button type="button" className="btn btn-outline btn-sm" disabled={hal <= 1} onClick={() => setPage(hal - 1)}>← Prev</button>
+                  <span style={{ fontSize: '0.74rem', color: '#878a99' }}>Hal {hal} / {totalHal}</span>
+                  <button type="button" className="btn btn-outline btn-sm" disabled={hal >= totalHal} onClick={() => setPage(hal + 1)}>Next →</button>
                 </div>
-                <button type="button" onClick={() => setDetailRow(null)} aria-label="Tutup detail" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#adb5bd', padding: '0.2rem', display: 'flex' }}>
-                  <X size={18} />
+              )}
+              {sortKolom && (
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setSortKolom(''); setPage(1); }} style={{ fontSize: '0.74rem' }} title="Kembalikan urutan asli (urutan data masuk)">
+                  <Undo2 size={12} /> Urutan asli
                 </button>
-              </div>
-              <div style={{ padding: '0.9rem 1.4rem 1.2rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '0.55rem 1.1rem', fontSize: '0.78rem' }}>
-                {([
-                  ['Fase 1 — Kota/Kabupaten', detailRow.kotaPtenMax15 || detailRow.kotaPten],
-                  ['Fase 1 — Kode Pos PTEN', detailRow.kodePosPten],
-                  ['Fase 1 — Kode Pos Kelurahan', detailRow.kodePosKelurahan || '—'],
-                  ['Fase 1 — Kelurahan', detailRow.kelurahan],
-                  ['Fase 1 — Kecamatan', detailRow.kecamatan],
-                  ['Fase 1 — Provinsi', detailRow.provinsi],
-                  ['Fase 1 — Status PTEN', detailRow.statusPten],
-                  ['Fase 1 — Penempatan', detailRow.placementStatus],
-                  ['Fase 1 — Metode', detailRow.placementMethod],
-                  ['Fase 2 — Wilayah', detailRow.wilayah],
-                  ['Fase 2 — Sandi Cabang', detailRow.sandiCabang],
-                  ['Fase 2 — Cabang', detailRow.cabang],
-                  ['Fase 2 — Branch Code', detailRow.branchCode],
-                  ['Fase 2 — Kode Cabang', detailRow.kodeCabang],
-                  ['Fase 2 — Status Outlet', detailRow.statusOutlet],
-                  ['Fase 2 — ALAMAT', detailRow.alamat],
-                  ['Fase 3 — Organisasi Tujuan', detailRow.organisasiTujuan],
-                  ['Fase 3 — Tipe Unit', detailRow.tipeUnit],
-                  ['Fase 3 — CABSAL / CABAPV1 / CABAPV2', `${detailRow.roleCabsal} / ${detailRow.roleCabapv1} / ${detailRow.roleCabapv2}`],
-                  ['Fase 3 — 3 Role Lengkap', detailRow.is3RoleLengkap ? 'LENGKAP' : 'BELUM'],
-                  ['Fase 3 — Alur Wondr', detailRow.alurWondr],
-                  ['Fase 3 — Skor Keyakinan', `${detailRow.confidenceScore}%`],
-                  ['Status Analisa', detailRow.isFinalApproved ? 'FINAL' : detailRow.statusAnalisa],
-                ] as [string, string | number][]).map(([label, value]) => (
-                  <div key={label} style={{ borderBottom: '1px dashed #eef1f4', paddingBottom: '0.3rem' }}>
-                    <div style={{ fontSize: '0.66rem', color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{label}</div>
-                    <div style={{ color: '#212529', fontWeight: 600, wordBreak: 'break-word' }}>{String(value || '-')}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ padding: '0.9rem 1.4rem', borderTop: '1px solid #eef1f4', display: 'flex', justifyContent: 'flex-end' }}>
-                <button type="button" className="btn btn-outline btn-sm" onClick={() => setDetailRow(null)} style={{ padding: '0.45rem 1.1rem', fontSize: '0.8rem' }}>
-                  Tutup
-                </button>
-              </div>
-          </DialogPanel>
-        )}
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
-        {importSummary && (
-          <DialogPanel
-            onClose={() => setImportSummary(null)}
-            label="Hasil Impor Excel"
-            backdropClassName=""
-            backdropStyle={{ position: 'fixed', inset: 0, zIndex: 1070, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', padding: '1rem' }}
-            className=""
-            style={{ width: '100%', maxWidth: '520px', background: '#ffffff', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.18)', border: '1px solid #e9ebec' }}
-          >
-            <div style={{ padding: '1.2rem 1.4rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.75rem', borderBottom: '1px solid #eef1f4' }}>
-              <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <CheckCircle2 size={22} color="#16a34a" />
-              </div>
-              <div style={{ flex: 1 }}>
-                <h3 style={{ fontSize: '0.98rem', fontWeight: 800, color: '#212529', margin: 0 }}>
-                  Impor Berkas Selesai
+      <ConfirmDialog
+        isOpen={konfirmasi !== null}
+        icon={<AlertTriangle size={20} />}
+        accent={konfirmasi?.kind === 'delete' ? '#f06548' : '#f7b84b'}
+        title={
+          konfirmasi?.kind === 'delete' ? 'Hapus Data Final?'
+            : konfirmasi?.kind === 'return' ? 'Kembalikan ke Data Analyst?'
+              : 'Kembalikan SELURUH Data Final?'
+        }
+        message={
+          konfirmasi?.kind === 'delete'
+            ? `${(konfirmasi.ids.length).toLocaleString('id-ID')} baris akan DIHAPUS PERMANEN dari Final Data. Baris yang dihapus tidak lagi dikecualikan, jadi Analisa berikutnya memproses kelurahan itu dari awal.`
+            : konfirmasi?.kind === 'return'
+              ? `${konfirmasi.ids.length.toLocaleString('id-ID')} baris akan keluar dari Final Data dan kembali ke Data Analyst mulai Fase 1 (persetujuan tiap fase dilepas).`
+              : `${rows.length.toLocaleString('id-ID')} baris akan dikembalikan ke Data Analyst mulai Fase 1. Final Data akan kosong.`
+        }
+        confirmLabel={konfirmasi?.kind === 'delete' ? 'Ya, Hapus Permanen' : 'Ya, Lanjutkan'}
+        onConfirm={() => {
+          if (!konfirmasi) return;
+          if (konfirmasi.kind === 'returnAll') onReturnAll();
+          else if (konfirmasi.kind === 'return') onReturnRows(konfirmasi.ids);
+          else onDeleteRows(konfirmasi.ids);
+          setTerpilih(new Set());
+          setKonfirmasi(null);
+        }}
+        onClose={() => setKonfirmasi(null)}
+      />
+
+      {detailRow && (
+        <DialogPanel
+          onClose={() => setDetailRow(null)}
+          label="Detail baris Final Data"
+          backdropClassName=""
+          backdropStyle={{ position: 'fixed', inset: 0, zIndex: 1070, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', padding: '1rem' }}
+          className=""
+          style={{ width: '100%', maxWidth: '860px', maxHeight: '86vh', overflowY: 'auto', background: '#ffffff', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.18)', border: '1px solid #e9ebec' }}
+        >
+            <div style={{ padding: '1.1rem 1.4rem 0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #eef1f4' }}>
+              <div>
+                <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#212529', margin: 0 }}>
+                  Detail Baris #{nomorAsli.get(detailRow.id) ?? detailRow.no} — {detailRow.namaOutlet}
                 </h3>
                 <span style={{ fontSize: '0.74rem', color: '#878a99' }}>
-                  {importSummary.fileName}
+                  {detailRow.kelurahan}, {detailRow.kotaPtenMax15 || detailRow.kotaPten} · Kode Pos {detailRow.kodePosPten}
                 </span>
               </div>
-              <button type="button" onClick={() => setImportSummary(null)} aria-label="Tutup laporan" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#adb5bd', padding: '0.2rem', display: 'flex' }}>
+              <button type="button" onClick={() => setDetailRow(null)} aria-label="Tutup detail" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#adb5bd', padding: '0.2rem', display: 'flex' }}>
                 <X size={18} />
               </button>
             </div>
-            <div style={{ padding: '1.2rem 1.4rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.9rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px' }}>
-                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#166534' }}>Baris Baru Dimasukkan ke Data Analyst</span>
-                <strong style={{ fontSize: '0.92rem', color: '#15803d' }}>{importSummary.imported.toLocaleString('id-ID')} baris</strong>
-              </div>
-              {importSummary.skippedFinal > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.9rem', background: '#fff8ec', border: '1px solid #f2d9a8', borderRadius: '6px' }}>
-                  <span style={{ fontSize: '0.8rem', color: '#8a5a00' }}>Dilewati (Sudah ada di Final Data)</span>
-                  <strong style={{ fontSize: '0.88rem', color: '#b45309' }}>{importSummary.skippedFinal.toLocaleString('id-ID')} baris</strong>
+            <div style={{ padding: '0.9rem 1.4rem 1.2rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '0.55rem 1.1rem', fontSize: '0.78rem' }}>
+              {([
+                ['Urutan masuk', nomorAsli.get(detailRow.id) ?? detailRow.no],
+                ['Fase 1 — Kota/Kabupaten', detailRow.kotaPtenMax15 || detailRow.kotaPten],
+                ['Fase 1 — Kode Pos PTEN', detailRow.kodePosPten],
+                ['Fase 1 — Kode Pos Kelurahan', detailRow.kodePosKelurahan || '—'],
+                ['Fase 1 — Kelurahan', detailRow.kelurahan],
+                ['Fase 1 — Kecamatan', detailRow.kecamatan],
+                ['Fase 1 — Provinsi', detailRow.provinsi],
+                ['Fase 1 — Status PTEN', detailRow.statusPten],
+                ['Fase 1 — Penempatan', detailRow.placementStatus],
+                ['Fase 1 — Metode', detailRow.placementMethod],
+                ['Fase 2 — Wilayah', detailRow.wilayah],
+                ['Fase 2 — Sandi Cabang', detailRow.sandiCabang],
+                ['Fase 2 — Cabang', detailRow.cabang],
+                ['Fase 2 — Branch Code', detailRow.branchCode],
+                ['Fase 2 — Kode Cabang', detailRow.kodeCabang],
+                ['Fase 2 — Status Outlet', detailRow.statusOutlet],
+                ['Fase 2 — ALAMAT', detailRow.alamat],
+                ['Fase 3 — Organisasi Tujuan', detailRow.organisasiTujuan],
+                ['Fase 3 — Tipe Unit', detailRow.tipeUnit],
+                ['Fase 3 — CABSAL / CABAPV1 / CABAPV2', `${detailRow.roleCabsal} / ${detailRow.roleCabapv1} / ${detailRow.roleCabapv2}`],
+                ['Fase 3 — 3 Role Lengkap', is3Role(detailRow) ? 'LENGKAP' : 'BELUM'],
+                ['Fase 3 — Alur Wondr', detailRow.alurWondr],
+                ['Fase 3 — Skor Keyakinan', `${detailRow.confidenceScore}%`],
+                ['Status Analisa', detailRow.isFinalApproved ? 'FINAL' : detailRow.statusAnalisa],
+              ] as [string, string | number][]).map(([label, value]) => (
+                <div key={label} style={{ borderBottom: '1px dashed #eef1f4', paddingBottom: '0.3rem' }}>
+                  <div style={{ fontSize: '0.66rem', color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{label}</div>
+                  <div style={{ color: '#212529', fontWeight: 600, wordBreak: 'break-word' }}>{String(value || '-')}</div>
                 </div>
-              )}
-              {importSummary.skippedAnalyst > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.9rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
-                  <span style={{ fontSize: '0.8rem', color: '#475569' }}>Dilewati (Sudah ada di Data Analyst)</span>
-                  <strong style={{ fontSize: '0.88rem', color: '#334155' }}>{importSummary.skippedAnalyst.toLocaleString('id-ID')} baris</strong>
-                </div>
-              )}
-              <p style={{ fontSize: '0.74rem', color: '#64748b', margin: '0.3rem 0 0', lineHeight: 1.5 }}>
-                Baris baru telah ditambahkan ke antrean <strong>Data Analyst</strong> sehingga operator dapat meninjau dan memvalidasi sebelum dijadikan Final.
-              </p>
+              ))}
             </div>
-            <div style={{ padding: '0.8rem 1.4rem', borderTop: '1px solid #eef1f4', display: 'flex', justifyContent: 'flex-end' }}>
-              <button type="button" className="btn btn-primary btn-sm" onClick={() => setImportSummary(null)} style={{ padding: '0.45rem 1.2rem', fontSize: '0.8rem', fontWeight: 600 }}>
-                Mengerti
+            <div style={{ padding: '0.9rem 1.4rem', borderTop: '1px solid #eef1f4', display: 'flex', justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => setDetailRow(null)} style={{ padding: '0.45rem 1.1rem', fontSize: '0.8rem' }}>
+                Tutup
               </button>
             </div>
-          </DialogPanel>
-        )}
-      </div>
+        </DialogPanel>
+      )}
+
+      {importSummary && (
+        <DialogPanel
+          onClose={() => setImportSummary(null)}
+          label="Hasil Impor Excel"
+          backdropClassName=""
+          backdropStyle={{ position: 'fixed', inset: 0, zIndex: 1070, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', padding: '1rem' }}
+          className=""
+          style={{ width: '100%', maxWidth: '520px', background: '#ffffff', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.18)', border: '1px solid #e9ebec' }}
+        >
+          <div style={{ padding: '1.2rem 1.4rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.75rem', borderBottom: '1px solid #eef1f4' }}>
+            <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <CheckCircle2 size={22} color="#16a34a" />
+            </div>
+            <div style={{ flex: 1 }}>
+              <h3 style={{ fontSize: '0.98rem', fontWeight: 800, color: '#212529', margin: 0 }}>
+                Impor Berkas Selesai
+              </h3>
+              <span style={{ fontSize: '0.74rem', color: '#878a99' }}>
+                {importSummary.fileName}
+              </span>
+            </div>
+            <button type="button" onClick={() => setImportSummary(null)} aria-label="Tutup laporan" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#adb5bd', padding: '0.2rem', display: 'flex' }}>
+              <X size={18} />
+            </button>
+          </div>
+          <div style={{ padding: '1.2rem 1.4rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.9rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#166534' }}>Baris Baru Dimasukkan ke Data Analyst</span>
+              <strong style={{ fontSize: '0.92rem', color: '#15803d' }}>{importSummary.imported.toLocaleString('id-ID')} baris</strong>
+            </div>
+            {importSummary.skippedFinal > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.9rem', background: '#fff8ec', border: '1px solid #f2d9a8', borderRadius: '6px' }}>
+                <span style={{ fontSize: '0.8rem', color: '#8a5a00' }}>Dilewati (Sudah ada di Final Data)</span>
+                <strong style={{ fontSize: '0.88rem', color: '#b45309' }}>{importSummary.skippedFinal.toLocaleString('id-ID')} baris</strong>
+              </div>
+            )}
+            {importSummary.skippedAnalyst > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.9rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
+                <span style={{ fontSize: '0.8rem', color: '#475569' }}>Dilewati (Sudah ada di Data Analyst)</span>
+                <strong style={{ fontSize: '0.88rem', color: '#334155' }}>{importSummary.skippedAnalyst.toLocaleString('id-ID')} baris</strong>
+              </div>
+            )}
+            <p style={{ fontSize: '0.74rem', color: '#64748b', margin: '0.3rem 0 0', lineHeight: 1.5 }}>
+              Baris baru telah ditambahkan ke antrean <strong>Data Analyst</strong> sehingga operator dapat meninjau dan memvalidasi sebelum dijadikan Final.
+            </p>
+          </div>
+          <div style={{ padding: '0.8rem 1.4rem', borderTop: '1px solid #eef1f4', display: 'flex', justifyContent: 'flex-end' }}>
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => setImportSummary(null)} style={{ padding: '0.45rem 1.2rem', fontSize: '0.8rem', fontWeight: 600 }}>
+              Mengerti
+            </button>
+          </div>
+        </DialogPanel>
+      )}
     </div>
   );
 };
+
+/** `is3RoleLengkap` bisa tidak terisi pada baris impor lama — hitung dari QRS-nya saja. */
+function is3Role(r: AnalystRow): boolean {
+  return !!r.is3RoleLengkap || (r.roleCabsal === 1 && r.roleCabapv1 === 1 && r.roleCabapv2 === 1);
+}
