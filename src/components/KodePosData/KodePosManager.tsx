@@ -588,7 +588,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
             style={{
               width: '42px',
               height: '42px',
-              borderRadius: '8px',
+              borderRadius: '6px',
               background: 'linear-gradient(135deg, rgba(64, 81, 137, 0.15) 0%, rgba(53, 119, 241, 0.15) 100%)',
               display: 'flex',
               alignItems: 'center',
@@ -625,7 +625,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                     padding: '0.15rem 0.55rem',
                     borderRadius: '4px',
                     background: 'rgba(240, 165, 0, 0.12)',
-                    color: '#b45309',
+                    color: '#d68b0c',
                     border: '1px solid rgba(240, 165, 0, 0.4)',
                     cursor: 'help',
                   }}
@@ -637,7 +637,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
             <div className="section-subtitle">
               Referensi resmi kode pos wilayah kelurahan, kecamatan, kota/kabupaten & provinsi seluruh Indonesia.
               {stats.total <= SEED_THRESHOLD && (
-                <span style={{ color: '#b45309', fontWeight: 600 }}>
+                <span style={{ color: '#d68b0c', fontWeight: 600 }}>
                   {' '}— Klik <strong>Sync Data</strong> untuk mengisi 83.000+ baris dari database cloud.
                 </span>
               )}
@@ -1132,7 +1132,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                               background: 'rgba(64, 81, 137, 0.08)',
                               padding: '0.2rem 0.55rem',
                               borderRadius: '4px',
-                              fontFamily: 'monospace',
+                              fontFamily: 'var(--font-mono)',
                               letterSpacing: '0.5px',
                             }}
                           >
@@ -1190,7 +1190,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                       <td
                         style={{
                           textAlign: 'right',
-                          fontFamily: 'monospace',
+                          fontFamily: 'var(--font-mono)',
                           fontSize: '0.74rem',
                           whiteSpace: 'nowrap',
                           color: item.latitude == null ? '#adb5bd' : '#495057',
@@ -1201,7 +1201,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                       <td
                         style={{
                           textAlign: 'right',
-                          fontFamily: 'monospace',
+                          fontFamily: 'var(--font-mono)',
                           fontSize: '0.74rem',
                           whiteSpace: 'nowrap',
                           color: item.longitude == null ? '#adb5bd' : '#495057',
@@ -1218,7 +1218,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                                 fontSize: '0.78rem',
                                 fontWeight: 700,
                                 letterSpacing: '0.03em',
-                                color: item.geoTerverifikasi ? '#0ab39c' : '#b45309',
+                                color: item.geoTerverifikasi ? '#0ab39c' : '#d68b0c',
                               }}
                             >
                               {item.geoTerverifikasi ? 'GOOGLE' : 'PERKIRAAN'}
@@ -1387,7 +1387,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                     maxLength={5}
                     placeholder="Contoh: 10110"
                     className="form-control"
-                    style={{ fontFamily: 'monospace', fontWeight: 700 }}
+                    style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}
                     value={formData.kodePos}
                     onChange={(e) => setFormData({ ...formData, kodePos: e.target.value.replace(/\D/g, '') })}
                   />
@@ -1467,7 +1467,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                       inputMode="decimal"
                       placeholder="-6.1762629"
                       className="form-control"
-                      style={{ fontFamily: 'monospace' }}
+                      style={{ fontFamily: 'var(--font-mono)' }}
                       value={formTitik.lat}
                       onChange={(e) => setFormTitik((t) => ({ ...t, lat: e.target.value }))}
                     />
@@ -1479,7 +1479,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                       inputMode="decimal"
                       placeholder="106.8293243"
                       className="form-control"
-                      style={{ fontFamily: 'monospace' }}
+                      style={{ fontFamily: 'var(--font-mono)' }}
                       value={formTitik.lng}
                       onChange={(e) => setFormTitik((t) => ({ ...t, lng: e.target.value }))}
                     />
@@ -1544,7 +1544,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                     style={{
                       background: '#f8f9fa',
                       border: '1px solid #eef0f3',
-                      borderRadius: '10px',
+                      borderRadius: '6px',
                       padding: '0.9rem 1rem',
                     }}
                   >
@@ -1569,7 +1569,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                               fontSize: '1.85rem',
                               fontWeight: 800,
                               color: '#f06548',
-                              fontFamily: 'monospace',
+                              fontFamily: 'var(--font-mono)',
                               lineHeight: 1.1,
                               wordBreak: 'break-all',
                             }}
@@ -1621,7 +1621,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                         style={{
                           background: '#f8f9fa',
                           border: '1px solid #eef0f3',
-                          borderRadius: '10px',
+                          borderRadius: '6px',
                           padding: '0.65rem 0.8rem',
                           minWidth: 0,
                         }}
@@ -1661,7 +1661,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                         minHeight: '300px',
                         width: '100%',
                         border: '1px solid #eef0f3',
-                        borderRadius: '10px',
+                        borderRadius: '6px',
                         background: '#f1f3f5',
                       }}
                     />
@@ -1671,7 +1671,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                         flex: 1,
                         minHeight: '300px',
                         border: '1px dashed #d0d7de',
-                        borderRadius: '10px',
+                        borderRadius: '6px',
                         background: '#f8f9fa',
                         display: 'flex',
                         flexDirection: 'column',
@@ -1694,7 +1694,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                     style={{
                       background: '#f8f9fa',
                       border: '1px solid #eef0f3',
-                      borderRadius: '10px',
+                      borderRadius: '6px',
                       padding: '0.65rem 0.8rem',
                       display: 'flex',
                       alignItems: 'center',
@@ -1706,7 +1706,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                       <div style={{ fontSize: '0.66rem', color: '#878a99', fontWeight: 700, letterSpacing: '0.04em' }}>
                         TITIK KOORDINAT
                       </div>
-                      <div style={{ fontWeight: 700, color: '#212529', fontFamily: 'monospace', fontSize: '0.84rem' }}>
+                      <div style={{ fontWeight: 700, color: '#212529', fontFamily: 'var(--font-mono)', fontSize: '0.84rem' }}>
                         {detailItem.latitude == null || detailItem.longitude == null
                           ? 'belum ada'
                           : `${detailItem.latitude.toFixed(7)}, ${detailItem.longitude.toFixed(7)}`}

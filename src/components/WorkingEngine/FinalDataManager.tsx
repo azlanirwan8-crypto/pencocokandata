@@ -320,7 +320,7 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
             style={{
               width: '42px',
               height: '42px',
-              borderRadius: '8px',
+              borderRadius: '6px',
               background: 'linear-gradient(135deg, rgba(10, 179, 156, 0.15) 0%, rgba(64, 81, 137, 0.15) 100%)',
               display: 'flex',
               alignItems: 'center',
@@ -527,7 +527,7 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
               <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#405189' }}>
                 {idTerpilihAktif.length.toLocaleString('id-ID')} baris terpilih
               </span>
-              <button type="button" className="btn btn-outline btn-sm" onClick={() => setKonfirmasi({ kind: 'return', ids: idTerpilihAktif })} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem', color: '#d97706', borderColor: 'rgba(217,119,6,0.4)' }}>
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => setKonfirmasi({ kind: 'return', ids: idTerpilihAktif })} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem', color: '#d68b0c', borderColor: 'rgba(214,139,12,0.4)' }}>
                 <RotateCcw size={12} /> Kembalikan ke Data Analyst
               </button>
               <button type="button" className="btn btn-outline btn-sm" onClick={() => setKonfirmasi({ kind: 'delete', ids: idTerpilihAktif })} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem', color: '#f06548', borderColor: 'rgba(240,101,72,0.4)' }}>
@@ -629,7 +629,7 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
                                 className="btn btn-outline btn-sm"
                                 onClick={() => setKonfirmasi({ kind: 'return', ids: [r.id] })}
                                 title="Kembalikan ke Data Analyst mulai Fase 1"
-                                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.7rem', padding: '0.25rem 0.5rem', color: '#d97706', borderColor: 'rgba(217,119,6,0.4)' }}
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.7rem', padding: '0.25rem 0.5rem', color: '#d68b0c', borderColor: 'rgba(214,139,12,0.4)' }}
                               >
                                 <RotateCcw size={12} /> Revisi
                               </button>
@@ -715,9 +715,9 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
           onClose={() => setDetailRow(null)}
           label="Detail baris Final Data"
           backdropClassName=""
-          backdropStyle={{ position: 'fixed', inset: 0, zIndex: 1070, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', padding: '1rem' }}
+          backdropStyle={{ position: 'fixed', inset: 0, zIndex: 1070, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(33,37,41, 0.65)', backdropFilter: 'blur(4px)', padding: '1rem' }}
           className=""
-          style={{ width: '100%', maxWidth: '860px', maxHeight: '86vh', overflowY: 'auto', background: '#ffffff', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.18)', border: '1px solid #e9ebec' }}
+          style={{ width: '100%', maxWidth: '860px', maxHeight: '86vh', overflowY: 'auto', background: '#ffffff', borderRadius: '6px', boxShadow: '0 8px 16px rgba(0,0,0,0.15)', border: '1px solid #e9ebec' }}
         >
             <div style={{ padding: '1.1rem 1.4rem 0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #eef1f4' }}>
               <div>
@@ -778,13 +778,13 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
           onClose={() => setImportSummary(null)}
           label="Hasil Impor Excel"
           backdropClassName=""
-          backdropStyle={{ position: 'fixed', inset: 0, zIndex: 1070, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', padding: '1rem' }}
+          backdropStyle={{ position: 'fixed', inset: 0, zIndex: 1070, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(33,37,41, 0.65)', backdropFilter: 'blur(4px)', padding: '1rem' }}
           className=""
-          style={{ width: '100%', maxWidth: '520px', background: '#ffffff', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.18)', border: '1px solid #e9ebec' }}
+          style={{ width: '100%', maxWidth: '520px', background: '#ffffff', borderRadius: '6px', boxShadow: '0 8px 16px rgba(0,0,0,0.15)', border: '1px solid #e9ebec' }}
         >
           <div style={{ padding: '1.2rem 1.4rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.75rem', borderBottom: '1px solid #eef1f4' }}>
-            <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <CheckCircle2 size={22} color="#16a34a" />
+            <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: '#e8f7f5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <CheckCircle2 size={22} color="#0ab39c" />
             </div>
             <div style={{ flex: 1 }}>
               <h3 style={{ fontSize: '0.98rem', fontWeight: 800, color: '#212529', margin: 0 }}>
@@ -799,23 +799,23 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
             </button>
           </div>
           <div style={{ padding: '1.2rem 1.4rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.9rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.9rem', background: '#e8f7f5', border: '1px solid #b7ebe4', borderRadius: '6px' }}>
               <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#166534' }}>Baris Baru Dimasukkan ke Data Analyst</span>
               <strong style={{ fontSize: '0.92rem', color: '#15803d' }}>{importSummary.imported.toLocaleString('id-ID')} baris</strong>
             </div>
             {importSummary.skippedFinal > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.9rem', background: '#fff8ec', border: '1px solid #f2d9a8', borderRadius: '6px' }}>
                 <span style={{ fontSize: '0.8rem', color: '#8a5a00' }}>Dilewati (Sudah ada di Final Data)</span>
-                <strong style={{ fontSize: '0.88rem', color: '#b45309' }}>{importSummary.skippedFinal.toLocaleString('id-ID')} baris</strong>
+                <strong style={{ fontSize: '0.88rem', color: '#d68b0c' }}>{importSummary.skippedFinal.toLocaleString('id-ID')} baris</strong>
               </div>
             )}
             {importSummary.skippedAnalyst > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.9rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
-                <span style={{ fontSize: '0.8rem', color: '#475569' }}>Dilewati (Sudah ada di Data Analyst)</span>
-                <strong style={{ fontSize: '0.88rem', color: '#334155' }}>{importSummary.skippedAnalyst.toLocaleString('id-ID')} baris</strong>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.9rem', background: '#f9fbfd', border: '1px solid #e9ebec', borderRadius: '6px' }}>
+                <span style={{ fontSize: '0.8rem', color: '#495057' }}>Dilewati (Sudah ada di Data Analyst)</span>
+                <strong style={{ fontSize: '0.88rem', color: '#495057' }}>{importSummary.skippedAnalyst.toLocaleString('id-ID')} baris</strong>
               </div>
             )}
-            <p style={{ fontSize: '0.74rem', color: '#64748b', margin: '0.3rem 0 0', lineHeight: 1.5 }}>
+            <p style={{ fontSize: '0.74rem', color: '#878a99', margin: '0.3rem 0 0', lineHeight: 1.5 }}>
               Baris baru telah ditambahkan ke antrean <strong>Data Analyst</strong> sehingga operator dapat meninjau dan memvalidasi sebelum dijadikan Final.
             </p>
           </div>

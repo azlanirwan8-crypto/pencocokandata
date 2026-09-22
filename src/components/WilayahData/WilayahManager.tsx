@@ -481,7 +481,7 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
             style={{
               width: '42px',
               height: '42px',
-              borderRadius: '8px',
+              borderRadius: '6px',
               background: 'linear-gradient(135deg, rgba(64, 81, 137, 0.15) 0%, rgba(10, 179, 156, 0.15) 100%)',
               display: 'flex',
               alignItems: 'center',
@@ -910,7 +910,7 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
                       <td>
                         <span
                           style={{
-                            background: '#eff2f7',
+                            background: '#eef1f4',
                             padding: '0.15rem 0.4rem',
                             borderRadius: '3px',
                             fontSize: '0.72rem',
@@ -1127,7 +1127,7 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
           style={{
             background: 'rgba(64, 81, 137, 0.04)',
             border: '1px solid rgba(64, 81, 137, 0.15)',
-            borderRadius: '8px',
+            borderRadius: '6px',
             padding: '1rem 1.25rem',
             display: 'flex',
             alignItems: 'flex-start',

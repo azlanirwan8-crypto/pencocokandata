@@ -796,10 +796,10 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       const titik = titikUntukBaris(r) || undefined;
 
       let anomalyTitle = 'Anomali Status Analisa';
-      let anomalyBadge: { text: string; bg: string; color: string; border: string } = { text: r.statusAnalisa, bg: '#fee2e2', color: '#991b1b', border: '#f87171' };
+      let anomalyBadge: { text: string; bg: string; color: string; border: string } = { text: r.statusAnalisa, bg: '#fdeae5', color: '#991b1b', border: '#f87171' };
       if (primary === 'PULAU') {
         anomalyTitle = 'Penempatan Beda Pulau';
-        anomalyBadge = { text: 'Beda Pulau', bg: '#fee2e2', color: '#991b1b', border: '#f87171' };
+        anomalyBadge = { text: 'Beda Pulau', bg: '#fdeae5', color: '#991b1b', border: '#f87171' };
       } else if (primary === 'PROVINSI') {
         anomalyTitle = 'Penempatan Beda Provinsi';
         anomalyBadge = { text: 'Beda Provinsi', bg: '#ffedd5', color: '#9a3412', border: '#fb923c' };
@@ -808,7 +808,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         anomalyBadge = { text: `Penempatan ${r.placementStatus}`, bg: '#ffedd5', color: '#9a3412', border: '#fb923c' };
       } else if (primary === 'ROLE') {
         anomalyTitle = 'Role Belum Lengkap';
-        anomalyBadge = { text: `Role ${r.roleGrandTotal}/3`, bg: '#fef3c7', color: '#92400e', border: '#fcd34d' };
+        anomalyBadge = { text: `Role ${r.roleGrandTotal}/3`, bg: '#fef3c7', color: '#92400e', border: '#f7b84b' };
       }
 
       return {
@@ -1014,7 +1014,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       if (pin.finalStatus) {
         fillColor = pin.finalStatus === 'ANOMALI' ? '#f06548' : pin.finalStatus === 'REVIEW' ? '#f0ad4e' : '#0ab39c';
       } else if (isSelected) {
-        fillColor = '#f59e0b';
+        fillColor = '#f7b84b';
       } else if (isMulti) {
         fillColor = '#f06548';
       } else if (hasMatch) {
@@ -1037,7 +1037,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
       // Instant lightweight hover tooltip
       const finalBadge = pin.finalStatus
-        ? `<div style="font-weight:700;font-size:11px;margin-top:3px;color:${pin.finalStatus === 'ANOMALI' ? '#f06548' : pin.finalStatus === 'REVIEW' ? '#b45309' : '#0ab39c'};">
+        ? `<div style="font-weight:700;font-size:11px;margin-top:3px;color:${pin.finalStatus === 'ANOMALI' ? '#f06548' : pin.finalStatus === 'REVIEW' ? '#d68b0c' : '#0ab39c'};">
             ${pin.finalStatus === 'ANOMALI' ? '⛔ Anomali' : pin.finalStatus === 'REVIEW' ? '⚠️ Perlu Review' : '✓ Final · Terverifikasi'} · ${pin.finalCount?.toLocaleString('id-ID') ?? pin.branchCount.toLocaleString('id-ID')} baris
           </div>`
         : '';
@@ -1132,7 +1132,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           keyboard: false,
         });
         cluster.bindTooltip(
-          `<div style="font-size:11px;font-weight:600;">${b.pins.length.toLocaleString('id-ID')} titik · ${totalBranches.toLocaleString('id-ID')} cabang<br/><span style="color:#64748b;font-weight:400;">Klik untuk memperbesar</span></div>`,
+          `<div style="font-size:11px;font-weight:600;">${b.pins.length.toLocaleString('id-ID')} titik · ${totalBranches.toLocaleString('id-ID')} cabang<br/><span style="color:#878a99;font-weight:400;">Klik untuk memperbesar</span></div>`,
           { direction: 'top', className: 'bni-map-fast-tooltip' }
         );
         cluster.on('mouseover', () => { if (mapContainerRef.current) mapContainerRef.current.style.cursor = 'zoom-in'; });
@@ -1316,16 +1316,16 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           const curvedPolyline = L.polyline(arcPoints, {
             pane: 'arcsPane',
             renderer: svgRendererRef.current || undefined,
-            color: isAnomalyGroup ? '#f06548' : isApprox ? '#94a3b8' : '#0ab39c',
+            color: isAnomalyGroup ? '#f06548' : isApprox ? '#adb5bd' : '#0ab39c',
             weight: Math.min(2 + Math.log10(count + 1), 4),
             opacity: isApprox ? 0.55 : 0.82,
             interactive: false, // Prevents curved lines from blocking clicks on markers
             className: isApprox ? 'bni-flow-arc bni-flow-arc--approx' : 'bni-flow-arc',
           });
           curvedPolyline.bindTooltip(
-            `<div style="font-size:11px;font-weight:600;color:${isApprox ? '#475569' : '#0f766e'};">
+            `<div style="font-size:11px;font-weight:600;color:${isApprox ? '#495057' : '#0f766e'};">
               ${count.toLocaleString('id-ID')} data dari ${group.label}<br/>
-              <span style="font-size:10px;color:${isAnomalyGroup ? '#b91c1c' : '#64748b'};">${isAnomalyGroup ? '⚠️ Audit anomali →' : '➔'} ${selectedPin.primaryOutletName}${isApprox ? ' · <em>titik asal perkiraan (pusat wilayah)</em>' : ''}</span>
+              <span style="font-size:10px;color:${isAnomalyGroup ? '#f06548' : '#878a99'};">${isAnomalyGroup ? '⚠️ Audit anomali →' : '➔'} ${selectedPin.primaryOutletName}${isApprox ? ' · <em>titik asal perkiraan (pusat wilayah)</em>' : ''}</span>
             </div>`,
             { sticky: true }
           );
@@ -1337,7 +1337,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       const originDot = L.circleMarker(isOnSite ? destCoords : startCoords, {
         pane: 'arcsPane',
         radius: isOnSite ? 4 : Math.min(5 + Math.log10(count + 1) * 2, 9),
-        fillColor: isOnSite ? '#a78bfa' : isApprox ? '#94a3b8' : '#38bdf8',
+        fillColor: isOnSite ? '#a78bfa' : isApprox ? '#adb5bd' : '#38bdf8',
         color: '#ffffff',
         weight: 1.8,
         fillOpacity: 0.95,
@@ -1354,11 +1354,11 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       });
       originDot.bindTooltip(
         `<div style="font-size:11px;padding:2px 4px;max-width:280px;">
-          <strong style="color:#0284c7;">📍 ${group.label}</strong>
-          <div style="color:#334155;margin-top:2px;">${count.toLocaleString('id-ID')} data dari Excel upload</div>
-          <div style="color:#64748b;font-size:10px;">Sumber koordinat: ${group.source}</div>
-          <div style="color:#64748b;font-size:10px;margin-top:3px;">📮 ${firstRow['KODE POS'] || '-'} · ${firstRow.Kecamatan || ''}</div>
-          <div style="color:#475569;font-size:10px;margin-top:3px;max-height:96px;overflow:auto;">
+          <strong style="color:#299cdb;">📍 ${group.label}</strong>
+          <div style="color:#495057;margin-top:2px;">${count.toLocaleString('id-ID')} data dari Excel upload</div>
+          <div style="color:#878a99;font-size:10px;">Sumber koordinat: ${group.source}</div>
+          <div style="color:#878a99;font-size:10px;margin-top:3px;">📮 ${firstRow['KODE POS'] || '-'} · ${firstRow.Kecamatan || ''}</div>
+          <div style="color:#495057;font-size:10px;margin-top:3px;max-height:96px;overflow:auto;">
             ${group.rows.slice(0, 12).map((row) => `No. ${row.No || '-'} · ${row['Nama Outlet'] || '-'} · ${row.ALAMAT || '-'} · KP ${row['KODE POS'] || '-'}`).join('<br/>')}
             ${group.rows.length > 12 ? `<br/>+${group.rows.length - 12} record lainnya` : ''}
           </div>
@@ -1486,7 +1486,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         padding: '1.15rem 1.25rem',
         background: '#ffffff',
         border: '1px solid #e9ebec',
-        borderRadius: '8px',
+        borderRadius: '6px',
         boxShadow: '0 2px 4px rgba(56, 65, 74, 0.05)',
       }}
     >
@@ -1499,7 +1499,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           flexWrap: 'wrap',
           gap: '1rem',
           marginBottom: '0.85rem',
-          borderBottom: '1px solid #eef0f2',
+          borderBottom: '1px solid #eef1f4',
           paddingBottom: '0.75rem',
         }}
       >
@@ -1508,7 +1508,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
             style={{
               width: '38px',
               height: '38px',
-              borderRadius: '7px',
+              borderRadius: '6px',
               background: 'linear-gradient(135deg, rgba(64, 81, 137, 0.12) 0%, rgba(10, 179, 156, 0.15) 100%)',
               display: 'flex',
               alignItems: 'center',
@@ -1531,7 +1531,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                   background: 'rgba(10, 179, 156, 0.12)',
                   color: '#0ab39c',
                   padding: '0.12rem 0.45rem',
-                  borderRadius: '8px',
+                  borderRadius: '6px',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '0.25rem',
@@ -1614,8 +1614,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           marginBottom: '0.65rem',
           padding: '0.4rem 0.6rem',
           background: '#f8f9fa',
-          borderRadius: '7px',
-          border: '1px solid #eef0f2',
+          borderRadius: '6px',
+          border: '1px solid #eef1f4',
           flexWrap: 'wrap',
         }}
       >
@@ -1738,7 +1738,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <Filter size={12} color="#878a99" />
               {displayScope === 'ALL' && (
-                <><span style={{ width: 9, height: 9, borderRadius: '50%', background: '#6366f1', display: 'inline-block', flexShrink: 0 }} /><span>Master + Final ({allPins.length + finalPins.length})</span></>
+                <><span style={{ width: 9, height: 9, borderRadius: '50%', background: '#6559cc', display: 'inline-block', flexShrink: 0 }} /><span>Master + Final ({allPins.length + finalPins.length})</span></>
               )}
               {displayScope === 'FINAL_ONLY' && (
                 <><span style={{ width: 9, height: 9, borderRadius: '50%', background: '#0ab39c', display: 'inline-block', flexShrink: 0 }} /><span>Data Final ({finalPins.length})</span></>
@@ -1747,7 +1747,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 <><span style={{ width: 9, height: 9, borderRadius: '50%', background: '#f06548', display: 'inline-block', flexShrink: 0 }} /><span>Multi-Outlet ({stats.multiOutletPins})</span></>
               )}
               {displayScope === 'SELECTED_ONLY' && (
-                <><span style={{ width: 9, height: 9, borderRadius: '50%', background: '#f59e0b', display: 'inline-block', flexShrink: 0 }} /><span>Titik Terpilih</span></>
+                <><span style={{ width: 9, height: 9, borderRadius: '50%', background: '#f7b84b', display: 'inline-block', flexShrink: 0 }} /><span>Titik Terpilih</span></>
               )}
             </span>
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0, transition: 'transform 0.15s', transform: showFilterDropdown ? 'rotate(180deg)' : 'rotate(0deg)' }}>
@@ -1763,16 +1763,16 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 top: 'calc(100% + 4px)',
                 left: 0,
                 background: '#ffffff',
-                border: '1px solid #e2e8f0',
-                borderRadius: '8px',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                border: '1px solid #e9ebec',
+                borderRadius: '6px',
+                boxShadow: '0 5px 10px rgba(30, 32, 37, 0.12)',
                 zIndex: 2000,
                 minWidth: '230px',
                 overflow: 'hidden',
               }}
             >
               {/* Section label */}
-              <div style={{ padding: '0.4rem 0.75rem 0.2rem', fontSize: '0.63rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <div style={{ padding: '0.4rem 0.75rem 0.2rem', fontSize: '0.63rem', fontWeight: 700, color: '#adb5bd', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Filter Tampilan Peta
               </div>
 
@@ -1780,7 +1780,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
               {([
                 {
                   value: 'ALL' as DisplayScope,
-                  dot: '#6366f1',
+                  dot: '#6559cc',
                   label: 'Master + Final',
                   count: allPins.length + finalPins.length,
                   desc: 'Titik cabang master dan titik Data Final digambar bersama',
@@ -1804,7 +1804,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 },
                 {
                   value: 'SELECTED_ONLY' as DisplayScope,
-                  dot: '#f59e0b',
+                  dot: '#f7b84b',
                   label: 'Titik Terpilih',
                   count: null,
                   desc: 'Cabang yang diklik',
@@ -1838,7 +1838,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                       textAlign: 'left',
                       transition: 'background 0.1s',
                     }}
-                    onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = '#f8fafc'; }}
+                    onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = '#f9fbfd'; }}
                     onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
                   >
                     {/* Colored bullet */}
@@ -1860,10 +1860,10 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                           <span style={{
                             fontSize: '0.68rem',
                             fontWeight: 700,
-                            background: isActive ? opt.dot : '#f1f5f9',
-                            color: isActive ? '#fff' : '#64748b',
+                            background: isActive ? opt.dot : '#f8f9fa',
+                            color: isActive ? '#fff' : '#878a99',
                             padding: '0.05rem 0.4rem',
-                            borderRadius: '10px',
+                            borderRadius: '6px',
                             minWidth: '28px',
                             textAlign: 'center',
                           }}>
@@ -1871,7 +1871,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                           </span>
                         )}
                       </span>
-                      <span style={{ fontSize: '0.65rem', color: '#94a3b8', display: 'block', marginTop: '1px' }}>{opt.desc}</span>
+                      <span style={{ fontSize: '0.65rem', color: '#adb5bd', display: 'block', marginTop: '1px' }}>{opt.desc}</span>
                     </span>
                   </button>
                 );
@@ -2005,7 +2005,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 background: '#ffffff',
                 border: '1px solid #e9ebec',
                 borderRadius: '6px',
-                boxShadow: '0 6px 16px rgba(0,0,0,0.12)',
+                boxShadow: '0 5px 10px rgba(30, 32, 37, 0.12)',
                 zIndex: 1050,
                 maxHeight: '220px',
                 overflowY: 'auto',
@@ -2063,11 +2063,11 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       </div>
 
       {showAnomalyPanel && (
-        <div className="bni-pop" style={{ marginBottom: '0.65rem', padding: '0.75rem 0.95rem', border: '1px solid rgba(240,101,72,0.35)', borderRadius: '8px', background: '#fff8f6', color: '#7c2d12', fontSize: '0.74rem' }}>
+        <div className="bni-pop" style={{ marginBottom: '0.65rem', padding: '0.75rem 0.95rem', border: '1px solid rgba(240,101,72,0.35)', borderRadius: '6px', background: '#fff8f6', color: '#7c2d12', fontSize: '0.74rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.6rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <strong style={{ fontSize: '0.82rem', color: '#991b1b' }}>⚠️ Anomali Data Final</strong>
-              <span style={{ fontSize: '0.7rem', padding: '0.15rem 0.45rem', borderRadius: '4px', background: '#fee2e2', color: '#991b1b', fontWeight: 700 }}>
+              <span style={{ fontSize: '0.7rem', padding: '0.15rem 0.45rem', borderRadius: '4px', background: '#fdeae5', color: '#991b1b', fontWeight: 700 }}>
                 {anomalyRows.length} baris
               </span>
             </div>
@@ -2143,11 +2143,11 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                       {anomalyBadge.text}
                     </span>
                     <span>
-                      <strong style={{ color: '#405189' }}>{row.namaOutlet || '-'}</strong> · <span style={{ color: '#b91c1c', fontWeight: 600 }}>{row.kotaPtenMax15 || row.kotaPten || '-'} ({row.provinsi || '-'})</span> · 📮 {row.kodePosPten || '-'}
+                      <strong style={{ color: '#405189' }}>{row.namaOutlet || '-'}</strong> · <span style={{ color: '#f06548', fontWeight: 600 }}>{row.kotaPtenMax15 || row.kotaPten || '-'} ({row.provinsi || '-'})</span> · 📮 {row.kodePosPten || '-'}
                     </span>
                     <span style={{ width: '100%', fontSize: '0.68rem', color: '#9a3412' }}>{reasons.join(' · ')}</span>
                     {!hasCoord && (
-                      <span style={{ fontSize: '0.66rem', color: '#64748b', background: '#f1f5f9', padding: '0.1rem 0.35rem', borderRadius: '3px' }}>tanpa titik kodepos</span>
+                      <span style={{ fontSize: '0.66rem', color: '#878a99', background: '#f8f9fa', padding: '0.1rem 0.35rem', borderRadius: '3px' }}>tanpa titik kodepos</span>
                     )}
                   </div>
                   <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#c2410c', flexShrink: 0 }}>Lihat di peta →</span>
@@ -2187,15 +2187,15 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
               zIndex: 900,
               pointerEvents: 'none',
               background: 'rgba(255,255,255,0.95)',
-              border: '1px solid #e2e8f0',
-              borderRadius: '8px',
-              boxShadow: '0 4px 12px rgba(15,23,42,0.12)',
+              border: '1px solid #e9ebec',
+              borderRadius: '6px',
+              boxShadow: '0 4px 12px rgba(33,37,41,0.12)',
               padding: '0.5rem 0.65rem',
               display: 'flex',
               flexDirection: 'column',
               gap: '0.35rem',
               fontSize: '0.68rem',
-              color: '#475569',
+              color: '#495057',
               maxWidth: '240px',
             }}
           >
@@ -2206,7 +2206,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
               <span><span style={{ marginRight: 4 }}>🏢</span>Multi-Outlet (banyak cabang 1 titik)</span>
               <span><span style={{ marginRight: 4 }}>📮</span>Kode Pos (Data Final)</span>
             </div>
-            <div style={{ height: 1, background: '#e2e8f0' }} />
+            <div style={{ height: 1, background: '#e9ebec' }} />
             {finalBelumTerpetakan.length > 0 ? (
               <span style={{ color: '#c2410c', fontWeight: 600, lineHeight: 1.35 }}>
                 {finalBelumTerpetakan.length.toLocaleString('id-ID')} baris Data Final belum terpetakan — tidak ketemu di Data Kode Pos lewat kode pos MAUPUN kelurahan+kecamatan+kota
@@ -2216,7 +2216,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 Seluruh baris Data Final terpetakan
               </span>
             )}
-            <div style={{ height: 1, background: '#e2e8f0' }} />
+            <div style={{ height: 1, background: '#e9ebec' }} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
               <span style={{ fontWeight: 700, color: '#405189', marginBottom: '0.05rem' }}>Status Titik</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
@@ -2224,7 +2224,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 <span style={{ fontWeight: 600 }}>Cabang Matched</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#6366f1', display: 'inline-block', border: '1.5px solid #fff', flexShrink: 0 }} />
+                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#6559cc', display: 'inline-block', border: '1.5px solid #fff', flexShrink: 0 }} />
                 <span style={{ fontWeight: 600 }}>Cabang Master</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
@@ -2236,7 +2236,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 <span style={{ color: '#0ab39c', fontWeight: 600 }}>Garis Lengkung Match</span>
               </div>
             </div>
-            <div style={{ height: 1, background: '#e2e8f0' }} />
+            <div style={{ height: 1, background: '#e9ebec' }} />
             <button
               type="button"
               onClick={() => setCameraLocked((v) => !v)}
@@ -2275,16 +2275,16 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 maxWidth: 'min(320px, calc(100% - 24px))',
                 padding: '0.45rem 0.65rem',
                 background: 'rgba(255, 255, 255, 0.96)',
-                border: '1px solid rgba(245, 158, 11, 0.55)',
-                borderRadius: '7px',
-                boxShadow: '0 3px 12px rgba(15, 23, 42, 0.16)',
+                border: '1px solid rgba(247,184,75, 0.55)',
+                borderRadius: '6px',
+                boxShadow: '0 3px 12px rgba(33,37,41, 0.16)',
                 color: '#92400e',
                 fontSize: '0.7rem',
                 fontWeight: 700,
                 pointerEvents: 'none',
               }}
             >
-              <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#f59e0b', flexShrink: 0 }} />
+              <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#f7b84b', flexShrink: 0 }} />
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 Dipilih: {selectedPin.primaryOutletName} · {selectedPin.kodePos}
               </span>
@@ -2370,8 +2370,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                         marginLeft: '0.4rem',
                         fontSize: '0.68rem',
                         fontWeight: 700,
-                        background: selectedPin.onlineSource === 'google' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-                        color: selectedPin.onlineSource === 'google' ? '#2563eb' : '#059669',
+                        background: selectedPin.onlineSource === 'google' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(10,179,156, 0.15)',
+                        color: selectedPin.onlineSource === 'google' ? '#3577f1' : '#0ab39c',
                         padding: '0.15rem 0.5rem',
                         borderRadius: '4px',
                         display: 'inline-flex',
@@ -2425,8 +2425,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                   }
                 }}
                 style={{
-                  background: selectedPin.matchedCount > 0 ? 'rgba(10, 179, 156, 0.08)' : '#f1f5f9',
-                  border: `1px solid ${selectedPin.matchedCount > 0 ? 'rgba(10, 179, 156, 0.3)' : '#cbd5e1'}`,
+                  background: selectedPin.matchedCount > 0 ? 'rgba(10, 179, 156, 0.08)' : '#f8f9fa',
+                  border: `1px solid ${selectedPin.matchedCount > 0 ? 'rgba(10, 179, 156, 0.3)' : '#ced4da'}`,
                   borderRadius: '6px',
                   padding: '0.55rem 0.75rem',
                   marginBottom: '0.75rem',
@@ -2438,16 +2438,16 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                    <CheckCircle size={16} color={selectedPin.matchedCount > 0 ? '#0ab39c' : '#64748b'} />
+                    <CheckCircle size={16} color={selectedPin.matchedCount > 0 ? '#0ab39c' : '#878a99'} />
                     <div>
-                      <div style={{ fontSize: '0.74rem', fontWeight: 700, color: selectedPin.matchedCount > 0 ? '#0ab39c' : '#475569' }}>
+                      <div style={{ fontSize: '0.74rem', fontWeight: 700, color: selectedPin.matchedCount > 0 ? '#0ab39c' : '#495057' }}>
                         {trackingMode === 'aceh_kim'
                           ? `ALUR ACEH: ${selectedMatchedRows.length.toLocaleString('id-ID')} DATA → KIM`
                           : selectedPin.matchedCount > 0
                           ? `TERKORELASI: ${selectedPin.matchedCount.toLocaleString('id-ID')} DATA MATCHED`
                           : 'Belum Ada Transaksi Cocok'}
                       </div>
-                      <div style={{ fontSize: '0.67rem', color: '#64748b' }}>
+                      <div style={{ fontSize: '0.67rem', color: '#878a99' }}>
                         {trackingMode === 'aceh_kim'
                           ? `${groupTargetOriginsForMap(selectedMatchedRows).length} titik kabupaten/kota Aceh`
                           : selectedPin.matchedCount > 0
@@ -2499,8 +2499,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                     fontSize: '0.71rem',
                     fontWeight: 600,
                     borderRadius: '4px',
-                    border: displayScope === 'SELECTED_ONLY' ? '1px solid #f59e0b' : '1px solid #ced4da',
-                    background: displayScope === 'SELECTED_ONLY' ? '#f59e0b' : '#ffffff',
+                    border: displayScope === 'SELECTED_ONLY' ? '1px solid #f7b84b' : '1px solid #ced4da',
+                    background: displayScope === 'SELECTED_ONLY' ? '#f7b84b' : '#ffffff',
                     color: displayScope === 'SELECTED_ONLY' ? '#ffffff' : '#495057',
                     cursor: 'pointer',
                   }}
@@ -2582,7 +2582,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                     style={{
                       fontSize: '0.68rem',
                       fontWeight: 600,
-                      background: '#eef0f7',
+                      background: '#eef1f4',
                       color: '#405189',
                       padding: '0.15rem 0.45rem',
                       borderRadius: '3px',
@@ -2594,7 +2594,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                     style={{
                       fontSize: '0.68rem',
                       fontWeight: 600,
-                      background: '#eef0f7',
+                      background: '#eef1f4',
                       color: '#495057',
                       padding: '0.15rem 0.45rem',
                       borderRadius: '3px',
@@ -2639,8 +2639,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
             <div
               style={{
                 marginBottom: '0.65rem',
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
+                background: '#f9fbfd',
+                border: '1px solid #e9ebec',
                 borderRadius: '6px',
                 padding: '0.45rem 0.65rem',
                 fontSize: '0.69rem',
@@ -2650,12 +2650,12 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ color: '#64748b', fontWeight: 600 }}>📍 Titik GPS Real:</span>
+                <span style={{ color: '#878a99', fontWeight: 600 }}>📍 Titik GPS Real:</span>
                 <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#0f766e' }}>
                   {selectedPin.lat.toFixed(6)}, {selectedPin.lng.toFixed(6)}
                 </span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#059669', fontWeight: 600, fontSize: '0.67rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#0ab39c', fontWeight: 600, fontSize: '0.67rem' }}>
                 <ShieldCheck size={12} />
                 <span>Terverifikasi Real Daratan (Benchmark Google Maps)</span>
               </div>
@@ -2757,26 +2757,26 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           className=""
           style={{
               background: '#ffffff',
-              borderRadius: '8px',
+              borderRadius: '6px',
               maxWidth: '820px',
               width: '100%',
               maxHeight: '85vh',
               display: 'flex',
               flexDirection: 'column',
-              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
-              border: '1px solid #e2e8f0',
+              boxShadow: '0 8px 16px rgba(0, 0, 0, 0.15)',
+              border: '1px solid #e9ebec',
           }}
         >
             {/* Modal Header */}
             <div
               style={{
                 padding: '1rem 1.25rem',
-                borderBottom: '1px solid #eef0f2',
+                borderBottom: '1px solid #eef1f4',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 background: '#fafbfc',
-                borderRadius: '8px 8px 0 0',
+                borderRadius: '6px 6px 0 0',
               }}
             >
               <div>
@@ -2814,7 +2814,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 gap: '0.75rem',
-                borderBottom: '1px solid #eef0f2',
+                borderBottom: '1px solid #eef1f4',
                 background: '#ffffff',
                 flexWrap: 'wrap',
               }}
@@ -2911,7 +2911,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                                   ? '#0ab39c'
                                   : row._matchLevel === 'level2'
                                   ? '#3577f1'
-                                  : '#d97706',
+                                  : '#d68b0c',
                                 padding: '0.12rem 0.45rem',
                                 borderRadius: '4px',
                                 display: 'inline-block',
@@ -2948,23 +2948,23 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                                   gap: '0.2rem',
                                   fontSize: '0.66rem',
                                   fontWeight: 700,
-                                  color: '#059669',
+                                  color: '#0ab39c',
                                   background: 'rgba(10, 179, 156, 0.12)',
                                   border: '1px solid rgba(10, 179, 156, 0.3)',
                                   borderRadius: '4px',
                                   padding: '0.1rem 0.4rem',
                                 }}
                               >
-                                <CheckCircle2 size={10} color="#059669" /> Match PTEN
+                                <CheckCircle2 size={10} color="#0ab39c" /> Match PTEN
                               </span>
                             ) : (
                               <span
                                 style={{
                                   fontSize: '0.66rem',
                                   fontWeight: 600,
-                                  color: '#6b7280',
-                                  background: '#f3f4f6',
-                                  border: '1px solid #e5e7eb',
+                                  color: '#6c757d',
+                                  background: '#f8f9fa',
+                                  border: '1px solid #e9ebec',
                                   borderRadius: '4px',
                                   padding: '0.1rem 0.4rem',
                                 }}
@@ -2988,9 +2988,9 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                                 alignItems: 'center',
                                 gap: '0.25rem',
                                 borderRadius: '4px',
-                                color: '#2563eb',
-                                background: 'rgba(37, 99, 235, 0.08)',
-                                border: '1px solid rgba(37, 99, 235, 0.2)',
+                                color: '#3577f1',
+                                background: 'rgba(53,119,241, 0.08)',
+                                border: '1px solid rgba(53,119,241, 0.2)',
                                 textDecoration: 'none',
                                 fontWeight: 600,
                               }}
@@ -3014,7 +3014,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
             <div
               style={{
                 padding: '0.75rem 1.25rem',
-                borderTop: '1px solid #eef0f2',
+                borderTop: '1px solid #eef1f4',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -3048,12 +3048,12 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
             bottom: '24px',
             right: '24px',
             zIndex: 9999,
-            background: 'rgba(15, 23, 42, 0.92)',
+            background: 'rgba(33,37,41, 0.92)',
             backdropFilter: 'blur(8px)',
             color: '#ffffff',
             padding: '0.65rem 1.1rem',
             borderRadius: '50px',
-            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2)',
+            boxShadow: '0 8px 16px rgba(0, 0, 0, 0.15)',
             display: 'flex',
             alignItems: 'center',
             gap: '0.65rem',
@@ -3065,7 +3065,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
             style={{
               width: '12px',
               height: '12px',
-              border: '2px solid #34d399',
+              border: '2px solid #0ab39c',
               borderTopColor: 'transparent',
               borderRadius: '50%',
               animation: 'qdrSpin 1s linear infinite',
@@ -3077,7 +3077,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
               {googleApiKey ? '' : ' (tanpa kunci Google)'}
             </div>
             {geocodingProgress.activeItem && (
-              <div style={{ fontSize: '0.68rem', color: '#94a3b8', maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div style={{ fontSize: '0.68rem', color: '#adb5bd', maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {geocodingProgress.activeItem}
               </div>
             )}

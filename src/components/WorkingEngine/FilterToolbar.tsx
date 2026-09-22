@@ -48,7 +48,7 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
 
         {/* Status Pencocokan Filter */}
         <div className="unified-select-box">
-          <Filter size={15} color="#94a3b8" />
+          <Filter size={15} color="#adb5bd" />
           <select
             value={statusFilter}
             onChange={(e) => onStatusFilterChange(e.target.value as any)}

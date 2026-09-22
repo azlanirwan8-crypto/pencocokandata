@@ -318,15 +318,15 @@ export function formatWilayahCode(rawWilayah: string | number): string {
 
 /**
  * Gaya Header Excel Sesuai Warna Asli File Unggahan:
- * - Biru (#366092): Kolom Master Cabang (No, Wilayah, Sandi Cabang, Branch Code, Kode Cabang, Nama Outlet, Status Outlet)
+ * - Biru (#405189): Kolom Master Cabang (No, Wilayah, Sandi Cabang, Branch Code, Kode Cabang, Nama Outlet, Status Outlet)
  * - Oranye (#E97132): Kolom Dati II / Kota
- * - Hijau (#47D359): Kolom Alamat & Lokasi Target (ALAMAT, KODE POS, Kelurahan, Kecamatan, Kode Dati II, Provinsi, Telp)
+ * - Hijau (#0ab39c): Kolom Alamat & Lokasi Target (ALAMAT, KODE POS, Kelurahan, Kecamatan, Kode Dati II, Provinsi, Telp)
  * - Kuning (#FFFF00): Kolom PTEN & Validasi (KOTA PTEN, KODE POS PTEN, CEK KODE POS + PTEN, SUMBER DATA, CEK DUPLIKAT KODE POS)
  */
 export function getHeaderStyle(col: string) {
   const norm = col.trim().toUpperCase();
 
-  // 1. Biru Navy (#366092) untuk Identitas Cabang / Master
+  // 1. Biru Navy (#405189) untuk Identitas Cabang / Master
   if ([
     'NO',
     'WILAYAH',
@@ -366,7 +366,7 @@ export function getHeaderStyle(col: string) {
     };
   }
 
-  // 3. Hijau Cerah (#47D359) untuk Wilayah Administratif & Alamat Target
+  // 3. Hijau Cerah (#0ab39c) untuk Wilayah Administratif & Alamat Target
   if ([
     'ALAMAT',
     'KODE POS',

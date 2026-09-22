@@ -17,9 +17,9 @@ const NILAI: React.CSSProperties = { flex: 1, color: '#212529', fontWeight: 600,
 
 function Kelompok({ judul, hasil, isi }: { judul: string; hasil: { label: string; alasan: string; nada: 'ok' | 'waspada' | 'buruk' }; isi: React.ReactNode }) {
   const Ikon = hasil.nada === 'ok' ? CheckCircle2 : hasil.nada === 'waspada' ? AlertTriangle : Info;
-  const warna = hasil.nada === 'ok' ? '#059669' : hasil.nada === 'waspada' ? '#d97706' : '#dc2626';
+  const warna = hasil.nada === 'ok' ? '#0ab39c' : hasil.nada === 'waspada' ? '#d68b0c' : '#f06548';
   return (
-    <section style={{ border: '1px solid #e9ebec', borderRadius: '8px', padding: '0.6rem 0.75rem', marginBottom: '0.7rem', background: '#fcfdfe' }}>
+    <section style={{ border: '1px solid #e9ebec', borderRadius: '6px', padding: '0.6rem 0.75rem', marginBottom: '0.7rem', background: '#f9fbfd' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.6rem', marginBottom: '0.4rem', flexWrap: 'nowrap' }}>
         <h5 style={{ margin: 0, fontSize: '0.82rem', color: '#405189' }}>{judul}</h5>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.7rem', fontWeight: 700, color: warna, flexShrink: 0 }} title={hasil.alasan}>
@@ -27,7 +27,7 @@ function Kelompok({ judul, hasil, isi }: { judul: string; hasil: { label: string
           {hasil.label}
         </span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.72rem', color: '#6b7280', marginBottom: '0.45rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.72rem', color: '#6c757d', marginBottom: '0.45rem' }}>
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={hasil.alasan}>{hasil.alasan}</span>
       </div>
       {isi}

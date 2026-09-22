@@ -357,7 +357,7 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
             style={{
               width: '42px',
               height: '42px',
-              borderRadius: '8px',
+              borderRadius: '6px',
               background: 'linear-gradient(135deg, rgba(64, 81, 137, 0.15) 0%, rgba(10, 179, 156, 0.15) 100%)',
               color: '#405189',
               border: '1px solid rgba(64, 81, 137, 0.2)',

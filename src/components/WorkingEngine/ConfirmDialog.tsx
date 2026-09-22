@@ -22,7 +22,7 @@ const BACKDROP: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  backgroundColor: 'rgba(15, 23, 42, 0.65)',
+  backgroundColor: 'rgba(33,37,41, 0.65)',
   backdropFilter: 'blur(4px)',
   padding: '1rem',
 };
@@ -31,8 +31,8 @@ const PANEL: React.CSSProperties = {
   width: '100%',
   maxWidth: '480px',
   background: '#ffffff',
-  borderRadius: '12px',
-  boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.18), 0 10px 10px -5px rgba(0, 0, 0, 0.06)',
+  borderRadius: '6px',
+  boxShadow: '0 8px 16px rgba(0, 0, 0, 0.15)',
   overflow: 'hidden',
   border: '1px solid #e9ebec',
 };
@@ -80,7 +80,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
               style={{
                 width: '42px',
                 height: '42px',
-                borderRadius: '10px',
+                borderRadius: '6px',
                 background: `${accent}1a`,
                 display: 'flex',
                 alignItems: 'center',
@@ -127,14 +127,14 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                 gap: '0.5rem',
                 background: '#fff8ec',
                 border: '1px solid #f5d9a8',
-                borderRadius: '8px',
+                borderRadius: '6px',
                 padding: '0.65rem 0.8rem',
                 fontSize: '0.78rem',
                 color: '#8a5a00',
                 lineHeight: 1.45,
               }}
             >
-              <AlertTriangle size={15} color="#d97706" style={{ flexShrink: 0, marginTop: '1px' }} />
+              <AlertTriangle size={15} color="#d68b0c" style={{ flexShrink: 0, marginTop: '1px' }} />
               <div>{detail}</div>
             </div>
           )}

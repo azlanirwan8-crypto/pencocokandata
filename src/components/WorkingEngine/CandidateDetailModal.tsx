@@ -126,7 +126,7 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
   const cand = selectedCand || data.candidate;
   const m = cand.master;
   const isTop1 = cand.rank === 1;
-  const themeColor = isTop1 ? '#0ab39c' : cand.rank === 2 ? '#d97706' : '#3577f1';
+  const themeColor = isTop1 ? '#0ab39c' : cand.rank === 2 ? '#d68b0c' : '#3577f1';
 
   const masterPhone = extractPhone(m);
 
@@ -217,7 +217,7 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(15, 23, 42, 0.6)',
+        backgroundColor: 'rgba(33,37,41, 0.6)',
         backdropFilter: 'blur(4px)',
         padding: '1rem',
       }}
@@ -227,8 +227,8 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
           maxWidth: '780px',
           maxHeight: '92vh',
           background: '#ffffff',
-          borderRadius: '8px',
-          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.12), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+          borderRadius: '6px',
+          boxShadow: '0 8px 16px rgba(0, 0, 0, 0.15)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -256,7 +256,7 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: isTop1 ? '#0ab39c' : '#d97706',
+                color: isTop1 ? '#0ab39c' : '#d68b0c',
               }}
             >
               <Award size={18} />
@@ -265,7 +265,7 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
               <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#212529', margin: 0 }}>
                 Detail Rekomendasi Cabang & Alasan Penilaian Skor
               </h3>
-              <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.1rem' }}>
+              <div style={{ fontSize: '0.72rem', color: '#878a99', marginTop: '0.1rem' }}>
                 Target Baris #{r.No} • {r['Nama Outlet'] || r.Cabang || 'Target'}
               </div>
             </div>
@@ -307,7 +307,7 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
           >
             {/* Header Rekomendasi Cabang */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#1e293b', fontWeight: 700, fontSize: '0.82rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#212529', fontWeight: 700, fontSize: '0.82rem' }}>
                 <Building2 size={15} color={themeColor} />
                 <span>Rekomendasi Cabang Master:</span>
                 <span
@@ -317,7 +317,7 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                     fontSize: '0.72rem',
                     fontWeight: 700,
                     background: isTop1 ? 'rgba(10, 179, 156, 0.15)' : 'rgba(247, 184, 75, 0.2)',
-                    color: isTop1 ? '#0ab39c' : '#d97706',
+                    color: isTop1 ? '#0ab39c' : '#d68b0c',
                   }}
                 >
                   {isTop1 ? '⭐ Pilihan 1 (Utama)' : `Pilihan ${cand.rank} (Alternatif)`}
@@ -328,7 +328,7 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                 style={{
                   fontSize: '0.82rem',
                   fontWeight: 700,
-                  color: isTop1 ? '#0ab39c' : '#d97706',
+                  color: isTop1 ? '#0ab39c' : '#d68b0c',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '0.25rem',
@@ -341,10 +341,10 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
             {/* Selector Tab Jika Ada Lebih dari 1 Rekomendasi */}
             {candidatesList.length > 1 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', paddingTop: '0.2rem' }}>
-                <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b' }}>Ganti Pilihan:</span>
+                <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#878a99' }}>Ganti Pilihan:</span>
                 {candidatesList.map((c) => {
                   const isSelected = c.rank === cand.rank;
-                  const btnColor = c.rank === 1 ? '#0ab39c' : c.rank === 2 ? '#d97706' : '#3577f1';
+                  const btnColor = c.rank === 1 ? '#0ab39c' : c.rank === 2 ? '#d68b0c' : '#3577f1';
                   return (
                     <button
                       key={c.rank}
@@ -356,8 +356,8 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                         fontSize: '0.72rem',
                         fontWeight: isSelected ? 700 : 500,
                         background: isSelected ? btnColor : '#ffffff',
-                        color: isSelected ? '#ffffff' : '#475569',
-                        border: `1px solid ${isSelected ? btnColor : '#cbd5e1'}`,
+                        color: isSelected ? '#ffffff' : '#495057',
+                        border: `1px solid ${isSelected ? btnColor : '#ced4da'}`,
                         cursor: 'pointer',
                         display: 'inline-flex',
                         alignItems: 'center',
@@ -372,7 +372,7 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                           padding: '0.02rem 0.3rem',
                           borderRadius: '9999px',
                           background: isSelected ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.06)',
-                          color: isSelected ? '#ffffff' : '#64748b',
+                          color: isSelected ? '#ffffff' : '#878a99',
                           fontWeight: 700,
                         }}
                       >
@@ -385,7 +385,7 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
             )}
 
             {/* Nama Cabang & Info Tag */}
-            <div style={{ fontSize: '0.96rem', fontWeight: 700, color: '#1e293b', marginTop: '0.1rem' }}>
+            <div style={{ fontSize: '0.96rem', fontWeight: 700, color: '#212529', marginTop: '0.1rem' }}>
               {m['Sandi Cabang'] || m.Cabang || m.Sandi || '-'}
               {m['Nama Outlet'] && (
                 <span style={{ fontSize: '0.86rem', color: '#405189', fontWeight: 600, marginLeft: '0.4rem' }}>
@@ -439,7 +439,7 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                     borderRadius: '4px',
                     background: '#dcfce7',
                     color: '#15803d',
-                    border: '1px solid #bbf7d0',
+                    border: '1px solid #b7ebe4',
                     fontWeight: 700,
                   }}
                 >
@@ -453,7 +453,7 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
           <div
             style={{
               background: '#ffffff',
-              border: '1px solid #e2e8f0',
+              border: '1px solid #e9ebec',
               borderRadius: '6px',
               padding: '0.85rem 1rem',
               display: 'flex',
@@ -483,7 +483,7 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                           fontSize: '0.72rem',
                           fontWeight: 700,
                           color: '#047857',
-                          background: '#d1fae5',
+                          background: '#d5f3ee',
                           border: '1px solid #a7f3d0',
                           padding: '0.15rem 0.55rem',
                           borderRadius: '4px',
@@ -502,9 +502,9 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                           gap: '0.3rem',
                           fontSize: '0.72rem',
                           fontWeight: 700,
-                          color: '#b45309',
+                          color: '#d68b0c',
                           background: '#fef3c7',
-                          border: '1px solid #fde68a',
+                          border: '1px solid #f7b84b',
                           padding: '0.15rem 0.55rem',
                           borderRadius: '4px',
                         }}
@@ -521,9 +521,9 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                         gap: '0.3rem',
                         fontSize: '0.72rem',
                         fontWeight: 600,
-                        color: '#64748b',
-                        background: '#f1f5f9',
-                        border: '1px solid #e2e8f0',
+                        color: '#878a99',
+                        background: '#f8f9fa',
+                        border: '1px solid #e9ebec',
                         padding: '0.15rem 0.55rem',
                         borderRadius: '4px',
                       }}
@@ -549,26 +549,26 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
               }}
             >
               <div>
-                <div style={{ color: '#64748b', fontSize: '0.7rem', fontWeight: 600 }}>Kota PTEN:</div>
+                <div style={{ color: '#878a99', fontSize: '0.7rem', fontWeight: 600 }}>Kota PTEN:</div>
                 <div style={{ color: '#0f766e', fontWeight: 700 }}>
-                  {r['KOTA PTEN'] || <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>-</span>}
+                  {r['KOTA PTEN'] || <span style={{ color: '#adb5bd', fontStyle: 'italic' }}>-</span>}
                 </div>
               </div>
               <div>
-                <div style={{ color: '#64748b', fontSize: '0.7rem', fontWeight: 600 }}>Kode Pos PTEN:</div>
+                <div style={{ color: '#878a99', fontSize: '0.7rem', fontWeight: 600 }}>Kode Pos PTEN:</div>
                 <div style={{ color: '#0f766e', fontWeight: 700 }}>
-                  {r['KODE POS PTEN'] || <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>-</span>}
+                  {r['KODE POS PTEN'] || <span style={{ color: '#adb5bd', fontStyle: 'italic' }}>-</span>}
                 </div>
               </div>
               <div>
-                <div style={{ color: '#64748b', fontSize: '0.7rem', fontWeight: 600 }}>Cek Duplikat Kode Pos:</div>
-                <div style={{ color: '#334155', fontWeight: 600 }}>
+                <div style={{ color: '#878a99', fontSize: '0.7rem', fontWeight: 600 }}>Cek Duplikat Kode Pos:</div>
+                <div style={{ color: '#495057', fontWeight: 600 }}>
                   {r['CEK DUPLIKAT KODE POS'] || '-'}
                 </div>
               </div>
               <div>
-                <div style={{ color: '#64748b', fontSize: '0.7rem', fontWeight: 600 }}>Sumber Validasi:</div>
-                <div style={{ color: '#334155', fontWeight: 600 }}>
+                <div style={{ color: '#878a99', fontSize: '0.7rem', fontWeight: 600 }}>Sumber Validasi:</div>
+                <div style={{ color: '#495057', fontWeight: 600 }}>
                   {r['SUMBER DATA'] || 'Database Master PTEN'}
                 </div>
               </div>
@@ -635,15 +635,15 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                       <MapPin size={20} />
                     </div>
                     <div>
-                      <div style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <div style={{ fontSize: '0.72rem', color: '#495057', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                         <span>Estimasi Jarak Fisik Real:</span>
-                        <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '0.05rem 0.35rem', borderRadius: '3px', fontSize: '0.66rem' }}>
+                        <span style={{ background: '#e0f2fe', color: '#299cdb', padding: '0.05rem 0.35rem', borderRadius: '3px', fontSize: '0.66rem' }}>
                           Terverifikasi Geografis
                         </span>
                       </div>
-                      <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#1e293b' }}>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#212529' }}>
                         {realDist.formattedDistance}{' '}
-                        <span style={{ fontSize: '0.73rem', fontWeight: 500, color: '#64748b' }}>
+                        <span style={{ fontSize: '0.73rem', fontWeight: 500, color: '#878a99' }}>
                           • {realDist.basis}
                         </span>
                       </div>
@@ -687,16 +687,16 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                 background: '#f8f9fa',
                 padding: '0.75rem 0.9rem',
                 borderRadius: '6px',
-                border: '1px solid #e2e8f0',
+                border: '1px solid #e9ebec',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '0.35rem',
               }}
             >
-              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b' }}>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#212529' }}>
                 {explanationTitle}
               </div>
-              <div style={{ fontSize: '0.78rem', color: '#475569', lineHeight: 1.55 }}>
+              <div style={{ fontSize: '0.78rem', color: '#495057', lineHeight: 1.55 }}>
                 {explanationDescription}
               </div>
             </div>
@@ -715,15 +715,15 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                 style={{
                   padding: '0.4rem 0.6rem',
                   borderRadius: '4px',
-                  background: provMatch ? '#f0fdf4' : '#fffbeb',
-                  border: provMatch ? '1px solid #bbf7d0' : '1px solid #fef3c7',
+                  background: provMatch ? '#e8f7f5' : '#fffbeb',
+                  border: provMatch ? '1px solid #b7ebe4' : '1px solid #fef3c7',
                   color: provMatch ? '#166534' : '#92400e',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.35rem',
                 }}
               >
-                {provMatch ? <Check size={13} color="#16a34a" /> : <AlertTriangle size={13} color="#d97706" />}
+                {provMatch ? <Check size={13} color="#0ab39c" /> : <AlertTriangle size={13} color="#d68b0c" />}
                 <div>
                   <strong>Provinsi: </strong>
                   <span>{provMatch ? 'Satu Provinsi' : 'Beda'}</span>
@@ -735,15 +735,15 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                 style={{
                   padding: '0.4rem 0.6rem',
                   borderRadius: '4px',
-                  background: datiMatch ? '#f0fdf4' : '#fffbeb',
-                  border: datiMatch ? '1px solid #bbf7d0' : '1px solid #fef3c7',
+                  background: datiMatch ? '#e8f7f5' : '#fffbeb',
+                  border: datiMatch ? '1px solid #b7ebe4' : '1px solid #fef3c7',
                   color: datiMatch ? '#166534' : '#92400e',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.35rem',
                 }}
               >
-                {datiMatch ? <Check size={13} color="#16a34a" /> : <AlertTriangle size={13} color="#d97706" />}
+                {datiMatch ? <Check size={13} color="#0ab39c" /> : <AlertTriangle size={13} color="#d68b0c" />}
                 <div>
                   <strong>Kota/Kab: </strong>
                   <span>{datiMatch ? 'Satu Kota' : 'Beda Kota'}</span>
@@ -755,15 +755,15 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                 style={{
                   padding: '0.4rem 0.6rem',
                   borderRadius: '4px',
-                  background: kecMatch ? '#f0fdf4' : '#f8fafc',
-                  border: kecMatch ? '1px solid #bbf7d0' : '1px solid #e2e8f0',
-                  color: kecMatch ? '#166534' : '#475569',
+                  background: kecMatch ? '#e8f7f5' : '#f9fbfd',
+                  border: kecMatch ? '1px solid #b7ebe4' : '1px solid #e9ebec',
+                  color: kecMatch ? '#166534' : '#495057',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.35rem',
                 }}
               >
-                {kecMatch ? <Check size={13} color="#16a34a" /> : <Info size={13} color="#64748b" />}
+                {kecMatch ? <Check size={13} color="#0ab39c" /> : <Info size={13} color="#878a99" />}
                 <div>
                   <strong>Kecamatan: </strong>
                   <span>{kecMatch ? 'Satu Kec.' : 'Beda Kec.'}</span>
@@ -775,15 +775,15 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                 style={{
                   padding: '0.4rem 0.6rem',
                   borderRadius: '4px',
-                  background: posMatch ? '#f0fdf4' : pos3Match ? '#f0f9ff' : '#f8fafc',
-                  border: posMatch ? '1px solid #bbf7d0' : pos3Match ? '1px solid #bae6fd' : '1px solid #e2e8f0',
-                  color: posMatch ? '#166534' : pos3Match ? '#0369a1' : '#475569',
+                  background: posMatch ? '#e8f7f5' : pos3Match ? '#f0f9ff' : '#f9fbfd',
+                  border: posMatch ? '1px solid #b7ebe4' : pos3Match ? '1px solid #d5eef8' : '1px solid #e9ebec',
+                  color: posMatch ? '#166534' : pos3Match ? '#299cdb' : '#495057',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.35rem',
                 }}
               >
-                {posMatch ? <Check size={13} color="#16a34a" /> : <Info size={13} color="#0284c7" />}
+                {posMatch ? <Check size={13} color="#0ab39c" /> : <Info size={13} color="#299cdb" />}
                 <div>
                   <strong>Kode Pos: </strong>
                   <span>{posMatch ? 'Sama' : pos3Match ? 'Satu Zona' : 'Beda Zona'}</span>
@@ -794,7 +794,7 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
 
           {/* Section: Komparasi Berdampingan Rapi & Rata Kiri-Kanan */}
           <div>
-            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', marginBottom: '0.45rem' }}>
+            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#495057', marginBottom: '0.45rem' }}>
               Perbandingan Data Lapangan (Target vs Master):
             </div>
 
@@ -802,7 +802,7 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
               {/* Kolom Kiri: Data Target Operasional */}
               <div
                 style={{
-                  border: '1px solid #e2e8f0',
+                  border: '1px solid #e9ebec',
                   borderRadius: '6px',
                   background: '#ffffff',
                   display: 'flex',
@@ -831,27 +831,27 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                 {/* Body Baris Data Target */}
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   {/* Branch Code */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Branch Code</div>
-                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
-                    <div style={{ flex: 1, color: r['Branch Code'] || r['Sandi Cabang'] || r.Cabang || r.Sandi ? '#c2410c' : '#64748b', fontWeight: 700 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Branch Code</div>
+                    <div style={{ width: '12px', color: '#ced4da' }}>:</div>
+                    <div style={{ flex: 1, color: r['Branch Code'] || r['Sandi Cabang'] || r.Cabang || r.Sandi ? '#c2410c' : '#878a99', fontWeight: 700 }}>
                       {r['Branch Code'] || r['Sandi Cabang'] || r.Cabang || r.Sandi || '-'}
                     </div>
                   </div>
 
                   {/* Nama Outlet */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Nama Outlet</div>
-                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
-                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Nama Outlet</div>
+                    <div style={{ width: '12px', color: '#ced4da' }}>:</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>
                       {r['Nama Outlet'] || r.Cabang || '-'}
                     </div>
                   </div>
 
                   {/* Status Outlet */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Status Outlet</div>
-                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Status Outlet</div>
+                    <div style={{ width: '12px', color: '#ced4da' }}>:</div>
                     <div style={{ flex: 1 }}>
                       {r['Status Outlet'] ? (
                         <span
@@ -868,100 +868,100 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                           {r['Status Outlet']}
                         </span>
                       ) : (
-                        <span style={{ color: '#94a3b8' }}>-</span>
+                        <span style={{ color: '#adb5bd' }}>-</span>
                       )}
                     </div>
                   </div>
 
                   {/* Sandi Cabang */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Sandi Cabang</div>
-                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
-                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Sandi Cabang</div>
+                    <div style={{ width: '12px', color: '#ced4da' }}>:</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>
                       {r['Sandi Cabang'] || r.Sandi || '-'}
                     </div>
                   </div>
 
                   {/* Kode Cabang */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Kode Cabang</div>
-                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
-                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Kode Cabang</div>
+                    <div style={{ width: '12px', color: '#ced4da' }}>:</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>
                       {r['Kode Cabang'] || '-'}
                     </div>
                   </div>
 
                   {/* No HP / Telp */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>No HP / Telp</div>
-                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
-                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>No HP / Telp</div>
+                    <div style={{ width: '12px', color: '#ced4da' }}>:</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>
                       {extractPhone(r) ? (
                         <span style={{ color: '#c2410c', fontWeight: 600 }}>{extractPhone(r)}</span>
                       ) : (
-                        <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>-</span>
+                        <span style={{ color: '#adb5bd', fontStyle: 'italic' }}>-</span>
                       )}
                     </div>
                   </div>
 
                   {/* Wilayah */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Wilayah</div>
-                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
-                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{r.Wilayah || '-'}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Wilayah</div>
+                    <div style={{ width: '12px', color: '#ced4da' }}>:</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{r.Wilayah || '-'}</div>
                   </div>
 
                   {/* Kode Pos */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Kode Pos</div>
-                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Kode Pos</div>
+                    <div style={{ width: '12px', color: '#ced4da' }}>:</div>
                     <div style={{ flex: 1, color: '#c2410c', fontWeight: 700 }}>{r['KODE POS'] || '-'}</div>
                   </div>
 
                   {/* Kecamatan */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Kecamatan</div>
-                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
-                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{r.Kecamatan || '-'}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Kecamatan</div>
+                    <div style={{ width: '12px', color: '#ced4da' }}>:</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{r.Kecamatan || '-'}</div>
                   </div>
 
                   {/* Kelurahan */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Kelurahan</div>
-                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
-                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{r.Kelurahan || '-'}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Kelurahan</div>
+                    <div style={{ width: '12px', color: '#ced4da' }}>:</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{r.Kelurahan || '-'}</div>
                   </div>
 
                   {/* Dati II (Kota) */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Dati II (Kota)</div>
-                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
-                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{r['Dati II'] || '-'}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Dati II (Kota)</div>
+                    <div style={{ width: '12px', color: '#ced4da' }}>:</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{r['Dati II'] || '-'}</div>
                   </div>
 
                   {/* Kode Dati II jika ada */}
                   {r['Kode Dati II'] && (
-                    <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                      <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Kode Dati II</div>
-                      <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
-                      <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{r['Kode Dati II']}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                      <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Kode Dati II</div>
+                      <div style={{ width: '12px', color: '#ced4da' }}>:</div>
+                      <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{r['Kode Dati II']}</div>
                     </div>
                   )}
 
                   {/* Provinsi */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Provinsi</div>
-                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
-                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{r.Provinsi || '-'}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Provinsi</div>
+                    <div style={{ width: '12px', color: '#ced4da' }}>:</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{r.Provinsi || '-'}</div>
                   </div>
 
                   {/* Alamat Target */}
                   <div style={{ padding: '0.55rem 0.75rem', background: '#fafafa', minHeight: '68px', display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600, marginBottom: '0.2rem' }}>
+                    <div style={{ fontSize: '0.72rem', color: '#878a99', fontWeight: 600, marginBottom: '0.2rem' }}>
                       Alamat Target:
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: '#1e293b', lineHeight: 1.45, wordBreak: 'break-word' }}>
-                      {r.ALAMAT || <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Tidak terisi</span>}
+                    <div style={{ fontSize: '0.75rem', color: '#212529', lineHeight: 1.45, wordBreak: 'break-word' }}>
+                      {r.ALAMAT || <span style={{ color: '#adb5bd', fontStyle: 'italic' }}>Tidak terisi</span>}
                     </div>
                   </div>
                 </div>
@@ -982,8 +982,8 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                 <div
                   style={{
                     padding: '0.55rem 0.75rem',
-                    background: '#f0fdf4',
-                    borderBottom: '1px solid #bbf7d0',
+                    background: '#e8f7f5',
+                    borderBottom: '1px solid #b7ebe4',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '0.4rem',
@@ -999,27 +999,27 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                 {/* Body Baris Data Master */}
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   {/* Branch Code */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Branch Code</div>
-                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Branch Code</div>
+                    <div style={{ width: '12px', color: '#ced4da' }}>:</div>
                     <div style={{ flex: 1, color: themeColor, fontWeight: 700 }}>
                       {m['Branch Code'] || m['Sandi Cabang'] || m.Cabang || m.Sandi || '-'}
                     </div>
                   </div>
 
                   {/* Nama Outlet */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Nama Outlet</div>
-                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
-                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 700 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Nama Outlet</div>
+                    <div style={{ width: '12px', color: '#ced4da' }}>:</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 700 }}>
                       {m['Nama Outlet'] || m.Cabang || '-'}
                     </div>
                   </div>
 
                   {/* Status Outlet */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Status Outlet</div>
-                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Status Outlet</div>
+                    <div style={{ width: '12px', color: '#ced4da' }}>:</div>
                     <div style={{ flex: 1 }}>
                       {m['Status Outlet'] ? (
                         <span
@@ -1030,42 +1030,42 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                             fontWeight: 700,
                             background: '#dcfce7',
                             color: '#15803d',
-                            border: '1px solid #bbf7d0',
+                            border: '1px solid #b7ebe4',
                           }}
                         >
                           {m['Status Outlet']}
                         </span>
                       ) : (
-                        <span style={{ color: '#94a3b8' }}>-</span>
+                        <span style={{ color: '#adb5bd' }}>-</span>
                       )}
                     </div>
                   </div>
 
                   {/* Sandi Cabang */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Sandi Cabang</div>
-                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
-                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Sandi Cabang</div>
+                    <div style={{ width: '12px', color: '#ced4da' }}>:</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>
                       {m['Sandi Cabang'] || m.Sandi || '-'}
                     </div>
                   </div>
 
                   {/* Kode Cabang */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Kode Cabang</div>
-                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
-                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Kode Cabang</div>
+                    <div style={{ width: '12px', color: '#ced4da' }}>:</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>
                       {m['Kode Cabang'] || '-'}
                     </div>
                   </div>
 
                   {/* No HP / Telp KC/KCP */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                       <Phone size={12} color="#15803d" />
                       <span>No HP / Telp</span>
                     </div>
-                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
+                    <div style={{ width: '12px', color: '#ced4da' }}>:</div>
                     <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
                       {masterPhone ? (
                         <a
@@ -1088,62 +1088,62 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                           <span>{masterPhone}</span>
                         </a>
                       ) : (
-                        <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Tidak terisi di master</span>
+                        <span style={{ color: '#adb5bd', fontStyle: 'italic' }}>Tidak terisi di master</span>
                       )}
                     </div>
                   </div>
 
                   {/* Wilayah */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Wilayah</div>
-                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
-                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Wilayah</div>
+                    <div style={{ width: '12px', color: '#ced4da' }}>:</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>
                       {m.Wilayah || candWilayahInfo.wilayahName || '-'}
                     </div>
                   </div>
 
                   {/* Kode Pos */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Kode Pos</div>
-                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Kode Pos</div>
+                    <div style={{ width: '12px', color: '#ced4da' }}>:</div>
                     <div style={{ flex: 1, color: '#15803d', fontWeight: 700 }}>{m['KODE POS'] || '-'}</div>
                   </div>
 
                   {/* Kecamatan */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Kecamatan</div>
-                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
-                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{m.Kecamatan || '-'}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Kecamatan</div>
+                    <div style={{ width: '12px', color: '#ced4da' }}>:</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{m.Kecamatan || '-'}</div>
                   </div>
 
                   {/* Kelurahan */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Kelurahan</div>
-                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
-                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{m.Kelurahan || '-'}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Kelurahan</div>
+                    <div style={{ width: '12px', color: '#ced4da' }}>:</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{m.Kelurahan || '-'}</div>
                   </div>
 
                   {/* Dati II (Kota) */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Dati II (Kota)</div>
-                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
-                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{m['Dati II'] || '-'}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Dati II (Kota)</div>
+                    <div style={{ width: '12px', color: '#ced4da' }}>:</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{m['Dati II'] || '-'}</div>
                   </div>
 
                   {/* Kode Dati II jika ada */}
                   {m['Kode Dati II'] && (
-                    <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                      <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Kode Dati II</div>
-                      <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
-                      <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{m['Kode Dati II']}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                      <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Kode Dati II</div>
+                      <div style={{ width: '12px', color: '#ced4da' }}>:</div>
+                      <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{m['Kode Dati II']}</div>
                     </div>
                   )}
 
                   {/* Provinsi */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', minHeight: '30px' }}>
-                    <div style={{ width: '105px', minWidth: '105px', color: '#64748b', fontWeight: 600 }}>Provinsi</div>
-                    <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
-                    <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>{m.Provinsi || '-'}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
+                    <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Provinsi</div>
+                    <div style={{ width: '12px', color: '#ced4da' }}>:</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{m.Provinsi || '-'}</div>
                   </div>
 
                   {/* Dynamic extra fields if uploaded master contains custom columns */}
@@ -1154,17 +1154,17 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                         display: 'flex',
                         alignItems: 'center',
                         padding: '0.38rem 0.75rem',
-                        borderBottom: '1px solid #f1f5f9',
+                        borderBottom: '1px solid #f8f9fa',
                         fontSize: '0.75rem',
                         minHeight: '30px',
-                        background: '#f8fafc',
+                        background: '#f9fbfd',
                       }}
                     >
-                      <div style={{ width: '105px', minWidth: '105px', color: '#475569', fontWeight: 600 }} title={fieldKey}>
+                      <div style={{ width: '105px', minWidth: '105px', color: '#495057', fontWeight: 600 }} title={fieldKey}>
                         {fieldKey}
                       </div>
-                      <div style={{ width: '12px', color: '#cbd5e1' }}>:</div>
-                      <div style={{ flex: 1, color: '#1e293b', fontWeight: 600 }}>
+                      <div style={{ width: '12px', color: '#ced4da' }}>:</div>
+                      <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>
                         {String(fieldVal)}
                       </div>
                     </div>
@@ -1172,11 +1172,11 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
 
                   {/* Alamat Master */}
                   <div style={{ padding: '0.55rem 0.75rem', background: '#fafafa', minHeight: '68px', display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600, marginBottom: '0.2rem' }}>
+                    <div style={{ fontSize: '0.72rem', color: '#878a99', fontWeight: 600, marginBottom: '0.2rem' }}>
                       Alamat Master:
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: '#1e293b', lineHeight: 1.45, wordBreak: 'break-word' }}>
-                      {m.ALAMAT || <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Tidak terisi di master</span>}
+                    <div style={{ fontSize: '0.75rem', color: '#212529', lineHeight: 1.45, wordBreak: 'break-word' }}>
+                      {m.ALAMAT || <span style={{ color: '#adb5bd', fontStyle: 'italic' }}>Tidak terisi di master</span>}
                     </div>
                   </div>
                 </div>

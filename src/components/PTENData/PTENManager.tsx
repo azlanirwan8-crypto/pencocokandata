@@ -491,7 +491,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
             style={{
               width: '42px',
               height: '42px',
-              borderRadius: '8px',
+              borderRadius: '6px',
               background: 'linear-gradient(135deg, rgba(247, 184, 75, 0.15) 0%, rgba(64, 81, 137, 0.15) 100%)',
               display: 'flex',
               alignItems: 'center',

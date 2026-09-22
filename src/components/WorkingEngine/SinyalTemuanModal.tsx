@@ -84,10 +84,10 @@ export const SinyalTemuanModal: React.FC<Props> = ({ no, rows, onClose }) => {
           <p
             style={{
               fontSize: '0.84rem',
-              color: '#334155',
+              color: '#495057',
               margin: '0 0 0.85rem',
               lineHeight: 1.5,
-              background: '#f8fafc',
+              background: '#f9fbfd',
               border: '1px solid #edf2f7',
               borderLeft: `3px solid ${meta.warna}`,
               borderRadius: '6px',

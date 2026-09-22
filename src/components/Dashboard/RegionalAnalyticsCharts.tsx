@@ -209,7 +209,7 @@ export const RegionalAnalyticsCharts: React.FC<RegionalAnalyticsChartsProps> = (
                           : isMedium
                           ? 'rgba(247, 184, 75, 0.15)'
                           : 'rgba(240, 101, 72, 0.12)',
-                        color: isHigh ? '#0ab39c' : isMedium ? '#d97706' : '#f06548',
+                        color: isHigh ? '#0ab39c' : isMedium ? '#d68b0c' : '#f06548',
                       }}
                     >
                       {item.rate.toFixed(1)}%

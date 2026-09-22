@@ -74,7 +74,7 @@ export const AnalystInsightsBanner: React.FC<AnalystInsightsBannerProps> = ({
                   padding: '0.08rem 0.4rem',
                   borderRadius: '3px',
                   background: matchRate >= 90 ? 'rgba(10, 179, 156, 0.12)' : 'rgba(247, 184, 75, 0.15)',
-                  color: matchRate >= 90 ? '#0ab39c' : '#d97706',
+                  color: matchRate >= 90 ? '#0ab39c' : '#d68b0c',
                 }}
               >
                 {matchRate >= 90 ? 'Kinerja Sangat Baik' : 'Butuh Intervensi'}

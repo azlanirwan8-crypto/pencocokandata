@@ -12,7 +12,7 @@ import type { AnalystRow } from './analystPipeline';
  * per-piksel dari tangkapan layar header yang dilampirkannya.
  */
 export type GrupWarna = 'navy' | 'hijau' | 'oranye';
-export const WARNA_TH: Record<GrupWarna, string> = { navy: '#366092', hijau: '#47D359', oranye: '#E97132' };
+export const WARNA_TH: Record<GrupWarna, string> = { navy: '#405189', hijau: '#0ab39c', oranye: '#E97132' };
 
 export type KolomFinal = {
   judul: string;

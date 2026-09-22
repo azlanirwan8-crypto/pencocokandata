@@ -87,7 +87,7 @@ export const MasterDuplicateChart: React.FC<MasterDuplicateChartProps> = ({
         marginBottom: '1.25rem',
         background: '#ffffff',
         border: '1px solid #e9ebec',
-        borderRadius: '8px',
+        borderRadius: '6px',
         boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
       }}
     >
@@ -109,7 +109,7 @@ export const MasterDuplicateChart: React.FC<MasterDuplicateChartProps> = ({
             style={{
               width: '36px',
               height: '36px',
-              borderRadius: '8px',
+              borderRadius: '6px',
               background: 'rgba(240, 101, 72, 0.12)',
               display: 'flex',
               alignItems: 'center',
@@ -130,9 +130,9 @@ export const MasterDuplicateChart: React.FC<MasterDuplicateChartProps> = ({
                   fontSize: '0.68rem',
                   fontWeight: 700,
                   padding: '0.12rem 0.5rem',
-                  borderRadius: '12px',
+                  borderRadius: '6px',
                   background: filteredItems.length > 0 ? 'rgba(240, 101, 72, 0.1)' : 'rgba(10, 179, 156, 0.1)',
-                  color: filteredItems.length > 0 ? '#e05338' : '#0ab39c',
+                  color: filteredItems.length > 0 ? '#f06548' : '#0ab39c',
                   border: filteredItems.length > 0 ? '1px solid rgba(240, 101, 72, 0.25)' : '1px solid rgba(10, 179, 156, 0.25)',
                 }}
               >
@@ -359,11 +359,11 @@ export const MasterDuplicateChart: React.FC<MasterDuplicateChartProps> = ({
                         style={{
                           fontSize: '0.72rem',
                           fontWeight: 700,
-                          color: '#e05338',
+                          color: '#f06548',
                           background: 'rgba(240, 101, 72, 0.1)',
                           border: '1px solid rgba(240, 101, 72, 0.25)',
                           padding: '0.1rem 0.5rem',
-                          borderRadius: '12px',
+                          borderRadius: '6px',
                         }}
                       >
                         {item.count} Cabang Aktif
@@ -497,11 +497,11 @@ export const MasterDuplicateChart: React.FC<MasterDuplicateChartProps> = ({
                         style={{
                           fontSize: '0.7rem',
                           fontWeight: 700,
-                          color: '#e05338',
+                          color: '#f06548',
                           background: 'rgba(240, 101, 72, 0.1)',
                           border: '1px solid rgba(240, 101, 72, 0.25)',
                           padding: '0.08rem 0.45rem',
-                          borderRadius: '12px',
+                          borderRadius: '6px',
                         }}
                       >
                         {item.count} Cabang

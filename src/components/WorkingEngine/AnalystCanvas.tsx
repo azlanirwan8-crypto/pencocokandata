@@ -94,7 +94,7 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
         style={{
           background: 'linear-gradient(135deg, #ffffff 0%, #f8faff 50%, #f0f5ff 100%)',
           border: '1px solid #dce4f5',
-          borderRadius: '12px',
+          borderRadius: '6px',
           padding: '1.5rem 1.75rem',
           boxShadow: '0 4px 20px rgba(64, 81, 137, 0.08)',
           position: 'relative',
@@ -129,7 +129,7 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: '#ffffff',
-                boxShadow: '0 8px 24px rgba(64, 81, 137, 0.3)',
+                boxShadow: '0 5px 14px rgba(64, 81, 137, 0.25)',
                 flexShrink: 0,
               }}
             >
@@ -334,7 +334,7 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
         style={{
           background: '#ffffff',
           border: '1px solid #e9ebec',
-          borderRadius: '8px',
+          borderRadius: '6px',
           padding: '0.85rem 1.25rem',
           boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
         }}
@@ -415,7 +415,7 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
                 type="button"
                 onClick={() => onLihatTemuan?.(s.no)}
                 className="sinyal-card"
-                style={{ background: '#f8fafc', padding: '0.65rem 0.8rem', borderRadius: '6px', border: '1px solid #edf2f7', textAlign: 'left', cursor: 'pointer' }}
+                style={{ background: '#f9fbfd', padding: '0.65rem 0.8rem', borderRadius: '6px', border: '1px solid #edf2f7', textAlign: 'left', cursor: 'pointer' }}
                 title={temuan > 0 ? `Lihat ${temuan} temuan sinyal ini` : 'Sinyal ini belum menangkap temuan pada analisa berjalan'}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
@@ -443,7 +443,7 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
                 <div
                   style={{
                     fontSize: '0.7rem',
-                    color: '#64748b',
+                    color: '#878a99',
                     lineHeight: 1.35,
                     display: '-webkit-box',
                     WebkitLineClamp: 3,
@@ -551,8 +551,8 @@ const KartuFase: React.FC<KartuFaseProps> = ({
     <div
       style={{
         background: '#ffffff',
-        border: `1px solid ${aktif ? aksen : disetujui && !berjalan ? '#d1fae5' : '#e2e8f0'}`,
-        borderRadius: '8px',
+        border: `1px solid ${aktif ? aksen : disetujui && !berjalan ? '#d5f3ee' : '#e9ebec'}`,
+        borderRadius: '6px',
         padding: '0.75rem 0.9rem',
         boxShadow: aktif ? `0 0 0 3px ${aksen}26` : '0 1px 3px rgba(0,0,0,0.03)',
         borderLeft: `4px solid ${disetujui && !berjalan ? '#0ab39c' : terkunci ? '#ced4da' : aksen}`,

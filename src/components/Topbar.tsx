@@ -52,7 +52,7 @@ export const Topbar: React.FC<TopbarProps> = ({
         {/* Status koneksi cloud (Neon) */}
         {isNeonConnected !== undefined && (
           <span
-            title={isNeonConnected ? `Terhubung ke Neon Postgres${lastSyncedAt ? ` · disinkron ${lastSyncedAt}` : ''}` : 'Tidak terhubung ke cloud — data hanya tersimpan di browser ini'}
+            title={isNeonConnected ? `Terhubung ke Supabase Postgres${lastSyncedAt ? ` · disinkron ${lastSyncedAt}` : ''}` : 'Tidak terhubung ke cloud — data hanya tersimpan di browser ini'}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
               fontSize: '0.72rem', fontWeight: 600, padding: '0.25rem 0.6rem', borderRadius: '9999px',

@@ -139,7 +139,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
                 <span className="nav-item-label">Data Master</span>
               </div>
-              <div className="nav-item-collapse-icon" style={{ color: '#8c9cd0', display: 'flex', alignItems: 'center' }}>
+              <div className="nav-item-collapse-icon" style={{ color: 'var(--sidebar-item)', display: 'flex', alignItems: 'center' }}>
                 {isMasterOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               </div>
             </button>

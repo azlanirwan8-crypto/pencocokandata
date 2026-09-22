@@ -176,8 +176,8 @@ export const SnapshotModal: React.FC<SnapshotModalProps> = ({
           width: '92%',
           padding: '1.25rem 1.4rem',
           background: '#ffffff',
-          borderRadius: '8px',
-          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.15)',
+          borderRadius: '6px',
+          boxShadow: '0 8px 16px rgba(0, 0, 0, 0.15)',
         }}
       >
         {/* Header */}

@@ -50,13 +50,13 @@ function GeoTooltipLayer({ anchor }: { anchor: Anchor }) {
         [above ? 'bottom' : 'top']: above ? window.innerHeight - anchor.top + GAP : anchor.bottom + GAP,
         zIndex: 1200,
         pointerEvents: 'none',
-        background: '#0f172a',
-        color: '#f8fafc',
+        background: '#212529',
+        color: '#f9fbfd',
         fontSize: '0.85rem',
         lineHeight: 1.45,
         padding: '0.45rem 0.6rem',
         borderRadius: 6,
-        boxShadow: '0 6px 18px rgba(15, 23, 42, 0.28)',
+        boxShadow: '0 5px 12px rgba(30, 32, 37, 0.2)',
       }}
     >
       {anchor.text}

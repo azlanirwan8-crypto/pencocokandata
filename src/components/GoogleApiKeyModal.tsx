@@ -28,7 +28,7 @@ export const GoogleApiKeyModal: React.FC<GoogleApiKeyModalProps> = ({ onClose, o
         position: 'fixed',
         inset: 0,
         zIndex: 10000,
-        background: 'rgba(15, 23, 42, 0.65)',
+        background: 'rgba(33,37,41, 0.65)',
         backdropFilter: 'blur(4px)',
         display: 'flex',
         alignItems: 'center',
@@ -37,24 +37,24 @@ export const GoogleApiKeyModal: React.FC<GoogleApiKeyModalProps> = ({ onClose, o
       }}
       style={{
         background: '#ffffff',
-        borderRadius: '12px',
+        borderRadius: '6px',
         maxWidth: '460px',
         width: '100%',
         padding: '1.5rem',
-        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-        border: '1px solid #e2e8f0',
+        boxShadow: '0 8px 16px rgba(0, 0, 0, 0.15)',
+        border: '1px solid #e9ebec',
       }}
     >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <div style={{ padding: '0.4rem', borderRadius: '8px', background: 'rgba(59, 130, 246, 0.1)', color: '#2563eb' }}>
+            <div style={{ padding: '0.4rem', borderRadius: '6px', background: 'rgba(59, 130, 246, 0.1)', color: '#3577f1' }}>
               <Key size={18} />
             </div>
             <div>
-              <h4 id="google-api-key-title" style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
+              <h4 id="google-api-key-title" style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#212529' }}>
                 Google Maps Geocoding API
               </h4>
-              <p style={{ margin: 0, fontSize: '0.72rem', color: '#64748b' }}>
+              <p style={{ margin: 0, fontSize: '0.72rem', color: '#878a99' }}>
                 Validasi koordinat langsung ke server Google Maps
               </p>
             </div>
@@ -63,23 +63,23 @@ export const GoogleApiKeyModal: React.FC<GoogleApiKeyModalProps> = ({ onClose, o
             type="button"
             onClick={onClose}
             aria-label="Tutup dialog API key"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '0.35rem', lineHeight: 1 }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#adb5bd', padding: '0.35rem', lineHeight: 1 }}
           >
             <X size={18} />
           </button>
         </div>
 
-        <div style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1rem', fontSize: '0.75rem', color: '#334155', lineHeight: 1.5 }}>
+        <div style={{ background: '#f9fbfd', padding: '0.75rem', borderRadius: '6px', border: '1px solid #e9ebec', marginBottom: '1rem', fontSize: '0.75rem', color: '#495057', lineHeight: 1.5 }}>
           <p style={{ margin: 0, marginBottom: '0.4rem' }}>
             💡 <strong>Gratis $200/bulan dari Google Cloud</strong> (setara ~40.000 request gratis setiap bulan).
           </p>
-          <p style={{ margin: 0, color: '#64748b' }}>
+          <p style={{ margin: 0, color: '#878a99' }}>
             Jika dikosongkan, sistem secara otomatis menggunakan engine publik (ESRI / OpenStreetMap) secara gratis tanpa perlu API Key.
           </p>
         </div>
 
         <div style={{ marginBottom: '1.25rem' }}>
-          <label htmlFor="google-api-key-input" style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#334155', marginBottom: '0.35rem' }}>
+          <label htmlFor="google-api-key-input" style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: '#495057', marginBottom: '0.35rem' }}>
             Google Maps API Key:
           </label>
           <input
@@ -93,9 +93,9 @@ export const GoogleApiKeyModal: React.FC<GoogleApiKeyModalProps> = ({ onClose, o
               padding: '0.5rem 0.75rem',
               fontSize: '0.82rem',
               borderRadius: '6px',
-              border: '1px solid #cbd5e1',
+              border: '1px solid #ced4da',
               outline: 'none',
-              fontFamily: 'monospace',
+              fontFamily: 'var(--font-mono)',
               boxSizing: 'border-box',
             }}
           />
@@ -126,9 +126,9 @@ export const GoogleApiKeyModal: React.FC<GoogleApiKeyModalProps> = ({ onClose, o
                 padding: '0.4rem 0.85rem',
                 fontSize: '0.74rem',
                 fontWeight: 600,
-                color: '#64748b',
-                background: '#f1f5f9',
-                border: '1px solid #e2e8f0',
+                color: '#878a99',
+                background: '#f8f9fa',
+                border: '1px solid #e9ebec',
                 borderRadius: '6px',
                 cursor: 'pointer',
               }}
@@ -143,11 +143,11 @@ export const GoogleApiKeyModal: React.FC<GoogleApiKeyModalProps> = ({ onClose, o
                 fontSize: '0.74rem',
                 fontWeight: 600,
                 color: '#ffffff',
-                background: '#2563eb',
+                background: '#3577f1',
                 border: 'none',
                 borderRadius: '6px',
                 cursor: 'pointer',
-                boxShadow: '0 2px 4px rgba(37, 99, 235, 0.25)',
+                boxShadow: '0 2px 4px rgba(53,119,241, 0.25)',
               }}
             >
               Simpan & Terapkan

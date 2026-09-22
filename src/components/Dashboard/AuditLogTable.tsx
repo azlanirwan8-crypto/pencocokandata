@@ -62,7 +62,7 @@ export const AuditLogTable: React.FC<AuditLogTableProps> = ({ logs }) => {
                     </td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                        <UserCheck size={13} color="#94a3b8" />
+                        <UserCheck size={13} color="#adb5bd" />
                         <span>{log.uploader}</span>
                       </div>
                     </td>

@@ -439,7 +439,7 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
                 return (
                   <tr key={`reg-match-${region.wilayah}`} style={{ transition: 'background-color 0.15s ease' }}>
                     {/* 1. No */}
-                    <td style={{ textAlign: 'center', fontWeight: 600, color: '#6c757d', background: '#fcfdfe' }}>
+                    <td style={{ textAlign: 'center', fontWeight: 600, color: '#6c757d', background: '#f9fbfd' }}>
                       {idx + 1}
                     </td>
 
@@ -500,7 +500,7 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
                     <td>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
-                          <span style={{ fontWeight: 600, color: isOptimal ? '#0ab39c' : isGood ? '#d97706' : '#f06548' }}>
+                          <span style={{ fontWeight: 600, color: isOptimal ? '#0ab39c' : isGood ? '#d68b0c' : '#f06548' }}>
                             {rate.toFixed(1)}% Bersih
                           </span>
                           <span style={{ color: '#878a99', fontSize: '0.67rem' }}>
@@ -510,7 +510,7 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
                         <div
                           style={{
                             height: '5px',
-                            background: '#eff2f7',
+                            background: '#eef1f4',
                             borderRadius: '3px',
                             overflow: 'hidden',
                           }}
@@ -541,7 +541,7 @@ export const DashboardMatchTable: React.FC<DashboardMatchTableProps> = ({
                               : rate > 0
                               ? 'rgba(247, 184, 75, 0.15)'
                               : 'rgba(240, 101, 72, 0.12)',
-                          color: rate === 100 ? '#0ab39c' : rate > 0 ? '#d97706' : '#f06548',
+                          color: rate === 100 ? '#0ab39c' : rate > 0 ? '#d68b0c' : '#f06548',
                         }}
                       >
                         {rate === 100 ? 'Bersih Semua' : rate > 0 ? 'Ada Anomali' : 'Semua Anomali'}

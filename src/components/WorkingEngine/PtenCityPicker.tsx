@@ -156,7 +156,7 @@ export const PtenCityPicker: React.FC<PtenCityPickerProps> = ({
               background: '#fff',
               border: '1px solid #d5dce8',
               borderRadius: '6px',
-              boxShadow: '0 10px 25px -3px rgba(15,23,42,0.2), 0 4px 6px -4px rgba(15,23,42,0.1)',
+              boxShadow: '0 8px 16px rgba(33, 37, 41, 0.16)',
               overflow: 'hidden',
             }}
           >

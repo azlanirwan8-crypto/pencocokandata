@@ -60,7 +60,7 @@ export const AnalystRowEditModal: React.FC<AnalystRowEditModalProps> = ({
         position: 'fixed',
         inset: 0,
         zIndex: 1060,
-        background: 'rgba(15, 23, 42, 0.6)',
+        background: 'rgba(33,37,41, 0.6)',
         backdropFilter: 'blur(4px)',
         display: 'flex',
         alignItems: 'center',
@@ -70,13 +70,13 @@ export const AnalystRowEditModal: React.FC<AnalystRowEditModalProps> = ({
       className="glass-card"
       style={{
           background: '#ffffff',
-          borderRadius: '10px',
+          borderRadius: '6px',
           width: '100%',
           maxWidth: '720px',
           maxHeight: '90vh',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          boxShadow: '0 8px 16px rgba(0, 0, 0, 0.15)',
           overflow: 'hidden',
           border: '1px solid #e9ebec',
       }}
@@ -137,7 +137,7 @@ export const AnalystRowEditModal: React.FC<AnalystRowEditModalProps> = ({
           <div style={{ padding: '1.25rem 1.4rem', overflowY: 'auto', maxHeight: 'calc(90vh - 140px)', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             {/* Section 1: Fase 1 PTEN & Kode Pos */}
             {showFase1 && (
-            <div style={{ background: '#f8fafc', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+            <div style={{ background: '#f9fbfd', padding: '0.85rem 1rem', borderRadius: '6px', border: '1px solid #e9ebec' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.82rem', fontWeight: 700, color: '#299cdb', marginBottom: '0.65rem' }}>
                 <MapPin size={15} />
                 <span>Atribut Fase 1: PTEN & Kode Pos</span>
@@ -201,7 +201,7 @@ export const AnalystRowEditModal: React.FC<AnalystRowEditModalProps> = ({
 
             {/* Section 2: Fase 2 Wilayah & Master Cabang */}
             {showFase2 && (
-            <div style={{ background: '#f8fafc', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+            <div style={{ background: '#f9fbfd', padding: '0.85rem 1rem', borderRadius: '6px', border: '1px solid #e9ebec' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.82rem', fontWeight: 700, color: '#405189', marginBottom: '0.65rem' }}>
                 <Building2 size={15} />
                 <span>Atribut Fase 2: Wilayah & Master Cabang</span>
@@ -269,7 +269,7 @@ export const AnalystRowEditModal: React.FC<AnalystRowEditModalProps> = ({
 
             {/* Section 3: Fase 3 Mapping Role */}
             {showFase3 && (
-            <div style={{ background: '#f8fafc', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+            <div style={{ background: '#f9fbfd', padding: '0.85rem 1rem', borderRadius: '6px', border: '1px solid #e9ebec' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.82rem', fontWeight: 700, color: '#0ab39c', marginBottom: '0.65rem' }}>
                 <Users size={15} />
                 <span>Atribut Fase 3: Mapping Role & Wondr</span>

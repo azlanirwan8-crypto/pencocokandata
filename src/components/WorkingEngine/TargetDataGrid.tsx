@@ -895,7 +895,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
             padding: '0.45rem 0.85rem',
             fontSize: '0.78rem',
             fontWeight: checkerTab === 'recommendation' ? 600 : 500,
-            color: checkerTab === 'recommendation' ? '#d97706' : '#878a99',
+            color: checkerTab === 'recommendation' ? '#d68b0c' : '#878a99',
             background: 'transparent',
             border: 'none',
             borderBottom: checkerTab === 'recommendation' ? '2px solid #f7b84b' : '2px solid transparent',
@@ -905,7 +905,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           }}
           id="tab-btn-recommendation"
         >
-          <Sparkles size={13} color={checkerTab === 'recommendation' ? '#d97706' : '#878a99'} />
+          <Sparkles size={13} color={checkerTab === 'recommendation' ? '#d68b0c' : '#878a99'} />
           <span>Rekomendasi Data</span>
           <span
             style={{
@@ -914,7 +914,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               fontSize: '0.67rem',
               fontWeight: 600,
               background: targetRecommendationRows.length > 0 ? 'rgba(247, 184, 75, 0.15)' : '#f3f3f9',
-              color: targetRecommendationRows.length > 0 ? '#d97706' : '#878a99',
+              color: targetRecommendationRows.length > 0 ? '#d68b0c' : '#878a99',
               border: targetRecommendationRows.length > 0 ? '1px solid rgba(247, 184, 75, 0.3)' : '1px solid #e9ebec',
             }}
           >
@@ -1017,7 +1017,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                 onClick={() => { setRecommendationScope('all'); setPage(1); setRenderedLimit(60); }}
                 style={{
                   border: 'none',
-                  background: recommendationScope === 'all' ? '#d97706' : 'transparent',
+                  background: recommendationScope === 'all' ? '#d68b0c' : 'transparent',
                   color: recommendationScope === 'all' ? '#ffffff' : '#6c757d',
                   fontWeight: recommendationScope === 'all' ? 700 : 500,
                   fontSize: '0.72rem',
@@ -1230,7 +1230,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                 margin: '0 auto 0.6rem',
               }}
             >
-              <Sparkles size={20} color="#d97706" />
+              <Sparkles size={20} color="#d68b0c" />
             </div>
             <h4 style={{ fontSize: '0.92rem', fontWeight: 600, color: '#212529', margin: '0 0 0.25rem' }}>
               {matchedRows.length > 0 && pendingUploadRows.length === 0
@@ -1416,7 +1416,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                     maxWidth: '420px',
                     width: '420px',
                     background: '#fff9f0',
-                    color: '#d97706',
+                    color: '#d68b0c',
                     position: 'sticky',
                     left: '80px',
                     top: 0,
@@ -1434,15 +1434,15 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                     style={{
                       minWidth: '340px',
                       background: '#f0fdf8',
-                      color: '#059669',
+                      color: '#0ab39c',
                       borderBottom: '1px solid #e9ebec',
-                      borderLeft: '2px solid rgba(16, 185, 129, 0.35)',
+                      borderLeft: '2px solid rgba(10,179,156, 0.35)',
                       padding: '0.55rem 0.65rem',
                       verticalAlign: 'middle',
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                      <Shield size={13} color="#059669" />
+                      <Shield size={13} color="#0ab39c" />
                       <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>Rekomendasi Cabang</span>
                     </div>
                   </th>
@@ -1453,7 +1453,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                 <th style={{ color: '#878a99', minWidth: '120px', borderBottom: '1px solid #e9ebec' }}>Kelurahan Target</th>
                 <th style={{ color: '#878a99', minWidth: '120px', borderBottom: '1px solid #e9ebec' }}>Dati II Target</th>
                 <th style={{ minWidth: '110px', color: '#878a99', borderBottom: '1px solid #e9ebec' }}>Provinsi Target</th>
-                <th style={{ minWidth: '130px', color: '#059669', borderBottom: '1px solid #e9ebec' }}>PTEN</th>
+                <th style={{ minWidth: '130px', color: '#0ab39c', borderBottom: '1px solid #e9ebec' }}>PTEN</th>
               </tr>
             </thead>
             <tbody>
@@ -1477,7 +1477,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                   const isRowChecked = selectedRowNos.has(r.No);
 
                   return (
-                    <tr key={`rec-${r.No}-${idx}`} style={{ background: isRowChecked ? '#f0fdf4' : '#fffdfa', verticalAlign: 'top' }}>
+                    <tr key={`rec-${r.No}-${idx}`} style={{ background: isRowChecked ? '#e8f7f5' : '#fffdfa', verticalAlign: 'top' }}>
                       <td
                         style={{
                           width: '36px',
@@ -1488,7 +1488,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                           position: 'sticky',
                           left: 0,
                           zIndex: 6,
-                          background: isRowChecked ? '#f0fdf4' : '#fffdfa',
+                          background: isRowChecked ? '#e8f7f5' : '#fffdfa',
                           borderRight: '1px solid #e9ebec',
                           borderBottom: '1px solid #e9ebec',
                         }}
@@ -1511,7 +1511,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                           position: 'sticky',
                           left: '36px',
                           zIndex: 5,
-                          background: isRowChecked ? '#f0fdf4' : '#fffdfa',
+                          background: isRowChecked ? '#e8f7f5' : '#fffdfa',
                           borderRight: '1px solid #e9ebec',
                           borderBottom: '1px solid #e9ebec',
                         }}
@@ -1523,7 +1523,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                       {/* Multi-Kandidat Rekomendasi (Top 2 - 3 Opsi Asli Master dengan Segmented Pill Toggle) - FROZEN / STICKY */}
                       <td
                         style={{
-                          background: isRowChecked ? '#f0fdf4' : '#fffdfa',
+                          background: isRowChecked ? '#e8f7f5' : '#fffdfa',
                           padding: '0.45rem 0.55rem',
                           position: 'sticky',
                           left: '80px',
@@ -1548,7 +1548,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                             : activeCand?.rank === 2
                             ? 'rgba(247, 184, 75, 0.15)'
                             : 'rgba(53, 119, 241, 0.1)';
-                          const badgeColor = isTop1 ? '#0ab39c' : activeCand?.rank === 2 ? '#d97706' : '#3577f1';
+                          const badgeColor = isTop1 ? '#0ab39c' : activeCand?.rank === 2 ? '#d68b0c' : '#3577f1';
                           const cardBorder = isTop1 ? '1px solid rgba(10, 179, 156, 0.35)' : '1px solid #e9ebec';
                           const cardBg = isTop1 ? '#ffffff' : '#fafafa';
 
@@ -1582,7 +1582,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                         ? '#07796a'
                                         : rec.userPrefilledAudit.status === 'match_top2' || rec.userPrefilledAudit.status === 'match_top3'
                                         ? '#925807'
-                                        : '#2563eb',
+                                        : '#3577f1',
                                     border:
                                       rec.userPrefilledAudit.status === 'match_top1'
                                         ? '1px solid rgba(10, 179, 156, 0.28)'
@@ -1599,7 +1599,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                   {rec.userPrefilledAudit.status === 'match_top1' ? (
                                     <CheckCircle2 size={12} color="#0ab39c" style={{ flexShrink: 0 }} />
                                   ) : rec.userPrefilledAudit.status === 'match_top2' || rec.userPrefilledAudit.status === 'match_top3' ? (
-                                    <AlertTriangle size={12} color="#d97706" style={{ flexShrink: 0 }} />
+                                    <AlertTriangle size={12} color="#d68b0c" style={{ flexShrink: 0 }} />
                                   ) : (
                                     <Info size={12} color="#3577f1" style={{ flexShrink: 0 }} />
                                   )}
@@ -1617,7 +1617,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                   </span>
                                   {candidates.map((cand) => {
                                     const isSelected = cand.rank === activeCand.rank;
-                                    const pillActiveBg = cand.rank === 1 ? '#0ab39c' : cand.rank === 2 ? '#d97706' : '#3577f1';
+                                    const pillActiveBg = cand.rank === 1 ? '#0ab39c' : cand.rank === 2 ? '#d68b0c' : '#3577f1';
                                     const isUserChoice = rec.userPrefilledAudit?.matchedRank === cand.rank;
 
                                     return (
@@ -1635,7 +1635,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                           fontWeight: isSelected ? 700 : 500,
                                           background: isSelected ? pillActiveBg : '#f3f6f9',
                                           color: isSelected ? '#ffffff' : '#495057',
-                                          border: isSelected ? `1px solid ${pillActiveBg}` : isUserChoice ? '1px dashed #d97706' : '1px solid #e9ebec',
+                                          border: isSelected ? `1px solid ${pillActiveBg}` : isUserChoice ? '1px dashed #d68b0c' : '1px solid #e9ebec',
                                           cursor: 'pointer',
                                           transition: 'all 0.15s ease',
                                           flexShrink: 0,
@@ -1650,7 +1650,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                               fontSize: '0.58rem',
                                               padding: '0.02rem 0.25rem',
                                               borderRadius: '3px',
-                                              background: isSelected ? 'rgba(255,255,255,0.3)' : 'rgba(217, 119, 6, 0.15)',
+                                              background: isSelected ? 'rgba(255,255,255,0.3)' : 'rgba(214,139,12, 0.15)',
                                               color: isSelected ? '#ffffff' : '#925807',
                                               fontWeight: 700,
                                             }}
@@ -1764,9 +1764,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                           padding: '0 0.35rem',
                                           fontSize: '0.67rem',
                                           fontWeight: 600,
-                                          color: '#2563eb',
-                                          background: 'rgba(37, 99, 235, 0.08)',
-                                          border: '1px solid rgba(37, 99, 235, 0.25)',
+                                          color: '#3577f1',
+                                          background: 'rgba(53,119,241, 0.08)',
+                                          border: '1px solid rgba(53,119,241, 0.25)',
                                           borderRadius: '3px',
                                           textDecoration: 'none',
                                           cursor: 'pointer',
@@ -1795,9 +1795,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                         width: '18px',
                                         height: '18px',
                                         borderRadius: '3px',
-                                        border: '1px solid #d1d5db',
-                                        background: '#f8fafc',
-                                        color: '#64748b',
+                                        border: '1px solid #ced4da',
+                                        background: '#f9fbfd',
+                                        color: '#878a99',
                                         cursor: 'pointer',
                                         transition: 'all 0.15s ease',
                                         flexShrink: 0,
@@ -1857,12 +1857,12 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                         borderColor: isTop1
                                           ? 'rgba(10, 179, 156, 0.45)'
                                           : activeCand.rank === 2
-                                          ? 'rgba(217, 119, 6, 0.45)'
+                                          ? 'rgba(214,139,12, 0.45)'
                                           : 'rgba(53, 119, 241, 0.45)',
                                         background: isTop1
                                           ? 'rgba(10, 179, 156, 0.08)'
                                           : activeCand.rank === 2
-                                          ? 'rgba(217, 119, 6, 0.08)'
+                                          ? 'rgba(214,139,12, 0.08)'
                                           : 'rgba(53, 119, 241, 0.08)',
                                         fontWeight: 600,
                                         whiteSpace: 'nowrap',
@@ -1937,16 +1937,16 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                           gap: '0.3rem',
                                           fontSize: '0.69rem',
                                           color: '#495057',
-                                          background: '#f8fafc',
+                                          background: '#f9fbfd',
                                           padding: '0.18rem 0.45rem',
                                           borderRadius: '4px',
-                                          border: '1px solid #e2e8f0',
+                                          border: '1px solid #e9ebec',
                                           margin: '0.1rem 0 0.15rem',
                                           flexWrap: 'wrap',
                                         }}
                                       >
                                         <span>
-                                          Kel: <strong style={{ color: isKelMatched ? '#059669' : '#1e293b' }}>{m.Kelurahan || '-'}</strong>
+                                          Kel: <strong style={{ color: isKelMatched ? '#0ab39c' : '#212529' }}>{m.Kelurahan || '-'}</strong>
                                         </span>
                                         {isKelMatched && (
                                           <span
@@ -1955,7 +1955,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                               padding: '0.02rem 0.25rem',
                                               borderRadius: '3px',
                                               background: 'rgba(10, 179, 156, 0.12)',
-                                              color: '#059669',
+                                              color: '#0ab39c',
                                               fontWeight: 700,
                                             }}
                                             title="Kelurahan target dan master sama persis"
@@ -1963,9 +1963,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                             ✓ Kelurahan Sama
                                           </span>
                                         )}
-                                        <span style={{ color: '#cbd5e1' }}>•</span>
+                                        <span style={{ color: '#ced4da' }}>•</span>
                                         <span>
-                                          Kec: <strong style={{ color: isKecMatched ? '#2563eb' : '#1e293b' }}>{m.Kecamatan || '-'}</strong>
+                                          Kec: <strong style={{ color: isKecMatched ? '#3577f1' : '#212529' }}>{m.Kecamatan || '-'}</strong>
                                         </span>
                                         {isKecMatched && (
                                           <span
@@ -1973,8 +1973,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                               fontSize: '0.6rem',
                                               padding: '0.02rem 0.25rem',
                                               borderRadius: '3px',
-                                              background: 'rgba(37, 99, 235, 0.1)',
-                                              color: '#2563eb',
+                                              background: 'rgba(53,119,241, 0.1)',
+                                              color: '#3577f1',
                                               fontWeight: 700,
                                             }}
                                             title="Kecamatan target dan master sama persis"
@@ -1982,9 +1982,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                             ✓ Kecamatan Sama
                                           </span>
                                         )}
-                                        <span style={{ color: '#cbd5e1' }}>•</span>
+                                        <span style={{ color: '#ced4da' }}>•</span>
                                         <span>
-                                          Kota/Kab: <strong style={{ color: '#1e293b' }}>{m['Dati II'] || '-'}</strong>
+                                          Kota/Kab: <strong style={{ color: '#212529' }}>{m['Dati II'] || '-'}</strong>
                                         </span>
                                       </div>
                                     );
@@ -2029,7 +2029,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                               padding: '0.5rem 0.6rem',
                               verticalAlign: 'top',
                               background: '#fafffe',
-                              borderLeft: '2px solid rgba(16, 185, 129, 0.2)',
+                              borderLeft: '2px solid rgba(10,179,156, 0.2)',
                               minWidth: '340px',
                               boxSizing: 'border-box',
                             }}
@@ -2045,9 +2045,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
 
                                   // Color theme per rank
                                   const rankTheme = [
-                                    { bg: 'rgba(16,185,129,0.09)', border: '#6ee7b7', text: '#065f46', badge: '#059669', selBg: 'rgba(16,185,129,0.22)', selBorder: '#059669' },
-                                    { bg: 'rgba(14,165,233,0.07)', border: '#7dd3fc', text: '#0c4a6e', badge: '#0284c7', selBg: 'rgba(14,165,233,0.2)', selBorder: '#0284c7' },
-                                    { bg: 'rgba(99,102,241,0.07)', border: '#c4b5fd', text: '#312e81', badge: '#4f46e5', selBg: 'rgba(99,102,241,0.18)', selBorder: '#4f46e5' },
+                                    { bg: 'rgba(10,179,156,0.09)', border: '#b7ebe4', text: '#065f46', badge: '#0ab39c', selBg: 'rgba(10,179,156,0.22)', selBorder: '#0ab39c' },
+                                    { bg: 'rgba(41,156,219,0.07)', border: '#7dd3fc', text: '#0c4a6e', badge: '#299cdb', selBg: 'rgba(41,156,219,0.2)', selBorder: '#299cdb' },
+                                    { bg: 'rgba(101,89,204,0.07)', border: '#c4b5fd', text: '#312e81', badge: '#6559cc', selBg: 'rgba(101,89,204,0.18)', selBorder: '#6559cc' },
                                   ];
                                   const t = rankTheme[rIdx] || rankTheme[0];
 
@@ -2125,7 +2125,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                             padding: '0.04rem 0.28rem',
                                             borderRadius: '3px',
                                             background: isKc ? 'rgba(64,81,137,0.11)' : 'rgba(41,156,219,0.11)',
-                                            color: isKc ? '#405189' : '#0284c7',
+                                            color: isKc ? '#405189' : '#299cdb',
                                           }}
                                         >
                                           {isKc ? 'Cabang Utama (KC)' : 'Outlet (KCP)'}
@@ -2135,7 +2135,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                             style={{
                                               fontSize: '0.6rem',
                                               fontWeight: 700,
-                                              color: !sameIsland ? '#dc2626' : distanceKm < 50 ? '#059669' : distanceKm < 200 ? '#d97706' : '#6b7280',
+                                              color: !sameIsland ? '#f06548' : distanceKm < 50 ? '#0ab39c' : distanceKm < 200 ? '#d68b0c' : '#6c757d',
                                               display: 'inline-flex',
                                               alignItems: 'center',
                                               gap: '0.15rem',
@@ -2158,9 +2158,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                   <div
                                     style={{
                                       fontSize: '0.62rem',
-                                      color: '#059669',
+                                      color: '#0ab39c',
                                       fontWeight: 600,
-                                      background: 'rgba(16,185,129,0.07)',
+                                      background: 'rgba(10,179,156,0.07)',
                                       borderRadius: '4px',
                                       padding: '0.2rem 0.4rem',
                                       display: 'flex',
@@ -2212,7 +2212,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                 gap: '0.25rem',
                                 fontSize: '0.68rem',
                                 fontWeight: 700,
-                                color: '#059669',
+                                color: '#0ab39c',
                                 background: 'rgba(10, 179, 156, 0.12)',
                                 border: '1px solid rgba(10, 179, 156, 0.3)',
                                 borderRadius: '4px',
@@ -2221,7 +2221,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                               }}
                               title="Kode Pos target terdaftar dan cocok di database PTEN"
                             >
-                              <CheckCircle2 size={11} color="#059669" /> Match PTEN
+                              <CheckCircle2 size={11} color="#0ab39c" /> Match PTEN
                             </span>
                           ) : (
                             <span
@@ -2231,9 +2231,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                 gap: '0.25rem',
                                 fontSize: '0.68rem',
                                 fontWeight: 600,
-                                color: '#6b7280',
-                                background: '#f3f4f6',
-                                border: '1px solid #e5e7eb',
+                                color: '#6c757d',
+                                background: '#f8f9fa',
+                                border: '1px solid #e9ebec',
                                 borderRadius: '4px',
                                 padding: '0.15rem 0.45rem',
                                 whiteSpace: 'nowrap',
@@ -2321,7 +2321,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                 gap: '0.35rem',
                 fontSize: '0.78rem',
                 padding: '0.35rem 0.95rem',
-                color: '#d97706',
+                color: '#d68b0c',
                 borderColor: '#f7b84b',
                 background: '#fffdf5',
               }}
@@ -2584,7 +2584,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                   borderRadius: '3px',
                                   border: '1px solid rgba(240, 101, 72, 0.3)',
                                   background: 'rgba(240, 101, 72, 0.06)',
-                                  color: '#e05338',
+                                  color: '#f06548',
                                   fontSize: '0.64rem',
                                   fontWeight: 600,
                                   cursor: 'pointer',
@@ -2613,11 +2613,11 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                     (uCabang && mCabang && (uCabang === mCabang || mCabang.includes(uCabang) || uCabang.includes(mCabang)));
 
                                   return isAgree ? (
-                                    <span style={{ color: '#059669', background: 'rgba(5, 150, 105, 0.08)', padding: '0.04rem 0.25rem', borderRadius: '2px', whiteSpace: 'nowrap' }} title="Pencocokan sistem sesuai dengan cabang yang Anda isi di file Excel">
+                                    <span style={{ color: '#0ab39c', background: 'rgba(5, 150, 105, 0.08)', padding: '0.04rem 0.25rem', borderRadius: '2px', whiteSpace: 'nowrap' }} title="Pencocokan sistem sesuai dengan cabang yang Anda isi di file Excel">
                                       ✓ Sesuai Excel Anda
                                     </span>
                                   ) : (
-                                    <span style={{ color: '#d97706', background: 'rgba(217, 119, 6, 0.08)', padding: '0.04rem 0.25rem', borderRadius: '2px', whiteSpace: 'nowrap' }} title={`Di Excel Anda isi: ${r._originalFilledCabang || r._originalFilledSandi || r._originalFilledSandiCabang}`}>
+                                    <span style={{ color: '#d68b0c', background: 'rgba(214,139,12, 0.08)', padding: '0.04rem 0.25rem', borderRadius: '2px', whiteSpace: 'nowrap' }} title={`Di Excel Anda isi: ${r._originalFilledCabang || r._originalFilledSandi || r._originalFilledSandiCabang}`}>
                                       ⚠️ Beda dr Excel
                                     </span>
                                   );
@@ -2671,14 +2671,14 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                             if (audit.hasRole && !audit.isNameMatched) {
                               return (
                                 <div style={{ display: 'inline-flex', flexDirection: 'column', gap: '0.15rem' }}>
-                                  <span style={{ color: '#b91c1c', fontWeight: 600 }} title={audit.tooltip}>
+                                  <span style={{ color: '#f06548', fontWeight: 600 }} title={audit.tooltip}>
                                     {val}
                                   </span>
                                   <span
                                     style={{
                                       fontSize: '0.62rem',
-                                      color: '#dc2626',
-                                      background: '#fee2e2',
+                                      color: '#f06548',
+                                      background: '#fdeae5',
                                       padding: '0.04rem 0.28rem',
                                       borderRadius: '3px',
                                       border: '1px solid #fca5a5',
@@ -2705,13 +2705,13 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                             if (audit.hasRole && !audit.isTypeMatched) {
                               return (
                                 <div style={{ display: 'inline-flex', flexDirection: 'column', gap: '0.15rem', alignItems: 'center' }}>
-                                  <span className="badge" style={{ background: '#fef3c7', color: '#b45309', border: '1px solid #fcd34d', fontWeight: 700 }}>
+                                  <span className="badge" style={{ background: '#fef3c7', color: '#d68b0c', border: '1px solid #f7b84b', fontWeight: 700 }}>
                                     {val}
                                   </span>
                                   <span
                                     style={{
                                       fontSize: '0.6rem',
-                                      color: '#d97706',
+                                      color: '#d68b0c',
                                       fontWeight: 700,
                                       whiteSpace: 'nowrap',
                                     }}
@@ -2760,7 +2760,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                   gap: '0.25rem',
                                   fontSize: '0.68rem',
                                   fontWeight: 700,
-                                  color: '#059669',
+                                  color: '#0ab39c',
                                   background: 'rgba(10, 179, 156, 0.12)',
                                   border: '1px solid rgba(10, 179, 156, 0.3)',
                                   borderRadius: '4px',
@@ -2769,7 +2769,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                 }}
                                 title={`Kode Pos ${targetKp} cocok di database PTEN`}
                               >
-                                <CheckCircle2 size={11} color="#059669" /> Match PTEN
+                                <CheckCircle2 size={11} color="#0ab39c" /> Match PTEN
                               </span>
                               ) : (
                               <span
@@ -2779,9 +2779,9 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                   gap: '0.25rem',
                                   fontSize: '0.68rem',
                                   fontWeight: 600,
-                                  color: '#6b7280',
-                                  background: '#f3f4f6',
-                                  border: '1px solid #e5e7eb',
+                                  color: '#6c757d',
+                                  background: '#f8f9fa',
+                                  border: '1px solid #e9ebec',
                                   borderRadius: '4px',
                                   padding: '0.15rem 0.45rem',
                                   whiteSpace: 'nowrap',
@@ -2829,7 +2829,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                   style={{
                                     fontSize: '0.72rem',
                                     fontWeight: 700,
-                                    color: audit.isNameMatched ? '#1e293b' : '#b91c1c',
+                                    color: audit.isNameMatched ? '#212529' : '#f06548',
                                     textAlign: 'center',
                                     maxWidth: '220px',
                                     whiteSpace: 'normal',
@@ -2887,8 +2887,8 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                     style={{
                                       fontSize: '0.62rem',
                                       fontWeight: 600,
-                                      color: '#b91c1c',
-                                      background: '#fee2e2',
+                                      color: '#f06548',
+                                      background: '#fdeae5',
                                       padding: '0.1rem 0.35rem',
                                       borderRadius: '3px',
                                       border: '1px solid #fca5a5',
@@ -2910,11 +2910,11 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                                     style={{
                                       fontSize: '0.61rem',
                                       fontWeight: 500,
-                                      color: '#0369a1',
+                                      color: '#299cdb',
                                       background: '#e0f2fe',
                                       padding: '0.08rem 0.35rem',
                                       borderRadius: '3px',
-                                      border: '1px solid #bae6fd',
+                                      border: '1px solid #d5eef8',
                                       marginTop: '0.1rem',
                                       maxWidth: '220px',
                                       textAlign: 'center',
@@ -3191,7 +3191,7 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
             position: 'fixed',
             inset: 0,
             zIndex: 99999,
-            background: 'rgba(15, 23, 42, 0.72)',
+            background: 'rgba(33,37,41, 0.72)',
             backdropFilter: 'blur(5px)',
             display: 'flex',
             alignItems: 'center',
@@ -3202,11 +3202,11 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
           className=""
           style={{
               background: '#ffffff',
-              borderRadius: '16px',
+              borderRadius: '6px',
               padding: '1.75rem 2rem',
               maxWidth: '480px',
               width: '100%',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              boxShadow: '0 8px 16px rgba(0, 0, 0, 0.15)',
               border: '1px solid rgba(226, 232, 240, 0.8)',
               display: 'flex',
               flexDirection: 'column',
@@ -3235,11 +3235,11 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
               )}
             </div>
 
-            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#1e293b', margin: '0 0 0.35rem' }}>
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#212529', margin: '0 0 0.35rem' }}>
               {approvalProgress.percent === 100 ? 'Persetujuan Selesai!' : 'Memproses Persetujuan Rekomendasi'}
             </h3>
 
-            <p style={{ fontSize: '0.82rem', color: '#64748b', margin: '0 0 1.25rem', lineHeight: 1.45 }}>
+            <p style={{ fontSize: '0.82rem', color: '#878a99', margin: '0 0 1.25rem', lineHeight: 1.45 }}>
               {approvalProgress.stage}
             </p>
 
@@ -3265,10 +3265,10 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                 style={{
                   width: '100%',
                   height: '10px',
-                  background: '#f1f5f9',
+                  background: '#f8f9fa',
                   borderRadius: '9999px',
                   overflow: 'hidden',
-                  border: '1px solid #e2e8f0',
+                  border: '1px solid #e9ebec',
                 }}
               >
                 <div
@@ -3290,17 +3290,17 @@ export const TargetDataGrid: React.FC<TargetDataGridProps> = ({
                 alignItems: 'center',
                 gap: '0.35rem',
                 fontSize: '0.72rem',
-                color: '#64748b',
-                background: '#f8fafc',
+                color: '#878a99',
+                background: '#f9fbfd',
                 padding: '0.3rem 0.75rem',
                 borderRadius: '6px',
-                border: '1px solid #e2e8f0',
+                border: '1px solid #e9ebec',
                 fontWeight: 500,
                 marginBottom: approvalProgress.percent === 100 ? '0.75rem' : '0',
               }}
             >
               <span>Diproses:</span>
-              <strong style={{ color: '#1e293b' }}>
+              <strong style={{ color: '#212529' }}>
                 {approvalProgress.current.toLocaleString('id-ID')} / {approvalProgress.total.toLocaleString('id-ID')} Baris
               </strong>
             </div>

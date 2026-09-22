@@ -83,8 +83,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 background: '#ffffff',
                 border: '1px solid #e6e9ec',
                 borderLeft: `4px solid ${WARNA[n.type]}`,
-                borderRadius: '8px',
-                boxShadow: '0 8px 20px rgba(15, 23, 42, 0.14)',
+                borderRadius: '6px',
+                boxShadow: '0 5px 12px rgba(30, 32, 37, 0.16)',
                 padding: '0.6rem 0.7rem',
               }}
             >

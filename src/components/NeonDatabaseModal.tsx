@@ -61,8 +61,8 @@ export const NeonDatabaseModal: React.FC<NeonDatabaseModalProps> = ({
         position: 'relative',
         background: '#ffffff',
         border: '1px solid var(--border-subtle)',
-        boxShadow: '0 10px 25px rgba(56, 65, 74, 0.15)',
-        borderRadius: '8px',
+        boxShadow: '0 8px 16px rgba(56, 65, 74, 0.14)',
+        borderRadius: '6px',
       }}
     >
         {/* Close Button */}
@@ -135,7 +135,7 @@ export const NeonDatabaseModal: React.FC<NeonDatabaseModalProps> = ({
               <AlertCircle size={20} color="#d68b0c" />
             )}
             <div>
-              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: neonStatus?.connected ? '#0ab39c' : '#b45309' }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: neonStatus?.connected ? '#0ab39c' : '#d68b0c' }}>
                 {neonStatus?.connected ? 'Terhubung ke Supabase Postgres' : 'Supabase Belum Terkoneksi (Mode Lokal)'}
               </div>
               <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
@@ -159,8 +159,8 @@ export const NeonDatabaseModal: React.FC<NeonDatabaseModalProps> = ({
         </div>
 
         {/* Live Relational Tables Information */}
-        <div style={{ background: '#f8fafc', borderRadius: '6px', padding: '1rem', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
-          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b', marginBottom: '0.65rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        <div style={{ background: '#f9fbfd', borderRadius: '6px', padding: '1rem', border: '1px solid #e9ebec', marginBottom: '1rem' }}>
+          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#212529', marginBottom: '0.65rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             <Table size={15} color="#405189" />
             <span>Tabel Relasional Database Aktif di Supabase Postgres:</span>
           </div>
@@ -170,7 +170,7 @@ export const NeonDatabaseModal: React.FC<NeonDatabaseModalProps> = ({
             <div
               style={{
                 background: '#ffffff',
-                border: '1px solid #e2e8f0',
+                border: '1px solid #e9ebec',
                 borderRadius: '6px',
                 padding: '0.6rem 0.8rem',
                 display: 'flex',
@@ -182,7 +182,7 @@ export const NeonDatabaseModal: React.FC<NeonDatabaseModalProps> = ({
                 <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#405189' }}>
                   master_records
                 </div>
-                <div style={{ fontSize: '0.71rem', color: '#64748b' }}>
+                <div style={{ fontSize: '0.71rem', color: '#878a99' }}>
                   Menyimpan seluruh data master cabang per baris (alamat, kode pos, dati II, provinsi, dll)
                 </div>
               </div>
@@ -205,7 +205,7 @@ export const NeonDatabaseModal: React.FC<NeonDatabaseModalProps> = ({
             <div
               style={{
                 background: '#ffffff',
-                border: '1px solid #e2e8f0',
+                border: '1px solid #e9ebec',
                 borderRadius: '6px',
                 padding: '0.6rem 0.8rem',
                 display: 'flex',
@@ -217,7 +217,7 @@ export const NeonDatabaseModal: React.FC<NeonDatabaseModalProps> = ({
                 <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0ab39c' }}>
                   target_records
                 </div>
-                <div style={{ fontSize: '0.71rem', color: '#64748b' }}>
+                <div style={{ fontSize: '0.71rem', color: '#878a99' }}>
                   Menyimpan seluruh data target &amp; status hasil pencocokan (is_matched, match_level)
                 </div>
               </div>
@@ -240,7 +240,7 @@ export const NeonDatabaseModal: React.FC<NeonDatabaseModalProps> = ({
             <div
               style={{
                 background: '#ffffff',
-                border: '1px solid #e2e8f0',
+                border: '1px solid #e9ebec',
                 borderRadius: '6px',
                 padding: '0.6rem 0.8rem',
                 display: 'flex',
@@ -252,7 +252,7 @@ export const NeonDatabaseModal: React.FC<NeonDatabaseModalProps> = ({
                 <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#f0ad4e' }}>
                   final_rows
                 </div>
-                <div style={{ fontSize: '0.71rem', color: '#64748b' }}>
+                <div style={{ fontSize: '0.71rem', color: '#878a99' }}>
                   Salinan cloud Data Final — hasil tetap ada saat ganti perangkat atau browser dibersihkan
                 </div>
               </div>
@@ -274,9 +274,9 @@ export const NeonDatabaseModal: React.FC<NeonDatabaseModalProps> = ({
         </div>
 
         {/* Persistence & Reset Guarantee Box */}
-        <div style={{ background: '#f0fdf4', borderRadius: '6px', padding: '0.85rem 1rem', border: '1px solid #bbf7d0', marginBottom: '1rem' }}>
+        <div style={{ background: '#e8f7f5', borderRadius: '6px', padding: '0.85rem 1rem', border: '1px solid #b7ebe4', marginBottom: '1rem' }}>
           <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#166534', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <Server size={15} color="#16a34a" />
+            <Server size={15} color="#0ab39c" />
             <span>Jaminan Penyimpanan Data:</span>
           </div>
           <ul style={{ fontSize: '0.74rem', color: '#14532d', lineHeight: 1.6, paddingLeft: '1.2rem', margin: 0 }}>

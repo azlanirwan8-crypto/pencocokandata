@@ -964,7 +964,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
 
       {/* G3: Baris dilewati karena sudah ada di Final Data (Analisis Inkremental) */}
       {(coverage?.skippedFinalRows || 0) > 0 && (
-        <details style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', padding: '0.6rem 1rem' }}>
+        <details style={{ background: '#e8f7f5', border: '1px solid #b7ebe4', borderRadius: '6px', padding: '0.6rem 1rem' }}>
           <summary style={{ cursor: 'pointer', fontWeight: 700, color: '#166534', fontSize: '0.86rem' }}>
             {coverage!.skippedFinalRows.toLocaleString('id-ID')} baris dilewati — data kelurahan sudah berstatus Final (analisis inkremental)
           </summary>
@@ -1137,7 +1137,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
         style={{
           background: '#ffffff',
           border: '1px solid #e9ebec',
-          borderRadius: '8px',
+          borderRadius: '6px',
           padding: '0.9rem 1.25rem',
           display: 'flex',
           alignItems: 'center',
@@ -1289,7 +1289,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
             borderRadius: '6px',
             fontSize: '0.78rem',
             fontWeight: 600,
-            background: phaseState.step === 4 ? '#e8f7f5' : '#eff2f7',
+            background: phaseState.step === 4 ? '#e8f7f5' : '#eef1f4',
             color: phaseState.step === 4 ? '#0ab39c' : '#405189',
             border: `1px solid ${phaseState.step === 4 ? '#b7ebe4' : '#dce4f5'}`,
           }}
@@ -1572,7 +1572,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
         <ConfirmDialog
           isOpen={konfirmasiRevisiMassal}
           icon={<RotateCcw size={18} />}
-          accent="#d97706"
+          accent="#d68b0c"
           title="Kembalikan baris terpilih ke manual?"
           message={`${barisTerpilih.length.toLocaleString('id-ID')} baris terpilih akan ditandai perlu diperiksa ulang dan keluar dari tab Berhasil Dianalisa.`}
           confirmLabel="Ya, Revisi terpilih"
@@ -1608,9 +1608,9 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                   {thSort('provinsi', 'Provinsi', { minWidth: '130px' })}
                   {thSort('kotaPten', 'KOTA PTEN', { minWidth: '140px', borderLeft: '2px solid #b7ebe4' })}
                   {thSort('kodePosPten', 'KODE POS PTEN', { width: '115px', textAlign: 'center' })}
-                  <th style={{ width: '165px', textAlign: 'center', background: '#eef7ff', color: '#2563eb' }} title="Hasil analisa Fase 1 (PTEN & Kode Pos) untuk baris ini">Validasi Fase 1</th>
-                  <th style={{ width: '175px', textAlign: 'center', background: '#fff9f0', color: '#d97706' }} title="Hasil analisa Fase 2 (Wilayah & Master Cabang) untuk baris ini">Validasi Fase 2</th>
-                  <th style={{ width: '175px', textAlign: 'center', background: '#f0fdf8', color: '#059669' }} title="Hasil analisa Fase 3 (Mapping Role & Wondr) untuk baris ini">Validasi Fase 3</th>
+                  <th style={{ width: '165px', textAlign: 'center', background: '#eef7ff', color: '#3577f1' }} title="Hasil analisa Fase 1 (PTEN & Kode Pos) untuk baris ini">Validasi Fase 1</th>
+                  <th style={{ width: '175px', textAlign: 'center', background: '#fff9f0', color: '#d68b0c' }} title="Hasil analisa Fase 2 (Wilayah & Master Cabang) untuk baris ini">Validasi Fase 2</th>
+                  <th style={{ width: '175px', textAlign: 'center', background: '#f0fdf8', color: '#0ab39c' }} title="Hasil analisa Fase 3 (Mapping Role & Wondr) untuk baris ini">Validasi Fase 3</th>
                   <th style={{ width: '95px', textAlign: 'center' }}>Aksi Review</th>
                 </tr>
               )}
@@ -1623,7 +1623,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                       <input type="checkbox" checked={semuaHalamanTerpilih} onChange={gantiPilihanSemua} aria-label="Pilih semua baris pada halaman ini" style={{ cursor: 'pointer' }} />
                     </th>
                     {thSort('no', 'No', { width: '40px', textAlign: 'center', verticalAlign: 'middle' }, { rowSpan: 2 })}
-                    <th colSpan={5} style={{ textAlign: 'center', background: '#eff6fb', color: '#299cdb', borderLeft: '2px solid #d5e7f2' }}>
+                    <th colSpan={5} style={{ textAlign: 'center', background: '#eff6fb', color: '#299cdb', borderLeft: '2px solid #e3eff7' }}>
                       📮 DATA POS (Kelurahan &amp; Wilayah Administrasi)
                     </th>
                     <th colSpan={3} style={{ textAlign: 'center', background: '#eefaf6', color: '#0ab39c', borderLeft: '2px solid #b7ebe4' }}>
@@ -1634,7 +1634,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                     <th rowSpan={2} style={{ width: '110px', textAlign: 'center', verticalAlign: 'middle' }}>Aksi Review</th>
                   </tr>
                   <tr>
-                    {thSort('kelurahan', 'Kelurahan', { minWidth: '140px', borderLeft: '2px solid #d5e7f2' })}
+                    {thSort('kelurahan', 'Kelurahan', { minWidth: '140px', borderLeft: '2px solid #e3eff7' })}
                     <th style={{ minWidth: '150px' }} title="Nama kota/kabupaten persis seperti tertulis di Data KodePos — hanya pembanding tampilan, tidak ikut disimpan di baris hasil">Kota/Kab (dari KodePos)</th>
                     {thSort('kecamatan', 'Kecamatan', { minWidth: '140px' })}
                     {thSort('provinsi', 'Provinsi', { minWidth: '130px' })}
@@ -1662,7 +1662,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                       maxWidth: '420px',
                       textAlign: 'left',
                       background: '#fff9f0',
-                      color: '#d97706',
+                      color: '#d68b0c',
                       position: 'sticky',
                       left: '74px',
                       zIndex: 12,
@@ -1702,20 +1702,20 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                       maxWidth: '420px',
                       textAlign: 'left',
                       background: '#f0fdf8',
-                      color: '#059669',
+                      color: '#0ab39c',
                       position: 'sticky',
                       left: '34px',
                       zIndex: 12,
                       boxShadow: '3px 0 6px -2px rgba(0,0,0,0.06)',
-                      borderRight: '2px solid rgba(16, 185, 129, 0.35)',
+                      borderRight: '2px solid rgba(10,179,156, 0.35)',
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                      <Shield size={13} color="#059669" />
+                      <Shield size={13} color="#0ab39c" />
                       <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>Rekomendasi Mapping Role</span>
                     </div>
                   </th>
-                  <th style={{ width: '400px', minWidth: '400px', maxWidth: '400px', textAlign: 'left', background: '#fff9f0', color: '#d97706', borderRight: '2px solid #f7b84b' }} title="Cabang Master yang terpilih di Fase 2 — acuan rekomendasi role di kolom kiri">
+                  <th style={{ width: '400px', minWidth: '400px', maxWidth: '400px', textAlign: 'left', background: '#fff9f0', color: '#d68b0c', borderRight: '2px solid #f7b84b' }} title="Cabang Master yang terpilih di Fase 2 — acuan rekomendasi role di kolom kiri">
                     Data Master Outlet
                   </th>
                   <th style={{ width: '95px', textAlign: 'center' }} title="Kode pos dari data PTEN (hasil tabrakan Fase 1)">Kode Pos</th>
@@ -1792,7 +1792,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                           <td className="code-cell" style={{ textAlign: 'center', color: '#0ab39c', fontWeight: 700 }}>{r.kodePosKelurahan || r.kodePosPten || '-'}</td>
                           <td style={{ fontWeight: 700 }}>{r.kelurahan}</td>
                           <td>{r.kecamatan}</td>
-                          <td style={{ color: kotaKodePosDari(r) && kotaKodePosDari(r) !== (r.kotaPtenMax15 || r.kotaPten) ? '#b45309' : '#495057' }} title={`Nilai sama dengan kolom KOTA PTEN (aturan ekspor). Menurut Data KodePos kota ini: ${kotaKodePosDari(r) || 'tidak ada'}`}>
+                          <td style={{ color: kotaKodePosDari(r) && kotaKodePosDari(r) !== (r.kotaPtenMax15 || r.kotaPten) ? '#d68b0c' : '#495057' }} title={`Nilai sama dengan kolom KOTA PTEN (aturan ekspor). Menurut Data KodePos kota ini: ${kotaKodePosDari(r) || 'tidak ada'}`}>
                             {r.kotaPtenMax15 || r.kotaPten || '—'}
                           </td>
                           <td>{r.provinsi}</td>
@@ -1811,8 +1811,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                       {viewTab === 'fase1' && (
                         <>
                           <td style={{ textAlign: 'center', color: '#878a99' }}>{r.kelurahanSeq ?? displayIdx}</td>
-                          <td style={{ fontWeight: 700, color: '#212529', borderLeft: '2px solid #d5e7f2' }}>{r.kelurahan}</td>
-                          <td style={{ color: kotaKodePosDari(r) && kotaKodePosDari(r) !== r.kotaPten ? '#b45309' : '#495057' }} title="Dari Data KodePos (tampilan saja)">{kotaKodePosDari(r) || '—'}</td>
+                          <td style={{ fontWeight: 700, color: '#212529', borderLeft: '2px solid #e3eff7' }}>{r.kelurahan}</td>
+                          <td style={{ color: kotaKodePosDari(r) && kotaKodePosDari(r) !== r.kotaPten ? '#d68b0c' : '#495057' }} title="Dari Data KodePos (tampilan saja)">{kotaKodePosDari(r) || '—'}</td>
                           <td>{r.kecamatan}</td>
                           <td>{r.provinsi}</td>
                           <td className="code-cell" style={{ textAlign: 'center', color: '#299cdb', fontWeight: 700 }}>
@@ -1868,7 +1868,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                               width: '420px',
                               minWidth: '420px',
                               maxWidth: '420px',
-                              background: r.fase2Approved ? '#f0fdf4' : '#fffdfa',
+                              background: r.fase2Approved ? '#e8f7f5' : '#fffdfa',
                               padding: '0.45rem 0.55rem',
                               verticalAlign: 'top',
                               boxShadow: '3px 0 6px -2px rgba(0,0,0,0.06)',
@@ -1887,7 +1887,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                             const m = activeCand.master;
                             const isTop1 = activeCand.rank === 1;
                             const badgeBg = isTop1 ? 'rgba(10,179,156,0.12)' : activeCand.rank === 2 ? 'rgba(247,184,75,0.15)' : 'rgba(53,119,241,0.1)';
-                            const badgeColor = isTop1 ? '#0ab39c' : activeCand.rank === 2 ? '#d97706' : '#3577f1';
+                            const badgeColor = isTop1 ? '#0ab39c' : activeCand.rank === 2 ? '#d68b0c' : '#3577f1';
                             const candWilayah = extractWilayahFromBranchCode(String(m['Branch Code'] || m['Kode Cabang'] || '').trim(), wilayahSettings, r.wilayah);
                             const isKelMatched = !!(r.kelurahan && m.Kelurahan && cleanKelurahan(r.kelurahan) === cleanKelurahan(m.Kelurahan));
                             const isKecMatched = !!(r.kecamatan && m.Kecamatan && cleanKecamatan(r.kecamatan) === cleanKecamatan(m.Kecamatan));
@@ -1931,7 +1931,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                         color:
                                           audit.status === 'match_top1' ? '#07796a'
                                           : audit.status === 'match_top2' || audit.status === 'match_top3' ? '#925807'
-                                          : '#2563eb',
+                                          : '#3577f1',
                                         border: `1px solid ${
                                           audit.status === 'match_top1' ? 'rgba(10,179,156,0.28)'
                                           : audit.status === 'match_top2' || audit.status === 'match_top3' ? 'rgba(247,184,75,0.35)'
@@ -1944,7 +1944,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                       {audit.status === 'match_top1' ? (
                                         <CheckCircle2 size={12} color="#0ab39c" style={{ flexShrink: 0 }} />
                                       ) : audit.status === 'match_top2' || audit.status === 'match_top3' ? (
-                                        <AlertTriangle size={12} color="#d97706" style={{ flexShrink: 0 }} />
+                                        <AlertTriangle size={12} color="#d68b0c" style={{ flexShrink: 0 }} />
                                       ) : (
                                         <Info size={12} color="#3577f1" style={{ flexShrink: 0 }} />
                                       )}
@@ -1958,7 +1958,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                       <span style={{ fontSize: '0.68rem', color: '#878a99', fontWeight: 600, flexShrink: 0, whiteSpace: 'nowrap' }}>Opsi:</span>
                                       {cands.map((cand) => {
                                         const isSelected = cand.rank === activeCand.rank;
-                                        const pillBg = cand.rank === 1 ? '#0ab39c' : cand.rank === 2 ? '#d97706' : '#3577f1';
+                                        const pillBg = cand.rank === 1 ? '#0ab39c' : cand.rank === 2 ? '#d68b0c' : '#3577f1';
                                         const isUserChoice = audit?.matchedRank === cand.rank;
                                         return (
                                           <button
@@ -1979,7 +1979,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                               fontWeight: isSelected ? 700 : 500,
                                               background: isSelected ? pillBg : '#f3f6f9',
                                               color: isSelected ? '#ffffff' : '#495057',
-                                              border: isSelected ? `1px solid ${pillBg}` : isUserChoice ? '1px dashed #d97706' : '1px solid #e9ebec',
+                                              border: isSelected ? `1px solid ${pillBg}` : isUserChoice ? '1px dashed #d68b0c' : '1px solid #e9ebec',
                                               cursor: 'pointer',
                                               flexShrink: 0,
                                               whiteSpace: 'nowrap',
@@ -1987,7 +1987,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                           >
                                             <span>{cand.rank === 1 ? 'Pilihan 1' : `Pilihan ${cand.rank}`}</span>
                                             {isUserChoice && (
-                                              <span style={{ fontSize: '0.58rem', padding: '0.02rem 0.25rem', borderRadius: '3px', background: isSelected ? 'rgba(255,255,255,0.3)' : 'rgba(217,119,6,0.15)', color: isSelected ? '#ffffff' : '#925807', fontWeight: 700 }}>
+                                              <span style={{ fontSize: '0.58rem', padding: '0.02rem 0.25rem', borderRadius: '3px', background: isSelected ? 'rgba(255,255,255,0.3)' : 'rgba(214,139,12,0.15)', color: isSelected ? '#ffffff' : '#925807', fontWeight: 700 }}>
                                                 Pilihan Anda
                                               </span>
                                             )}
@@ -2015,7 +2015,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                           {isTop1 ? 'Pilihan 1 (Utama)' : `Pilihan ${activeCand.rank} (Alternatif)`}
                                         </span>
                                         {activeCand.diLuarZona && (
-                                          <span style={{ padding: '0.1rem 0.38rem', borderRadius: '3px', fontSize: '0.67rem', fontWeight: 700, background: 'rgba(217,119,6,0.12)', color: '#925807' }} title="Kota ini punya kurang dari tiga cabang di Master, jadi pilihan ini diambil dari luar kota/provinsi — bukan hasil pencocokan otomatis">
+                                          <span style={{ padding: '0.1rem 0.38rem', borderRadius: '3px', fontSize: '0.67rem', fontWeight: 700, background: 'rgba(214,139,12,0.12)', color: '#925807' }} title="Kota ini punya kurang dari tiga cabang di Master, jadi pilihan ini diambil dari luar kota/provinsi — bukan hasil pencocokan otomatis">
                                             LUAR ZONA
                                           </span>
                                         )}
@@ -2038,7 +2038,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             title="Buka rute navigasi & cek jarak real di Google Maps"
-                                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', height: '18px', padding: '0 0.35rem', fontSize: '0.67rem', fontWeight: 600, color: '#2563eb', background: 'rgba(37,99,235,0.08)', border: '1px solid rgba(37,99,235,0.25)', borderRadius: '3px', textDecoration: 'none' }}
+                                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', height: '18px', padding: '0 0.35rem', fontSize: '0.67rem', fontWeight: 600, color: '#3577f1', background: 'rgba(53,119,241,0.08)', border: '1px solid rgba(53,119,241,0.25)', borderRadius: '3px', textDecoration: 'none' }}
                                           >
                                             <ExternalLink size={10} /> Maps
                                           </a>
@@ -2047,7 +2047,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                           type="button"
                                           title="Lihat alasan penilaian skor & detail wilayah"
                                           onClick={() => setFase2Detail({ row: r, target: entry.target, rec, chosen: activeCand })}
-                                          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '18px', height: '18px', borderRadius: '3px', border: '1px solid #d1d5db', background: '#f8fafc', color: '#64748b', cursor: 'pointer', padding: 0 }}
+                                          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '18px', height: '18px', borderRadius: '3px', border: '1px solid #ced4da', background: '#f9fbfd', color: '#878a99', cursor: 'pointer', padding: 0 }}
                                         >
                                           <Info size={10} />
                                         </button>
@@ -2070,8 +2070,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                           fontSize: '0.69rem',
                                           padding: '0.16rem 0.52rem',
                                           color: badgeColor,
-                                          borderColor: isTop1 ? 'rgba(10,179,156,0.45)' : activeCand.rank === 2 ? 'rgba(217,119,6,0.45)' : 'rgba(53,119,241,0.45)',
-                                          background: isTop1 ? 'rgba(10,179,156,0.08)' : activeCand.rank === 2 ? 'rgba(217,119,6,0.08)' : 'rgba(53,119,241,0.08)',
+                                          borderColor: isTop1 ? 'rgba(10,179,156,0.45)' : activeCand.rank === 2 ? 'rgba(214,139,12,0.45)' : 'rgba(53,119,241,0.45)',
+                                          background: isTop1 ? 'rgba(10,179,156,0.08)' : activeCand.rank === 2 ? 'rgba(214,139,12,0.08)' : 'rgba(53,119,241,0.08)',
                                           fontWeight: 600,
                                           whiteSpace: 'nowrap',
                                           flexShrink: 0,
@@ -2091,16 +2091,16 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                         <MapPin size={9} /> {candWilayah.wilayahName}
                                       </span>
                                     </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.69rem', color: '#495057', background: '#f8fafc', padding: '0.18rem 0.45rem', borderRadius: '4px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
-                                      <span>Kel: <strong style={{ color: isKelMatched ? '#059669' : '#1e293b' }}>{m.Kelurahan || '-'}</strong></span>
-                                      {isKelMatched && <span style={{ fontSize: '0.6rem', padding: '0.02rem 0.25rem', borderRadius: '3px', background: 'rgba(10,179,156,0.12)', color: '#059669', fontWeight: 700 }} title="Kelurahan sama persis">✓ Kelurahan Sama</span>}
-                                      <span style={{ color: '#cbd5e1' }}>•</span>
-                                      <span>Kec: <strong style={{ color: isKecMatched ? '#2563eb' : '#1e293b' }}>{m.Kecamatan || '-'}</strong></span>
-                                      {isKecMatched && <span style={{ fontSize: '0.6rem', padding: '0.02rem 0.25rem', borderRadius: '3px', background: 'rgba(37,99,235,0.1)', color: '#2563eb', fontWeight: 700 }} title="Kecamatan sama persis">✓ Kecamatan Sama</span>}
-                                      <span style={{ color: '#cbd5e1' }}>•</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.69rem', color: '#495057', background: '#f9fbfd', padding: '0.18rem 0.45rem', borderRadius: '4px', border: '1px solid #e9ebec', flexWrap: 'wrap' }}>
+                                      <span>Kel: <strong style={{ color: isKelMatched ? '#0ab39c' : '#212529' }}>{m.Kelurahan || '-'}</strong></span>
+                                      {isKelMatched && <span style={{ fontSize: '0.6rem', padding: '0.02rem 0.25rem', borderRadius: '3px', background: 'rgba(10,179,156,0.12)', color: '#0ab39c', fontWeight: 700 }} title="Kelurahan sama persis">✓ Kelurahan Sama</span>}
+                                      <span style={{ color: '#ced4da' }}>•</span>
+                                      <span>Kec: <strong style={{ color: isKecMatched ? '#3577f1' : '#212529' }}>{m.Kecamatan || '-'}</strong></span>
+                                      {isKecMatched && <span style={{ fontSize: '0.6rem', padding: '0.02rem 0.25rem', borderRadius: '3px', background: 'rgba(53,119,241,0.1)', color: '#3577f1', fontWeight: 700 }} title="Kecamatan sama persis">✓ Kecamatan Sama</span>}
+                                      <span style={{ color: '#ced4da' }}>•</span>
                                       <span>{m['Dati II'] || '-'}</span>
                                     </div>
-                                    <div style={{ fontSize: '0.68rem', color: '#6b7280', marginTop: '0.25rem' }}>{activeCand.reason}</div>
+                                    <div style={{ fontSize: '0.68rem', color: '#6c757d', marginTop: '0.25rem' }}>{activeCand.reason}</div>
                                   </div>
                                 </div>
                               </td>
@@ -2135,11 +2135,11 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                               width: '420px',
                               minWidth: '420px',
                               maxWidth: '420px',
-                              background: r.fase3Approved ? '#f0fdf4' : '#fafffe',
+                              background: r.fase3Approved ? '#e8f7f5' : '#fafffe',
                               padding: '0.45rem 0.55rem',
                               verticalAlign: 'top',
                               boxShadow: '3px 0 6px -2px rgba(0,0,0,0.06)',
-                              borderRight: '2px solid rgba(16,185,129,0.45)',
+                              borderRight: '2px solid rgba(10,179,156,0.45)',
                               boxSizing: 'border-box',
                             };
                             if (topRoles.length === 0)
@@ -2151,9 +2151,9 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                 </td>
                               );
                             const rankTheme = [
-                              { bg: 'rgba(16,185,129,0.09)', border: '#6ee7b7', text: '#065f46', badge: '#059669', selBg: 'rgba(16,185,129,0.22)', selBorder: '#059669' },
-                              { bg: 'rgba(14,165,233,0.07)', border: '#7dd3fc', text: '#0c4a6e', badge: '#0284c7', selBg: 'rgba(14,165,233,0.2)', selBorder: '#0284c7' },
-                              { bg: 'rgba(99,102,241,0.07)', border: '#c4b5fd', text: '#312e81', badge: '#4f46e5', selBg: 'rgba(99,102,241,0.18)', selBorder: '#4f46e5' },
+                              { bg: 'rgba(10,179,156,0.09)', border: '#b7ebe4', text: '#065f46', badge: '#0ab39c', selBg: 'rgba(10,179,156,0.22)', selBorder: '#0ab39c' },
+                              { bg: 'rgba(41,156,219,0.07)', border: '#7dd3fc', text: '#0c4a6e', badge: '#299cdb', selBg: 'rgba(41,156,219,0.2)', selBorder: '#299cdb' },
+                              { bg: 'rgba(101,89,204,0.07)', border: '#c4b5fd', text: '#312e81', badge: '#6559cc', selBg: 'rgba(101,89,204,0.18)', selBorder: '#6559cc' },
                             ];
                             return (
                               <td style={tdRole}>
@@ -2195,12 +2195,12 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                           )}
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', paddingLeft: '1.3rem', marginTop: '0.15rem', flexWrap: 'wrap' }}>
-                                          <span style={{ fontSize: '0.6rem', fontWeight: 700, padding: '0.04rem 0.28rem', borderRadius: '3px', background: isKc ? 'rgba(64,81,137,0.11)' : 'rgba(41,156,219,0.11)', color: isKc ? '#405189' : '#0284c7' }}>
+                                          <span style={{ fontSize: '0.6rem', fontWeight: 700, padding: '0.04rem 0.28rem', borderRadius: '3px', background: isKc ? 'rgba(64,81,137,0.11)' : 'rgba(41,156,219,0.11)', color: isKc ? '#405189' : '#299cdb' }}>
                                             {isKc ? 'Cabang Utama (KC)' : 'Outlet (KCP)'}
                                           </span>
                                           {item.distanceKm !== null ? (
                                             <span
-                                              style={{ fontSize: '0.6rem', fontWeight: 700, color: !item.sameIsland ? '#dc2626' : item.distanceKm < 50 ? '#059669' : item.distanceKm < 200 ? '#d97706' : '#6b7280', display: 'inline-flex', alignItems: 'center', gap: '0.15rem' }}
+                                              style={{ fontSize: '0.6rem', fontWeight: 700, color: !item.sameIsland ? '#f06548' : item.distanceKm < 50 ? '#0ab39c' : item.distanceKm < 200 ? '#d68b0c' : '#6c757d', display: 'inline-flex', alignItems: 'center', gap: '0.15rem' }}
                                               title={!item.sameIsland ? 'Peringatan: cabang ini berada di pulau berbeda' : `Estimasi jarak lurus: ${item.distanceKm} km`}
                                             >
                                               <MapPin size={9} />
@@ -2215,7 +2215,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                     );
                                   })}
                                   {selectedIdx >= 0 && topRoles[selectedIdx] && (
-                                    <div style={{ fontSize: '0.62rem', color: '#059669', fontWeight: 600, background: 'rgba(16,185,129,0.07)', borderRadius: '4px', padding: '0.2rem 0.4rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                    <div style={{ fontSize: '0.62rem', color: '#0ab39c', fontWeight: 600, background: 'rgba(10,179,156,0.07)', borderRadius: '4px', padding: '0.2rem 0.4rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                                       <CheckCircle2 size={11} />
                                       Dipilih: {topRoles[selectedIdx].rec.organisasiTujuan}
                                     </div>
@@ -2225,7 +2225,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                       type="button"
                                       onClick={() => applyFase3Role(r, topRoles[selectedIdx].rec)}
                                       disabled={isProcessing}
-                                      style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.22rem 0.6rem', fontSize: '0.7rem', fontWeight: 700, border: '1px solid #059669', borderRadius: '4px', background: '#059669', color: '#fff', cursor: isProcessing ? 'wait' : 'pointer' }}
+                                      style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.22rem 0.6rem', fontSize: '0.7rem', fontWeight: 700, border: '1px solid #0ab39c', borderRadius: '4px', background: '#0ab39c', color: '#fff', cursor: isProcessing ? 'wait' : 'pointer' }}
                                     >
                                       <Check size={11} /> Terapkan Role Ini
                                     </button>
@@ -2244,7 +2244,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                               width: '400px',
                               minWidth: '400px',
                               maxWidth: '400px',
-                              background: r.fase3Approved ? '#f0fdf4' : '#fffdfa',
+                              background: r.fase3Approved ? '#e8f7f5' : '#fffdfa',
                               padding: '0.45rem 0.55rem',
                               verticalAlign: 'top',
                               borderRight: '2px solid rgba(247,184,75,0.45)',
@@ -2267,10 +2267,10 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                               <td style={tdMaster}>
                                 <div style={{ border: '1px solid rgba(247,184,75,0.4)', borderRadius: '6px', padding: '0.45rem 0.6rem', background: '#ffffff', overflow: 'hidden' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginBottom: '0.3rem', flexWrap: 'nowrap', ...ell }}>
-                                    <span style={{ padding: '0.1rem 0.38rem', borderRadius: '3px', fontSize: '0.67rem', fontWeight: 700, background: 'rgba(247,184,75,0.15)', color: '#d97706', flexShrink: 0 }}>
+                                    <span style={{ padding: '0.1rem 0.38rem', borderRadius: '3px', fontSize: '0.67rem', fontWeight: 700, background: 'rgba(247,184,75,0.15)', color: '#d68b0c', flexShrink: 0 }}>
                                       Cabang Fase 2
                                     </span>
-                                    <span style={{ padding: '0.1rem 0.38rem', borderRadius: '3px', fontSize: '0.67rem', fontWeight: 700, background: isKcUnit ? 'rgba(64,81,137,0.11)' : 'rgba(41,156,219,0.11)', color: isKcUnit ? '#405189' : '#0284c7', flexShrink: 0 }}>
+                                    <span style={{ padding: '0.1rem 0.38rem', borderRadius: '3px', fontSize: '0.67rem', fontWeight: 700, background: isKcUnit ? 'rgba(64,81,137,0.11)' : 'rgba(41,156,219,0.11)', color: isKcUnit ? '#405189' : '#299cdb', flexShrink: 0 }}>
                                       {isKcUnit ? 'Cabang Utama (KC)' : 'Outlet (KCP)'}
                                     </span>
                                     {r.fase2JarakKm > 0 && (
@@ -2293,16 +2293,16 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                       <MapPin size={9} /> {wil.wilayahName || r.wilayah || p2?.wilayah || '-'}
                                     </span>
                                   </div>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.69rem', color: '#495057', background: '#f8fafc', padding: '0.18rem 0.45rem', borderRadius: '4px', border: '1px solid #e2e8f0', flexWrap: 'nowrap', ...ell }}>
-                                    <span>Kel: <strong style={{ color: isKelMatched ? '#059669' : '#1e293b' }}>{m.Kelurahan || '-'}</strong></span>
-                                    {isKelMatched && <span style={{ fontSize: '0.6rem', padding: '0.02rem 0.25rem', borderRadius: '3px', background: 'rgba(10,179,156,0.12)', color: '#059669', fontWeight: 700 }} title="Kelurahan sama persis">✓ Sama</span>}
-                                    <span style={{ color: '#cbd5e1' }}>•</span>
-                                    <span>Kec: <strong style={{ color: isKecMatched ? '#2563eb' : '#1e293b' }}>{m.Kecamatan || '-'}</strong></span>
-                                    {isKecMatched && <span style={{ fontSize: '0.6rem', padding: '0.02rem 0.25rem', borderRadius: '3px', background: 'rgba(37,99,235,0.1)', color: '#2563eb', fontWeight: 700 }} title="Kecamatan sama persis">✓ Sama</span>}
-                                    <span style={{ color: '#cbd5e1' }}>•</span>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.69rem', color: '#495057', background: '#f9fbfd', padding: '0.18rem 0.45rem', borderRadius: '4px', border: '1px solid #e9ebec', flexWrap: 'nowrap', ...ell }}>
+                                    <span>Kel: <strong style={{ color: isKelMatched ? '#0ab39c' : '#212529' }}>{m.Kelurahan || '-'}</strong></span>
+                                    {isKelMatched && <span style={{ fontSize: '0.6rem', padding: '0.02rem 0.25rem', borderRadius: '3px', background: 'rgba(10,179,156,0.12)', color: '#0ab39c', fontWeight: 700 }} title="Kelurahan sama persis">✓ Sama</span>}
+                                    <span style={{ color: '#ced4da' }}>•</span>
+                                    <span>Kec: <strong style={{ color: isKecMatched ? '#3577f1' : '#212529' }}>{m.Kecamatan || '-'}</strong></span>
+                                    {isKecMatched && <span style={{ fontSize: '0.6rem', padding: '0.02rem 0.25rem', borderRadius: '3px', background: 'rgba(53,119,241,0.1)', color: '#3577f1', fontWeight: 700 }} title="Kecamatan sama persis">✓ Sama</span>}
+                                    <span style={{ color: '#ced4da' }}>•</span>
                                     <span>{m['Dati II'] || '-'}</span>
                                   </div>
-                                  <div style={{ fontSize: '0.68rem', color: '#6b7280', marginTop: '0.25rem', ...ell }} title={m.ALAMAT || ''}>
+                                  <div style={{ fontSize: '0.68rem', color: '#6c757d', marginTop: '0.25rem', ...ell }} title={m.ALAMAT || ''}>
                                     Alamat: {m.ALAMAT || '-'}
                                   </div>
                                 </div>

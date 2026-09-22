@@ -200,7 +200,7 @@ export const MasterUploadModal: React.FC<MasterUploadModalProps> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(15, 23, 42, 0.6)',
+        backgroundColor: 'rgba(33,37,41, 0.6)',
         backdropFilter: 'blur(4px)',
         padding: '1rem',
       }}
@@ -209,8 +209,8 @@ export const MasterUploadModal: React.FC<MasterUploadModalProps> = ({
           width: '100%',
           maxWidth: '560px',
           background: '#ffffff',
-          borderRadius: '8px',
-          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+          borderRadius: '6px',
+          boxShadow: '0 8px 16px rgba(0, 0, 0, 0.15)',
           overflow: 'hidden',
           border: '1px solid #e9ebec',
       }}
@@ -394,9 +394,9 @@ export const MasterUploadModal: React.FC<MasterUploadModalProps> = ({
                   </div>
                 </div>
 
-                <div style={{ background: duplicateReport.duplicateCount > 0 ? 'rgba(247, 184, 75, 0.12)' : 'rgba(135, 138, 153, 0.08)', padding: '0.5rem 0.65rem', borderRadius: '4px', borderLeft: duplicateReport.duplicateCount > 0 ? '3px solid #d97706' : '3px solid #878a99' }}>
-                  <div style={{ fontSize: '0.7rem', color: duplicateReport.duplicateCount > 0 ? '#d97706' : '#878a99', fontWeight: 600 }}>DUPLIKAT DIABAIKAN</div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: duplicateReport.duplicateCount > 0 ? '#d97706' : '#878a99' }}>
+                <div style={{ background: duplicateReport.duplicateCount > 0 ? 'rgba(247, 184, 75, 0.12)' : 'rgba(135, 138, 153, 0.08)', padding: '0.5rem 0.65rem', borderRadius: '4px', borderLeft: duplicateReport.duplicateCount > 0 ? '3px solid #d68b0c' : '3px solid #878a99' }}>
+                  <div style={{ fontSize: '0.7rem', color: duplicateReport.duplicateCount > 0 ? '#d68b0c' : '#878a99', fontWeight: 600 }}>DUPLIKAT DIABAIKAN</div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: duplicateReport.duplicateCount > 0 ? '#d68b0c' : '#878a99' }}>
                     {duplicateReport.duplicateCount.toLocaleString('id-ID')}
                   </div>
                 </div>

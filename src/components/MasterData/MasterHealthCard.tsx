@@ -73,7 +73,7 @@ export const MasterHealthCard: React.FC<MasterHealthCardProps> = ({ health }) =>
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: '#d97706',
+                  color: '#d68b0c',
                   flexShrink: 0,
                 }}
               >
@@ -129,7 +129,7 @@ export const MasterHealthCard: React.FC<MasterHealthCardProps> = ({ health }) =>
             <table className="modern-table">
               <thead>
                 <tr>
-                  <th style={{ minWidth: '130px', color: '#d97706' }}>KODE POS</th>
+                  <th style={{ minWidth: '130px', color: '#d68b0c' }}>KODE POS</th>
                   <th>Wilayah</th>
                   <th>Sandi Cabang</th>
                   <th>Nama Outlet</th>
@@ -161,13 +161,13 @@ export const MasterHealthCard: React.FC<MasterHealthCardProps> = ({ health }) =>
                         className="code-cell"
                         style={{
                           fontWeight: 700,
-                          color: '#d97706',
+                          color: '#d68b0c',
                           background: 'rgba(247, 184, 75, 0.08)',
                           borderRight: '1px solid #e9ebec',
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                          <MapPin size={13} color="#d97706" />
+                          <MapPin size={13} color="#d68b0c" />
                           <span>{kodePos}</span>
                           <span style={{ fontSize: '0.7rem', color: '#878a99' }}>#{indexInKp}</span>
                         </div>

@@ -385,7 +385,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                                 {...tipProps(geoLabel(r))}
                                 style={{
                                   textAlign: 'right',
-                                  fontFamily: 'monospace',
+                                  fontFamily: 'var(--font-mono)',
                                   color: r.latitude == null ? '#adb5bd' : '#495057',
                                 }}
                               >
@@ -395,7 +395,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                                 {...tipProps(geoLabel(r))}
                                 style={{
                                   textAlign: 'right',
-                                  fontFamily: 'monospace',
+                                  fontFamily: 'var(--font-mono)',
                                   color: r.longitude == null ? '#adb5bd' : '#495057',
                                 }}
                               >

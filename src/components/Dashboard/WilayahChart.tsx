@@ -34,17 +34,17 @@ export const WilayahChart: React.FC<WilayahChartProps> = ({ stats }) => {
             return (
               <div key={item.wilayah} className="chart-bar-item">
                 <div className="chart-bar-label-row" style={{ fontSize: '0.76rem' }}>
-                  <span className="chart-bar-name" style={{ color: '#f8fafc', fontWeight: 600 }}>
+                  <span className="chart-bar-name" style={{ color: '#f9fbfd', fontWeight: 600 }}>
                     {item.wilayah}
                   </span>
                   <div className="chart-bar-stats" style={{ display: 'flex', gap: '0.6rem', fontSize: '0.74rem' }}>
-                    <span style={{ color: '#34d399', fontWeight: 600 }}>
+                    <span style={{ color: '#0ab39c', fontWeight: 600 }}>
                       {item.matched} Match ({item.rate.toFixed(1)}%)
                     </span>
                     {item.unmatched > 0 && (
                       <span style={{ color: '#fb7185' }}>{item.unmatched} Unmatch</span>
                     )}
-                    <span style={{ color: '#94a3b8' }}>
+                    <span style={{ color: '#adb5bd' }}>
                       Tot: {item.total}
                     </span>
                   </div>

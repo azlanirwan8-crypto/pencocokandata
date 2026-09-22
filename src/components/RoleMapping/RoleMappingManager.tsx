@@ -716,7 +716,7 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
           gap: '0.85rem',
           background: '#ffffff',
           padding: '1.15rem 1.4rem',
-          borderRadius: '8px',
+          borderRadius: '6px',
           border: '1px solid #e9ebec',
           boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
         }}
@@ -726,7 +726,7 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
             style={{
               width: '42px',
               height: '42px',
-              borderRadius: '8px',
+              borderRadius: '6px',
               background: 'linear-gradient(135deg, rgba(64, 81, 137, 0.15) 0%, rgba(41, 156, 219, 0.15) 100%)',
               display: 'flex',
               alignItems: 'center',
@@ -853,7 +853,7 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
         <div
           style={{
             background: 'linear-gradient(135deg, #f0f4ff 0%, #e6f7ff 100%)',
-            borderRadius: '8px',
+            borderRadius: '6px',
             border: '1px solid #d0e2ff',
             padding: '1.1rem 1.35rem',
             display: 'flex',
@@ -1064,7 +1064,7 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
         <div
           style={{
             background: '#ffffff',
-            borderRadius: '8px',
+            borderRadius: '6px',
             padding: '3.5rem 2rem',
             textAlign: 'center',
             border: '1px dashed #ced4da',
@@ -1121,7 +1121,7 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
         <div
           style={{
             background: '#ffffff',
-            borderRadius: '8px',
+            borderRadius: '6px',
             border: '1px solid #e9ebec',
             boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
             padding: '1.15rem 1.35rem',
@@ -1161,10 +1161,10 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
               <span>Daftar Mapping Role Cabang & Outlet</span>
               <span
                 style={{
-                  background: activeSubTab === 'list' ? '#eef0f7' : '#e9ebec',
+                  background: activeSubTab === 'list' ? '#eef1f4' : '#e9ebec',
                   color: activeSubTab === 'list' ? '#405189' : '#878a99',
                   padding: '0.05rem 0.35rem',
-                  borderRadius: '10px',
+                  borderRadius: '6px',
                   fontSize: '0.68rem',
                   fontWeight: 600,
                 }}
@@ -1630,7 +1630,7 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
               <div
                 style={{
                   background: 'linear-gradient(135deg, rgba(64, 81, 137, 0.05) 0%, rgba(41, 156, 219, 0.05) 100%)',
-                  borderRadius: '8px',
+                  borderRadius: '6px',
                   border: '1px solid rgba(64, 81, 137, 0.15)',
                   padding: '1.25rem',
                 }}
@@ -1927,10 +1927,10 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
           className=""
           style={{
               background: '#ffffff',
-              borderRadius: '8px',
+              borderRadius: '6px',
               width: '100%',
               maxWidth: '540px',
-              boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+              boxShadow: '0 8px 16px rgba(0, 0, 0, 0.15)',
               border: '1px solid #e9ebec',
               overflow: 'hidden',
           }}
@@ -2129,11 +2129,11 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
           className=""
           style={{
               background: '#ffffff',
-              borderRadius: '8px',
+              borderRadius: '6px',
               width: '100%',
               maxWidth: '420px',
               padding: '1.5rem',
-              boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+              boxShadow: '0 8px 16px rgba(0, 0, 0, 0.15)',
               textAlign: 'center',
           }}
         >
@@ -2184,11 +2184,11 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
           className=""
           style={{
               background: '#ffffff',
-              borderRadius: '8px',
+              borderRadius: '6px',
               width: '100%',
               maxWidth: '460px',
               padding: '1.5rem',
-              boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+              boxShadow: '0 8px 16px rgba(0, 0, 0, 0.15)',
               textAlign: 'center',
           }}
         >

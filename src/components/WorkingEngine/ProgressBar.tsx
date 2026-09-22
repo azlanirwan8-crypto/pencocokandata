@@ -49,7 +49,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
             <span>{durationMs} ms</span>
           </span>
           {rowsPerSec > 0 && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#34d399' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#0ab39c' }}>
               <Zap size={13} />
               <span>{rowsPerSec.toLocaleString('id-ID')} baris/detik</span>
             </span>

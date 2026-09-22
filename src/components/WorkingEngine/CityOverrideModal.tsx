@@ -64,7 +64,7 @@ export const CityOverrideModal: React.FC<CityOverrideModalProps> = ({
         position: 'fixed',
         inset: 0,
         zIndex: 1060,
-        background: 'rgba(15, 23, 42, 0.6)',
+        background: 'rgba(33,37,41, 0.6)',
         backdropFilter: 'blur(4px)',
         display: 'flex',
         alignItems: 'center',
@@ -74,13 +74,13 @@ export const CityOverrideModal: React.FC<CityOverrideModalProps> = ({
       className=""
       style={{
           background: '#fff',
-          borderRadius: '10px',
+          borderRadius: '6px',
           width: '100%',
           maxWidth: '720px',
           maxHeight: '88vh',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 20px 50px rgba(15,23,42,0.3)',
+          boxShadow: '0 8px 16px rgba(33, 37, 41, 0.16)',
       }}
     >
         <div

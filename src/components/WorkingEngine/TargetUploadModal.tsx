@@ -152,7 +152,7 @@ export const TargetUploadModal: React.FC<TargetUploadModalProps> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(15, 23, 42, 0.6)',
+        backgroundColor: 'rgba(33,37,41, 0.6)',
         backdropFilter: 'blur(4px)',
         padding: '1rem',
       }}
@@ -161,8 +161,8 @@ export const TargetUploadModal: React.FC<TargetUploadModalProps> = ({
           width: '100%',
           maxWidth: '560px',
           background: '#ffffff',
-          borderRadius: '8px',
-          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+          borderRadius: '6px',
+          boxShadow: '0 8px 16px rgba(0, 0, 0, 0.15)',
           overflow: 'hidden',
           border: '1px solid #e9ebec',
       }}
