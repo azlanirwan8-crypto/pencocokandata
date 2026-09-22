@@ -1,6 +1,6 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
-import { neon } from '@neondatabase/serverless'
+import { buatSql } from './server/sql.js'
 
 function geocodeDevMiddleware(): Plugin {
   return {
@@ -108,7 +108,7 @@ function kodeposDevMiddleware(connectionString: string): Plugin {
         }
 
         try {
-          const sql = neon(connectionString);
+          const sql = buatSql(connectionString);
           await sql`CREATE TABLE IF NOT EXISTS kodepos_data (
             id SERIAL PRIMARY KEY, kode_pos VARCHAR(10) NOT NULL, kelurahan TEXT, kecamatan TEXT,
             kabupaten_kota TEXT, provinsi TEXT, status VARCHAR(20) DEFAULT 'AKTIF',
