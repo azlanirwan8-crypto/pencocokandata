@@ -1,23 +1,21 @@
-import { buatSql, ambilUrlDb } from '../server/sql';
+import { rest, bacaAppStore, tulisAppStore, hapusAppStore, pesanRest } from '../server/rest';
 
 /**
- * /api/target — Supabase Postgres CRUD Data Target & Match
+ * /api/target — Supabase Postgres CRUD Data Target & Match, lewat PostgREST.
  *
  * GET    ?limit=N&offset=M   → halaman saja + total (tanpa param = semua baris, kompatibel lama)
  * POST   body { rows, fileName, mode:'replace'|'append' }
  * DELETE → kosongkan tabel
  *
- * Tabel: target_records (+ target_meta, app_store fallback) dengan index.
- *
  * --- ?view=final (Data Final Analisa; satu-satunya jalur cloud untuk `analyst_final_data`) ---
  * GET    ?view=final&limit=N&offset=M → halaman baris + total (order = row_key agar paging stabil)
  * POST   ?view=final  body { rows, mode:'upsert'|'replace' } → upsert per baris, tanpa menghapus
  *        baris lain (kecuali mode 'replace'), jadi tidak ada jendela "cloud kosong".
- * POST   ?view=final  body { mode:'hapus', keys:[...] } → hapus ≤1000 baris sekali jalan.
+ * POST   ?view=final  body { mode:'hapus', keys:[...] } → hapus ≤1000 baris sekali jalan
+ *        (lewat fungsi final_hapus: kuncinya parameter ternama, bukan teks yang digabung).
  * DELETE ?view=final&key=K  → hapus 1 baris | ?view=final&all=1 → kosongkan seluruh tabel
  *
- * Tabel per-baris (bukan 1 blob JSONB) karena Final Data bisa puluhan ribu baris × ~40 field:
- * satu blob utuh menabrak batas body Vercel (~4,5 MB) dan read-modify-write per chunk mahal.
+ * Skema + fungsinya dibuat server/supabase-bootstrap.sql, bukan oleh fungsi ini.
  */
 
 // Impor puluhan ribu baris bisa lama — samakan batas dengan /api/kodepos.
@@ -27,79 +25,11 @@ const PAGE_SIZE_CAP = 500;
 
 /** ?view=final selalu dipaging — tanpa `limit` pun satu baca maksimal seukuran ini. */
 const FINAL_PAGE_DEFAULT = 500;
-/** Baris per INSERT; ~40 kolom × 200 baris masih jauh di bawah batas body/proses serverless. */
+/** Baris per kiriman; ~40 kolom × 200 baris masih jauh di bawah batas body serverless. */
 const FINAL_INSERT_CHUNK = 200;
-
-/** DDL idempoten: sekali per warm instance, bukan tiap request. */
-let readyPromise: Promise<void> | null = null;
-function ensureSchema(sql: any): Promise<void> {
-  if (!readyPromise) {
-    readyPromise = (async () => {
-      await sql`
-        CREATE TABLE IF NOT EXISTS target_records (
-          id SERIAL PRIMARY KEY,
-          no_urut INT,
-          wilayah TEXT,
-          branch_code TEXT,
-          kode_cabang TEXT,
-          nama_outlet TEXT,
-          sandi_cabang TEXT,
-          sandi TEXT,
-          cabang TEXT,
-          status_outlet TEXT,
-          alamat TEXT,
-          kode_pos TEXT,
-          kelurahan TEXT,
-          kecamatan TEXT,
-          dati_ii TEXT,
-          kode_dati_ii TEXT,
-          provinsi TEXT,
-          sumber_data TEXT,
-          is_matched BOOLEAN DEFAULT false,
-          match_level TEXT,
-          matched_at TEXT,
-          matched_by TEXT,
-          raw_data JSONB,
-          created_at TIMESTAMPTZ DEFAULT NOW(),
-          updated_at TIMESTAMPTZ DEFAULT NOW()
-        );
-      `;
-      await sql`CREATE INDEX IF NOT EXISTS idx_target_no_urut   ON target_records(no_urut, id);`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_target_wilayah   ON target_records(wilayah);`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_target_is_matched ON target_records(is_matched);`;
-      await sql`
-        CREATE TABLE IF NOT EXISTS target_meta (
-          key VARCHAR(50) PRIMARY KEY,
-          file_name TEXT,
-          initial_count INT,
-          matched_done BOOLEAN DEFAULT false,
-          updated_at TIMESTAMPTZ DEFAULT NOW()
-        );
-      `;
-      await sql`
-        CREATE TABLE IF NOT EXISTS app_store (
-          key VARCHAR(100) PRIMARY KEY,
-          data JSONB NOT NULL,
-          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        );
-      `;
-      await sql`
-        CREATE TABLE IF NOT EXISTS final_rows (
-          row_key TEXT PRIMARY KEY,
-          raw_data JSONB NOT NULL,
-          updated_at TIMESTAMPTZ DEFAULT NOW()
-        );
-      `;
-    })().catch((err) => {
-      readyPromise = null;
-      throw err;
-    });
-  }
-  return readyPromise;
-}
+const CHUNK = 200;
 
 export default async function handler(req: any, res: any) {
-  // Setup CORS headers
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -108,151 +38,108 @@ export default async function handler(req: any, res: any) {
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
   );
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const connectionString = ambilUrlDb();
-
-  if (!connectionString) {
-    return res.status(200).json({
-      ok: false,
-      configured: false,
-      message: 'DATABASE_URL (Supabase Postgres) belum terpasang di Vercel Environment Variables.',
-    });
-  }
+  const r = rest();
+  const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
+  const limitRaw = url.searchParams.get('limit');
+  const limit = limitRaw === null ? null : Math.min(PAGE_SIZE_CAP, Math.max(1, Number(limitRaw) || 1));
+  const offset = Math.max(0, Number(url.searchParams.get('offset')) || 0);
 
   try {
-    const sql = buatSql(connectionString);
-    try {
-      await ensureSchema(sql);
-    } catch (err) {
-      console.warn('Migrasi skema target dilewati:', err);
-    }
-
-    // 1. GET: Fetch target & match data (first from dedicated target_records table, fallback to app_store)
+    // ─────────────── GET ───────────────
     if (req.method === 'GET') {
-      const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
-      const limitRaw = url.searchParams.get('limit');
-      const limit =
-        limitRaw === null ? null : Math.min(PAGE_SIZE_CAP, Math.max(1, Number(limitRaw) || 1));
-      const offset = Math.max(0, Number(url.searchParams.get('offset')) || 0);
-
-      // 1a. ?view=final → Data Final (selalu dipaging; blob utuh bisa >4,5 MB)
       if (url.searchParams.get('view') === 'final') {
         const fLimit = limit ?? FINAL_PAGE_DEFAULT;
-        const records = await sql`
-          SELECT raw_data FROM final_rows ORDER BY row_key ASC LIMIT ${fLimit} OFFSET ${offset};
-        `;
-        const total = (await sql`SELECT COUNT(*)::int as count FROM final_rows;`)[0]?.count ?? 0;
-
+        const { rows, total } = await r.baris<{ raw_data: any }>('final_rows', {
+          kolom: 'raw_data',
+          urut: 'row_key.asc',
+          batas: fLimit,
+          mulai: offset,
+          count: true,
+        });
         return res.status(200).json({
           ok: true,
           configured: true,
           table: 'final_rows',
-          total,
-          returned: records.length,
+          total: total ?? rows.length,
+          returned: rows.length,
           offset,
           limit: fLimit,
-          data: {
-            rows: records.map((r: any) => r.raw_data),
-          },
+          data: { rows: rows.map((x) => x.raw_data) },
         });
       }
 
-      const records = limit
-        ? await sql`SELECT * FROM target_records ORDER BY no_urut ASC, id ASC LIMIT ${limit} OFFSET ${offset};`
-        : await sql`SELECT * FROM target_records ORDER BY no_urut ASC, id ASC;`;
+      const dibaca = limit
+        ? await r.baris<any>('target_records', { urut: 'no_urut.asc,id.asc', batas: limit, mulai: offset, count: true })
+        : { rows: await r.semuaBaris<any>('target_records', { urut: 'no_urut.asc,id.asc' }), total: null as number | null };
+      const records = dibaca.rows;
 
-      if (records && records.length > 0) {
-        const meta = await sql`
-          SELECT file_name, initial_count, matched_done FROM target_meta WHERE key = 'target_meta' LIMIT 1;
-        `;
-        const fileName = meta[0]?.file_name || `${records.length} Data Target (Target_Neon.xlsx)`;
-        const initialCount = meta[0]?.initial_count || records.length;
-        const matchedDone = Boolean(meta[0]?.matched_done);
+      if (records.length > 0) {
+        const meta = await r
+          .baris<{ file_name: string | null; initial_count: number | null; matched_done: boolean | null }>(
+            'target_meta',
+            { kolom: 'file_name,initial_count,matched_done', filter: { key: 'eq.target_meta' }, batas: 1 }
+          )
+          .then((x) => x.rows[0]);
 
-        const mappedRows = records.map((r: any) => ({
-          No: r.no_urut,
-          Wilayah: r.wilayah || '',
-          'Branch Code': r.branch_code || '',
-          'Kode Cabang': r.kode_cabang || '',
-          'Nama Outlet': r.nama_outlet || '',
-          'Status Outlet': r.status_outlet || '',
-          'Sandi Cabang': r.sandi_cabang || '',
-          Sandi: r.sandi || '',
-          Cabang: r.cabang || '',
-          ALAMAT: r.alamat || '',
-          'KODE POS': r.kode_pos || '',
-          Kelurahan: r.kelurahan || '',
-          Kecamatan: r.kecamatan || '',
-          'Dati II': r.dati_ii || '',
-          'Kode Dati II': r.kode_dati_ii || '',
-          Provinsi: r.provinsi || '',
-          'SUMBER DATA': r.sumber_data || '',
-          _isMatched: Boolean(r.is_matched),
-          _matchLevel: r.match_level || undefined,
-          _matchedAt: r.matched_at || undefined,
-          _matchedBy: r.matched_by || undefined,
-          ...(r.raw_data || {}),
+        const fileName = meta?.file_name || `${records.length} Data Target (Target_Neon.xlsx)`;
+        const initialCount = meta?.initial_count || records.length;
+        const matchedDone = Boolean(meta?.matched_done);
+
+        const mappedRows = records.map((raw: any) => ({
+          No: raw.no_urut,
+          Wilayah: raw.wilayah || '',
+          'Branch Code': raw.branch_code || '',
+          'Kode Cabang': raw.kode_cabang || '',
+          'Nama Outlet': raw.nama_outlet || '',
+          'Status Outlet': raw.status_outlet || '',
+          'Sandi Cabang': raw.sandi_cabang || '',
+          Sandi: raw.sandi || '',
+          Cabang: raw.cabang || '',
+          ALAMAT: raw.alamat || '',
+          'KODE POS': raw.kode_pos || '',
+          Kelurahan: raw.kelurahan || '',
+          Kecamatan: raw.kecamatan || '',
+          'Dati II': raw.dati_ii || '',
+          'Kode Dati II': raw.kode_dati_ii || '',
+          Provinsi: raw.provinsi || '',
+          'SUMBER DATA': raw.sumber_data || '',
+          _isMatched: Boolean(raw.is_matched),
+          _matchLevel: raw.match_level || undefined,
+          _matchedAt: raw.matched_at || undefined,
+          _matchedBy: raw.matched_by || undefined,
+          ...(raw.raw_data || {}),
         }));
-
-        // Saat dipaging, total = jumlah seluruh baris (untuk kalkulasi halaman klien)
-        const total = limit
-          ? (await sql`SELECT COUNT(*)::int as count FROM target_records;`)[0]?.count ?? mappedRows.length
-          : mappedRows.length;
 
         return res.status(200).json({
           ok: true,
           configured: true,
           table: 'target_records',
-          total,
+          total: dibaca.total ?? mappedRows.length,
           returned: mappedRows.length,
           offset,
-          data: {
-            rows: mappedRows,
-            fileName,
-            initialCount,
-            matchedDone,
-          },
+          data: { rows: mappedRows, fileName, initialCount, matchedDone },
         });
       }
 
-      // Fallback: check app_store
-      const storeResult = await sql`
-        SELECT data, updated_at 
-        FROM app_store 
-        WHERE key = 'target_data' 
-        LIMIT 1;
-      `;
-
-      if (storeResult && storeResult.length > 0) {
-        return res.status(200).json({
-          ok: true,
-          configured: true,
-          table: 'app_store',
-          data: storeResult[0].data,
-          updatedAt: storeResult[0].updated_at,
-        });
+      const simpanan = await bacaAppStore(r, 'target_data');
+      if (simpanan) {
+        return res
+          .status(200)
+          .json({ ok: true, configured: true, table: 'app_store', data: simpanan.data, updatedAt: simpanan.updated_at });
       }
 
-      return res.status(200).json({
-        ok: true,
-        configured: true,
-        table: 'target_records',
-        total: 0,
-        data: null,
-      });
+      return res.status(200).json({ ok: true, configured: true, table: 'target_records', total: 0, data: null });
     }
 
-    // 2. POST: Save / Update target & match data into dedicated target_records table
+    // ─────────────── POST ───────────────
     if (req.method === 'POST') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
       const rows = Array.isArray(body?.rows) ? body.rows : [];
-      const urlPost = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
-      const viewPost = urlPost.searchParams.get('view');
+      const viewPost = url.searchParams.get('view');
 
-      // Sama seperti DELETE: `view` tak dikenal tidak boleh jatuh ke jalur target_records
+      // `view` tak dikenal tidak boleh jatuh ke jalur target_records
       // (mode 'replace' di sana menghapus seluruh tabel lebih dulu).
       if (viewPost && viewPost !== 'final') {
         return res.status(400).json({
@@ -262,12 +149,7 @@ export default async function handler(req: any, res: any) {
         });
       }
 
-      // 2a. POST ?view=final → upsert baris Data Final. Default 'upsert' (tanpa DELETE),
-      //     supaya kegagalan di tengah chunk tidak pernah meninggalkan cloud dalam keadaan kosong.
       if (viewPost === 'final') {
-        // 2a-0. mode 'hapus' → buang banyak baris sekali jalan (aksi massal Revisi/Hapus
-        //       di menu Final Data). Kunci dikirim sebagai parameter bertanda $1..$n,
-        //       bukan disisipkan ke teks SQL, jadi tidak ada jalur injeksi dari daftar id.
         if (body?.mode === 'hapus') {
           const mentah: unknown[] = Array.isArray(body.keys) ? body.keys : [];
           const kunci = [...new Set(mentah.map((k) => String(k ?? '').trim()).filter(Boolean))];
@@ -281,46 +163,32 @@ export default async function handler(req: any, res: any) {
               error: `Maksimal 1000 kunci per permintaan (diterima ${kunci.length}); kirim per chunk.`,
             });
           }
-          const tanda = kunci.map((_, i) => `$${i + 1}`).join(', ');
-          const deleted = (await sql.query(
-            `DELETE FROM final_rows WHERE row_key IN (${tanda}) RETURNING row_key;`,
-            kunci
-          )) as any[];
+          const terhapus = (await r.rpc<string[]>('final_hapus', { p_keys: kunci })) || [];
           return res.status(200).json({
             ok: true,
             configured: true,
             table: 'final_rows',
-            deleted: deleted?.length ?? 0,
+            deleted: terhapus.length,
             diminta: kunci.length,
-            message: `${deleted?.length ?? 0} dari ${kunci.length} baris Data Final terhapus dari Supabase Postgres.`,
+            message: `${terhapus.length} dari ${kunci.length} baris Data Final terhapus dari Supabase Postgres.`,
           });
         }
+
         const fMode = body?.mode === 'replace' ? 'replace' : 'upsert';
-        if (fMode === 'replace') {
-          await sql`DELETE FROM final_rows;`;
-        }
+        if (fMode === 'replace') await r.hapus('final_rows');
 
         let written = 0;
         for (let i = 0; i < rows.length; i += FINAL_INSERT_CHUNK) {
           const chunk = rows
             .slice(i, i + FINAL_INSERT_CHUNK)
-            .map((r: any) => ({ row_key: String(r?.id ?? '').trim(), raw_data: r }))
-            .filter((r) => r.row_key.length > 0);
+            .map((raw: any) => ({ row_key: String(raw?.id ?? '').trim(), raw_data: raw }))
+            .filter((x) => x.row_key.length > 0);
           if (chunk.length === 0) continue;
-
-          await sql`
-            INSERT INTO final_rows (row_key, raw_data, updated_at)
-            SELECT row_key, raw_data, NOW()
-            FROM json_to_recordset(${JSON.stringify(chunk)}::json) as x(
-              row_key TEXT, raw_data JSONB
-            )
-            ON CONFLICT (row_key)
-            DO UPDATE SET raw_data = EXCLUDED.raw_data, updated_at = NOW();
-          `;
+          await r.simpan('final_rows', chunk, { onKonflik: 'row_key' });
           written += chunk.length;
         }
 
-        const total = (await sql`SELECT COUNT(*)::int as count FROM final_rows;`)[0]?.count ?? written;
+        const total = await r.hitung('final_rows').catch(() => written);
         return res.status(200).json({
           ok: true,
           configured: true,
@@ -334,87 +202,54 @@ export default async function handler(req: any, res: any) {
       const fileName = body?.fileName || 'Target_Neon_Vercel.xlsx';
       const initialCount = body?.initialCount || rows.length;
       const matchedDone = Boolean(body?.matchedDone);
-      const mode = body?.mode || 'replace'; // 'replace' or 'append'
+      const mode = body?.mode || 'replace';
 
-      if (mode === 'replace') {
-        await sql`DELETE FROM target_records;`;
+      if (mode === 'replace') await r.hapus('target_records');
+
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const chunk = rows.slice(i, i + CHUNK).map((raw: any, idx: number) => ({
+          no_urut: typeof raw.No === 'number' ? raw.No : parseInt(raw.No, 10) || i + idx + 1,
+          wilayah: String(raw.Wilayah || '').trim(),
+          branch_code: String(raw['Branch Code'] || raw['Kode Cabang'] || '').trim(),
+          kode_cabang: String(raw['Kode Cabang'] || raw['Branch Code'] || '').trim(),
+          nama_outlet: String(raw['Nama Outlet'] || '').trim(),
+          sandi_cabang: String(raw['Sandi Cabang'] || raw.Sandi || raw.Cabang || '').trim(),
+          sandi: String(raw.Sandi || raw['Sandi Cabang'] || '').trim(),
+          cabang: String(raw.Cabang || '').trim(),
+          status_outlet: String(raw['Status Outlet'] || '').trim(),
+          alamat: String(raw.ALAMAT || '').trim(),
+          kode_pos: String(raw['KODE POS'] || '').trim(),
+          kelurahan: String(raw.Kelurahan || '').trim(),
+          kecamatan: String(raw.Kecamatan || '').trim(),
+          dati_ii: String(raw['Dati II'] || '').trim(),
+          kode_dati_ii: String(raw['Kode Dati II'] || '').trim(),
+          provinsi: String(raw.Provinsi || '').trim(),
+          sumber_data: String(raw['SUMBER DATA'] || '').trim(),
+          is_matched: Boolean(raw._isMatched),
+          match_level: raw._matchLevel ? String(raw._matchLevel) : null,
+          matched_at: raw._matchedAt ? String(raw._matchedAt) : null,
+          matched_by: raw._matchedBy ? String(raw._matchedBy) : null,
+          raw_data: raw,
+          updated_at: new Date().toISOString(),
+        }));
+        if (chunk.length > 0) await r.simpan('target_records', chunk);
       }
 
-      if (rows.length > 0) {
-        // Chunk insert in batches of 200 using native PostgreSQL json_to_recordset
-        const chunkSize = 200;
-        for (let i = 0; i < rows.length; i += chunkSize) {
-          const chunk = rows.slice(i, i + chunkSize).map((r: any, idx: number) => ({
-            no_urut: typeof r.No === 'number' ? r.No : parseInt(r.No, 10) || i + idx + 1,
-            wilayah: String(r.Wilayah || '').trim(),
-            branch_code: String(r['Branch Code'] || r['Kode Cabang'] || '').trim(),
-            kode_cabang: String(r['Kode Cabang'] || r['Branch Code'] || '').trim(),
-            nama_outlet: String(r['Nama Outlet'] || '').trim(),
-            sandi_cabang: String(r['Sandi Cabang'] || r.Sandi || r.Cabang || '').trim(),
-            sandi: String(r.Sandi || r['Sandi Cabang'] || '').trim(),
-            cabang: String(r.Cabang || '').trim(),
-            status_outlet: String(r['Status Outlet'] || '').trim(),
-            alamat: String(r.ALAMAT || '').trim(),
-            kode_pos: String(r['KODE POS'] || '').trim(),
-            kelurahan: String(r.Kelurahan || '').trim(),
-            kecamatan: String(r.Kecamatan || '').trim(),
-            dati_ii: String(r['Dati II'] || '').trim(),
-            kode_dati_ii: String(r['Kode Dati II'] || '').trim(),
-            provinsi: String(r.Provinsi || '').trim(),
-            sumber_data: String(r['SUMBER DATA'] || '').trim(),
-            is_matched: Boolean(r._isMatched),
-            match_level: r._matchLevel ? String(r._matchLevel) : null,
-            matched_at: r._matchedAt ? String(r._matchedAt) : null,
-            matched_by: r._matchedBy ? String(r._matchedBy) : null,
-            raw_data: r,
-          }));
-
-          await sql`
-            INSERT INTO target_records (
-              no_urut, wilayah, branch_code, kode_cabang, nama_outlet,
-              sandi_cabang, sandi, cabang, status_outlet, alamat,
-              kode_pos, kelurahan, kecamatan, dati_ii, kode_dati_ii,
-              provinsi, sumber_data, is_matched, match_level, matched_at, matched_by,
-              raw_data, updated_at
-            )
-            SELECT
-              no_urut, wilayah, branch_code, kode_cabang, nama_outlet,
-              sandi_cabang, sandi, cabang, status_outlet, alamat,
-              kode_pos, kelurahan, kecamatan, dati_ii, kode_dati_ii,
-              provinsi, sumber_data, is_matched, match_level, matched_at, matched_by,
-              raw_data, NOW()
-            FROM json_to_recordset(${JSON.stringify(chunk)}::json) as x(
-              no_urut INT, wilayah TEXT, branch_code TEXT, kode_cabang TEXT, nama_outlet TEXT,
-              sandi_cabang TEXT, sandi TEXT, cabang TEXT, status_outlet TEXT, alamat TEXT,
-              kode_pos TEXT, kelurahan TEXT, kecamatan TEXT, dati_ii TEXT, kode_dati_ii TEXT,
-              provinsi TEXT, sumber_data TEXT, is_matched BOOLEAN, match_level TEXT, matched_at TEXT, matched_by TEXT,
-              raw_data JSONB
-            );
-          `;
-        }
-      }
-
-      // Upsert metadata
-      const totalCount = (await sql`SELECT COUNT(*)::int as count FROM target_records;`)[0]?.count || rows.length;
-      await sql`
-        INSERT INTO target_meta (key, file_name, initial_count, matched_done, updated_at)
-        VALUES ('target_meta', ${fileName}, ${initialCount}, ${matchedDone}, NOW())
-        ON CONFLICT (key)
-        DO UPDATE SET 
-          file_name = EXCLUDED.file_name,
-          initial_count = EXCLUDED.initial_count,
-          matched_done = EXCLUDED.matched_done,
-          updated_at = NOW();
-      `;
-
-      // Dual sync to app_store for fast backup
-      const dataJson = JSON.stringify(body);
-      await sql`
-        INSERT INTO app_store (key, data, updated_at)
-        VALUES ('target_data', ${dataJson}::jsonb, NOW())
-        ON CONFLICT (key)
-        DO UPDATE SET data = EXCLUDED.data, updated_at = NOW();
-      `;
+      const totalCount = await r.hitung('target_records').catch(() => rows.length);
+      await r.simpan(
+        'target_meta',
+        [
+          {
+            key: 'target_meta',
+            file_name: fileName,
+            initial_count: initialCount,
+            matched_done: matchedDone,
+            updated_at: new Date().toISOString(),
+          },
+        ],
+        { onKonflik: 'key' }
+      );
+      await tulisAppStore(r, 'target_data', body);
 
       return res.status(200).json({
         ok: true,
@@ -425,10 +260,9 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 3. DELETE: Reset / wipe target data (only when user clicks reset)
+    // ─────────────── DELETE ───────────────
     if (req.method === 'DELETE') {
-      const urlDel = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
-      const viewDel = urlDel.searchParams.get('view');
+      const viewDel = url.searchParams.get('view');
 
       // Parameter `view` yang tidak dikenal = salah ketik URL. Tanpa penolakan ini,
       // satu karakter `&` yang tertinggal akan menjatuhkan permintaan ke penghapusan
@@ -441,30 +275,27 @@ export default async function handler(req: any, res: any) {
         });
       }
 
-      // 3a. DELETE ?view=final → hapus 1 baris (?key=K) atau kosongkan (?all=1).
-      //     Tanpa keduanya: tolak, agar satu DELETE lupa param tidak menghapus semua hasil.
-      //     (Hapus BANYAK baris lewat POST ?view=final mode 'hapus' — body DELETE tidak
-      //      selalu diparse platform, jadi jalur massal sengaja ditaruh ke POST.)
       if (viewDel === 'final') {
-        const oneKey = (urlDel.searchParams.get('key') || '').trim();
-        if (urlDel.searchParams.get('all') === '1') {
-          const deleted = await sql`DELETE FROM final_rows RETURNING row_key;`;
+        const oneKey = (url.searchParams.get('key') || '').trim();
+        if (url.searchParams.get('all') === '1') {
+          const sebelum = await r.hitung('final_rows');
+          await r.hapus('final_rows');
           return res.status(200).json({
             ok: true,
             configured: true,
             table: 'final_rows',
-            deleted: deleted.length,
-            message: `Tabel final_rows berhasil dikosongkan (${deleted.length} baris dihapus).`,
+            deleted: sebelum,
+            message: `Tabel final_rows berhasil dikosongkan (${sebelum} baris dihapus).`,
           });
         }
         if (oneKey) {
-          const deleted = await sql`DELETE FROM final_rows WHERE row_key = ${oneKey} RETURNING row_key;`;
+          const terhapus = (await r.rpc<string[]>('final_hapus', { p_keys: [oneKey] })) || [];
           return res.status(200).json({
             ok: true,
             configured: true,
             table: 'final_rows',
-            deleted: deleted.length,
-            message: deleted.length
+            deleted: terhapus.length,
+            message: terhapus.length
               ? `Baris Data Final ${oneKey} berhasil dihapus dari Supabase Postgres.`
               : `Baris ${oneKey} tidak ditemukan di final_rows (mungkin belum pernah disinkronkan).`,
           });
@@ -476,9 +307,9 @@ export default async function handler(req: any, res: any) {
         });
       }
 
-      await sql`DELETE FROM target_records;`;
-      await sql`DELETE FROM target_meta;`;
-      await sql`DELETE FROM app_store WHERE key = 'target_data';`;
+      await r.hapus('target_records');
+      await r.hapus('target_meta');
+      await hapusAppStore(r, 'target_data');
 
       return res.status(200).json({
         ok: true,
@@ -489,12 +320,7 @@ export default async function handler(req: any, res: any) {
 
     return res.status(405).json({ ok: false, error: 'Method Not Allowed' });
   } catch (error: any) {
-    console.error('Neon DB API Error (Target):', error);
-    return res.status(500).json({
-      ok: false,
-      configured: true,
-      error: error.message || 'Internal Server Error',
-    });
+    console.error('Supabase API Error (Target):', error);
+    return res.status(500).json({ ok: false, configured: true, error: pesanRest(error) });
   }
 }
-

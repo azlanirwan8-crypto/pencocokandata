@@ -1,4 +1,4 @@
-import { buatSql, ambilUrlDb } from '../server/sql';
+import { rest, pesanRest } from '../server/rest';
 
 /**
  * /api/kodepos-geo — satu titik koordinat per kode pos.
@@ -9,8 +9,9 @@ import { buatSql, ambilUrlDb } from '../server/sql';
  * GET  ?view=points  daftar titik (dipakai peta dashboard)
  *
  * Tabel: kodepos_geo — kunci unik kode_pos. Daftar kode pos diambil dari gabungan
- * kodepos_data + kodepos_baseline, jadi baris patokan yang belum diimpor pun sudah
- * punya titik dan tabel Sinkronisasi tampil sama dengan tabel induk.
+ * kodepos_data + kodepos_baseline (lewat fungsi geo_kandidat), jadi baris patokan
+ * yang belum diimpor pun sudah punya titik dan tabel Sinkronisasi tampil sama
+ * dengan tabel induk.
  *
  * Titik dicari berjenjang: Google Geocoding API bila kunci tersedia, lalu ESRI
  * World Geocoder, lalu OpenStreetMap. Hasil selain Google disimpan dengan
@@ -23,43 +24,13 @@ const BATCH_DEFAULT = 40;
 const BATCH_MAX = 80;
 const CONCURRENCY = 6;
 const REQUEST_TIMEOUT = 9000;
+/** Hasil ditulis bertahap tiap sekian baris: kalau fungsi kehabisan waktu, yang
+ *  sudah selesai dicari tidak hilang. */
+const SIMPAN_EVERY = 10;
 
 // Kotak pembatas Indonesia. Titik di luar ini pasti salah baca dari penyedia mana
 // pun dan tidak boleh pernah masuk database.
 const BOUND = { latMin: -11.5, latMax: 7.5, lngMin: 94.0, lngMax: 142.0 };
-
-let schemaReady: Promise<void> | null = null;
-
-function ensureSchema(sql: any): Promise<void> {
-  if (!schemaReady) {
-    schemaReady = (async () => {
-      try {
-        await sql`
-          CREATE TABLE IF NOT EXISTS kodepos_geo (
-            kode_pos              VARCHAR(10) PRIMARY KEY,
-            latitude              DOUBLE PRECISION,
-            longitude             DOUBLE PRECISION,
-            sumber                TEXT,
-            presisi               TEXT,
-            terverifikasi_google  BOOLEAN DEFAULT FALSE,
-            alamat                TEXT,
-            dicari                TEXT,
-            provinsi              TEXT,
-            kabupaten_kota        TEXT,
-            diambil_pada          TIMESTAMPTZ,
-            dibuat_pada           TIMESTAMPTZ DEFAULT NOW()
-          );
-        `;
-        await sql`ALTER TABLE kodepos_geo ADD COLUMN IF NOT EXISTS provinsi TEXT;`;
-        await sql`ALTER TABLE kodepos_geo ADD COLUMN IF NOT EXISTS kabupaten_kota TEXT;`;
-      } catch (err) {
-        console.warn('Migrasi kodepos_geo dilewati:', err);
-        schemaReady = null;
-      }
-    })();
-  }
-  return schemaReady;
-}
 
 interface Titik {
   lat: number;
@@ -208,144 +179,49 @@ async function dariOsm(row: KodePosRow): Promise<Titik | null> {
 }
 
 /**
- * Kode pos yang titiknya belum ada (mode 'isi') atau sudah ada tetapi belum
- * dikonfirmasi Google (mode 'verifikasi').
+ * Bentuk satu baris simpanan kodepos_geo. Titik null = pernah dicari, tidak
+ * ditemukan: barisnya tetap ditulis (sumber 'TIDAK DITEMUKAN') supaya tidak
+ * ditawarkan lagi pada putaran berikutnya.
  */
-function pendingSql(opts: {
+function barisGeo(row: KodePosRow, titik: Titik | null) {
+  return {
+    kode_pos: row.kode_pos,
+    latitude: titik ? titik.lat : null,
+    longitude: titik ? titik.lng : null,
+    sumber: titik ? titik.sumber : 'TIDAK DITEMUKAN',
+    presisi: titik ? titik.presisi : null,
+    terverifikasi: titik ? titik.terverifikasi : false,
+    alamat: titik ? titik.alamat : null,
+    dicari: buildQuery(row),
+    provinsi: row.provinsi,
+    kabupaten_kota: row.kabupaten_kota,
+  };
+}
+
+/** Kandidat + sisa antrean, satu panggilan ke fungsi geo_kandidat. */
+async function kandidat(r: ReturnType<typeof rest>, opts: {
   mode: 'isi' | 'verifikasi';
   provinsi: string | null;
   limit: number | null;
-  count?: boolean;
-  ulang?: boolean;
-}): { sql: string; params: any[] } {
-  const params: any[] = [];
-  let prov = '';
-  if (opts.provinsi) {
-    params.push(opts.provinsi);
-    prov = `AND upper(btrim(provinsi)) = upper($${params.length})`;
-  }
-  const filterGeo =
-    opts.mode === 'verifikasi'
-      ? `WHERE g.kode_pos IS NOT NULL AND g.terverifikasi_google IS NOT TRUE AND g.latitude IS NOT NULL`
-      : // `ulang` = yang BELUM PERNAH dicari + yang pernah dicari tetapi penyedia peta
-        // belum pernah menjawab sama sekali (barisnya masih ada di `kodepos_geo` dengan
-        // `sumber` selain 'TIDAK DITEMUKAN'). Yang sudah ditandai 'TIDAK DITEMUKAN'
-        // sengaja tidak ditawarkan lagi: satu putaran penuh sudah pernah melewatinya dan
-        // tidak ada satu pun penyedia yang punya titiknya — itulah "tak bersumber".
-        opts.ulang
-        ? `WHERE g.kode_pos IS NULL OR (g.latitude IS NULL AND coalesce(upper(btrim(g.sumber)), '') <> 'TIDAK DITEMUKAN')`
-        : `WHERE g.kode_pos IS NULL`;
-  let tail = '';
-  // Retry dijalankan dari yang paling lama tidak dicoba, supaya satu putaran penuh
-  // dan urutan kerjanya tidak berubah-ubah antar batch.
-  const urutan = opts.ulang && !opts.count ? 'ORDER BY dicoba_pada NULLS FIRST' : '';
-  if (!opts.count) {
-    if (opts.limit !== null) {
-      params.push(opts.limit);
-      tail = `LIMIT $${params.length}`;
-    }
-  }
-  const select = opts.count ? 'SELECT COUNT(*)::int AS n' : 'SELECT kode_pos, kecamatan, kabupaten_kota, provinsi';
-  return {
-    sql: `
-      WITH u AS (
-        SELECT upper(btrim(kode_pos)) AS kode_pos, kecamatan, kabupaten_kota, provinsi, id
-        FROM kodepos_data
-        UNION ALL
-        SELECT upper(btrim(kode_pos)), kecamatan, kabupaten_kota, provinsi, id + 900000000
-        FROM kodepos_baseline
-      ),
-      k AS (
-        SELECT DISTINCT ON (kode_pos) kode_pos, kecamatan, kabupaten_kota, provinsi
-        FROM u
-        WHERE kode_pos ~ '^[0-9]{5}$' ${prov}
-        ORDER BY kode_pos, id
-      ),
-      p AS (
-        SELECT k.*, g.diambil_pada AS dicoba_pada
-        FROM k LEFT JOIN kodepos_geo g ON g.kode_pos = k.kode_pos ${filterGeo}
-      )
-      ${select} FROM p ${urutan} ${tail};`,
-    params,
-  };
+  ulang: boolean;
+}): Promise<{ rows: KodePosRow[]; sisa: number }> {
+  const hasil = await r.rpc<{ rows: KodePosRow[]; sisa: number }>('geo_kandidat', {
+    p_mode: opts.mode,
+    p_provinsi: opts.provinsi || null,
+    p_limit: opts.limit,
+    p_ulang: opts.ulang,
+  });
+  return { rows: hasil?.rows || [], sisa: Number(hasil?.sisa || 0) };
 }
 
-async function hitung(
-  sql: any,
-  mode: 'isi' | 'verifikasi',
-  provinsi: string | null,
-  ulang = false,
-): Promise<number> {
-  const { sql: text, params } = pendingSql({ mode, provinsi, limit: null, count: true, ulang });
-  const rows = await sql.query(text, params);
-  return Number((rows?.[0] as any)?.n || 0);
-}
-
-async function ringkasanGeo(sql: any) {
-  const rows = await sql`
-    SELECT COUNT(*)::int AS tercatat,
-           COUNT(*) FILTER (WHERE latitude IS NOT NULL)::int AS punya,
-           COUNT(*) FILTER (WHERE latitude IS NULL)::int AS gagal,
-           COUNT(*) FILTER (WHERE latitude IS NULL AND upper(btrim(sumber)) = 'TIDAK DITEMUKAN')::int AS tak_bersumber,
-           COUNT(*) FILTER (WHERE terverifikasi_google)::int AS google,
-           COUNT(*) FILTER (WHERE latitude IS NOT NULL AND sumber = 'esri')::int AS esri,
-           COUNT(*) FILTER (WHERE latitude IS NOT NULL AND sumber = 'osm')::int AS osm,
-           COUNT(*) FILTER (WHERE presisi = 'PERKIRAAN WILAYAH')::int AS perkiraan
-    FROM kodepos_geo;`;
-  const t = (rows?.[0] as any) || {};
-  return {
-    tercatat: t.tercatat || 0,
-    punya: t.punya || 0,
-    gagal: t.gagal || 0,
-    takBersumber: t.tak_bersumber || 0,
-    google: t.google || 0,
-    esri: t.esri || 0,
-    osm: t.osm || 0,
-    perkiraan: t.perkiraan || 0,
-  };
-}
-
-async function simpanTitik(sql: any, row: KodePosRow, titik: Titik | null) {
-  if (titik) {
-    await sql.query(
-      `INSERT INTO kodepos_geo
-         (kode_pos, latitude, longitude, sumber, presisi, terverifikasi_google, alamat, dicari,
-          provinsi, kabupaten_kota, diambil_pada)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
-       ON CONFLICT (kode_pos) DO UPDATE SET
-         latitude = EXCLUDED.latitude,
-         longitude = EXCLUDED.longitude,
-         sumber = EXCLUDED.sumber,
-         presisi = EXCLUDED.presisi,
-         terverifikasi_google = kodepos_geo.terverifikasi_google OR EXCLUDED.terverifikasi_google,
-         alamat = EXCLUDED.alamat,
-         dicari = EXCLUDED.dicari,
-         provinsi = EXCLUDED.provinsi,
-         kabupaten_kota = EXCLUDED.kabupaten_kota,
-         diambil_pada = NOW();`,
-      [
-        row.kode_pos,
-        titik.lat,
-        titik.lng,
-        titik.sumber,
-        titik.presisi,
-        titik.terverifikasi,
-        titik.alamat,
-        buildQuery(row),
-        row.provinsi,
-        row.kabupaten_kota,
-      ]
-    );
-    return;
-  }
-  await sql.query(
-    `INSERT INTO kodepos_geo (kode_pos, sumber, dicari, provinsi, kabupaten_kota, diambil_pada)
-     VALUES ($1, 'TIDAK DITEMUKAN', $2, $3, $4, NOW())
-     ON CONFLICT (kode_pos) DO UPDATE SET
-       latitude = NULL, longitude = NULL, sumber = 'TIDAK DITEMUKAN', presisi = NULL,
-       terverifikasi_google = FALSE, dicari = EXCLUDED.dicari, diambil_pada = NOW();`,
-    [row.kode_pos, buildQuery(row), row.provinsi, row.kabupaten_kota]
-  );
+/** Angka ringkas antrean + isi kodepos_geo (satu panggilan). */
+async function ringkas(r: ReturnType<typeof rest>, provinsi: string | null) {
+  return r.rpc<{
+    geo: Record<string, number>;
+    menunggu: number;
+    menungguUlang: number;
+    perluVerifikasi: number;
+  }>('geo_stats', { p_provinsi: provinsi || null });
 }
 
 async function mapLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
@@ -366,12 +242,6 @@ export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const connectionString = ambilUrlDb();
-
-  if (!connectionString) {
-    return res.status(200).json({ ok: false, configured: false, message: 'DATABASE_URL (Supabase Postgres) belum terpasang.' });
-  }
-
   const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
   const body =
     req.method === 'POST'
@@ -381,8 +251,7 @@ export default async function handler(req: any, res: any) {
       : {};
 
   try {
-    const sql = buatSql(connectionString);
-    await ensureSchema(sql);
+    const r = rest();
     const view = url.searchParams.get('view') || 'stats';
     const googleKey = String(
       body.apiKey || process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || ''
@@ -390,89 +259,43 @@ export default async function handler(req: any, res: any) {
 
     // ─────────────── GET stats ───────────────
     if (req.method === 'GET' && view === 'stats') {
-      const [geo, menunggu, menungguUlang, perluVerifikasi] = await Promise.all([
-        ringkasanGeo(sql),
-        hitung(sql, 'isi', null),
-        hitung(sql, 'isi', null, true),
-        hitung(sql, 'verifikasi', null),
-      ]);
+      const angka = await ringkas(r, null);
       return res.status(200).json({
         ok: true,
         configured: true,
         googleSiap: Boolean(googleKey),
-        geo,
-        menunggu,
-        menungguUlang,
-        perluVerifikasi,
+        geo: angka?.geo || {},
+        menunggu: angka?.menunggu ?? 0,
+        menungguUlang: angka?.menungguUlang ?? 0,
+        perluVerifikasi: angka?.perluVerifikasi ?? 0,
       });
     }
 
     // ─────────────── GET points ───────────────
     if (req.method === 'GET' && view === 'points') {
-      const provinsi = url.searchParams.get('provinsi');
-      const params: any[] = [];
-      let filter = '';
-      if (provinsi) {
-        params.push(provinsi);
-        filter = `WHERE upper(btrim(provinsi)) = upper($${params.length})`;
-      }
-      // Prioritas 1: rata-rata titik desa per kode pos (kodepos_data punya koordinat sendiri).
-      // Prioritas 2: cache geocoding per kode pos di kodepos_geo.
-      const gabungan = `
-        WITH d AS (
-          SELECT upper(btrim(kode_pos)) AS kode_pos, AVG(latitude) AS latitude, AVG(longitude) AS longitude,
-                 COUNT(*)::int AS n, MIN(provinsi) AS provinsi
-          FROM kodepos_data
-          WHERE latitude IS NOT NULL AND kode_pos ~ '^[0-9]{5}$'
-          GROUP BY 1
-        ),
-        g AS (
-          SELECT upper(btrim(kode_pos)) AS kode_pos, latitude, longitude, sumber, presisi,
-                 terverifikasi_google, provinsi
-          FROM kodepos_geo WHERE latitude IS NOT NULL
-        ),
-        u AS (
-          SELECT kode_pos, latitude, longitude, 'desa' AS sumber, (n::text || ' titik desa') AS presisi,
-                 FALSE AS terverifikasi_google, provinsi, 1 AS prioritas FROM d
-          UNION ALL
-          SELECT kode_pos, latitude, longitude, sumber, presisi, terverifikasi_google, provinsi, 2 FROM g
-        )
-        SELECT DISTINCT ON (kode_pos) kode_pos, latitude, longitude, sumber, presisi, terverifikasi_google
-        FROM u ${filter}
-        ORDER BY kode_pos, prioritas;`;
-      let rows: any[];
-      try {
-        rows = (await sql.query(gabungan, params)) as any[];
-      } catch (err) {
-        // Kolom koordinat per baris belum ada di deployment ini — kembali ke kodepos_geo.
-        console.warn('Titik per desa belum terbaca, pakai kodepos_geo:', err);
-        let where = 'WHERE latitude IS NOT NULL';
-        if (provinsi) where += ` AND upper(btrim(provinsi)) = upper($1)`;
-        rows = (await sql.query(
-          `SELECT kode_pos, latitude, longitude, sumber, presisi, terverifikasi_google
-           FROM kodepos_geo ${where} ORDER BY kode_pos;`,
-          params
-        )) as any[];
-      }
+      // Prioritas 1: rata-rata titik desa per kode pos (kodepos_data punya koordinat
+      // sendiri). Prioritas 2: cache geocoding per kode pos di kodepos_geo.
+      const rows =
+        (await r.rpc<any[]>('geo_points', { p_provinsi: url.searchParams.get('provinsi') || null })) || [];
       return res.status(200).json({
         ok: true,
         configured: true,
-        data: (rows || []).map((r: any) => ({
-          kodePos: r.kode_pos,
-          lat: Number(r.latitude),
-          lng: Number(r.longitude),
-          sumber: r.sumber,
-          presisi: r.presisi,
-          terverifikasi: Boolean(r.terverifikasi_google),
+        data: rows.map((x: any) => ({
+          kodePos: x.kode_pos,
+          lat: Number(x.latitude),
+          lng: Number(x.longitude),
+          sumber: x.sumber,
+          presisi: x.presisi,
+          terverifikasi: Boolean(x.terverifikasi_google),
         })),
       });
     }
 
     // ─────────────── POST retry ───────────────
     if (req.method === 'POST' && view === 'retry') {
-      const gagal = await sql`SELECT COUNT(*)::int AS n FROM kodepos_geo WHERE latitude IS NULL;`;
-      await sql`DELETE FROM kodepos_geo WHERE latitude IS NULL;`;
-      return res.status(200).json({ ok: true, configured: true, dihapus: Number((gagal?.[0] as any)?.n || 0) });
+      const gagal = await r.hitung('kodepos_geo', { latitude: 'is.null' });
+      await r.hapus('kodepos_geo', { latitude: 'is.null' });
+      return res.status(200).json({ ok: true, configured: true, dihapus: gagal });
     }
 
     // ─────────────── POST run ───────────────
@@ -482,9 +305,14 @@ export default async function handler(req: any, res: any) {
       const limit = Math.min(BATCH_MAX, Math.max(1, Number(body.jumlah) || BATCH_DEFAULT));
       const provinsi = body.provinsi ? String(body.provinsi) : null;
 
-      const { sql: text, params } = pendingSql({ mode, provinsi, limit, ulang });
-      const kandidat = (await sql.query(text, params)) as KodePosRow[];
-      if (kandidat.length === 0) {
+      const antrean = await kandidat(r, { mode, provinsi, limit, ulang });
+      /** Angka antrean sesuai mode/ulang; `geo` selalu cakupan nasional (sama seperti sebelumnya). */
+      const menungguDari = (n: Awaited<ReturnType<typeof ringkas>> | null) =>
+        Number(
+          (mode === 'verifikasi' ? n?.perluVerifikasi : ulang ? n?.menungguUlang : n?.menunggu) ?? 0
+        );
+
+      if (antrean.rows.length === 0) {
         return res.status(200).json({
           ok: true,
           configured: true,
@@ -492,15 +320,24 @@ export default async function handler(req: any, res: any) {
           berhasil: 0,
           gagal: 0,
           googleTerhenti: false,
-          menunggu: await hitung(sql, mode, provinsi, ulang),
+          menunggu: antrean.sisa,
         });
       }
 
       let googleTerhenti = false;
       let berhasil = 0;
       let gagal = 0;
+      // Hasil ditulis per beberapa baris, bukan satu per satu: tiap panggilan ke
+      // Supabase ada harga round-trip-nya, tetapi menunda semua tulisan sampai akhir
+      // berarti fungsi yang kehabisan waktu menghapus hasil yang sudah dicari.
+      let siap: ReturnType<typeof barisGeo>[] = [];
+      const simpan = async (akhir = false) => {
+        if (siap.length === 0 || (!akhir && siap.length < SIMPAN_EVERY)) return;
+        await r.rpc('geo_simpan', { p_rows: siap });
+        siap = [];
+      };
 
-      await mapLimit(kandidat, CONCURRENCY, async (row) => {
+      await mapLimit(antrean.rows, CONCURRENCY, async (row) => {
         let titik: Titik | null = null;
         if (googleKey && !googleTerhenti) {
           const hasil = await dariGoogle(row, googleKey);
@@ -511,28 +348,27 @@ export default async function handler(req: any, res: any) {
         if (!titik) titik = await dariOsm(row);
         if (titik) berhasil++;
         else gagal++;
-        await simpanTitik(sql, row, titik);
+        siap.push(barisGeo(row, titik));
+        await simpan();
       });
+      await simpan(true);
 
-      const [menunggu, geo] = await Promise.all([
-        hitung(sql, mode, provinsi, ulang),
-        ringkasanGeo(sql),
-      ]);
+      const ringkasannya = await ringkas(r, provinsi);
       return res.status(200).json({
         ok: true,
         configured: true,
-        diproses: kandidat.length,
+        diproses: antrean.rows.length,
         berhasil,
         gagal,
         googleTerhenti,
-        menunggu,
-        geo,
+        menunggu: menungguDari(ringkasannya),
+        geo: ringkasannya?.geo || {},
       });
     }
 
     return res.status(405).json({ ok: false, error: `View ${view} tidak dikenali.` });
   } catch (err: any) {
     console.error('/api/kodepos-geo gagal:', err);
-    return res.status(500).json({ ok: false, error: err?.message || 'Kesalahan tak terduga.' });
+    return res.status(500).json({ ok: false, error: pesanRest(err) });
   }
 }

@@ -663,7 +663,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
             className="btn btn-primary btn-sm"
             onClick={() => setShowSyncModal(true)}
             style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-            title="Periksa kelengkapan & kevalidan kode pos terhadap database Neon"
+            title="Periksa kelengkapan & kevalidan kode pos terhadap database Supabase"
           >
             <RefreshCw size={13} />
             <span>Sync Data</span>

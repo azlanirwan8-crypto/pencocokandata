@@ -107,10 +107,10 @@ export const NeonDatabaseModal: React.FC<NeonDatabaseModalProps> = ({
           </div>
           <div>
             <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#212529' }}>
-              Database Vercel (Neon Postgres)
+              Database Cloud (Supabase Postgres)
             </h3>
             <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-              Penyimpanan data nyata di tabel relasional Cloud Database Vercel
+              Penyimpanan data nyata di tabel relasional Supabase Postgres
             </p>
           </div>
         </div>
@@ -136,7 +136,7 @@ export const NeonDatabaseModal: React.FC<NeonDatabaseModalProps> = ({
             )}
             <div>
               <div style={{ fontSize: '0.85rem', fontWeight: 600, color: neonStatus?.connected ? '#0ab39c' : '#b45309' }}>
-                {neonStatus?.connected ? 'Terhubung ke Neon Postgres (Vercel)' : 'Neon Belum Terkoneksi (Mode Lokal)'}
+                {neonStatus?.connected ? 'Terhubung ke Supabase Postgres' : 'Supabase Belum Terkoneksi (Mode Lokal)'}
               </div>
               <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
                 {neonStatus?.connected
@@ -162,7 +162,7 @@ export const NeonDatabaseModal: React.FC<NeonDatabaseModalProps> = ({
         <div style={{ background: '#f8fafc', borderRadius: '6px', padding: '1rem', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
           <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b', marginBottom: '0.65rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             <Table size={15} color="#405189" />
-            <span>Tabel Relasional Database Aktif di Neon Postgres:</span>
+            <span>Tabel Relasional Database Aktif di Supabase Postgres:</span>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
@@ -280,20 +280,23 @@ export const NeonDatabaseModal: React.FC<NeonDatabaseModalProps> = ({
             <span>Jaminan Penyimpanan Data:</span>
           </div>
           <ul style={{ fontSize: '0.74rem', color: '#14532d', lineHeight: 1.6, paddingLeft: '1.2rem', margin: 0 }}>
-            <li>Setiap kali Anda upload atau tambah data, data otomatis tersimpan permanen di database cloud Neon.</li>
+            <li>Setiap kali Anda upload atau tambah data, data otomatis tersimpan permanen di database cloud Supabase.</li>
             <li>Data tetap ada saat refresh, saat laptop dimatikan, atau saat dibuka bersama rekan lain di link Vercel.</li>
             <li>Data <strong>hanya akan terhapus</strong> jika Anda secara sengaja menekan tombol <strong>Reset Data</strong>.</li>
           </ul>
         </div>
 
-        {/* How to connect Neon on Vercel */}
+        {/* How to connect Supabase on Vercel */}
         <div style={{ background: '#f8f9fa', borderRadius: '6px', padding: '0.9rem', border: '1px solid #e9ebec' }}>
           <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#405189', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             <Zap size={14} color="#0ab39c" />
-            <span>Koneksi Neon di Vercel:</span>
+            <span>Koneksi Supabase di Vercel:</span>
           </div>
           <p style={{ fontSize: '0.75rem', color: '#495057', lineHeight: 1.6, margin: 0 }}>
-            Database Neon Postgres terhubung langsung via backend serverless Vercel melalui environment variable <code>POSTGRES_URL</code> / <code>DATABASE_URL</code>. Seluruh auto-migrasi tabel dijalankan otomatis tanpa perlu konfigurasi SQL manual.
+            Fungsi serverless Vercel bicara ke Supabase lewat API REST memakai <code>SUPABASE_URL</code> +{' '}
+            <code>SUPABASE_PUBLISHABLE_KEY</code> — kunci publik, jadi tidak ada kata sandi basis data yang perlu
+            dipasang. Skema tabel dibuat satu kali dengan menjalankan <code>server/supabase-bootstrap.sql</code> di
+            Supabase SQL Editor; tanpa langkah itu semua menu menampilkan pesan bahwa skema belum terpasang.
           </p>
         </div>
     </DialogPanel>

@@ -1,53 +1,41 @@
-import { buatSql, ambilUrlDb } from '../server/sql';
+import { rest, pesanRest } from '../server/rest';
 
+/**
+ * /api/status — pil "Terhubung" di kepala aplikasi.
+ *
+ * `app_now()` dipanggil lebih dulu: kalau fungsi itu saja tidak ada, seluruh
+ * tabel pasti belum dibuat, dan menjawab connected:true dengan angka nol akan
+ * terbaca sebagai "database kosong" (padahal belum di-bootstrap).
+ */
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const connectionString = ambilUrlDb();
-
-  if (!connectionString) {
-    return res.status(200).json({
-      connected: false,
-      provider: 'none',
-      message: 'DATABASE_URL Neon belum terpasang di Vercel Environment Variables.',
-    });
-  }
-
+  const r = rest();
   try {
-    const sql = buatSql(connectionString);
+    const serverTime = await r.rpc<string>('app_now');
 
-    // Semua query paralel: round-trip berurutan membuat boot aplikasi lambat
-    const [timeRes, masterRes, targetRes, kodeposRes, finalRes] = await Promise.all([
-      sql`SELECT NOW() as current_time;`,
-      sql`SELECT COUNT(*)::int as count FROM master_records;`.catch(() => [{ count: 0 }]),
-      sql`SELECT COUNT(*)::int as count FROM target_records;`.catch(() => [{ count: 0 }]),
-      sql`SELECT COUNT(*)::int as count FROM kodepos_data;`.catch(() => [{ count: 0 }]),
-      // final_rows dibuat otomatis oleh /api/target; belum ada = 0 (belum pernah sinkron Final).
-      sql`SELECT COUNT(*)::int as count FROM final_rows;`.catch(() => [{ count: 0 }]),
+    const [masterRecords, targetRecords, kodeposRecords, finalRecords] = await Promise.all([
+      r.hitung('master_records').catch(() => 0),
+      r.hitung('target_records').catch(() => 0),
+      r.hitung('kodepos_data').catch(() => 0),
+      r.hitung('final_rows').catch(() => 0),
     ]);
 
     return res.status(200).json({
       connected: true,
       provider: 'Supabase Postgres (Vercel)',
-      serverTime: timeRes[0]?.current_time,
-      tables: {
-        masterRecords: masterRes[0]?.count || 0,
-        targetRecords: targetRes[0]?.count || 0,
-        kodeposRecords: kodeposRes[0]?.count || 0,
-        finalRecords: finalRes[0]?.count || 0,
-      },
+      serverTime,
+      tables: { masterRecords, targetRecords, kodeposRecords, finalRecords },
     });
   } catch (error: any) {
+    console.error('Supabase API Error (Status):', error);
     return res.status(200).json({
       connected: false,
       provider: 'Supabase Postgres (Vercel)',
-      error: error.message,
+      error: pesanRest(error),
     });
   }
 }
-

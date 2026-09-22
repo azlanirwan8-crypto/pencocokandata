@@ -3,7 +3,7 @@ import type { KodePosRow } from './neonSync';
 
 /**
  * Perbandingan Master Kode Pos lokal (IndexedDB) dengan tabel cloud
- * `kodepos_data` di Neon.
+ * `kodepos_data` di Supabase.
  *
  * Strategi: sidik jari SHA-256 per provinsi (murah, satu request) lalu diff
  * himpunan kunci hanya untuk provinsi yang berbeda. Tidak pernah memindahkan
@@ -60,22 +60,22 @@ export interface KodePosSyncPlan {
   /** Satuan angka pembanding: 'kode pos' atau 'baris'. */
   compareUnit?: string;
   note?: string;
-  /** Jumlah kode pos unik yang tersimpan di Neon. */
+  /** Jumlah kode pos unik yang tersimpan di Supabase. */
   dbTotal: number;
-  /** Jumlah baris wilayah di Neon (satu kode pos bisa dipakai beberapa kelurahan). */
+  /** Jumlah baris wilayah di Supabase (satu kode pos bisa dipakai beberapa kelurahan). */
   dbRows?: number;
   /** Jumlah baris/kode pos di pembanding (master perangkat ini atau sumber internet). */
   compareTotal: number;
   compareLabel: string;
-  /** Asal angka pada kartu "belum ada di Neon". */
+  /** Asal angka pada kartu "belum ada di Supabase". */
   sourceDetail: string;
   /** Provinsi yang terdapat selisih. */
   provincesAffected: string[];
   /** false = sumber tidak memuat nama wilayah, hanya untuk pemeriksaan. */
   importable: boolean;
-  /** Isi saat sumber resmi: kode wilayah + kode pos yang belum ada di Neon. */
+  /** Isi saat sumber resmi: kode wilayah + kode pos yang belum ada di Supabase. */
   missingCodes: { kode: string; kodePos: string }[];
-  /** Jumlah kode pos patokan yang belum ada di Neon — bisa lebih besar dari daftar contoh. */
+  /** Jumlah kode pos patokan yang belum ada di Supabase — bisa lebih besar dari daftar contoh. */
   missingTotal?: number;
   /** true bila `missingInCloud` cuma contoh terbatas (DIFF_CAP), bukan seluruhnya. */
   listTruncated?: boolean;
@@ -156,7 +156,7 @@ export async function runKodePosSync(onProgress?: SyncProgress): Promise<KodePos
   const neonTotal = meta.cloudTotal ?? cloudProvinces.reduce((s, p) => s + p.total, 0);
   const sourceDetail =
     `Master perangkat ini (IndexedDB \`kodepos_master_data\`, ${local.length.toLocaleString('id-ID')} baris) ` +
-    `dibandingkan dengan tabel \`kodepos_data\` di Neon (${neonTotal.toLocaleString('id-ID')} baris).`;
+    `dibandingkan dengan tabel \`kodepos_data\` di Supabase (${neonTotal.toLocaleString('id-ID')} baris).`;
 
   if (diffProvinces.length === 0) {
     onProgress?.('Selesai', 100);
@@ -184,7 +184,7 @@ export async function runKodePosSync(onProgress?: SyncProgress): Promise<KodePos
   const missingInCloud: KodePosRow[] = [];
   const missingInLocal: KodePosRow[] = [];
   // Patokan validasi = KODE POS. Baris yang nama wilayahnya beda tapi kode posnya sudah
-  // tersimpan di Neon tidak boleh diusulkan import.
+  // tersimpan di Supabase tidak boleh diusulkan import.
   const cloudCodes = new Set<string>();
 
   for (let i = 0; i < diffProvinces.length; i++) {
@@ -274,7 +274,7 @@ export async function runKodePosSourceAudit(
       compareLabel: 'Sumber resmi',
       sourceDetail:
         `${json.source?.label} - ${json.source?.total} desa/kelurahan, ${srcCodes} kode pos unik. ` +
-        `${missingCodes.length} kode pos resmi belum ada di Neon, ${onlyInDb} kode pos di Neon tidak dikenal sumber.`,
+        `${missingCodes.length} kode pos resmi belum ada di Supabase, ${onlyInDb} kode pos di Supabase tidak dikenal sumber.`,
       provincesAffected: json.provincesAffected || [],
       importable: false,
       missingCodes,
@@ -302,7 +302,7 @@ export async function runKodePosSourceAudit(
     compareLabel: 'Sumber komunitas',
     sourceDetail:
       `${json.source?.label} - ${json.source?.total} baris / ${srcCodes} kode pos unik. ` +
-      `${newCodes.length} kode pos dikenal sumber tetapi belum ada di Neon, ${onlyInDb} kode pos hanya ada di Neon.`,
+      `${newCodes.length} kode pos dikenal sumber tetapi belum ada di Supabase, ${onlyInDb} kode pos hanya ada di Supabase.`,
     provincesAffected: provinces,
     importable: true,
     missingCodes: [],
@@ -335,8 +335,8 @@ function planFromBaselineDiff(json: any, noteTambahan?: string): KodePosSyncPlan
       `Tarikan ke-${json.version ?? '?'} pada tabel \`kodepos_baseline\` ` +
       `(${(json.baselineRows ?? 0).toLocaleString('id-ID')} baris, ${(json.baselineCodes ?? 0).toLocaleString('id-ID')} kode pos unik) ` +
       `- sumber: ${json.source}. ` +
-      `${(json.missingCodesTotal ?? 0).toLocaleString('id-ID')} kode pos patokan belum ada di Neon, ` +
-      `${(json.codesOnlyInDb ?? 0).toLocaleString('id-ID')} kode pos hanya ada di Neon.`,
+      `${(json.missingCodesTotal ?? 0).toLocaleString('id-ID')} kode pos patokan belum ada di Supabase, ` +
+      `${(json.codesOnlyInDb ?? 0).toLocaleString('id-ID')} kode pos hanya ada di Supabase.`,
     provincesAffected: provinces,
     importable: true,
     missingCodes: [],
@@ -545,7 +545,7 @@ export async function crawlKodePosId(
  * INI YANG JALAN SAAT KLIK "Sync Data".
  * 1) tanya kodepos.id: ada provinsi yang bertambah/berubah sejak patokan diambil?
  * 2) kalau ada, crawl hanya provinsi itu dan perbarui tabel patokan
- * 3) adukan kodepos_data (Neon) terhadap tabel patokan — di level kode pos
+ * 3) adukan kodepos_data (Supabase) terhadap tabel patokan — di level kode pos
  *
  * Cloudflare kodepos.id menolak IP datacenter, jadi kalau server diblokir (403)
  * pemeriksaan tetap jalan memakai patokan terakhir dan alasannya ditampilkan.
@@ -555,7 +555,7 @@ export async function runKodePosLiveSync(onProgress?: SyncProgress): Promise<Kod
   const fresh = await fetchJson('/api/kodepos-id?view=fresh');
 
   const ambilPatokan = async () => {
-    onProgress?.('Membandingkan dengan database Neon...', 88);
+    onProgress?.('Membandingkan dengan database Supabase...', 88);
     const json = await fetchJson('/api/kodepos-baseline?view=diff');
     if (!json.ready) {
       throw new Error(

@@ -86,7 +86,7 @@ export const Topbar: React.FC<TopbarProps> = ({
             className="btn btn-outline btn-sm"
             onClick={onOpenNeonModal}
             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.74rem', padding: '0.25rem 0.65rem', borderColor: '#ced4da', color: '#495057', background: '#ffffff', fontWeight: 600 }}
-            title="Periksa koneksi & kelola database Neon"
+            title="Periksa koneksi & kelola database Supabase"
           >
             <Database size={13} color="#3577f1" />
             <span>Database</span>

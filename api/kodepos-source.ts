@@ -1,4 +1,4 @@
-import { buatSql, ambilUrlDb } from '../server/sql';
+import { rest, pesanRest } from '../server/rest';
 
 /**
  * /api/kodepos-source — audit database kode pos terhadap sumber eksternal.
@@ -117,12 +117,6 @@ export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const connectionString = ambilUrlDb();
-
-  if (!connectionString) {
-    return res.status(200).json({ ok: false, configured: false, message: 'DATABASE_URL (Supabase Postgres) belum terpasang.' });
-  }
-
   const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
 
   try {
@@ -131,11 +125,11 @@ export default async function handler(req: any, res: any) {
     }
     const sourceKey = url.searchParams.get('source') === 'komunitas' ? 'komunitas' : 'resmi';
 
-    const [src, dbRes] = await Promise.all([
+    const [src, kodeDb] = await Promise.all([
       sourceKey === 'resmi' ? loadOfficial() : loadCommunity(),
-      buatSql(connectionString)`SELECT DISTINCT upper(btrim(kode_pos)) AS kode_pos FROM kodepos_data;`,
+      rest().rpc<string[]>('kp_kode_unik'),
     ]);
-    const dbCodes = new Set<string>((dbRes as any[]).map((r) => String(r.kode_pos).trim()));
+    const dbCodes = new Set<string>((kodeDb || []).map((k) => String(k).trim()));
 
     if (sourceKey === 'resmi') {
       const rows = (src as { rows: OfficialRow[] }).rows;
@@ -216,6 +210,6 @@ export default async function handler(req: any, res: any) {
     });
   } catch (error: any) {
     console.error('Kodepos source audit error:', error);
-    return res.status(500).json({ ok: false, configured: true, error: error?.message || 'Audit sumber eksternal gagal.' });
+    return res.status(500).json({ ok: false, configured: true, error: pesanRest(error, 'Audit sumber eksternal gagal.') });
   }
 }

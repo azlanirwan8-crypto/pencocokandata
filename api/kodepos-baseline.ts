@@ -1,4 +1,4 @@
-import { buatSql, ambilUrlDb } from '../server/sql';
+import { rest, pesanRest } from '../server/rest';
 
 /**
  * /api/kodepos-baseline — patokan kode pos nasional yang disimpan di database sendiri.
@@ -184,80 +184,7 @@ function sourceById(id: string | null | undefined): BaselineSource {
 }
 
 /**
- * Tabel baseline sudah ada di Neon (id, kode_wilayah UNIQUE, status, created_at).
- * Yang ditambahkan di sini hanya kolom isi dataset; semuanya nullable + ada default,
- * jadi tidak menabrak baris yang sudah ada.
- */
-let schemaReady: Promise<void> | null = null;
-function ensureSchema(sql: any): Promise<void> {
-  if (!schemaReady) {
-    schemaReady = (async () => {
-      try {
-        await sql`
-          CREATE TABLE IF NOT EXISTS kodepos_baseline (
-            id             SERIAL PRIMARY KEY,
-            kode_wilayah   VARCHAR(13) UNIQUE NOT NULL,
-            kode_pos       VARCHAR(10),
-            kelurahan      TEXT,
-            kecamatan      TEXT,
-            kabupaten_kota TEXT,
-            provinsi       TEXT,
-            sumber         TEXT,
-            versi          INT,
-            diambil_pada   TIMESTAMPTZ DEFAULT NOW()
-          );
-        `;
-        await sql`ALTER TABLE kodepos_baseline ADD COLUMN IF NOT EXISTS kode_pos VARCHAR(10);`;
-        await sql`ALTER TABLE kodepos_baseline ADD COLUMN IF NOT EXISTS kelurahan TEXT;`;
-        await sql`ALTER TABLE kodepos_baseline ADD COLUMN IF NOT EXISTS kecamatan TEXT;`;
-        await sql`ALTER TABLE kodepos_baseline ADD COLUMN IF NOT EXISTS kabupaten_kota TEXT;`;
-        await sql`ALTER TABLE kodepos_baseline ADD COLUMN IF NOT EXISTS provinsi TEXT;`;
-        await sql`ALTER TABLE kodepos_baseline ADD COLUMN IF NOT EXISTS sumber TEXT;`;
-        await sql`ALTER TABLE kodepos_baseline ADD COLUMN IF NOT EXISTS versi INT;`;
-        await sql`ALTER TABLE kodepos_baseline ADD COLUMN IF NOT EXISTS diambil_pada TIMESTAMPTZ DEFAULT NOW();`;
-        await sql`CREATE INDEX IF NOT EXISTS idx_baseline_kode_pos ON kodepos_baseline(kode_pos);`;
-        await sql`
-          CREATE TABLE IF NOT EXISTS kodepos_geo (
-            kode_pos              VARCHAR(10) PRIMARY KEY,
-            latitude              DOUBLE PRECISION,
-            longitude             DOUBLE PRECISION,
-            sumber                TEXT,
-            presisi               TEXT,
-            terverifikasi_google  BOOLEAN DEFAULT FALSE,
-            alamat                TEXT,
-            dicari                TEXT,
-            provinsi              TEXT,
-            kabupaten_kota        TEXT,
-            diambil_pada          TIMESTAMPTZ,
-            dibuat_pada           TIMESTAMPTZ DEFAULT NOW()
-          );
-        `;
-        await sql`
-          CREATE TABLE IF NOT EXISTS kodepos_koordinat (
-            kode_wilayah   VARCHAR(13) PRIMARY KEY,
-            kode_pos       VARCHAR(10),
-            latitude       DOUBLE PRECISION NOT NULL,
-            longitude      DOUBLE PRECISION NOT NULL,
-            elevasi        INT,
-            sumber         TEXT,
-            diambil_pada   TIMESTAMPTZ DEFAULT NOW()
-          );
-        `;
-        await sql`CREATE INDEX IF NOT EXISTS idx_koordinat_kode_pos ON kodepos_koordinat(kode_pos);`;
-        await sql`ALTER TABLE kodepos_data ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;`;
-        await sql`ALTER TABLE kodepos_data ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;`;
-        await sql`ALTER TABLE kodepos_data ADD COLUMN IF NOT EXISTS sumber_koordinat TEXT;`;
-        await sql`ALTER TABLE kodepos_data ADD COLUMN IF NOT EXISTS diambil_pada TIMESTAMPTZ;`;
-      } catch (err) {
-        console.warn('Migrasi kodepos_baseline dilewati:', err);
-        schemaReady = null;
-      }
-    })();
-  }
-  return schemaReady;
-}
-
-/** Kunci baris baseline: kode wilayah asli, atau pengganti pendek bila sumber tak memilikinya. */
+ * Kunci baris baseline: kode wilayah asli, atau pengganti pendek bila sumber tak memilikinya. */
 function baseKey(r: NormRow): string {
   const k = r.kode_wilayah.replace(/\s+/g, '');
   if (k && k.length <= 13) return k;
@@ -265,12 +192,6 @@ function baseKey(r: NormRow): string {
   const seed = `${r.kode_pos}|${r.kelurahan}|${r.kecamatan}`;
   for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619) >>> 0;
   return `x${h.toString(36)}`;
-}
-
-/** Kunci identitas satu baris — harus sama dengan ROW_KEY_SQL di api/kodepos.ts. */
-function rowKey(alias: string) {
-  const c = (col: string) => `upper(btrim(COALESCE(${alias}.${col},'')))`;
-  return `${c('kode_pos')}||'|'||${c('kelurahan')}||'|'||${c('kecamatan')}||'|'||${c('kabupaten_kota')}||'|'||${c('provinsi')}`;
 }
 
 /** Titik diterima hanya bila kode wilayah 13 digit dan koodinatnya masuk wilayah Indonesia. */
@@ -291,10 +212,6 @@ function bersihTitik(raw: any) {
   };
 }
 
-/** Kumpulan kode pos yang sudah ada di master aplikasi — dipakai untuk selisih. */
-const DB_CODES_SQL = 'SELECT DISTINCT upper(btrim(kode_pos)) AS kode_pos FROM kodepos_data;';
-const DB_CODES_SUB = '(SELECT DISTINCT upper(btrim(kode_pos)) FROM kodepos_data)';
-
 /**
  * Pilih sumber untuk penarikan baru: coba setiap sumber dengan satu halaman kecil.
  * Sumber pertama yang membalas JSON/CSV yang masuk akal dipakai sampai selesai.
@@ -313,82 +230,61 @@ async function resolveSource(): Promise<BaselineSource> {
   throw new Error(`Semua sumber gagal — ${errors.join(' | ')}`);
 }
 
+/** Bentuk baris baseline untuk upsert (PostgREST hanya menyegarkan kolom yang dikirim). */
+function barisBaseline(r: NormRow, sumber: string, versi: number) {
+  return {
+    kode_wilayah: r.kode_wilayah,
+    kode_pos: r.kode_pos,
+    kelurahan: r.kelurahan,
+    kecamatan: r.kecamatan,
+    kabupaten_kota: r.kabupaten_kota,
+    provinsi: r.provinsi,
+    sumber,
+    versi,
+    diambil_pada: new Date().toISOString(),
+  };
+}
+
+/** Kirim hasil unduhan per 500 baris supaya badan permintaan tetap kecil. */
+async function simpanBaseline(sb: ReturnType<typeof rest>, rows: NormRow[], sumber: string, versi: number): Promise<void> {
+  for (let i = 0; i < rows.length; i += 500) {
+    await sb.simpan('kodepos_baseline', rows.slice(i, i + 500).map((r) => barisBaseline(r, sumber, versi)), {
+      onKonflik: 'kode_wilayah',
+    });
+  }
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST,DELETE');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const connectionString = ambilUrlDb();
-
-  if (!connectionString) {
-    return res.status(200).json({ ok: false, configured: false, message: 'DATABASE_URL (Supabase Postgres) belum terpasang.' });
-  }
-
   const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
 
   try {
-    const sql = buatSql(connectionString);
-    await ensureSchema(sql);
+    const sb = rest();
     const view = url.searchParams.get('view') || 'meta';
 
     // ─────────────── GET meta ───────────────
     if (req.method === 'GET' && view === 'meta') {
-      const stats = await sql`
-        SELECT MAX(versi) AS versi, MAX(diambil_pada) AS diambil_pada, MAX(sumber) AS sumber,
-               COUNT(*)::int AS baris, COUNT(DISTINCT upper(kode_pos))::int AS kode_pos_unik
-        FROM kodepos_baseline;
-      `;
+      const stats = await sb.rpc<Record<string, unknown>>('base_meta');
       return res.status(200).json({
         ok: true,
         configured: true,
-        ready: ((stats?.[0] as any)?.baris || 0) > 0,
+        ready: Number(stats?.baris || 0) > 0,
         sumber: SOURCES.map((s) => s.label).join(' → '),
-        stats: stats?.[0] || null,
+        stats: stats || null,
       });
     }
 
     // ─────────────── GET diff ───────────────
     if (req.method === 'GET' && view === 'diff') {
-      const [dbRes, baseRes, totals] = await Promise.all([
-        sql.query(DB_CODES_SQL),
-        // Kode pos baseline yang belum ada di master aplikasi (baris contoh, dibatasi).
-        // Titik koordinatnya ikut dibawa dari kodepos_geo supaya tab Sinkronisasi
-        // menampilkan kolom lokasi yang sama dengan tabel induk.
-        sql.query(
-          `WITH b AS (
-             SELECT kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi
-             FROM kodepos_baseline
-             WHERE upper(btrim(kode_pos)) NOT IN ${DB_CODES_SUB}
-             ORDER BY provinsi, kabupaten_kota, kecamatan, kode_pos
-             LIMIT $1
-           )
-           SELECT b.*, g.latitude, g.longitude,
-                  g.sumber AS geo_sumber, g.presisi AS geo_presisi, g.terverifikasi_google
-           FROM b LEFT JOIN kodepos_geo g ON g.kode_pos = upper(btrim(b.kode_pos));`,
-          [DIFF_CAP]
-        ),
-        sql.query(
-          `SELECT COUNT(*)::int AS baris,
-                  COUNT(DISTINCT upper(btrim(kode_pos)))::int AS kode_pos_unik,
-                  MAX(sumber) AS sumber, MAX(diambil_pada) AS diambil_pada, MAX(versi) AS versi,
-                  COUNT(DISTINCT CASE WHEN upper(btrim(kode_pos)) NOT IN ${DB_CODES_SUB}
-                        THEN upper(btrim(kode_pos)) END)::int AS belum
-             FROM kodepos_baseline;`
-        ),
-      ]);
-
-      const dbRows = await sql`SELECT COUNT(*)::int AS n FROM kodepos_data;`;
-      const dbCodes = new Set<string>((dbRes as any[]).map((r) => String(r.kode_pos).trim()));
-      const baseCodes = await sql`SELECT DISTINCT upper(btrim(kode_pos)) AS kode_pos FROM kodepos_baseline;`;
-      const baseCodeSet = new Set<string>(
-        (baseCodes as any[]).map((r) => String(r.kode_pos ?? '').trim()).filter(Boolean)
-      );
-      let codesOnlyInDb = 0;
-      for (const c of dbCodes) if (!baseCodeSet.has(c)) codesOnlyInDb++;
-
-      const t = (totals?.[0] || {}) as any;
-      if (!t.baris) {
+      // base_diff mengerjakan seluruh aduan (kode pos unik, baris contoh, titik
+      // dari kodepos_geo) dalam satu panggilan ke database.
+      const t = (await sb.rpc<Record<string, any>>('base_diff', { p_cap: DIFF_CAP })) || {};
+      const contoh: any[] = t.missingInDb || [];
+      if (!Number(t.baris || 0)) {
         return res.status(200).json({ ok: true, configured: true, ready: false, message: 'Baseline belum tersimpan.' });
       }
 
@@ -400,25 +296,25 @@ export default async function handler(req: any, res: any) {
         source: t.sumber || SOURCES[0].label,
         takenAt: t.diambil_pada || null,
         baselineRows: t.baris || 0,
-        baselineCodes: t.kode_pos_unik || baseCodeSet.size,
-        dbCodes: dbCodes.size,
-        dbRows: (dbRows?.[0] as any)?.n || 0,
+        baselineCodes: t.kode_pos_unik || 0,
+        dbCodes: t.dbCodes || 0,
+        dbRows: t.dbRows || 0,
         missingCodesTotal: t.belum || 0,
-        missingInDb: (baseRes as any[]).map((r) => ({
-          kodePos: r.kode_pos,
+        missingInDb: contoh.map((r) => ({
+          kodePos: r.kodePos,
           kelurahan: r.kelurahan || '',
           kecamatan: r.kecamatan || '',
-          kabupatenKota: r.kabupaten_kota || '',
+          kabupatenKota: r.kabupatenKota || '',
           provinsi: r.provinsi || '',
           status: 'AKTIF',
           latitude: r.latitude == null ? null : Number(r.latitude),
           longitude: r.longitude == null ? null : Number(r.longitude),
-          geoSumber: r.geo_sumber ?? null,
-          geoPresisi: r.geo_presisi ?? null,
-          geoTerverifikasi: r.terverifikasi_google === true,
+          geoSumber: r.geoSumber ?? null,
+          geoPresisi: r.geoPresisi ?? null,
+          geoTerverifikasi: r.geoTerverifikasi === true,
         })),
-        codesOnlyInDb,
-        truncated: (baseRes as any[]).length >= DIFF_CAP,
+        codesOnlyInDb: t.hanyaDiDb || 0,
+        truncated: contoh.length >= DIFF_CAP,
       });
     }
 
@@ -432,10 +328,7 @@ export default async function handler(req: any, res: any) {
       const source = body.sourceId ? sourceById(String(body.sourceId)) : await resolveSource();
 
       let vers = Number(body.versi) || 0;
-      if (!vers) {
-        const max = await sql`SELECT COALESCE(MAX(versi), 0)::int AS v FROM kodepos_baseline;`;
-        vers = (max?.[0]?.v || 0) + 1;
-      }
+      if (!vers) vers = await sb.rpc<number>('base_next_versi');
 
       let upserted = 0;
       let total = 0;
@@ -457,25 +350,7 @@ export default async function handler(req: any, res: any) {
         }
         const rows = [...byKey.values()];
         if (rows.length > 0) {
-          const chunk = JSON.stringify(rows);
-          await sql`
-            INSERT INTO kodepos_baseline (kode_wilayah, kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, sumber, versi, diambil_pada)
-            SELECT kode_wilayah, kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi,
-                   ${source.label}, ${vers}, NOW()
-            FROM json_to_recordset(${chunk}::json) as x(
-              kode_wilayah VARCHAR(13), kode_pos VARCHAR(10), kelurahan TEXT,
-              kecamatan TEXT, kabupaten_kota TEXT, provinsi TEXT
-            )
-            ON CONFLICT (kode_wilayah) DO UPDATE SET
-              kode_pos = EXCLUDED.kode_pos,
-              kelurahan = EXCLUDED.kelurahan,
-              kecamatan = EXCLUDED.kecamatan,
-              kabupaten_kota = EXCLUDED.kabupaten_kota,
-              provinsi = EXCLUDED.provinsi,
-              sumber = EXCLUDED.sumber,
-              versi = EXCLUDED.versi,
-              diambil_pada = NOW();
-          `;
+          await simpanBaseline(sb, rows, source.label, vers);
           upserted += rows.length;
         }
         if (exhausted || (total > 0 && skip + PAGE_SIZE >= total)) break;
@@ -488,9 +363,9 @@ export default async function handler(req: any, res: any) {
       // jadi baris sumber lama yang tertinggal akan muncul sebagai desa ganda di atas yang baru.
       let dibuang = 0;
       if (done && upserted > 0) {
-        const sisa = await sql`SELECT COUNT(*)::int AS n FROM kodepos_baseline WHERE versi <> ${vers};`;
-        await sql`DELETE FROM kodepos_baseline WHERE versi <> ${vers};`;
-        dibuang = Number((sisa?.[0] as any)?.n || 0);
+        const filterLama = { versi: `neq.${vers}` };
+        dibuang = await sb.hitung('kodepos_baseline', filterLama);
+        await sb.hapus('kodepos_baseline', filterLama);
       }
 
       return res.status(200).json({
@@ -508,56 +383,22 @@ export default async function handler(req: any, res: any) {
     }
 
     // ─────────────── POST import-missing ───────────────
-    // Salin SEMUA baris patokan yang belum ada ke tabel kerja, langsung di database.
-    // Jalur browser biasa terbatas DIFF_CAP baris contoh, jadi tidak bisa dipakai untuk
-    // mengisi puluhan ribu baris sekali jalan.
+    // Salin SEMUA baris patokan yang belum ada ke tabel kerja, langsung di database
+    // (fungsi base_import_missing). Jalur browser biasa terbatas DIFF_CAP baris
+    // contoh, jadi tidak bisa dipakai untuk mengisi puluhan ribu baris sekali jalan.
     if (req.method === 'POST' && view === 'import-missing') {
-      const sebelum = await sql`SELECT COUNT(*)::int AS n FROM kodepos_data;`;
-      await sql`
-        INSERT INTO kodepos_data (kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, status)
-        SELECT b.kode_pos, b.kelurahan, b.kecamatan, b.kabupaten_kota, b.provinsi, 'AKTIF'
-        FROM kodepos_baseline b
-        WHERE b.kode_pos ~ '^[0-9]{5}$'
-          AND NOT EXISTS (
-            SELECT 1 FROM kodepos_data d
-            WHERE upper(btrim(d.kode_pos)) = upper(btrim(b.kode_pos))
-              AND lower(btrim(coalesce(d.kelurahan, ''))) = lower(btrim(coalesce(b.kelurahan, '')))
-          )
-        ON CONFLICT DO NOTHING;
-      `;
-      const sesudah = await sql`SELECT COUNT(*)::int AS n FROM kodepos_data;`;
-      const masuk = Number((sesudah?.[0] as any)?.n || 0) - Number((sebelum?.[0] as any)?.n || 0);
+      const hasil = await sb.rpc<{ masuk: number; totalSetelah: number }>('base_import_missing');
       return res.status(200).json({
         ok: true,
         configured: true,
-        masuk,
-        totalSetelah: Number((sesudah?.[0] as any)?.n || 0),
+        masuk: Number(hasil?.masuk || 0),
+        totalSetelah: Number(hasil?.totalSetelah || 0),
       });
     }
 
     // ─────────────── KOORDINAT: cakupan ───────────────
     if (req.method === 'GET' && view === 'koordinat') {
-      const r = await sql.query(`
-        SELECT
-          (SELECT COUNT(*)::int FROM kodepos_koordinat)                                    AS patokan_titik,
-          (SELECT MAX(diambil_pada) FROM kodepos_koordinat)                                AS terakhir,
-          (SELECT COUNT(*)::int FROM kodepos_data)                                         AS data_total,
-          (SELECT COUNT(*)::int FROM kodepos_data WHERE latitude IS NOT NULL)              AS data_titik,
-          (SELECT COUNT(DISTINCT upper(btrim(kode_pos)))::int FROM kodepos_data
-            WHERE latitude IS NOT NULL)                                                    AS kode_pos_titik,
-          (SELECT COUNT(*)::int FROM kodepos_data
-            WHERE latitude IS NOT NULL
-              AND (latitude NOT BETWEEN -11 AND 41 OR longitude NOT BETWEEN 89 AND 145))   AS di_luar_wilayah,
-          (SELECT COUNT(*)::int FROM kodepos_koordinat k
-            WHERE NOT EXISTS (SELECT 1 FROM kodepos_baseline b WHERE b.kode_wilayah = k.kode_wilayah)) AS tak_terkenalan,
-          (SELECT COUNT(*)::int FROM kodepos_koordinat k
-            JOIN kodepos_baseline b ON b.kode_wilayah = k.kode_wilayah)                                AS kode_wilayah_cocok,
-          (SELECT COUNT(*)::int FROM kodepos_koordinat k
-            JOIN kodepos_baseline b ON b.kode_wilayah = k.kode_wilayah
-            WHERE upper(btrim(k.kode_pos)) = upper(btrim(b.kode_pos)))                                AS kode_pos_cocok;
-      `);
-      // Alias Postgres dilipat ke huruf kecil, jadi baca namanya apa adanya.
-      const s = (r?.[0] as any) || {};
+      const s = (await sb.rpc<Record<string, any>>('koordinat_cakupan')) || {};
       return res.status(200).json({
         ok: true,
         configured: true,
@@ -582,70 +423,47 @@ export default async function handler(req: any, res: any) {
       const rows = raw
         .slice(0, 5000)
         .map(bersihTitik)
-        .filter((r): r is NonNullable<ReturnType<typeof bersihTitik>> => Boolean(r));
+        .filter((x): x is NonNullable<ReturnType<typeof bersihTitik>> => Boolean(x));
       if (!rows.length) {
         return res.status(400).json({ ok: false, error: 'Tidak ada baris valid (kode wilayah 13 digit + titik Indonesia).' });
       }
-      const nilai: string[] = [];
-      const params: any[] = [];
-      rows.forEach((r, i) => {
-        const b = i * 6;
-        nilai.push(`($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},NOW())`);
-        params.push(r.kode, r.kodePos || null, r.lat, r.lng, r.elev, 'kodepos.co.id');
-      });
-      const masuk = await sql.query(
-        `INSERT INTO kodepos_koordinat (kode_wilayah, kode_pos, latitude, longitude, elevasi, sumber, diambil_pada)
-         VALUES ${nilai.join(',')}
-         ON CONFLICT (kode_wilayah) DO UPDATE SET
-           kode_pos = EXCLUDED.kode_pos,
-           latitude = EXCLUDED.latitude,
-           longitude = EXCLUDED.longitude,
-           elevasi = EXCLUDED.elevasi,
-           sumber = EXCLUDED.sumber,
-           diambil_pada = NOW()
-         RETURNING kode_wilayah;`,
-        params
-      );
-      return res.status(200).json({ ok: true, configured: true, masuk: (masuk || []).length, ditolak: raw.length - rows.length });
+      // Upsert per 500 baris; kolom yang dikirim sama persis dengan yang dulu ditulis
+      // pernyataan INSERT ... ON CONFLICT.
+      for (let i = 0; i < rows.length; i += 500) {
+        await sb.simpan(
+          'kodepos_koordinat',
+          rows.slice(i, i + 500).map((x) => ({
+            kode_wilayah: x.kode,
+            kode_pos: x.kodePos || null,
+            latitude: x.lat,
+            longitude: x.lng,
+            elevasi: x.elev,
+            sumber: 'kodepos.co.id',
+            diambil_pada: new Date().toISOString(),
+          })),
+          { onKonflik: 'kode_wilayah' }
+        );
+      }
+      return res.status(200).json({ ok: true, configured: true, masuk: rows.length, ditolak: raw.length - rows.length });
     }
 
     // ─────────────── KOORDINAT: turunkan ke tabel kerja ───────────────
     if (req.method === 'POST' && view === 'koordinat-salin') {
-      const hasil = await sql.query(`
-        WITH src AS (
-          SELECT DISTINCT ON (kunci) kunci, latitude, longitude, sumber, diambil_pada
-          FROM (
-            SELECT ${rowKey('b')} AS kunci, k.latitude, k.longitude, k.sumber, k.diambil_pada, b.kode_wilayah
-            FROM kodepos_koordinat k
-            JOIN kodepos_baseline b ON b.kode_wilayah = k.kode_wilayah
-          ) t
-          ORDER BY kunci, kode_wilayah
-        ),
-        upd AS (
-          UPDATE kodepos_data d
-          SET latitude = src.latitude,
-              longitude = src.longitude,
-              sumber_koordinat = src.sumber,
-              diambil_pada = src.diambil_pada
-          FROM src
-          WHERE src.kunci = ${rowKey('d')}
-            AND (d.latitude IS DISTINCT FROM src.latitude OR d.longitude IS DISTINCT FROM src.longitude)
-          RETURNING 1
-        )
-        SELECT COUNT(*)::int AS n FROM upd;
-      `);
-      const bolong = await sql`SELECT COUNT(*)::int AS n FROM kodepos_data WHERE latitude IS NULL;`;
+      const hasil = (await sb.rpc<{ disalin: number; tanpaTitik: number }>('koordinat_salin')) || {
+        disalin: 0,
+        tanpaTitik: 0,
+      };
       return res.status(200).json({
         ok: true,
         configured: true,
-        disalin: (hasil?.[0] as any)?.n ?? 0,
-        tanpaTitik: (bolong?.[0] as any)?.n ?? 0,
+        disalin: Number(hasil.disalin || 0),
+        tanpaTitik: Number(hasil.tanpaTitik || 0),
       });
     }
 
     // ─────────────── RESET ───────────────
     if (req.method === 'DELETE') {
-      await sql`DELETE FROM kodepos_baseline;`;
+      await sb.hapus('kodepos_baseline');
       return res.status(200).json({ ok: true, configured: true, message: 'Tabel baseline dikosongkan.' });
     }
 
@@ -659,7 +477,7 @@ export default async function handler(req: any, res: any) {
     return res.status(status >= 400 && status < 600 ? status : 500).json({
       ok: false,
       configured: true,
-      error: error?.message || 'Baseline kodepos gagal.',
+      error: pesanRest(error, 'Baseline kodepos gagal.'),
     });
   }
 }

@@ -1,28 +1,10 @@
-import { buatSql, ambilUrlDb } from '../server/sql';
+import { rest, bacaAppStore, tulisAppStore, hapusAppStore, pesanRest } from '../server/rest';
 
-/** DDL app_store cukup sekali per warm instance; kegagalan tidak memblokir baca. */
-let appStoreReady: Promise<void> | null = null;
-async function ensureAppStore(sql: any) {
-  if (!appStoreReady) {
-    appStoreReady = (async () => {
-      try {
-        await sql`
-          CREATE TABLE IF NOT EXISTS app_store (
-            key VARCHAR(100) PRIMARY KEY,
-            data JSONB NOT NULL,
-            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-          );
-        `;
-      } catch (err) {
-        console.warn('Migrasi app_store dilewati:', err);
-      }
-    })();
-  }
-  await appStoreReady;
-}
-
+/**
+ * /api/wilayah — setting wilayah tersimpan di app_store kunci `wilayah_data`.
+ * Bicara ke Supabase lewat PostgREST + publishable key: tanpa kata sandi basis data.
+ */
 export default async function handler(req: any, res: any) {
-  // Setup CORS headers
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -31,61 +13,26 @@ export default async function handler(req: any, res: any) {
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
   );
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const connectionString = ambilUrlDb();
-
-  if (!connectionString) {
-    return res.status(200).json({
-      ok: false,
-      configured: false,
-      message: 'DATABASE_URL (Supabase Postgres) belum terpasang di Vercel Environment Variables.',
-    });
-  }
+  const r = rest();
+  const KUNCI = 'wilayah_data';
 
   try {
-    const sql = buatSql(connectionString);
-    await ensureAppStore(sql);
-
-    // 1. GET: Fetch wilayah data
     if (req.method === 'GET') {
-      const result = await sql`
-        SELECT data, updated_at 
-        FROM app_store 
-        WHERE key = 'wilayah_data' 
-        LIMIT 1;
-      `;
-
-      if (result && result.length > 0) {
-        return res.status(200).json({
-          ok: true,
-          configured: true,
-          data: result[0].data,
-          updatedAt: result[0].updated_at,
-        });
-      }
-
-      return res.status(200).json({
-        ok: true,
-        configured: true,
-        data: null,
-      });
+      const baris = await bacaAppStore(r, KUNCI);
+      return res
+        .status(200)
+        .json(
+          baris
+            ? { ok: true, configured: true, data: baris.data, updatedAt: baris.updated_at }
+            : { ok: true, configured: true, data: null }
+        );
     }
 
-    // 2. POST: Upsert wilayah data
     if (req.method === 'POST') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-      const dataJson = JSON.stringify(body);
-
-      await sql`
-        INSERT INTO app_store (key, data, updated_at)
-        VALUES ('wilayah_data', ${dataJson}::jsonb, NOW())
-        ON CONFLICT (key)
-        DO UPDATE SET data = EXCLUDED.data, updated_at = NOW();
-      `;
-
+      await tulisAppStore(r, KUNCI, body);
       return res.status(200).json({
         ok: true,
         configured: true,
@@ -93,9 +40,8 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 3. DELETE: Reset wilayah data
     if (req.method === 'DELETE') {
-      await sql`DELETE FROM app_store WHERE key = 'wilayah_data';`;
+      await hapusAppStore(r, KUNCI);
       return res.status(200).json({
         ok: true,
         configured: true,
@@ -105,11 +51,7 @@ export default async function handler(req: any, res: any) {
 
     return res.status(405).json({ ok: false, error: 'Method Not Allowed' });
   } catch (error: any) {
-    console.error('Neon DB API Error (Wilayah):', error);
-    return res.status(500).json({
-      ok: false,
-      configured: true,
-      error: error.message || 'Internal Server Error',
-    });
+    console.error('Supabase API Error (Wilayah):', error);
+    return res.status(500).json({ ok: false, configured: true, error: pesanRest(error) });
   }
 }

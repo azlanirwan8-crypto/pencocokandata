@@ -1,4 +1,4 @@
-import { buatSql, ambilUrlDb } from '../server/sql';
+import { rest, pesanRest } from '../server/rest';
 import { createHash } from 'node:crypto';
 
 /**
@@ -95,52 +95,27 @@ function rowKey(r: CollectedRow): string {
   return `k${h.toString(36)}`.slice(0, 13);
 }
 
-let schemaReady: Promise<void> | null = null;
-function ensureSchema(sql: any): Promise<void> {
-  if (!schemaReady) {
-    schemaReady = (async () => {
-      try {
-        await sql`
-          CREATE TABLE IF NOT EXISTS kodepos_baseline (
-            id             SERIAL PRIMARY KEY,
-            kode_wilayah   VARCHAR(13) UNIQUE NOT NULL,
-            kode_pos       VARCHAR(10),
-            kelurahan      TEXT,
-            kecamatan      TEXT,
-            kabupaten_kota TEXT,
-            provinsi       TEXT,
-            sumber         TEXT,
-            versi          INT,
-            diambil_pada   TIMESTAMPTZ DEFAULT NOW()
-          );
-        `;
-        await sql`ALTER TABLE kodepos_baseline ADD COLUMN IF NOT EXISTS kode_pos VARCHAR(10);`;
-        await sql`ALTER TABLE kodepos_baseline ADD COLUMN IF NOT EXISTS kelurahan TEXT;`;
-        await sql`ALTER TABLE kodepos_baseline ADD COLUMN IF NOT EXISTS kecamatan TEXT;`;
-        await sql`ALTER TABLE kodepos_baseline ADD COLUMN IF NOT EXISTS kabupaten_kota TEXT;`;
-        await sql`ALTER TABLE kodepos_baseline ADD COLUMN IF NOT EXISTS provinsi TEXT;`;
-        await sql`ALTER TABLE kodepos_baseline ADD COLUMN IF NOT EXISTS sumber TEXT;`;
-        await sql`ALTER TABLE kodepos_baseline ADD COLUMN IF NOT EXISTS versi INT;`;
-        await sql`ALTER TABLE kodepos_baseline ADD COLUMN IF NOT EXISTS diambil_pada TIMESTAMPTZ DEFAULT NOW();`;
-        await sql`CREATE INDEX IF NOT EXISTS idx_baseline_kode_pos ON kodepos_baseline(kode_pos);`;
-        await sql`
-          CREATE TABLE IF NOT EXISTS kodepos_crawl_state (
-            provinsi     TEXT PRIMARY KEY,
-            sumber       TEXT,
-            halaman      INT NOT NULL DEFAULT 0,
-            baris        INT NOT NULL DEFAULT 0,
-            sampel       TEXT,
-            versi        INT,
-            diambil_pada TIMESTAMPTZ DEFAULT NOW()
-          );
-        `;
-      } catch (err) {
-        console.warn('Migrasi kodepos_baseline (kodepos.id) dilewati:', err);
-        schemaReady = null;
-      }
-    })();
+/**
+ * Upsert hasil crawl ke kodepos_baseline, per 500 baris. `diambil_pada` dikirim
+ * eksplisit karena upsert PostgREST hanya menyegarkan kolom yang disertakan.
+ */
+async function simpanBaseline(sb: ReturnType<typeof rest>, rows: CollectedRow[], versi: number): Promise<void> {
+  const TERKIRIM = 500;
+  for (let i = 0; i < rows.length; i += TERKIRIM) {
+    const batch = rows.slice(i, i + TERKIRIM).map((x) => ({
+      kode_wilayah: x.kode_wilayah,
+      kode_pos: x.kode_pos,
+      kelurahan: x.kelurahan,
+      kecamatan: x.kecamatan,
+      kabupaten_kota: x.kabupaten_kota,
+      provinsi: x.provinsi,
+      sumber: SOURCE_LABEL,
+      versi,
+      diambil_pada: new Date().toISOString(),
+    }));
+    if (batch.length === 0) continue;
+    await sb.simpan('kodepos_baseline', batch, { onKonflik: 'kode_wilayah' });
   }
-  return schemaReady;
 }
 
 /** Hash isi halaman — dipakai untuk tahu sebuah provinsi berubah atau tidak. */
@@ -220,16 +195,10 @@ export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const connectionString = ambilUrlDb();
-
-  if (!connectionString) {
-    return res.status(200).json({ ok: false, configured: false, message: 'DATABASE_URL (Supabase Postgres) belum terpasang.' });
-  }
-
   const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
 
   try {
-    const sql = buatSql(connectionString);
+    const sb = rest();
     const view = url.searchParams.get('view') || 'provinces';
 
     if (req.method === 'GET' && view === 'provinces') {
@@ -241,11 +210,10 @@ export default async function handler(req: any, res: any) {
     }
 
     if (req.method === 'GET' && view === 'state') {
-      await ensureSchema(sql);
-      const rows = await sql`
-        SELECT provinsi, sumber, halaman, baris, versi, diambil_pada
-        FROM kodepos_crawl_state ORDER BY provinsi;
-      `;
+      const rows = await sb.semuaBaris('kodepos_crawl_state', {
+        kolom: 'provinsi,sumber,halaman,baris,versi,diambil_pada',
+        urut: 'provinsi.asc',
+      });
       return res.status(200).json({ ok: true, configured: true, source: SOURCE_LABEL, states: rows });
     }
 
@@ -259,7 +227,6 @@ export default async function handler(req: any, res: any) {
      * terakhir alih-alih gagal merah.
      */
     if (req.method === 'GET' && view === 'fresh') {
-      await ensureSchema(sql);
       let provinces: string[];
       try {
         const res2 = await fetch(SITE, { headers: BROWSER_HEADERS });
@@ -292,9 +259,12 @@ export default async function handler(req: any, res: any) {
       }
       if (provinces.length < 20) throw new Error(`Hanya ${provinces.length} provinsi terbaca — struktur situs berubah.`);
 
-      const stored = await sql`SELECT provinsi, halaman, sampel FROM kodepos_crawl_state;`;
+      const stored = await sb.semuaBaris<{ provinsi: string; halaman: number; sampel: string | null }>(
+        'kodepos_crawl_state',
+        { kolom: 'provinsi,halaman,sampel' }
+      );
       const byProv = new Map<string, { halaman: number; sampel: Record<string, string> }>();
-      for (const s of stored as any[]) {
+      for (const s of stored) {
         let sampel: Record<string, string> = {};
         try {
           sampel = JSON.parse(String(s.sampel || '{}'));
@@ -342,7 +312,6 @@ export default async function handler(req: any, res: any) {
 
     /** Simpan jejak crawl satu provinsi supaya ?view=fresh bisa membandingkan. */
     if (req.method === 'POST' && view === 'commit') {
-      await ensureSchema(sql);
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
       const provinsi = String(body.provinsi || '').trim().toLowerCase();
       const halaman = Math.max(0, Math.min(5000, Number(body.halaman) || 0));
@@ -351,33 +320,25 @@ export default async function handler(req: any, res: any) {
         return res.status(400).json({ ok: false, error: 'Slug provinsi tidak valid.' });
       }
 
-      let versi = Number(body.versi) || 0;
-      if (!versi) {
-        const max = await sql`SELECT COALESCE(MAX(versi), 0)::int AS v FROM kodepos_crawl_state;`;
-        versi = (max?.[0]?.v || 0) + 1;
-      }
-
       const pages = samplePages(halaman);
       const sampelRows = await Promise.all(pages.map((p) => fetchPage(provinsi, p).catch(() => [] as CollectedRow[])));
       const sampel: Record<string, string> = {};
       pages.forEach((p, i) => (sampel[String(p)] = hashRows(sampelRows[i])));
 
-      await sql`
-        INSERT INTO kodepos_crawl_state (provinsi, sumber, halaman, baris, sampel, versi, diambil_pada)
-        VALUES (${provinsi}, ${SOURCE_LABEL}, ${halaman}, ${baris}, ${JSON.stringify(sampel)}, ${versi}, NOW())
-        ON CONFLICT (provinsi) DO UPDATE SET
-          sumber = EXCLUDED.sumber,
-          halaman = EXCLUDED.halaman,
-          baris = EXCLUDED.baris,
-          sampel = EXCLUDED.sampel,
-          versi = EXCLUDED.versi,
-          diambil_pada = NOW();
-      `;
+      // Nomor versi dihitung di database: dua tab yang menyimpan bersamaan tidak
+      // boleh sama-sama memilih versi yang sama.
+      const versi = await sb.rpc<number>('crawl_state_simpan', {
+        p_provinsi: provinsi,
+        p_sumber: SOURCE_LABEL,
+        p_halaman: halaman,
+        p_baris: baris,
+        p_sampel: JSON.stringify(sampel),
+        p_versi: Number(body.versi) || 0,
+      });
       return res.status(200).json({ ok: true, configured: true, provinsi, halaman, versi, sampel: pages });
     }
 
     if (req.method === 'POST' && view === 'crawl') {
-      await ensureSchema(sql);
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
       const provinsi = String(body.provinsi || '').trim().toLowerCase();
       if (!/^[a-z][a-z-]{2,40}$/.test(provinsi)) {
@@ -387,39 +348,15 @@ export default async function handler(req: any, res: any) {
       const pages = Math.min(MAX_PAGES_PER_CALL, Math.max(1, Number(body.pages) || MAX_PAGES_PER_CALL));
 
       let versi = Number(body.versi) || 0;
-      if (!versi) {
-        const max = await sql`SELECT COALESCE(MAX(versi), 0)::int AS v FROM kodepos_baseline;`;
-        versi = (max?.[0]?.v || 0) + 1;
-      }
+      if (!versi) versi = await sb.rpc<number>('base_next_versi');
 
       const { rows, next, done, lastPage } = await crawlRange(provinsi, fromPage, pages);
 
       // Satu kunci tidak boleh muncul dua kali dalam satu pernyataan upsert.
       const byKey = new Map<string, CollectedRow>();
-      for (const r of rows) byKey.set(rowKey(r), { ...r, kode_wilayah: rowKey(r) });
+      for (const barisHasil of rows) byKey.set(rowKey(barisHasil), { ...barisHasil, kode_wilayah: rowKey(barisHasil) });
       const unique = [...byKey.values()];
-
-      if (unique.length > 0) {
-        const chunk = JSON.stringify(unique);
-        await sql`
-          INSERT INTO kodepos_baseline (kode_wilayah, kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, sumber, versi, diambil_pada)
-          SELECT kode_wilayah, kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi,
-                 ${SOURCE_LABEL}, ${versi}, NOW()
-          FROM json_to_recordset(${chunk}::json) as x(
-            kode_wilayah VARCHAR(13), kode_pos VARCHAR(10), kelurahan TEXT,
-            kecamatan TEXT, kabupaten_kota TEXT, provinsi TEXT
-          )
-          ON CONFLICT (kode_wilayah) DO UPDATE SET
-            kode_pos = EXCLUDED.kode_pos,
-            kelurahan = EXCLUDED.kelurahan,
-            kecamatan = EXCLUDED.kecamatan,
-            kabupaten_kota = EXCLUDED.kabupaten_kota,
-            provinsi = EXCLUDED.provinsi,
-            sumber = EXCLUDED.sumber,
-            versi = EXCLUDED.versi,
-            diambil_pada = NOW();
-        `;
-      }
+      await simpanBaseline(sb, unique, versi);
 
       return res.status(200).json({
         ok: true,
@@ -441,17 +378,13 @@ export default async function handler(req: any, res: any) {
      * Body: { rows: [{ kodePos, kelurahan, kecamatan, kabupatenKota, provinsi }] }
      */
     if (req.method === 'POST' && view === 'ingest') {
-      await ensureSchema(sql);
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
       const input = Array.isArray(body.rows) ? body.rows : [];
       if (input.length === 0) return res.status(400).json({ ok: false, error: 'body.rows kosong.' });
       if (input.length > 5000) return res.status(400).json({ ok: false, error: 'Maksimal 5000 baris per permintaan.' });
 
       let versi = Number(body.versi) || 0;
-      if (!versi) {
-        const max = await sql`SELECT COALESCE(MAX(versi), 0)::int AS v FROM kodepos_baseline;`;
-        versi = (max?.[0]?.v || 0) + 1;
-      }
+      if (!versi) versi = await sb.rpc<number>('base_next_versi');
 
       const byKey = new Map<string, CollectedRow>();
       for (const r of input) {
@@ -469,31 +402,13 @@ export default async function handler(req: any, res: any) {
       const unique = [...byKey.values()];
       if (unique.length === 0) return res.status(400).json({ ok: false, error: 'Tidak ada baris yang sah.' });
 
-      const chunk = JSON.stringify(unique);
-      await sql`
-        INSERT INTO kodepos_baseline (kode_wilayah, kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi, sumber, versi, diambil_pada)
-        SELECT kode_wilayah, kode_pos, kelurahan, kecamatan, kabupaten_kota, provinsi,
-               ${SOURCE_LABEL}, ${versi}, NOW()
-        FROM json_to_recordset(${chunk}::json) as x(
-          kode_wilayah VARCHAR(13), kode_pos VARCHAR(10), kelurahan TEXT,
-          kecamatan TEXT, kabupaten_kota TEXT, provinsi TEXT
-        )
-        ON CONFLICT (kode_wilayah) DO UPDATE SET
-          kode_pos = EXCLUDED.kode_pos,
-          kelurahan = EXCLUDED.kelurahan,
-          kecamatan = EXCLUDED.kecamatan,
-          kabupaten_kota = EXCLUDED.kabupaten_kota,
-          provinsi = EXCLUDED.provinsi,
-          sumber = EXCLUDED.sumber,
-          versi = EXCLUDED.versi,
-          diambil_pada = NOW();
-      `;
+      await simpanBaseline(sb, unique, versi);
       return res.status(200).json({ ok: true, configured: true, upserted: unique.length, versi, source: SOURCE_LABEL });
     }
 
     return res.status(400).json({ ok: false, error: 'Gunakan GET ?view=provinces|fresh|state atau POST ?view=crawl|commit|ingest.' });
   } catch (error: any) {
     console.error('Kodepos.id crawl error:', error);
-    return res.status(502).json({ ok: false, configured: true, error: error?.message || 'Crawl kodepos.id gagal.' });
+    return res.status(502).json({ ok: false, configured: true, error: pesanRest(error, 'Crawl kodepos.id gagal.') });
   }
 }
