@@ -678,25 +678,38 @@ export const App: React.FC = () => {
   // (bukan bagian persetujuan), sama seperti phaseState di grid.
   // `selesai` pakai kesamaan ketat (bukan pembulatan): dengan puluhan ribu baris,
   // 1 baris belum di-approve masih terbulat jadi 100% dan kartu menampilkan "Selesai".
-  const phaseApproval = useMemo(() => {
-    const analysed = analystRows.filter((r) => r.kategori !== 'TIDAK_ANALISA');
-    const total = analysed.length;
+  // Single-pass aggregasi kartu fase dan temuan sinyal (O(N) efisien tanpa multiple iterations)
+  const { phaseApproval, temuanSinyal } = useMemo(() => {
+    let total = 0;
     let a = 0, b = 0, c = 0;
-    for (const r of analysed) {
-      if (r.fase1Approved) a++;
-      if (r.fase2Approved) b++;
-      if (r.fase3Approved) c++;
+    const sinyalOut: Record<number, number> = {};
+
+    for (let i = 0; i < analystRows.length; i++) {
+      const r = analystRows[i];
+      if (r.kategori !== 'TIDAK_ANALISA') {
+        total++;
+        if (r.fase1Approved) a++;
+        if (r.fase2Approved) b++;
+        if (r.fase3Approved) c++;
+      }
+      const bit = bitTemuanBaris(r);
+      if (bit) {
+        for (const no of hitungBit(bit)) sinyalOut[no] = (sinyalOut[no] || 0) + 1;
+      }
     }
+
     const pct = (n: number) => (total ? Math.floor((n / total) * 100) : 0);
     return {
-      pct: { 1: pct(a), 2: pct(b), 3: pct(c) } as { 1: number; 2: number; 3: number },
-      // A7: angka mentah "masih berapa baris" — dipakai penanda yang bisa diklik.
-      sisa: { 1: total - a, 2: total - b, 3: total - c } as { 1: number; 2: number; 3: number },
-      selesai: { 1: total > 0 && a === total, 2: total > 0 && b === total, 3: total > 0 && c === total } as {
-        1: boolean;
-        2: boolean;
-        3: boolean;
+      phaseApproval: {
+        pct: { 1: pct(a), 2: pct(b), 3: pct(c) } as { 1: number; 2: number; 3: number },
+        sisa: { 1: total - a, 2: total - b, 3: total - c } as { 1: number; 2: number; 3: number },
+        selesai: { 1: total > 0 && a === total, 2: total > 0 && b === total, 3: total > 0 && c === total } as {
+          1: boolean;
+          2: boolean;
+          3: boolean;
+        },
       },
+      temuanSinyal: sinyalOut,
     };
   }, [analystRows]);
 
@@ -712,18 +725,6 @@ export const App: React.FC = () => {
         ? analystRows.some((r) => Boolean(r.namaOutlet))
         : analystRows.some((r) => r.statusAnalisa !== 'MENUNGGU');
   const tombolAnalisaTerkunci = !isAnalyzing && faseSudahDikerjakan;
-
-  // Jumlah temuan per sinyal (kartu 1..13) — dihitung dari bitmask yang ditulis engine
-  // saat analisa, bukan dari tebakan, jadi angkanya bisa dibuktikan barisnya.
-  const temuanSinyal = useMemo(() => {
-    const out: Record<number, number> = {};
-    for (const r of analystRows) {
-      const bit = bitTemuanBaris(r);
-      if (!bit) continue;
-      for (const no of hitungBit(bit)) out[no] = (out[no] || 0) + 1;
-    }
-    return out;
-  }, [analystRows]);
 
   const handleResetAnalyst = async () => {
     cancelPendingWrite('analyst_results_data');
