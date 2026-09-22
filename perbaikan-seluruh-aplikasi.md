@@ -1,5 +1,5 @@
 # RENCANA PERBAIKAN SELURUH APLIKASI
-> **STATUS 2026-09-22: BELUM SELESAI — 55 dari 71 item Bagian 0 `SELESAI`, 1 `SEDANG` (A9), 15 `BELUM`. Lampiran: M SELESAI (+M9), N0/N1/N3/N4 SELESAI, N2 & O BELUM.** **Seluruh menu Data Analyst (Bagian B, C, D, E, M, N0/N1/N3) sudah beres** — sisa di dalam menu itu tinggal N2 (inline style → kelas) + Bagian O (token desain) + A9, dan satu keputusan pemilik produk: C7 (15 baris kode pos kembar di cloud). Sisa TERBERAT ada di 5 menu data master: **F1-W2, F2-P2/P3, F3-C3, F4-R2/R3, F5-K1/K2/K3, F6-X1/X2/X3**, lalu **A10**, **G11/G12**, dan Bagian H/I/J/K.
+> **STATUS 2026-09-22: BELUM SELESAI — 55 dari 71 item Bagian 0 `SELESAI`, 1 `SEDANG` (A9), 15 `BELUM`. Lampiran: M SELESAI (+M9), N0/N1/N3/N4 SELESAI, N2 SEDANG (terukur −4% inline style; sisanya butuh cek visual), O BELUM.** **Seluruh menu Data Analyst (Bagian B, C, D, E, M, N0/N1/N3) sudah beres** — sisa di dalam menu itu tinggal N2 (inline style → kelas) + Bagian O (token desain) + A9, dan satu keputusan pemilik produk: C7 (15 baris kode pos kembar di cloud). Sisa TERBERAT ada di 5 menu data master: **F1-W2, F2-P2/P3, F3-C3, F4-R2/R3, F5-K1/K2/K3, F6-X1/X2/X3**, lalu **A10**, **G11/G12**, dan Bagian H/I/J/K.
 > Baca Bagian 0 sebelum mengerjakan apa pun. Titik lanjut: **N2 dikerjakan bersama O** (satu sweep gaya, jangan dua kali), lalu F (5 menu master). Rincian & bukti verifikasi ada di sana.
 
 **Aplikasi:** Tools Data Matcher Cabang & Outlet v2.x â€” React + TypeScript + Vite; IndexedDB (lokal) + Neon Postgres (cloud via serverless `api/`).
@@ -968,6 +968,13 @@ Aturan tampilan — berlaku untuk grid Data Analyst, Final, dan semua menu:
 12. **Animasi ringan**: transisi 150-200ms saja; hormati `prefers-reduced-motion` (aturan global sudah ada di `src/styles/index.css:1848`).
 
 **Eksekusi:** pindahkan gaya yang berulang dari inline style ke kelas di `src/styles/index.css` (bertahap, jangan sekaligus), targetkan penurunan sekitar 40 persen inline style di `AnalystResultsGrid.tsx`.
+
+**Status 2026-09-22 — SEDANG, baru 4 persen:**
+- Pengukurnya dipasang: `node tests/ukur-inline-style.mjs [file...]` mencetak jumlah blok `style={{}}`, jumlah deklarasi, dan nilai `fontSize`/`padding` unik. Baseline `AnalystResultsGrid.tsx`: **239 blok / 987 deklarasi / 18 fontSize unik / 33 padding unik**.
+- Butir 4 ✅ sebagian — keempat tombol aksi baris (Setujui, Revisi, Detail, Data Cabang) pindah ke kelas `.btn-aksi-baris` + varian `.btn-aksi-baris-padat` di `src/styles/index.css`; hanya warna yang tinggal inline. Nilainya **disalin persis** dari inline yang diganti, jadi tidak ada perubahan tampilan dan tidak perlu cek visual. Hasil ukur: 987 → **947 deklarasi (−4%)**.
+- ⚠ Aturan butir 4 ("urutan tetap Detail, lalu Revisi") **dilanggar sengaja** di tab Data Final atas permintaan pemilik produk 2026-09-22: urutannya jadi Revisi → Detail → Setujui (lihat N4 butir 3). Tab lain tidak berubah.
+- **Yang tersisa butuh mata operator, bukan kode:** ~380 deklarasi lagi untuk mencapai −40%, dan sebagian besar pola berulang berikutnya (chip, pill, kartu kandidat) nilainya TIDAK identik antar pemakaian — memindahkannya ke kelas berarti mengubah ukuran/jarak, yang hanya bisa dinilai dengan melihat hasilnya. Karena itu dihentikan di sini sampai operator bisa membuka Data Analyst dengan data nyata (origin dev sesi ini 0 baris, Neon `Offline`).
+- Bagian O (base font `html { font-size: 13px }` → 16px + grid 4px) sengaja **belum disentuh**: itu mengubah ukuran SELURUH aplikasi sekaligus, dan tanpa verifikasi visual justru menghasilkan "gemuk" yang dikeluhkan O0. Urutan aman yang diusulkan: (1) operator screenshot 3 tab hari ini, (2) token `--fs-*`/`--sp-*` + util ditambahkan, (3) satu file disweep, screenshot lagi, baru (4) base font dinaikkan.
 
 **Checklist uji UI:**
 - Semua kolom terbaca penuh tanpa harus klik (wrap atau tooltip tersedia).

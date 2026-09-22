@@ -881,6 +881,28 @@ body {
   color: #405189;
 }
 
+/* N2: tombol aksi pada sel "Aksi Review" grid Data Analyst. Warnanya (background,
+   border, color) tetap inline per aksi — yang di sini bagian yang selalu sama.
+   Nilainya disalin persis dari inline style yang diganti, jadi tidak ada perubahan
+   tampilan; nilai ini memang masih memakai skala rem lama (lihat Bagian O). */
+.btn-aksi-baris {
+  border-radius: var(--radius-sm);
+  padding: 0.22rem 0.55rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Varian rapat untuk tab yang kolom aksinya sempit (Fase 2 & Fase 3). */
+.btn-aksi-baris-padat {
+  padding: 0.22rem 0.4rem;
+}
+
 /* Drag and Drop Zone (Velzon Clean Card Style) */
 .dropzone-container {
   border: 2px dashed #ced4da;

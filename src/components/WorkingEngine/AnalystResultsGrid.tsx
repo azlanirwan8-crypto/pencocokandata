@@ -2261,20 +2261,11 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                               type="button"
                               onClick={() => setConfirmManualRow(r)}
                               title="Kembalikan baris ini ke tab Perlu Analisa Manual"
+                              className="btn-aksi-baris"
                               style={{
                                 background: 'rgba(240, 101, 72, 0.1)',
                                 border: '1px solid rgba(240, 101, 72, 0.35)',
                                 color: '#f06548',
-                                borderRadius: '4px',
-                                padding: '0.22rem 0.55rem',
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '0.25rem',
-                                fontSize: '0.72rem',
-                                fontWeight: 700,
-                                whiteSpace: 'nowrap',
                               }}
                             >
                               <RotateCcw size={12} />
@@ -2288,20 +2279,11 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                               type="button"
                               onClick={onBukaMasterCabang}
                               title="Perbaiki data cabangnya di menu Data Cabang, lalu jalankan ulang fase ini"
+                              className="btn-aksi-baris"
                               style={{
                                 background: 'rgba(64, 81, 137, 0.1)',
                                 border: '1px solid rgba(64, 81, 137, 0.3)',
                                 color: '#405189',
-                                borderRadius: '4px',
-                                padding: '0.22rem 0.55rem',
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '0.25rem',
-                                fontSize: '0.72rem',
-                                fontWeight: 700,
-                                whiteSpace: 'nowrap',
                               }}
                             >
                               <Store size={12} />
@@ -2313,20 +2295,11 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                               type="button"
                               onClick={() => setDetailRow(r)}
                               title="Lihat seluruh atribut baris ini beserta hasil analisa tiap fase"
+                              className="btn-aksi-baris"
                               style={{
                                 background: 'rgba(53, 119, 241, 0.1)',
                                 border: '1px solid rgba(53, 119, 241, 0.3)',
                                 color: '#3577f1',
-                                borderRadius: '4px',
-                                padding: '0.22rem 0.55rem',
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '0.25rem',
-                                fontSize: '0.72rem',
-                                fontWeight: 700,
-                                whiteSpace: 'nowrap',
                               }}
                             >
                               <Info size={12} />
@@ -2358,20 +2331,11 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                 title={diTabManual
                                   ? 'Tandai baris ini sudah diperbaiki → pindah ke tab Berhasil Dianalisa'
                                   : sudahSetuju ? 'Sudah disetujui' : 'Setujui hasil baris ini (OK)'}
+                                className={`btn-aksi-baris${viewTab === 'fase1' || viewTab === 'all' ? '' : ' btn-aksi-baris-padat'}`}
                                 style={{
                                   background: sudahSetuju ? '#0ab39c' : 'rgba(10, 179, 156, 0.1)',
                                   border: '1px solid rgba(10, 179, 156, 0.3)',
                                   color: sudahSetuju ? '#ffffff' : '#0ab39c',
-                                  borderRadius: '4px',
-                                  padding: viewTab === 'fase1' || viewTab === 'all' ? '0.22rem 0.55rem' : '0.22rem 0.4rem',
-                                  cursor: 'pointer',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  gap: '0.25rem',
-                                  fontSize: '0.72rem',
-                                  fontWeight: 700,
-                                  whiteSpace: 'nowrap',
                                 }}
                               >
                                 <Check size={12} />
