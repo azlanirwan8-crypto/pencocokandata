@@ -1,4 +1,4 @@
-import { rest, pesanRest } from '../server/rest';
+import { rest, pesanRest } from './_db';
 
 /**
  * /api/kodepos-baseline — patokan kode pos nasional yang disimpan di database sendiri.

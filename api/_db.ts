@@ -334,3 +334,13 @@ export async function hapusAppStore(r: Rest, key: string): Promise<void> {
 }
 
 
+
+/**
+ * Rute /api/_db tidak dipakai siapa pun. Berkas ini tinggal di dalam api/ karena
+ * fungsi serverless Vercel tidak bisa mengimpor modul dari luar folder api/ (terukur:
+ * semua /api/* yang mengimpor ../server/rest membalas FUNCTION_INVOCATION_FAILED,
+ * sedangkan /api/geocode yang tidak mengimpor apa pun tetap 200).
+ */
+export default async function handler(_req: any, res: any) {
+  res.status(405).json({ ok: false, error: 'Metode tidak diterima di rute ini.' });
+}

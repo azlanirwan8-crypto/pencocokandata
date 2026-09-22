@@ -1,4 +1,4 @@
-import { rest, pesanRest } from '../server/rest';
+import { rest, pesanRest } from './_db';
 
 /**
  * /api/kodepos — Supabase Postgres CRUD Master Data Kode Pos Indonesia, lewat PostgREST.

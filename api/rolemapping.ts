@@ -1,4 +1,4 @@
-import { rest, bacaAppStore, tulisAppStore, hapusAppStore, pesanRest } from '../server/rest';
+import { rest, bacaAppStore, tulisAppStore, hapusAppStore, pesanRest } from './_db';
 
 /**
  * /api/rolemapping — master pemetaan role tersimpan di app_store kunci `rolemapping_data`.

@@ -1,4 +1,4 @@
-import { rest, bacaAppStore, tulisAppStore, hapusAppStore, pesanRest } from '../server/rest';
+import { rest, bacaAppStore, tulisAppStore, hapusAppStore, pesanRest } from './_db';
 
 /**
  * /api/pten — master PTEN tersimpan di app_store kunci `pten_data`.

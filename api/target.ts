@@ -1,4 +1,4 @@
-import { rest, bacaAppStore, tulisAppStore, hapusAppStore, pesanRest } from '../server/rest';
+import { rest, bacaAppStore, tulisAppStore, hapusAppStore, pesanRest } from './_db';
 
 /**
  * /api/target — Supabase Postgres CRUD Data Target & Match, lewat PostgREST.

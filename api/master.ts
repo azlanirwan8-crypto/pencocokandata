@@ -1,4 +1,4 @@
-import { rest, bacaAppStore, tulisAppStore, hapusAppStore, pesanRest } from '../server/rest';
+import { rest, bacaAppStore, tulisAppStore, hapusAppStore, pesanRest } from './_db';
 
 /**
  * /api/master — Supabase Postgres CRUD Master Data Cabang, lewat PostgREST.
