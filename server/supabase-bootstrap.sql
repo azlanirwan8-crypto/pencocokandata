@@ -314,6 +314,49 @@ begin
   return jsonb_build_object('rows', coalesce(v_rows, '[]'::jsonb), 'total', coalesce(v_total, 0));
 end $$;
 
+/**
+ * Seluruh baris yang cocok filter, TANPA paging — dipakai ?view=export.
+ * Sengaja satu panggilan: mengulang kp_halaman per 1.000 baris berarti 168
+ * round-trip HTTPS untuk 83 ribu baris, dan fungsi serverless kehabisan waktu
+ * sebelum halaman terakhir tiba (gejalanya: ekspor kembali ke data contoh).
+ */
+create or replace function public.kp_semua(
+  p_search   text,
+  p_provinsi text,
+  p_kota     text,
+  p_status   text
+) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+      'id', x.id, 'kode_pos', x.kode_pos, 'kelurahan', x.kelurahan, 'kecamatan', x.kecamatan,
+      'kabupaten_kota', x.kabupaten_kota, 'provinsi', x.provinsi, 'status', x.status,
+      'latitude', x.latitude, 'longitude', x.longitude,
+      'geo_sumber', x.geo_sumber, 'geo_presisi', x.geo_presisi,
+      'terverifikasi_google', x.terverifikasi_google)), '[]'::jsonb)
+  from (
+    select d.id, d.kode_pos, d.kelurahan, d.kecamatan, d.kabupaten_kota, d.provinsi, d.status,
+           coalesce(d.latitude, g.latitude)   as latitude,
+           coalesce(d.longitude, g.longitude) as longitude,
+           case when d.latitude is not null then coalesce(nullif(d.sumber_koordinat, ''), 'kodepos.co.id')
+                else g.sumber end            as geo_sumber,
+           case when d.latitude is not null then 'titik desa'
+                else g.presisi end           as geo_presisi,
+           g.terverifikasi_google
+    from kodepos_data d
+    left join kodepos_geo g on g.kode_pos = upper(btrim(d.kode_pos))
+    where (p_provinsi is null or d.provinsi = p_provinsi)
+      and (p_kota is null or d.kabupaten_kota = p_kota)
+      and (p_status is null or upper(d.status) = upper(p_status))
+      and (p_search is null
+           or d.kode_pos ilike '%' || btrim(p_search) || '%'
+           or d.kelurahan ilike '%' || btrim(p_search) || '%'
+           or d.kecamatan ilike '%' || btrim(p_search) || '%'
+           or d.kabupaten_kota ilike '%' || btrim(p_search) || '%'
+           or d.provinsi ilike '%' || btrim(p_search) || '%')
+    order by d.id
+  ) x;
+$$;
+
 /** KPI kartu ringkas. ber_titik seluas bacaan tabel: titik baris sendiri ATAU cache. */
 create or replace function public.kp_stats() returns jsonb
 language sql stable security definer set search_path = public as $$

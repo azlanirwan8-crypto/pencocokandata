@@ -475,6 +475,13 @@ export function applyStandardSheetStyle(
   }
   worksheet['!rows'] = [{ hpt: 26 }];
   worksheet['!cols'] = columns.map(colWidthFor);
+  // Penyaring otomatis di baris judul: berkas dibuka lalu langsung bisa disortir
+  // per wilayah/kota tanpa menyalin ke alat lain.
+  if (rowCount > 0) {
+    worksheet['!autofilter'] = {
+      ref: `A1:${XLSX.utils.encode_col(Math.max(0, columns.length - 1))}${rowCount + 1}`,
+    };
+  }
 }
 
 /**

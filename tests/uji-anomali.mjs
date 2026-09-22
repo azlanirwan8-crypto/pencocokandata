@@ -56,6 +56,13 @@ asa('AN4 status ANOMALI', kategoriUntuk(baris({ statusAnalisa: 'ANOMALI' })).inc
 asa('AN4 penempatan FALLBACK', kategoriUntuk(baris({ placementStatus: 'FALLBACK' })).includes('PENEMPATAN'), true);
 asa('AN4 role belum lengkap', kategoriUntuk(baris({ is3RoleLengkap: false, roleGrandTotal: 2 })).includes('ROLE'), true);
 
+// ── 4b. baris yang BELUM dianalisa tidak boleh dihitung sebagai anomali role ──
+// Dulu kartu TOTAL ANOMALI di Dashboard menunjukkan seluruh isi Data Final
+// (83.764 dari 83.764) karena baris MENUNGGU dianggap "role belum lengkap".
+asa('AN8 MENUNGGU + role belum diisi = bukan anomali', kategoriUntuk(baris({ statusAnalisa: 'MENUNGGU', is3RoleLengkap: false, roleGrandTotal: 0 })), []);
+asa('AN8 keluaran nol untuk baris MENUNGGU', detectFinalAnomalies([baris({ statusAnalisa: 'MENUNGGU', is3RoleLengkap: false })], masterRows).length, 0);
+asa('AN8 tapi beda provinsi tetap dilaporkan walau MENUNGGU', kategoriUntuk(baris({ statusAnalisa: 'MENUNGGU', is3RoleLengkap: false, namaOutlet: 'SEMARANG MAYANG', kodeCabang: '03200001' })), ['PROVINSI']);
+
 // ── 5. pengecualian Aceh (Cabang KIM) tidak dianggap keluar wilayah ──
 const aceh = kategoriUntuk(baris({ provinsi: 'ACEH', kotaPten: 'BANDA ACEH', kotaPtenMax15: 'BANDA ACEH', kelurahan: 'KAMPANG BARU', kecamatan: 'BANDA ACEH', namaOutlet: 'KIM BANDA ACEH', kodeCabang: '01100001' }));
 asa('AN5 Aceh → KIM Banda Aceh bukan anomali wilayah', aceh, []);

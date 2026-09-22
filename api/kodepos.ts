@@ -25,8 +25,6 @@ const SYNC_DIFF_CAP = 500;
 const SYNC_KEYS_CAP = 20000;
 /** Baris per kiriman INSERT; 1.000 baris ≈ 120 kB, aman di bawah batas body. */
 const INSERT_BATCH = 1000;
-/** Halaman pengambilan penuh (export). */
-const EXPORT_BATCH = 1000;
 
 function mapRow(r: any) {
   return {
@@ -121,18 +119,15 @@ export default async function handler(req: any, res: any) {
       }
 
       if (view === 'export') {
-        // Diambil per halaman: balasan tunggal puluhan ribu baris bisa lebih besar
-        // daripada batas sebuah fungsi serverless.
-        const semua: any[] = [];
-        let total = 0;
-        for (let mulai = 0; ; mulai += EXPORT_BATCH) {
-          const halaman = await r.rpc<{ rows: any[]; total: number }>('kp_halaman',
-            argumenBaca({ search, provinsi, kota, status, sort: null, dir: null, limit: EXPORT_BATCH, offset: mulai }));
-          const rows = halaman?.rows || [];
-          semua.push(...rows);
-          total = Number(halaman?.total || 0);
-          if (rows.length === 0 || semua.length >= total) break;
-        }
+        // Satu panggilan ke database, bukan puluhan putaran halaman: dengan loop
+        // halaman fungsi serverless kehabisan waktu lalu klien jatuh ke data contoh.
+        const semua =
+          (await r.rpc<any[]>('kp_semua', {
+            p_search: search?.trim() || null,
+            p_provinsi: provinsi || null,
+            p_kota: kota || null,
+            p_status: status || null,
+          })) || [];
         return res.status(200).json({ ok: true, configured: true, count: semua.length, data: semua.map(mapRow) });
       }
 

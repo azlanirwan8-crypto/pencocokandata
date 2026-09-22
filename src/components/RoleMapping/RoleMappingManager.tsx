@@ -694,8 +694,14 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
     setShowResetConfirm(false);
     await setItem('role_mapping_data', []);
     onRoleMappingCountChange?.(0);
-    setSuccessMsg('Seluruh data mapping role berhasil dikosongkan!');
-    setTimeout(() => setSuccessMsg(null), 3000);
+    // Cloud ikut dikosongkan; kalau tidak, salinan lama muncul lagi saat tab lain memuat.
+    const sinkron = await saveRoleMappingToNeon([]).catch(() => false);
+    setSuccessMsg(
+      sinkron
+        ? 'Seluruh data mapping role dikosongkan — browser dan cloud.'
+        : 'Data mapping role dikosongkan di browser, tapi cloud GAGAL dikosongkan — muat ulang untuk memeriksa.'
+    );
+    setTimeout(() => setSuccessMsg(null), 4000);
   };
 
   return (

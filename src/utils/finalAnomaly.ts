@@ -51,6 +51,13 @@ export function detectFinalAnomalies(finalRows: AnalystRow[], masterRows: Master
     const cats: AnomalyCategory[] = [];
     const reasons: string[] = [];
 
+    // Baris yang BELUM pernah dianalisa tidak bisa disebut "penempatannya belum terbukti"
+    // atau "role-nya belum lengkap" — kolom itu memang belum diisi sama sekali.
+    // Dulu keduanya ikut dihitung, sehingga kartu TOTAL ANOMALI menunjukkan seluruh
+    // isi Data Final (83.764 dari 83.764) dan angkanya tidak ada gunanya lagi.
+    // Yang sudah diproses tetap dinilai penuh seperti sebelumnya.
+    const sudahDianalisa = r.statusAnalisa !== 'MENUNGGU';
+
     const outletKey = String(r.namaOutlet || '').trim().toUpperCase();
     const kodeKey = String(r.kodeCabang || r.branchCode || '').trim();
     const cabangIsland = islandByOutlet.get(outletKey) ?? islandByKode.get(kodeKey);
@@ -90,7 +97,7 @@ export function detectFinalAnomalies(finalRows: AnalystRow[], masterRows: Master
       reasons.push('Penempatan memakai fallback (tanpa bukti blok kode pos)');
     }
 
-    if (!r.is3RoleLengkap) {
+    if (sudahDianalisa && !r.is3RoleLengkap) {
       cats.push('ROLE');
       reasons.push(`Role belum lengkap ${r.roleGrandTotal}/3 (Sales ${r.roleCabsal}, Verifikator ${r.roleCabapv1}, Penyetuju ${r.roleCabapv2})`);
     }

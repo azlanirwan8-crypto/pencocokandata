@@ -30,6 +30,8 @@ export const NAMA_ENV_REST = {
 const TIMEOUT_MS = 25_000;
 /** Baris per halaman baca tabel — Supabase boleh memotong balasan di angka ini. */
 const HALAMAN_BACA = 1000;
+/** Berapa halaman yang diambil sekaligus; anggaran waktu fungsi serverless pendek. */
+const HALAMAN_PARALEL = 4;
 
 export interface KonfigRest {
   url: string;
@@ -158,23 +160,28 @@ export class Rest {
    * Baca SELURUH tabel/view. Wajib lewat loop: konsol Supabase bisa membatasi
    * jumlah baris per balasan (Settings → API → Max rows), dan tanpa loop bagian
    * yang terpotong hilang diam-diam.
+   *
+   * Total hanya diminta pada halaman pertama (`Prefer: count=exact` sekali, bukan
+   * tiap halaman), lalu halaman sisanya diambil paralel — fungsi serverless cuma
+   * punya anggaran beberapa detik dan klien menunggu 5 detik.
    */
   async semuaBaris<T = any>(
     tabel: string,
     opts: { kolom?: string; filter?: Record<string, string | number | undefined>; urut?: string } = {}
   ): Promise<T[]> {
-    const out: T[] = [];
-    for (let mulai = 0; ; mulai += HALAMAN_BACA) {
-      const { rows, total } = await this.baris<T>(tabel, {
-        ...opts,
-        batas: HALAMAN_BACA,
-        mulai,
-        count: true,
-      });
-      out.push(...rows);
-      if (rows.length === 0) break;
-      if (total !== null && out.length >= total) break;
-      if (rows.length < HALAMAN_BACA) break;
+    const pertama = await this.baris<T>(tabel, { ...opts, batas: HALAMAN_BACA, mulai: 0, count: true });
+    const out: T[] = [...pertama.rows];
+    const total = pertama.total ?? out.length;
+    if (out.length === 0 || out.length >= total) return out;
+
+    const mulaiSisa: number[] = [];
+    for (let mulai = HALAMAN_BACA; mulai < total; mulai += HALAMAN_BACA) mulaiSisa.push(mulai);
+    for (let i = 0; i < mulaiSisa.length; i += HALAMAN_PARALEL) {
+      const rombongan = mulaiSisa.slice(i, i + HALAMAN_PARALEL);
+      const halaman = await Promise.all(
+        rombongan.map((mulai) => this.baris<T>(tabel, { ...opts, batas: HALAMAN_BACA, mulai }))
+      );
+      for (const h of halaman) out.push(...h.rows);
     }
     return out;
   }
@@ -223,15 +230,20 @@ export class Rest {
     return (data as unknown as T[]) || [];
   }
 
-  /** `filter` kosong = kosongkan seluruh tabel (PostgREST mengizinkan DELETE tanpa penyaring). */
+  /**
+   * `filter` kosong = kosongkan seluruh tabel (PostgREST mengizinkan DELETE tanpa
+   * penyaring). Baris hasil hanya diminta bila pemanggilnya benar-benar memakai:
+   * meminta representasi untuk DELETE 83 ribu baris membuat fungsi kehabisan waktu.
+   */
   async hapus<T = any>(
     tabel: string,
-    filter: Record<string, string | number | undefined> = {}
+    filter: Record<string, string | number | undefined> = {},
+    opts: { kembalikan?: boolean } = {}
   ): Promise<T[]> {
     const { data } = await this.minta<T[]>(`/rest/v1/${tabel}`, {
       method: 'DELETE',
       query: filter,
-      prefer: 'return=representation',
+      prefer: opts.kembalikan ? 'return=representation' : undefined,
     });
     return (data as unknown as T[]) || [];
   }

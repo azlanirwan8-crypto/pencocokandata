@@ -461,8 +461,16 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
     setShowResetConfirm(false);
     await setItem('pten_master_data', []);
     onPtenCountChange?.(0);
-    setSuccessMsg('Seluruh data master PTEN berhasil dikosongkan!');
-    setTimeout(() => setSuccessMsg(null), 3000);
+    // Kosongkan browser saja tidak cukup: salinan cloud masih berisi data lama dan
+    // akan muncul kembali saat tab lain memuat. Jadi cloud ikut dikosongkan, dan
+    // pesannya mengikuti hasil yang sebenarnya.
+    const sinkron = await savePtenToNeon([]).catch(() => false);
+    setSuccessMsg(
+      sinkron
+        ? 'Seluruh data master PTEN dikosongkan — browser dan cloud.'
+        : 'Data master PTEN dikosongkan di browser, tapi cloud GAGAL dikosongkan — muat ulang untuk memeriksa.'
+    );
+    setTimeout(() => setSuccessMsg(null), 4000);
   };
 
   return (

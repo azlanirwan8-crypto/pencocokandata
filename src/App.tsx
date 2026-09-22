@@ -825,6 +825,11 @@ export const App: React.FC = () => {
     setItem('analyst_results_data', remaining).catch(() => {});
     setAnalystCoverage(null);
     setActiveTab('final');
+    notify(
+      `${moving.length.toLocaleString('id-ID')} baris disetujui masuk Data Final` +
+        (remaining.length ? ` — ${remaining.length.toLocaleString('id-ID')} baris TIDAK_ANALISA tetap di antrean.` : '.'),
+      'success'
+    );
   };
 
   // "Kembalikan ke Data Analyst": pindahkan seluruh Final Data kembali ke antrean analisa.
@@ -851,6 +856,7 @@ export const App: React.FC = () => {
     setItem('analyst_final_data', []).catch(() => {});
     if (isNeonConnected) void clearFinalInNeon().then((ok) => laporkanSinkronFinal(ok, 'dikosongkan'));
     setActiveTab('working');
+    notify(`${finalRows.length.toLocaleString('id-ID')} baris dikembalikan ke Data Analyst sebagai Fase 1.`, 'info');
   };
 
   // "Revisi" baris Final Data: keluarkan dari Final → kembali ke antrean Fase 1.
@@ -880,6 +886,7 @@ export const App: React.FC = () => {
     const merged = Array.from(byId.values());
     setAnalystRows(merged);
     setItem('analyst_results_data', merged).catch(() => {});
+    notify(`${ids.size.toLocaleString('id-ID')} baris direvisi — keluar dari Final, masuk antrean Fase 1.`, 'info');
   };
 
   // "Hapus" baris Final Data: hilang permanen. Karena `excludeFinalKeys`
@@ -893,6 +900,7 @@ export const App: React.FC = () => {
     setItem('analyst_final_data', remaining).catch(() => {});
     if (isNeonConnected)
       void deleteFinalKeysInNeon([...ids]).then((ok) => laporkanSinkronFinal(ok, `hapus ${ids.size} baris`));
+    notify(`${ids.size.toLocaleString('id-ID')} baris Data Final dihapus permanen.`, 'info');
   };
 
   // "Reset Data": kosongkan seluruh Final, Target, dan Analyst (lokal + cloud) secara total.
