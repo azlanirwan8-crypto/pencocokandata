@@ -70,10 +70,13 @@ asa('M7.3 Lebak Siliwangi/Coblong → DAGO', coblong?.namaOutlet, 'BANDUNG DAGO'
 asa('M7.2/3 dua baris BEDA hasil', braga?.namaOutlet !== coblong?.namaOutlet, true);
 asa('M7.2/3 keduanya otomatis valid', [braga?.fase2Status, coblong?.fase2Status], ['OTOMATIS_VALID', 'OTOMATIS_VALID']);
 
-// 4 — kota tanpa cabang sendiri: kolom Fase 2 TETAP terisi cabang terdekat yang jujur,
-//     tapi barisnya wajib masuk manual karena cabangnya di luar provinsi.
+// 4 — kota tanpa cabang sendiri: kolom Fase 2 TETAP terisi cabang terdekat yang jujur.
+//     Sejak 516fbad warning "cabang di luar provinsi" TIDAK lagi memindahkan baris ke
+//     antrean manual: statusnya OTOMATIS_VALID (cabangnya nyata terpasang) dan alasannya
+//     tetap tercatat di `fase2Temuan` — ditampilkan sebagai pill "Perlu diputuskan" di
+//     kartu Fase 2 dan sebagai "TERPASANG, PERLU DICEK" di kolom Validasi Fase 2.
 const singkawang = cari(hasil3, 'KAMPUNG BARU BARAT');
-asa('M7.4 Singkawang → perlu manual', singkawang?.fase2Status, 'PERLU_MANUAL');
+asa('M7.4 Singkawang → cabang terpasang, warning non-fatal', singkawang?.fase2Status, 'OTOMATIS_VALID');
 asa('M7.4 Singkawang → sumber: cabang terdekat, bukan dibiarkan kosong', singkawang?.fase2Sumber, 'OTOMATIS_TERDEKAT');
 asa('M7.4 kolom cabang terisi (bukan strip kosong)', (singkawang?.branchCode || '').length > 0, true);
 asa('M7.4 alasannya menyebut di luar provinsi', (singkawang?.fase2Temuan || []).some((t) => /di luar provinsi/.test(t)), true);

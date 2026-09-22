@@ -144,6 +144,73 @@ export function penjelasanFase1(r: {
 }
 
 /**
+ * Ringkasan hasil analisa Fase 2 untuk satu baris — dipakai tab Data Final supaya
+ * operator membaca keputusannya tanpa membuka tab Fase 2. Murni turunan dari field
+ * yang sudah ada (tidak disimpan sebagai field baru).
+ */
+export function penjelasanFase2(r: {
+  fase2Status?: string;
+  fase2Sumber?: string;
+  fase2Tier?: number;
+  fase2JarakKm?: number;
+  fase2Temuan?: string[];
+  namaOutlet?: string;
+}): { label: string; alasan: string; nada: 'ok' | 'waspada' | 'buruk' } {
+  const temuan = (r.fase2Temuan || []).join(' · ');
+  if (r.fase2Status === 'PERLU_MANUAL') {
+    return { label: 'PERLU MANUAL', alasan: temuan || 'Master Cabang kosong untuk wilayah ini', nada: 'buruk' };
+  }
+  if (!r.namaOutlet) {
+    return { label: 'BELUM DIJALANKAN', alasan: 'Fase 2 belum dijalankan — kolom cabang masih kosong', nada: 'waspada' };
+  }
+  const sumber =
+    r.fase2Sumber === 'PILIHAN_OPERATOR' ? 'dipilih operator'
+    : r.fase2Sumber === 'ATURAN_ACEH_KIM' ? 'aturan Aceh (KIM)'
+    : r.fase2Sumber === 'TIDAK_ADA_CABANG' ? 'tanpa cabang master'
+    : 'cabang terdekat otomatis';
+  const zona = r.fase2Tier === 1 ? 'sekota' : r.fase2Tier === 3 ? 'luar provinsi' : 'sepulau';
+  const jarak = typeof r.fase2JarakKm === 'number' && r.fase2JarakKm > 0 ? ` · ${r.fase2JarakKm.toLocaleString('id-ID')} km` : '';
+  // Warning Fase 2 tidak mengunci baris (516fbad): cabangnya terpasang, tapi alasannya
+  // tetap harus terbaca di tab Data Final — jangan dilabeli "valid" begitu saja.
+  if (temuan) {
+    return { label: 'TERPASANG, PERLU DICEK', alasan: `${sumber} · ${zona}${jarak} · ${temuan}`, nada: 'waspada' };
+  }
+  return {
+    label: r.fase2Status === 'OTOMATIS_VALID' ? 'OTOMATIS VALID' : 'TERPASANG',
+    alasan: `${sumber} · ${zona}${jarak}`,
+    nada: 'ok',
+  };
+}
+
+/** Ringkasan hasil analisa Fase 3 (mapping role) untuk tab Data Final. */
+export function penjelasanFase3(r: {
+  organisasiTujuan?: string;
+  is3RoleLengkap?: boolean;
+  roleCabsal?: number;
+  roleCabapv1?: number;
+  roleCabapv2?: number;
+  tipeUnit?: string;
+  alurWondr?: string;
+  roleGrandTotal?: number;
+}): { label: string; alasan: string; nada: 'ok' | 'waspada' | 'buruk' } {
+  if (!r.organisasiTujuan) {
+    return { label: 'BELUM ADA ROLE', alasan: 'Fase 3 belum dijalankan — atau tidak ada role lengkap di pulau ini', nada: 'buruk' };
+  }
+  const pegawai = typeof r.roleGrandTotal === 'number' && r.roleGrandTotal > 0 ? ` · ${r.roleGrandTotal} pegawai` : '';
+  if (r.is3RoleLengkap) {
+    return {
+      label: 'ROLE LENGKAP 3/3',
+      alasan: `${r.tipeUnit === 'KC' ? 'cabang utama' : 'outlet'}${pegawai}${r.alurWondr ? ` · ${r.alurWondr}` : ''}`,
+      nada: 'ok',
+    };
+  }
+  const kurang = [r.roleCabsal === 1 ? null : 'Sales', r.roleCabapv1 === 1 ? null : 'Verifikator 1', r.roleCabapv2 === 1 ? null : 'Verifikator 2']
+    .filter(Boolean)
+    .join(', ');
+  return { label: 'ROLE PARSIAL', alasan: `belum lengkap: ${kurang || 'role QRS'}${pegawai}`, nada: 'waspada' };
+}
+
+/**
  * Kunci identitas baris Final Data — kode pos PTEN + kelurahan + kecamatan + kota.
  * Dipakai analisis inkremental (lewati yang sudah final) dan pemindahan persetujuan
  * antar-run. Kecamatan & kota ikut karena dua kota berbeda bisa punya kode pos dan

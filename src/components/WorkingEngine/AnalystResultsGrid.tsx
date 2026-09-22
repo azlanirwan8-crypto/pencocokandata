@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import type { AnalystRow, AnalystCoverage } from '../../utils/analystPipeline';
-import { cityMatchKey, matchRoleForOutlet, penjelasanFase1 } from '../../utils/analystPipeline';
+import { cityMatchKey, matchRoleForOutlet, penjelasanFase1, penjelasanFase2, penjelasanFase3 } from '../../utils/analystPipeline';
 import { useTampilanTersimpan } from '../../utils/useTampilanTersimpan';
 import type { KodePosRow } from '../../utils/neonSync';
 import type { PTENRecord } from '../PTENData/PTENManager';
@@ -35,6 +35,7 @@ import { findTopRoleMatchesByLocation } from '../../utils/roleRecommender';
 import { getUnitCategory, getWondrRecommendation } from '../RoleMapping/RoleMappingManager';
 import { extractWilayahFromBranchCode } from '../../utils/normalizer';
 import { CandidateDetailModal } from './CandidateDetailModal';
+import { AnalystRowDetailModal } from './AnalystRowDetailModal';
 import { PtenCityPicker } from './PtenCityPicker';
 import { CityOverrideModal } from './CityOverrideModal';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -54,6 +55,32 @@ function stageOf(r: AnalystRow): 1 | 2 | 3 | 4 {
   if (!r.fase3Approved) return 3;
   return 4;
 }
+
+/** Satu sel "validasi fase N" di tab Data Final: badge hasil + alasannya satu baris. */
+const SelValidasi: React.FC<{
+  p: { label: string; alasan: string; nada: 'ok' | 'waspada' | 'buruk' };
+  warnaGaris?: string;
+}> = ({ p, warnaGaris }) => {
+  const cls = p.nada === 'ok' ? 'badge-match' : p.nada === 'waspada' ? 'badge-level2' : 'badge-diff';
+  return (
+    <td style={{ textAlign: 'center', borderLeft: warnaGaris }} title={p.alasan}>
+      <span className={`badge ${cls}`}>{p.label}</span>
+      <div
+        style={{
+          fontSize: '0.62rem',
+          color: '#878a99',
+          margin: '2px auto 0',
+          maxWidth: '200px',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+      >
+        {p.alasan}
+      </div>
+    </td>
+  );
+};
 
 /** Kolom tabel yang bisa diurutkan lewat klik header. */
 type SortKolom =
@@ -172,6 +199,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   const [confirmKind, setConfirmKind] = useState<null | 'fase1' | 'fase2' | 'fase3' | 'final'>(null);
   // Konfirmasi "Revisi ke Perlu Analisa Manual" per baris (menggantikan window.confirm).
   const [confirmManualRow, setConfirmManualRow] = useState<AnalystRow | null>(null);
+  // Jendela "Detail" per baris (tab Data Final) — baca saja, tidak mengubah data.
+  const [detailRow, setDetailRow] = useState<AnalystRow | null>(null);
   // N3: pilihan massal. Disimpan bersama kunci tab-nya di sessionStorage supaya bertahan
   // saat komponen ini di-unmount (pindah menu, pola A6) TETAPI otomatis kosong begitu
   // operator pindah tab fase atau tab Berhasil/Manual — lihat `kunciTab` di blok N3.
@@ -292,8 +321,6 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       namaOutlet,
       statusOutlet: String(master['Status Outlet'] || r.statusOutlet || 'Aktif'),
       alamat: String(master.ALAMAT || r.alamat),
-      // Operator sudah memutuskan → barisnya keluar dari antrean manual, tapi sumbernya
-      // dicatat sebagai pilihan manusia, bukan kemenangan mesin (sejajar dengan D6).
       fase2Temuan: [],
       fase2Status: 'OTOMATIS_VALID',
       fase2Sumber: 'PILIHAN_OPERATOR',
@@ -746,6 +773,13 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     });
     return m;
   }, [renderedRows, masterIndex]);
+
+  // Kolom Fase 2 diisi MESIN, bukan efek React: `handleApproveAnalystFase` di App.tsx
+  // langsung menjalankan fase berikutnya setelah "Setujui Fase", jadi Rank-1 tertulis
+  // ke baris saat fase itu dibuka. (Dulu di sini ada useEffect yang men-scan seluruh
+  // baris tiap render dan memanggil applyFase2Candidate — ia tidak pernah konvergen
+  // karena `sandiCabang` baris diisi dari Sandi+Cabang sementara pembandingnya hanya
+  // melihat kolom 'Sandi Cabang' master, akibatnya tab menulis ulang tanpa henti.)
 
   useEffect(() => {
     tableScrollRef.current?.scrollTo({ top: 0 });
@@ -1494,24 +1528,32 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
               elipsis; sel tetap satu baris dan tabel digeser horizontal. */}
           <table className="modern-table" style={{ width: 'max-content', minWidth: '100%', fontSize: '0.78rem' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
-              {/* TAB 1: ALL COLUMNS */}
+              {/* TAB 1: ALL COLUMNS — urutan kolom permintaan operator:
+                  identitas cabang (hasil Fase 2) → wilayah data → PTEN (hasil Fase 1) →
+                  validasi per fase → aksi. */}
               {viewTab === 'all' && (
                 <tr>
-                  <th style={{ width: '34px', textAlign: 'center' }} title="Pilih semua baris pada halaman ini">
+                  <th style={{ width: '34px', minWidth: '34px', textAlign: 'center', position: 'sticky', left: 0, background: '#f3f6f9', zIndex: 13, borderRight: '1px solid #e9ebec' }} title="Pilih semua baris pada halaman ini">
                     <input type="checkbox" checked={semuaHalamanTerpilih} onChange={gantiPilihanSemua} aria-label="Pilih semua baris pada halaman ini" style={{ cursor: 'pointer' }} />
                   </th>
-                  {thSort('no', 'No', { width: '40px', textAlign: 'center' })}
-                  {thSort('wilayah', 'Wilayah', { width: '70px', textAlign: 'center' })}
-                  <th style={{ width: '85px', textAlign: 'center' }}>Sandi</th>
-                  <th style={{ width: '90px', textAlign: 'center' }}>Branch Code</th>
-                  {thSort('namaOutlet', 'Nama Outlet', { minWidth: '160px' })}
-                  {thSort('kotaPten', 'Kota PTEN', { width: '110px' })}
-                  {thSort('kodePosKelurahan', 'Kode Pos', { width: '75px', textAlign: 'center' })}
-                  {thSort('kelurahan', 'Kelurahan / Kec.')}
-                  {thSort('organisasiTujuan', 'ORGANISASI TUJUAN', { minWidth: '180px' })}
-                  <th style={{ width: '75px', textAlign: 'center' }}>Tipe Unit</th>
-                  <th style={{ width: '85px', textAlign: 'center' }}>3 Role</th>
-                  <th style={{ width: '80px', textAlign: 'center' }}>Status</th>
+                  {thSort('no', 'No', { width: '40px', textAlign: 'center', position: 'sticky', left: 34, background: '#f3f6f9', zIndex: 12, borderRight: '1px solid #e9ebec' })}
+                  {thSort('wilayah', 'Wilayah', { width: '90px', textAlign: 'center' })}
+                  <th style={{ width: '110px', textAlign: 'center' }}>Sandi Cabang</th>
+                  <th style={{ width: '95px', textAlign: 'center' }}>Branch Code</th>
+                  <th style={{ width: '95px', textAlign: 'center' }}>Kode Cabang</th>
+                  {thSort('namaOutlet', 'Nama Outlet', { minWidth: '170px' })}
+                  <th style={{ width: '95px', textAlign: 'center' }}>Status Outlet</th>
+                  <th style={{ minWidth: '200px' }}>ALAMAT</th>
+                  <th style={{ width: '90px', textAlign: 'center' }} title="Kode pos kelurahan ini pada Data KodePos">KODE POS</th>
+                  {thSort('kelurahan', 'Kelurahan', { minWidth: '140px' })}
+                  {thSort('kecamatan', 'Kecamatan', { minWidth: '140px' })}
+                  <th style={{ minWidth: '140px' }} title="Sama seperti kolom KOTA PTEN (nama MAX 15 digit) — urutan ini mengikuti ekspor Excel. Berubah oranye bila kota menurut Data KodePos berbeda.">Dati II</th>
+                  {thSort('provinsi', 'Provinsi', { minWidth: '130px' })}
+                  {thSort('kotaPten', 'KOTA PTEN', { minWidth: '140px', borderLeft: '2px solid #b7ebe4' })}
+                  {thSort('kodePosPten', 'KODE POS PTEN', { width: '115px', textAlign: 'center' })}
+                  <th style={{ width: '165px', textAlign: 'center', background: '#eef7ff', color: '#2563eb' }} title="Hasil analisa Fase 1 (PTEN & Kode Pos) untuk baris ini">Validasi Fase 1</th>
+                  <th style={{ width: '175px', textAlign: 'center', background: '#fff9f0', color: '#d97706' }} title="Hasil analisa Fase 2 (Wilayah & Master Cabang) untuk baris ini">Validasi Fase 2</th>
+                  <th style={{ width: '175px', textAlign: 'center', background: '#f0fdf8', color: '#059669' }} title="Hasil analisa Fase 3 (Mapping Role & Wondr) untuk baris ini">Validasi Fase 3</th>
                   <th style={{ width: '95px', textAlign: 'center' }}>Aksi Review</th>
                 </tr>
               )}
@@ -1588,52 +1630,43 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                 </tr>
               )}
 
-              {/* TAB 4: FASE 3 MAPPING ROLE & WONDR */}
+              {/* TAB 4: FASE 3 MAPPING ROLE & WONDR
+                  Kolom sesuai permintaan operator: role dulu (keputusan yang diambil di tab ini),
+                  lalu identitas cabang hasil Fase 2 yang jadi acuannya, lalu data wilayah baris. */}
               {viewTab === 'fase3' && (
                 <tr>
-                  <th style={{ width: '34px', textAlign: 'center' }} title="Pilih semua baris pada halaman ini">
+                  <th style={{ width: '34px', minWidth: '34px', textAlign: 'center', position: 'sticky', left: 0, background: '#f3f6f9', zIndex: 13, borderRight: '1px solid #e9ebec' }} title="Pilih semua baris pada halaman ini">
                     <input type="checkbox" checked={semuaHalamanTerpilih} onChange={gantiPilihanSemua} aria-label="Pilih semua baris pada halaman ini" style={{ cursor: 'pointer' }} />
                   </th>
-                  {thSort('no', 'No', { width: '40px', textAlign: 'center' })}
-                  {thSort('namaOutlet', 'Nama Outlet', { minWidth: '180px' })}
-                  {/* Hasil Fase 2 dibawa PENUH ke layar Fase 3: operator memilih cabang role
-                      sambil melihat baris yang sama, bukan nama outletnya saja. */}
-                  {thSort('wilayah', 'Kanwil', { width: '85px', textAlign: 'center' })}
-                  <th style={{ width: '90px', textAlign: 'center' }}>Sandi Cabang</th>
-                  <th style={{ width: '95px', textAlign: 'center' }}>Branch Code</th>
-                  <th style={{ width: '85px', textAlign: 'center' }}>Kode Cabang</th>
-                  <th style={{ width: '90px', textAlign: 'center' }}>Status Outlet</th>
-                  <th style={{ minWidth: '200px' }}>ALAMAT</th>
-                  <th style={{ width: '85px', textAlign: 'center' }} title="Kode pos dari data PTEN (hasil tabrakan Fase 1)">KODE POS</th>
-                  <th style={{ minWidth: '130px' }}>Kelurahan</th>
-                  <th style={{ minWidth: '130px' }}>Kecamatan</th>
+                  <th
+                    style={{
+                      width: '420px',
+                      minWidth: '420px',
+                      maxWidth: '420px',
+                      textAlign: 'left',
+                      background: '#f0fdf8',
+                      color: '#059669',
+                      position: 'sticky',
+                      left: '34px',
+                      zIndex: 12,
+                      boxShadow: '3px 0 6px -2px rgba(0,0,0,0.06)',
+                      borderRight: '2px solid rgba(16, 185, 129, 0.35)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <Shield size={13} color="#059669" />
+                      <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>Rekomendasi Mapping Role</span>
+                    </div>
+                  </th>
+                  <th style={{ width: '400px', minWidth: '400px', maxWidth: '400px', textAlign: 'left', background: '#fff9f0', color: '#d97706', borderRight: '2px solid #f7b84b' }} title="Cabang Master yang terpilih di Fase 2 — acuan rekomendasi role di kolom kiri">
+                    Data Master Outlet
+                  </th>
+                  <th style={{ width: '95px', textAlign: 'center' }} title="Kode pos dari data PTEN (hasil tabrakan Fase 1)">Kode Pos</th>
+                  <th style={{ minWidth: '140px' }}>Kelurahan</th>
+                  <th style={{ minWidth: '140px' }}>Kecamatan</th>
                   <th style={{ minWidth: '150px' }} title="Wajib dari kolom PTEN &quot;KOTA/KABUPATEN MAX 15 DIGIT&quot;">Kota / Kab (MAX 15 Digit)</th>
                   <th style={{ minWidth: '130px' }}>Provinsi</th>
-                  {roleMappingList.length > 0 && (
-                    <th
-                      style={{
-                        minWidth: '340px',
-                        background: '#f0fdf8',
-                        color: '#059669',
-                        borderLeft: '2px solid rgba(16, 185, 129, 0.35)',
-                        padding: '0.55rem 0.65rem',
-                        verticalAlign: 'middle',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                        <Shield size={13} color="#059669" />
-                        <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>Rekomendasi Mapping Role</span>
-                      </div>
-                    </th>
-                  )}
-                  {thSort('organisasiTujuan', 'ORGANISASI TUJUAN', { minWidth: '220px' })}
-                  <th style={{ width: '80px', textAlign: 'center' }}>Tipe Unit</th>
-                  <th style={{ width: '60px', textAlign: 'center' }}>Sales</th>
-                  <th style={{ width: '70px', textAlign: 'center' }}>Verifikator</th>
-                  <th style={{ width: '70px', textAlign: 'center' }}>Penyetuju</th>
-                  <th style={{ minWidth: '160px' }}>Rekomendasi Alur Wondr</th>
-                  <th style={{ width: '70px', textAlign: 'center' }}>Pegawai</th>
-                  <th style={{ width: '95px', textAlign: 'center' }}>Aksi Review</th>
+                  <th style={{ width: '110px', textAlign: 'center', verticalAlign: 'middle' }}>Aksi Review</th>
                 </tr>
               )}
             </thead>
@@ -1662,47 +1695,41 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                           width: '34px',
                           minWidth: '34px',
                           textAlign: 'center',
-                          ...(viewTab === 'fase2'
+                          ...(viewTab === 'all' || viewTab === 'fase2' || viewTab === 'fase3'
                             ? { position: 'sticky', left: 0, zIndex: 6, background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd', borderRight: '1px solid #e9ebec' }
                             : {}),
                         }}
                       >
                         <input type="checkbox" checked={terpilih.has(r.id)} onChange={() => toggleTerpilih(r.id)} aria-label={`Pilih baris ${r.no}`} style={{ cursor: 'pointer' }} />
                       </td>
-                      {/* TAB 1: ALL COLUMNS */}
+                      {/* TAB 1: ALL COLUMNS — Data Final */}
                       {viewTab === 'all' && (
                         <>
-                          <td style={{ textAlign: 'center', color: '#878a99' }}>{displayIdx}</td>
+                          <td style={{ textAlign: 'center', color: '#878a99', position: 'sticky', left: 34, zIndex: 5, background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd', borderRight: '1px solid #e9ebec' }}>{displayIdx}</td>
                           <td style={{ textAlign: 'center' }}>
-                            <span className="badge badge-level1">{r.wilayah}</span>
+                            <span className="badge badge-level1">{r.wilayah || '-'}</span>
                           </td>
-                          <td className="code-cell" style={{ textAlign: 'center' }}>{r.sandiCabang}</td>
+                          <td className="code-cell" style={{ textAlign: 'center' }}>{r.sandiCabang || '-'}</td>
                           <td className="code-cell" style={{ textAlign: 'center' }}>{r.branchCode || '-'}</td>
-                          <td style={{ fontWeight: 600, color: '#405189' }}>{r.namaOutlet}</td>
-                          <td>{r.kotaPtenMax15 || r.kotaPten}</td>
+                          <td className="code-cell" style={{ textAlign: 'center' }}>{r.kodeCabang || '-'}</td>
+                          <td style={{ fontWeight: 600, color: '#405189' }}>{r.namaOutlet || '-'}</td>
+                          <td style={{ textAlign: 'center' }}>{r.statusOutlet || '-'}</td>
+                          <td title={r.alamat || ''}>{r.alamat || '-'}</td>
+                          <td className="code-cell" style={{ textAlign: 'center', color: '#0ab39c', fontWeight: 700 }}>{r.kodePosKelurahan || r.kodePosPten || '-'}</td>
+                          <td style={{ fontWeight: 700 }}>{r.kelurahan}</td>
+                          <td>{r.kecamatan}</td>
+                          <td style={{ color: kotaKodePosDari(r) && kotaKodePosDari(r) !== (r.kotaPtenMax15 || r.kotaPten) ? '#b45309' : '#495057' }} title={`Nilai sama dengan kolom KOTA PTEN (aturan ekspor). Menurut Data KodePos kota ini: ${kotaKodePosDari(r) || 'tidak ada'}`}>
+                            {r.kotaPtenMax15 || r.kotaPten || '—'}
+                          </td>
+                          <td>{r.provinsi}</td>
+                          <td style={{ fontWeight: 700, borderLeft: '2px solid #b7ebe4' }} title={`Nama persis di PTEN: ${r.kotaPten || '-'}`}>{r.kotaPtenMax15 || r.kotaPten || '—'}</td>
                           <td className="code-cell" style={{ textAlign: 'center', color: '#0ab39c', fontWeight: 700 }}>
-                            {r.kodePosKelurahan || r.kodePosPten}
+                            {/* Baris belum terpetakan warisi kode pos kelurahan, bukan dari PTEN */}
+                            {r.kategori === 'TIDAK_ANALISA' ? '—' : r.kodePosPten || '—'}
                           </td>
-                          <td>
-                            <div>{r.kelurahan}</div>
-                            <div style={{ fontSize: '0.7rem', color: '#878a99' }}>{r.kecamatan}</div>
-                          </td>
-                          <td style={{ fontWeight: 600, color: '#212529' }}>{r.organisasiTujuan}</td>
-                          <td style={{ textAlign: 'center' }}>
-                            <span className={`badge ${r.tipeUnit === 'KC' ? 'badge-match' : 'badge-level2'}`}>
-                              {r.tipeUnit}
-                            </span>
-                          </td>
-                          <td style={{ textAlign: 'center' }}>
-                            <span className={`badge ${r.is3RoleLengkap ? 'badge-match' : 'badge-level2'}`}>
-                              {r.is3RoleLengkap ? '3 Role OK' : 'Parsial'}
-                            </span>
-                          </td>
-                          <td style={{ textAlign: 'center' }}>
-                            <span className={`badge ${r.isFinalApproved ? 'badge-match' : 'badge-level1'}`}>
-                              {r.isFinalApproved ? '✓ Disetujui' : r.statusAnalisa}
-                            </span>
-                          </td>
+                          <SelValidasi p={penjelasanFase1(r)} warnaGaris="2px solid #d8ecff" />
+                          <SelValidasi p={penjelasanFase2(r)} warnaGaris="2px solid #f7e3bf" />
+                          <SelValidasi p={penjelasanFase3(r)} warnaGaris="2px solid #c7ecdc" />
                         </>
                       )}
 
@@ -1863,7 +1890,10 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                           <button
                                             key={`pill-${r.id}-${cand.rank}`}
                                             type="button"
-                                            onClick={() => setFase2Choice((prev) => ({ ...prev, [r.id]: cand.rank }))}
+                                            onClick={() => {
+                                              setFase2Choice((prev) => ({ ...prev, [r.id]: cand.rank }));
+                                              applyFase2Candidate(r, cand.master);
+                                            }}
                                             title={`Klik untuk melihat Pilihan ${cand.rank} (${cand.score}%)${cand.diLuarZona ? ' - cabang ini di LUAR kota/provinsi data ini, ditambah hanya supaya Anda punya tiga pilihan' : ''}${isUserChoice ? ' - Ini cabang yang terisi di data' : ''}`}
                                             style={{
                                               display: 'inline-flex',
@@ -2018,144 +2048,260 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                       {/* TAB 4: FASE 3 MAPPING ROLE & WONDR */}
                       {viewTab === 'fase3' && (
                         <>
-                          <td style={{ textAlign: 'center', color: '#878a99' }}>{displayIdx}</td>
-                          <td style={{ fontWeight: 600, color: '#405189' }}>{r.namaOutlet}</td>
-                          <td style={{ textAlign: 'center' }}>
-                            <span className="badge badge-level1">{r.wilayah}</span>
-                          </td>
-                          <td className="code-cell" style={{ textAlign: 'center' }}>{r.sandiCabang || '-'}</td>
-                          <td className="code-cell" style={{ textAlign: 'center' }}>{r.branchCode || '-'}</td>
-                          <td className="code-cell" style={{ textAlign: 'center' }}>{r.kodeCabang || '-'}</td>
-                          <td style={{ textAlign: 'center' }}>{r.statusOutlet || '-'}</td>
-                          <td title={r.alamat || ''}>{r.alamat || '-'}</td>
-                          <td className="code-cell" style={{ textAlign: 'center' }}>{r.kodePosPten || '-'}</td>
-                          <td>{r.kelurahan}</td>
-                          <td>{r.kecamatan}</td>
-                          <td title={r.kotaPten}>{r.kotaPtenMax15 || r.kotaPten}</td>
-                          <td>{r.provinsi}</td>
-                          {roleMappingList.length > 0 &&
-                            (() => {
-                              // Engine lama: 3 cabang role lengkap terdekat dari outlet hasil Fase 2,
-                              // strict 1 pulau, KC diprioritaskan, cache internal per outlet
-                              const activeMaster = masterByBranchCode.get(String(r.branchCode || '').trim());
-                              const topRoles = findTopRoleMatchesByLocation(activeMaster, targetFromAnalystRow(r), roleMappingList, masterRows, 3);
-                              const autoIdx = topRoles.findIndex((x) => x.rec.organisasiTujuan === r.organisasiTujuan);
-                              const selectedIdx = fase3RoleChoice[r.id] ?? (autoIdx >= 0 ? autoIdx : 0);
-                              if (topRoles.length === 0)
-                                return (
-                                  <td style={{ background: '#fafffe', borderLeft: '2px solid rgba(16,185,129,0.2)', padding: '0.5rem 0.6rem' }}>
-                                    <span style={{ fontSize: '0.7rem', color: '#adb5bd' }}>Belum ada data role lengkap di pulau ini</span>
-                                  </td>
-                                );
-                              const rankTheme = [
-                                { bg: 'rgba(16,185,129,0.09)', border: '#6ee7b7', text: '#065f46', badge: '#059669', selBg: 'rgba(16,185,129,0.22)', selBorder: '#059669' },
-                                { bg: 'rgba(14,165,233,0.07)', border: '#7dd3fc', text: '#0c4a6e', badge: '#0284c7', selBg: 'rgba(14,165,233,0.2)', selBorder: '#0284c7' },
-                                { bg: 'rgba(99,102,241,0.07)', border: '#c4b5fd', text: '#312e81', badge: '#4f46e5', selBg: 'rgba(99,102,241,0.18)', selBorder: '#4f46e5' },
-                              ];
+                          {/* Kolom 1 (sticky): 3 cabang role lengkap terdekat dari outlet hasil
+                              Fase 2 — strict 1 pulau, KC diprioritaskan, cache per outlet. */}
+                          {(() => {
+                            const activeMaster = masterByBranchCode.get(String(r.branchCode || '').trim());
+                            const topRoles = findTopRoleMatchesByLocation(activeMaster, targetFromAnalystRow(r), roleMappingList, masterRows, 3);
+                            const autoIdx = topRoles.findIndex((x) => x.rec.organisasiTujuan === r.organisasiTujuan);
+                            const selectedIdx = fase3RoleChoice[r.id] ?? (autoIdx >= 0 ? autoIdx : 0);
+                            const tdRole: React.CSSProperties = {
+                              position: 'sticky',
+                              left: '34px',
+                              zIndex: 5,
+                              width: '420px',
+                              minWidth: '420px',
+                              maxWidth: '420px',
+                              background: r.fase3Approved ? '#f0fdf4' : '#fafffe',
+                              padding: '0.45rem 0.55rem',
+                              verticalAlign: 'top',
+                              boxShadow: '3px 0 6px -2px rgba(0,0,0,0.06)',
+                              borderRight: '2px solid rgba(16,185,129,0.45)',
+                              boxSizing: 'border-box',
+                            };
+                            if (topRoles.length === 0)
                               return (
-                                <td style={{ background: '#fafffe', borderLeft: '2px solid rgba(16,185,129,0.2)', padding: '0.5rem 0.6rem', verticalAlign: 'top', minWidth: '340px', boxSizing: 'border-box' }}>
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.32rem' }}>
-                                    {topRoles.map((item, rIdx) => {
-                                      const role = item.rec;
-                                      const isSelected = selectedIdx === rIdx;
-                                      const isKc = getUnitCategory(role.organisasiTujuan) === 'KC';
-                                      const t = rankTheme[rIdx] || rankTheme[0];
-                                      return (
-                                        <div
-                                          key={`rm-${r.id}-${rIdx}`}
-                                          role="button"
-                                          tabIndex={0}
-                                          onClick={() => setFase3RoleChoice((prev) => ({ ...prev, [r.id]: isSelected ? -1 : rIdx }))}
-                                          onKeyDown={(e) => {
-                                            if (e.key === 'Enter' || e.key === ' ') setFase3RoleChoice((prev) => ({ ...prev, [r.id]: isSelected ? -1 : rIdx }));
-                                          }}
-                                          title={`Klik untuk ${isSelected ? 'batalkan pilihan' : 'pilih'} cabang ini${autoIdx === rIdx ? ' — ini role yang kini terpasang' : ''}`}
-                                          style={{
-                                            background: isSelected ? t.selBg : t.bg,
-                                            border: `1.5px solid ${isSelected ? t.selBorder : t.border}`,
-                                            borderRadius: '6px',
-                                            padding: '0.3rem 0.42rem',
-                                            cursor: 'pointer',
-                                            outline: 'none',
-                                            boxShadow: isSelected ? `0 0 0 2px ${t.selBorder}33` : 'none',
-                                          }}
-                                        >
-                                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.3rem' }}>
-                                            <span style={{ flexShrink: 0, width: '16px', height: '16px', borderRadius: '50%', background: isSelected ? t.selBorder : t.badge, color: '#fff', fontSize: '0.6rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-                                              {isSelected ? '✓' : rIdx + 1}
-                                            </span>
-                                            <span style={{ flex: 1, fontSize: '0.7rem', fontWeight: 700, color: t.text, lineHeight: 1.25, wordBreak: 'break-word' }}>
-                                              {role.organisasiTujuan}
-                                            </span>
-                                            {autoIdx === rIdx && !isSelected && (
-                                              <span style={{ flexShrink: 0, fontSize: '0.58rem', fontWeight: 700, color: t.badge }}>Terpasang</span>
-                                            )}
-                                          </div>
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', paddingLeft: '1.3rem', marginTop: '0.15rem', flexWrap: 'wrap' }}>
-                                            <span style={{ fontSize: '0.6rem', fontWeight: 700, padding: '0.04rem 0.28rem', borderRadius: '3px', background: isKc ? 'rgba(64,81,137,0.11)' : 'rgba(41,156,219,0.11)', color: isKc ? '#405189' : '#0284c7' }}>
-                                              {isKc ? 'Cabang Utama (KC)' : 'Outlet (KCP)'}
-                                            </span>
-                                            {item.distanceKm !== null ? (
-                                              <span
-                                                style={{ fontSize: '0.6rem', fontWeight: 700, color: !item.sameIsland ? '#dc2626' : item.distanceKm < 50 ? '#059669' : item.distanceKm < 200 ? '#d97706' : '#6b7280', display: 'inline-flex', alignItems: 'center', gap: '0.15rem' }}
-                                                title={!item.sameIsland ? 'Peringatan: cabang ini berada di pulau berbeda' : `Estimasi jarak lurus: ${item.distanceKm} km`}
-                                              >
-                                                <MapPin size={9} />
-                                                {item.distanceKm.toLocaleString('id-ID')} km
-                                                {!item.sameIsland && ' ⚠️ beda pulau'}
-                                              </span>
-                                            ) : (
-                                              <span style={{ fontSize: '0.6rem', color: '#adb5bd' }}>jarak tidak diketahui</span>
-                                            )}
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                    {selectedIdx >= 0 && topRoles[selectedIdx] && (
-                                      <div style={{ fontSize: '0.62rem', color: '#059669', fontWeight: 600, background: 'rgba(16,185,129,0.07)', borderRadius: '4px', padding: '0.2rem 0.4rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                                        <CheckCircle2 size={11} />
-                                        Dipilih: {topRoles[selectedIdx].rec.organisasiTujuan}
-                                      </div>
-                                    )}
-                                    {selectedIdx >= 0 && topRoles[selectedIdx] && autoIdx !== selectedIdx && (
-                                      <button
-                                        type="button"
-                                        onClick={() => applyFase3Role(r, topRoles[selectedIdx].rec)}
-                                        disabled={isProcessing}
-                                        style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.22rem 0.6rem', fontSize: '0.7rem', fontWeight: 700, border: '1px solid #059669', borderRadius: '4px', background: '#059669', color: '#fff', cursor: isProcessing ? 'wait' : 'pointer' }}
-                                      >
-                                        <Check size={11} /> Terapkan Role Ini
-                                      </button>
-                                    )}
-                                  </div>
+                                <td style={tdRole}>
+                                  <span style={{ fontSize: '0.7rem', color: '#adb5bd' }}>
+                                    {roleMappingList.length === 0 ? 'Belum ada data Role Mapping — menu ini butuh tab Role Mapping terisi' : 'Belum ada data role lengkap di pulau ini'}
+                                  </span>
                                 </td>
                               );
-                            })()}
-                          <td style={{ fontWeight: 700, color: '#212529' }}>{r.organisasiTujuan}</td>
-                          <td style={{ textAlign: 'center' }}>
-                            <span className={`badge ${r.tipeUnit === 'KC' ? 'badge-match' : 'badge-level2'}`}>
-                              {r.tipeUnit}
-                            </span>
+                            const rankTheme = [
+                              { bg: 'rgba(16,185,129,0.09)', border: '#6ee7b7', text: '#065f46', badge: '#059669', selBg: 'rgba(16,185,129,0.22)', selBorder: '#059669' },
+                              { bg: 'rgba(14,165,233,0.07)', border: '#7dd3fc', text: '#0c4a6e', badge: '#0284c7', selBg: 'rgba(14,165,233,0.2)', selBorder: '#0284c7' },
+                              { bg: 'rgba(99,102,241,0.07)', border: '#c4b5fd', text: '#312e81', badge: '#4f46e5', selBg: 'rgba(99,102,241,0.18)', selBorder: '#4f46e5' },
+                            ];
+                            return (
+                              <td style={tdRole}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.32rem' }}>
+                                  {topRoles.map((item, rIdx) => {
+                                    const role = item.rec;
+                                    const isSelected = selectedIdx === rIdx;
+                                    const isKc = getUnitCategory(role.organisasiTujuan) === 'KC';
+                                    const t = rankTheme[rIdx] || rankTheme[0];
+                                    return (
+                                      <div
+                                        key={`rm-${r.id}-${rIdx}`}
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={() => setFase3RoleChoice((prev) => ({ ...prev, [r.id]: isSelected ? -1 : rIdx }))}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter' || e.key === ' ') setFase3RoleChoice((prev) => ({ ...prev, [r.id]: isSelected ? -1 : rIdx }));
+                                        }}
+                                        title={`Klik untuk ${isSelected ? 'batalkan pilihan' : 'pilih'} cabang ini${autoIdx === rIdx ? ' — ini role yang kini terpasang' : ''}`}
+                                        style={{
+                                          background: isSelected ? t.selBg : t.bg,
+                                          border: `1.5px solid ${isSelected ? t.selBorder : t.border}`,
+                                          borderRadius: '6px',
+                                          padding: '0.3rem 0.42rem',
+                                          cursor: 'pointer',
+                                          outline: 'none',
+                                          boxShadow: isSelected ? `0 0 0 2px ${t.selBorder}33` : 'none',
+                                        }}
+                                      >
+                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.3rem' }}>
+                                          <span style={{ flexShrink: 0, width: '16px', height: '16px', borderRadius: '50%', background: isSelected ? t.selBorder : t.badge, color: '#fff', fontSize: '0.6rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            {isSelected ? '✓' : rIdx + 1}
+                                          </span>
+                                          <span style={{ flex: 1, fontSize: '0.7rem', fontWeight: 700, color: t.text, lineHeight: 1.25, wordBreak: 'break-word' }}>
+                                            {role.organisasiTujuan}
+                                          </span>
+                                          {autoIdx === rIdx && !isSelected && (
+                                            <span style={{ flexShrink: 0, fontSize: '0.58rem', fontWeight: 700, color: t.badge }}>Terpasang</span>
+                                          )}
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', paddingLeft: '1.3rem', marginTop: '0.15rem', flexWrap: 'wrap' }}>
+                                          <span style={{ fontSize: '0.6rem', fontWeight: 700, padding: '0.04rem 0.28rem', borderRadius: '3px', background: isKc ? 'rgba(64,81,137,0.11)' : 'rgba(41,156,219,0.11)', color: isKc ? '#405189' : '#0284c7' }}>
+                                            {isKc ? 'Cabang Utama (KC)' : 'Outlet (KCP)'}
+                                          </span>
+                                          {item.distanceKm !== null ? (
+                                            <span
+                                              style={{ fontSize: '0.6rem', fontWeight: 700, color: !item.sameIsland ? '#dc2626' : item.distanceKm < 50 ? '#059669' : item.distanceKm < 200 ? '#d97706' : '#6b7280', display: 'inline-flex', alignItems: 'center', gap: '0.15rem' }}
+                                              title={!item.sameIsland ? 'Peringatan: cabang ini berada di pulau berbeda' : `Estimasi jarak lurus: ${item.distanceKm} km`}
+                                            >
+                                              <MapPin size={9} />
+                                              {item.distanceKm.toLocaleString('id-ID')} km
+                                              {!item.sameIsland && ' ⚠️ beda pulau'}
+                                            </span>
+                                          ) : (
+                                            <span style={{ fontSize: '0.6rem', color: '#adb5bd' }}>jarak tidak diketahui</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                  {selectedIdx >= 0 && topRoles[selectedIdx] && (
+                                    <div style={{ fontSize: '0.62rem', color: '#059669', fontWeight: 600, background: 'rgba(16,185,129,0.07)', borderRadius: '4px', padding: '0.2rem 0.4rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                      <CheckCircle2 size={11} />
+                                      Dipilih: {topRoles[selectedIdx].rec.organisasiTujuan}
+                                    </div>
+                                  )}
+                                  {selectedIdx >= 0 && topRoles[selectedIdx] && autoIdx !== selectedIdx && (
+                                    <button
+                                      type="button"
+                                      onClick={() => applyFase3Role(r, topRoles[selectedIdx].rec)}
+                                      disabled={isProcessing}
+                                      style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.22rem 0.6rem', fontSize: '0.7rem', fontWeight: 700, border: '1px solid #059669', borderRadius: '4px', background: '#059669', color: '#fff', cursor: isProcessing ? 'wait' : 'pointer' }}
+                                    >
+                                      <Check size={11} /> Terapkan Role Ini
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            );
+                          })()}
+
+                          {/* Kolom 2: cabang Master yang terpasang dari Fase 2, kartunya sama
+                              seperti kandidat terpilih di tab Fase 2 supaya operator mengenali
+                              objek yang sama di kedua tab. */}
+                          {(() => {
+                            const m = masterByBranchCode.get(String(r.branchCode || '').trim());
+                            const tdMaster: React.CSSProperties = {
+                              width: '400px',
+                              minWidth: '400px',
+                              maxWidth: '400px',
+                              background: r.fase3Approved ? '#f0fdf4' : '#fffdfa',
+                              padding: '0.45rem 0.55rem',
+                              verticalAlign: 'top',
+                              borderRight: '2px solid rgba(247,184,75,0.45)',
+                              boxSizing: 'border-box',
+                            };
+                            if (!m)
+                              return (
+                                <td style={tdMaster}>
+                                  <span style={{ fontSize: '0.7rem', color: '#adb5bd' }}>
+                                    {r.namaOutlet ? `${r.namaOutlet} — cabang master tidak ditemukan di Branch Code ${r.branchCode || '-'}` : 'Cabang belum dipilih — selesaikan Fase 2 dulu'}
+                                  </span>
+                                </td>
+                              );
+                            const isKcUnit = getUnitCategory(String(m['Nama Outlet'] || m['Sandi Cabang'] || '')) === 'KC';
+                            const wil = extractWilayahFromBranchCode(String(m['Branch Code'] || m['Kode Cabang'] || '').trim(), wilayahSettings, r.wilayah);
+                            const isKelMatched = !!(r.kelurahan && m.Kelurahan && cleanKelurahan(r.kelurahan) === cleanKelurahan(m.Kelurahan));
+                            const isKecMatched = !!(r.kecamatan && m.Kecamatan && cleanKecamatan(r.kecamatan) === cleanKecamatan(m.Kecamatan));
+                            const ell = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const };
+                            return (
+                              <td style={tdMaster}>
+                                <div style={{ border: '1px solid rgba(247,184,75,0.4)', borderRadius: '6px', padding: '0.45rem 0.6rem', background: '#ffffff', overflow: 'hidden' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginBottom: '0.3rem', flexWrap: 'nowrap', ...ell }}>
+                                    <span style={{ padding: '0.1rem 0.38rem', borderRadius: '3px', fontSize: '0.67rem', fontWeight: 700, background: 'rgba(247,184,75,0.15)', color: '#d97706', flexShrink: 0 }}>
+                                      Cabang Fase 2
+                                    </span>
+                                    <span style={{ padding: '0.1rem 0.38rem', borderRadius: '3px', fontSize: '0.67rem', fontWeight: 700, background: isKcUnit ? 'rgba(64,81,137,0.11)' : 'rgba(41,156,219,0.11)', color: isKcUnit ? '#405189' : '#0284c7', flexShrink: 0 }}>
+                                      {isKcUnit ? 'Cabang Utama (KC)' : 'Outlet (KCP)'}
+                                    </span>
+                                    {r.fase2JarakKm > 0 && (
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.15rem', fontSize: '0.67rem', fontWeight: 600, color: '#0d9488', background: 'rgba(13,148,136,0.08)', padding: '0.08rem 0.32rem', borderRadius: '3px', flexShrink: 0 }} title="Estimasi jarak dari kelurahan data ini ke cabang">
+                                        <MapPin size={9} /> {Number(r.fase2JarakKm).toLocaleString('id-ID')} km
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div style={{ fontSize: '0.81rem', fontWeight: 600, color: '#212529', marginBottom: '0.1rem', ...ell }} title={`${m['Sandi Cabang'] || m.Cabang || m.Sandi || '-'}${m['Nama Outlet'] ? ` • ${m['Nama Outlet']}` : ''}`}>
+                                    {m['Sandi Cabang'] || m.Cabang || m.Sandi || '-'}
+                                    {m['Nama Outlet'] && (
+                                      <span style={{ fontSize: '0.73rem', color: '#405189', fontWeight: 500, marginLeft: '0.35rem' }}>• {m['Nama Outlet']}</span>
+                                    )}
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', margin: '0.12rem 0 0.22rem', flexWrap: 'nowrap', overflow: 'hidden' }}>
+                                    <span className="code-cell" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.69rem', background: '#f3f6f9', color: '#405189', padding: '0.08rem 0.4rem', borderRadius: '3px', border: '1px solid #e9ebec', fontWeight: 600, flexShrink: 0 }} title={`Kode Cabang: ${r.kodeCabang || '-'}`}>
+                                      <Building2 size={10} /> Branch: <strong>{r.branchCode || '-'}</strong>
+                                    </span>
+                                    <span className="badge badge-match" style={{ fontSize: '0.69rem', padding: '0.08rem 0.45rem', display: 'inline-flex', alignItems: 'center', gap: '0.2rem', flexShrink: 0 }} title={`Wilayah hasil setting: ${wil.wilayahName}`}>
+                                      <MapPin size={9} /> {wil.wilayahName}
+                                    </span>
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.69rem', color: '#495057', background: '#f8fafc', padding: '0.18rem 0.45rem', borderRadius: '4px', border: '1px solid #e2e8f0', flexWrap: 'nowrap', ...ell }}>
+                                    <span>Kel: <strong style={{ color: isKelMatched ? '#059669' : '#1e293b' }}>{m.Kelurahan || '-'}</strong></span>
+                                    {isKelMatched && <span style={{ fontSize: '0.6rem', padding: '0.02rem 0.25rem', borderRadius: '3px', background: 'rgba(10,179,156,0.12)', color: '#059669', fontWeight: 700 }} title="Kelurahan sama persis">✓ Sama</span>}
+                                    <span style={{ color: '#cbd5e1' }}>•</span>
+                                    <span>Kec: <strong style={{ color: isKecMatched ? '#2563eb' : '#1e293b' }}>{m.Kecamatan || '-'}</strong></span>
+                                    {isKecMatched && <span style={{ fontSize: '0.6rem', padding: '0.02rem 0.25rem', borderRadius: '3px', background: 'rgba(37,99,235,0.1)', color: '#2563eb', fontWeight: 700 }} title="Kecamatan sama persis">✓ Sama</span>}
+                                    <span style={{ color: '#cbd5e1' }}>•</span>
+                                    <span>{m['Dati II'] || '-'}</span>
+                                  </div>
+                                  <div style={{ fontSize: '0.68rem', color: '#6b7280', marginTop: '0.25rem', ...ell }} title={m.ALAMAT || ''}>
+                                    Alamat: {m.ALAMAT || '-'}
+                                  </div>
+                                </div>
+                              </td>
+                            );
+                          })()}
+                          <td className="code-cell" style={{ textAlign: 'center', fontWeight: 700 }} title={r.kodePosKelurahan && r.kodePosKelurahan !== r.kodePosPten ? `Kode pos kelurahan ini sendiri: ${r.kodePosKelurahan}` : undefined}>
+                            {r.kodePosPten || r.kodePosKelurahan || '-'}
                           </td>
-                          <td style={{ textAlign: 'center', fontWeight: 700, color: r.roleCabsal === 1 ? '#0ab39c' : '#f06548' }}>
-                            {r.roleCabsal === 1 ? '✓' : '-'}
-                          </td>
-                          <td style={{ textAlign: 'center', fontWeight: 700, color: r.roleCabapv1 === 1 ? '#0ab39c' : '#f06548' }}>
-                            {r.roleCabapv1 === 1 ? '✓' : '-'}
-                          </td>
-                          <td style={{ textAlign: 'center', fontWeight: 700, color: r.roleCabapv2 === 1 ? '#0ab39c' : '#f06548' }}>
-                            {r.roleCabapv2 === 1 ? '✓' : '-'}
-                          </td>
-                          <td>
-                            <span className="badge badge-match" style={{ fontSize: '0.72rem' }}>{r.alurWondr}</span>
-                          </td>
-                          <td style={{ textAlign: 'center', fontWeight: 600 }}>{r.roleGrandTotal} Org</td>
+                          <td style={{ fontWeight: 700 }}>{r.kelurahan}</td>
+                          <td>{r.kecamatan}</td>
+                          <td style={{ fontWeight: 600 }} title={r.kotaPten}>{r.kotaPtenMax15 || r.kotaPten}</td>
+                          <td>{r.provinsi}</td>
                         </>
                       )}
 
                       {/* ACTION REVIEW BUTTONS (Appears on ALL tabs) */}
                       <td style={{ textAlign: 'center' }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'nowrap', gap: '0.25rem', whiteSpace: 'nowrap' }}>
+                          {/* Urutan aksi tab Data Final: Revisi → Detail → Setujui.
+                              N0: tidak ada tombol Edit — koreksi data dilakukan di menu Data
+                              Master, lalu analisa dijalankan ulang. */}
+                          {innerTab === 'BERES' && (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmManualRow(r)}
+                              title="Kembalikan baris ini ke tab Perlu Analisa Manual"
+                              style={{
+                                background: 'rgba(240, 101, 72, 0.1)',
+                                border: '1px solid rgba(240, 101, 72, 0.35)',
+                                color: '#f06548',
+                                borderRadius: '4px',
+                                padding: '0.22rem 0.55rem',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '0.25rem',
+                                fontSize: '0.72rem',
+                                fontWeight: 700,
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              <RotateCcw size={12} />
+                              <span>Revisi</span>
+                            </button>
+                          )}
+                          {viewTab === 'all' && (
+                            <button
+                              type="button"
+                              onClick={() => setDetailRow(r)}
+                              title="Lihat seluruh atribut baris ini beserta hasil analisa tiap fase"
+                              style={{
+                                background: 'rgba(53, 119, 241, 0.1)',
+                                border: '1px solid rgba(53, 119, 241, 0.3)',
+                                color: '#3577f1',
+                                borderRadius: '4px',
+                                padding: '0.22rem 0.55rem',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '0.25rem',
+                                fontSize: '0.72rem',
+                                fontWeight: 700,
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              <Info size={12} />
+                              <span>Detail</span>
+                            </button>
+                          )}
                           {(() => {
                             const diTabManual = innerTab === 'MANUAL';
                             const sudahSetuju = !diTabManual && (
@@ -2186,7 +2332,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                   border: '1px solid rgba(10, 179, 156, 0.3)',
                                   color: sudahSetuju ? '#ffffff' : '#0ab39c',
                                   borderRadius: '4px',
-                                  padding: viewTab === 'fase1' ? '0.22rem 0.55rem' : '0.22rem 0.4rem',
+                                  padding: viewTab === 'fase1' || viewTab === 'all' ? '0.22rem 0.55rem' : '0.22rem 0.4rem',
                                   cursor: 'pointer',
                                   display: 'inline-flex',
                                   alignItems: 'center',
@@ -2198,38 +2344,10 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                 }}
                               >
                                 <Check size={12} />
-                                {viewTab === 'fase1' && <span>Setujui</span>}
+                                {(viewTab === 'fase1' || viewTab === 'all') && <span>Setujui</span>}
                               </button>
                             );
                           })()}
-                          {/* N0: tidak ada tombol Edit di Fase 1/2/3 — yang tersedia hanya
-                              Setujui, Revisi (tab Berhasil), dan aksi kandidat. Mengubah data
-                              dilakukan di menu Data Master, lalu analisa dijalankan ulang. */}
-                          {innerTab === 'BERES' && (
-                            <button
-                              type="button"
-                              onClick={() => setConfirmManualRow(r)}
-                              title="Kembalikan baris ini ke tab Perlu Analisa Manual"
-                              style={{
-                                background: 'rgba(240, 101, 72, 0.1)',
-                                border: '1px solid rgba(240, 101, 72, 0.35)',
-                                color: '#f06548',
-                                borderRadius: '4px',
-                                padding: '0.22rem 0.55rem',
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '0.25rem',
-                                fontSize: '0.72rem',
-                                fontWeight: 700,
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              <RotateCcw size={12} />
-                              <span>Revisi</span>
-                            </button>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -2350,6 +2468,13 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
           showToast(`${masterRows.length.toLocaleString('id-ID')} baris ${masterCity} dipetakan ke ${ptenKota} — menganalisa ulang…`);
           onApproveCityOverride(masterCity, ptenKota);
         }}
+      />
+
+      {/* Detail baca-saja satu baris (tombol "Detail" di tab Data Final) */}
+      <AnalystRowDetailModal
+        row={detailRow}
+        datiII={detailRow ? kotaKodePosDari(detailRow) : ''}
+        onClose={() => setDetailRow(null)}
       />
 
       {/* Dialog konfirmasi — wajib sebelum menyetujui Fase 1/2/3 & Final Analisa */}

@@ -574,10 +574,15 @@ export const App: React.FC = () => {
   const handleStartAnalystPipeline = async (
     reRunAnomaliesOnly = false,
     overrides?: Record<string, string>,
-    sampaiFase?: 1 | 2 | 3
+    sampaiFase?: 1 | 2 | 3,
+    // Baris dasar untuk run ini. Wajib eksplisit saat dipanggil tepat setelah
+    // "Setujui Fase": state `analystRows` di closure ini masih berisi array
+    // SEBELUM persetujuan, jadi tanpa parameter ini persetujuan yang baru saja
+    // diberikan akan tertimpa hasil run.
+    barisDasar?: AnalystRow[]
   ) => {
     const targetFase = sampaiFase ?? faseBerikutnya;
-    const lama = analystRows;
+    const lama = barisDasar ?? analystRows;
     pembatalAnalisaRef.current = { batal: false };
     setIsCancelling(false);
     setIsAnalyzing(true);
@@ -658,7 +663,7 @@ export const App: React.FC = () => {
           lastPhase = phase;
         },
         reRunAnomaliesOnly,
-        analystRows,
+        lama,
         // Analisis inkremental: kelurahan yang sudah ada di Final Data tidak diulang.
         new Set(finalRows.map((fr) => makeFinalKey(fr.kodePosPten, fr.kelurahan, fr.kecamatan, fr.kotaPten))),
         targetFase,
@@ -988,16 +993,20 @@ export const App: React.FC = () => {
   };
 
   const handleApproveAnalystFase = (fase: 1 | 2 | 3) => {
-    setAnalystRows((prev) => {
-      const next = prev.map((r) => {
-        if (r.kategori === 'TIDAK_ANALISA') return r; // perlu koreksi manual, jangan ikut disetujui otomatis
-        if (fase === 1) return { ...r, fase1Approved: true };
-        if (fase === 2) return { ...r, fase2Approved: true };
-        return { ...r, fase3Approved: true };
-      });
-      setItemDebounced('analyst_results_data', next);
-      return next;
+    const baru = analystRows.map((r) => {
+      if (r.kategori === 'TIDAK_ANALISA') return r; // perlu koreksi manual, jangan ikut disetujui otomatis
+      if (fase === 1) return { ...r, fase1Approved: true };
+      if (fase === 2) return { ...r, fase2Approved: true };
+      return { ...r, fase3Approved: true };
     });
+    setAnalystRows(baru);
+    setItemDebounced('analyst_results_data', baru);
+    // Mesin fase berikutnya LANGSUNG dijalankan, jadi kolom Fase 2 (Kanwil, Sandi
+    // Cabang, Branch Code, Kode Cabang, Nama Outlet, Alamat) dan Fase 3 terisi dari
+    // rekomendasi Rank-1 tanpa operator harus menekan "Gunakan Cabang Ini" per baris.
+    // Run ini memakai `baru` sebagai dasar supaya persetujuan yang barusan diberikan
+    // tidak hilang tertimpa hasil run.
+    if (fase < 3) void handleStartAnalystPipeline(false, undefined, (fase + 1) as 1 | 2 | 3, baru);
   };
 
   // Master Actions (Appends new rows to existing master data with strict deduplication)
