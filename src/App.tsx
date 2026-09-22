@@ -16,7 +16,8 @@ import { KodePosManager } from './components/KodePosData/KodePosManager';
 import { AnalystCanvas } from './components/WorkingEngine/AnalystCanvas';
 import { AnalystResultsGrid } from './components/WorkingEngine/AnalystResultsGrid';
 import { FinalDataManager } from './components/WorkingEngine/FinalDataManager';
-import { executeAnalystPipeline, cityMatchKey, makeFinalKey, pilFinalDariCloud, hitungBit, bitTemuanBaris, AnalisaDibatalkan, type AnalystRow, type AnalystCoverage } from './utils/analystPipeline';
+import { cityMatchKey, makeFinalKey, pilFinalDariCloud, hitungBit, bitTemuanBaris, AnalisaDibatalkan, type AnalystRow, type AnalystCoverage } from './utils/analystPipeline';
+import { jalankanAnalisaDiWorker, batalAnalisaDiWorker } from './utils/analystRunner';
 import { SinyalTemuanModal } from './components/WorkingEngine/SinyalTemuanModal';
 import { detectFinalAnomalies } from './utils/finalAnomaly';
 import type { ActiveTab } from './components/Sidebar';
@@ -512,12 +513,11 @@ export const App: React.FC = () => {
   // ✋ Pembatalan analisa (A4): flag bersama yang dibaca pipeline tiap `tick()`.
   // Hasil run baru ditulis setelah pipeline kembali, jadi membatalkan tidak pernah
   // meninggalkan hasil setengah jadi.
-  const pembatalAnalisaRef = useRef<{ batal: boolean }>({ batal: false });
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
 
   const handleBatalkanAnalisa = () => {
     if (!isAnalyzing) return;
-    pembatalAnalisaRef.current.batal = true;
+    batalAnalisaDiWorker();
     setIsCancelling(true);
   };
 
@@ -537,7 +537,6 @@ export const App: React.FC = () => {
   ) => {
     const targetFase = sampaiFase ?? faseBerikutnya;
     const lama = barisDasar ?? analystRows;
-    pembatalAnalisaRef.current = { batal: false };
     setIsCancelling(false);
     setIsAnalyzing(true);
     setAnalystProgress(10);
@@ -581,12 +580,19 @@ export const App: React.FC = () => {
               return ptenKota ? { ...kp, kabupatenKota: ptenKota } : kp;
             })
           : kodePosForPipeline;
-      const { rows: results, coverage } = await executeAnalystPipeline(
-        masterRows,
-        ptenList,
-        kodePosInput,
-        wilayahSettings,
-        roleMappingList,
+      const { rows: results, coverage } = await jalankanAnalisaDiWorker(
+        {
+          masterRows,
+          ptenList,
+          kodePosList: kodePosInput,
+          wilayahSettings,
+          roleMappingList,
+          reRunAnomaliesOnly,
+          previousRows: lama,
+          // Analisis inkremental: kelurahan yang sudah ada di Final Data tidak diulang.
+          excludeFinalKeys: finalRows.map((fr) => makeFinalKey(fr.kodePosPten, fr.kelurahan, fr.kecamatan, fr.kotaPten)),
+          sampaiFase: targetFase,
+        },
         (phase, pct, _processed, _total, msg) => {
           setAnalystProgress(pct);
           setAnalystMessage(`[Fase ${phase}] ${msg}`);
@@ -615,13 +621,7 @@ export const App: React.FC = () => {
             });
           }
           lastPhase = phase;
-        },
-        reRunAnomaliesOnly,
-        lama,
-        // Analisis inkremental: kelurahan yang sudah ada di Final Data tidak diulang.
-        new Set(finalRows.map((fr) => makeFinalKey(fr.kodePosPten, fr.kelurahan, fr.kecamatan, fr.kotaPten))),
-        targetFase,
-        pembatalAnalisaRef.current
+        }
       );
 
       // Persetujuan fase sebelumnya ikut dipindah ke baris hasil baru — kunci baris

@@ -6,7 +6,7 @@ import { getIslandFromProvinsi } from './roleMatcher';
 import { calculateRealDistance } from './geoDistance';
 import type { PTENRecord } from '../components/PTENData/PTENManager';
 import type { RoleMappingRecord } from '../components/RoleMapping/RoleMappingManager';
-import { getUnitCategory, getWondrRecommendation } from '../components/RoleMapping/RoleMappingManager';
+import { getUnitCategory, getWondrRecommendation } from './roleHelpers';
 import { extractWilayahFromBranchCode, hasDirectionalConflict, UNIT_NOISE_SET } from './normalizer';
 import type { KodePosRow } from './neonSync';
 

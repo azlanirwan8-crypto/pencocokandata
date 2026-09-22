@@ -33,7 +33,7 @@ import type { MasterRow, TargetRow, WilayahSetting } from '../../types';
 import type { RoleMappingRecord } from '../RoleMapping/RoleMappingManager';
 import { buildMasterProximityIndex, findClosestMasterRecommendation, type CandidateOption, type RecommendationResult } from '../../utils/recommender';
 import { findTopRoleMatchesByLocation, type RoleMatchScored } from '../../utils/roleRecommender';
-import { getUnitCategory, getWondrRecommendation } from '../RoleMapping/RoleMappingManager';
+import { getUnitCategory, getWondrRecommendation } from '../../utils/roleHelpers';
 import { extractWilayahFromBranchCode } from '../../utils/normalizer';
 import { CandidateDetailModal } from './CandidateDetailModal';
 import { AnalystRowDetailModal } from './AnalystRowDetailModal';

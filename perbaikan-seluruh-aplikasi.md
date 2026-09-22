@@ -1066,6 +1066,19 @@ Windowing tab kartu ikut diturunkan (mulai 20 baris, overscan 6, tinggi estimasi
 
 **Susulan 2 (operator masih melaporkan *This page isn't responding*, usulnya sendiri diterima):** tab Fase 2 kini **tidak menampilkan daftar kartu sama sekali sebelum fase itu selesai** — satu baris pesan pengganti, dan `fase2Recs` dikunci sehingga mesin ±10 ms/baris tidak dihitung untuk sesuatu yang memang tidak dilihat. Setelah Fase 2 dijalankan (`fase2Status` tertulis engine = bukti, bukan tebakan), kartu tampil seperti biasa. Catatan penting saat memverifikasi: tab yang dilaporkan beku itu **tidak mungkin** memuat kode `1c69742` — dev server baru hidup jam 19.44, jadi tab tersebut masih menjalankan bundle lama; `Ctrl+F5` lebih dulu.
 
+### N11 — MESIN ANALISA PINDAH KE WEB WORKER (keputusan pemilik produk 2026-09-22: "Jalankan di Web Worker")
+
+Gerbang tampilan (susulan 2 di atas) hanya menyembunyikan kartu; **pekerjaannya tetap 83 ribu baris × ±10 ms ≈ belasan menit di thread utama**, dan selama itu tab tidak bisa digulir — persis yang dilaporkan dari `match-sepia.vercel.app` (terverifikasi: bundle produksi `index-YkAwadT0.js` sudah memuat N8/N10, jadi ini bukan soal kode belum naik). Sekarang perhitungan itu tidak pernah terjadi di thread tampilan:
+
+- `src/utils/analyst.worker.ts` menjalankan `executeAnalystPipeline` di worker; progres dikirim per pesan, hasil lewat `selesai`, kegagalan lewat `gagal` (pembatalan ditandai **boolean**, bukan nama kelas, karena minifier mengubah `constructor.name`).
+- `src/utils/analystRunner.ts` = pembungkusnya: `jalankanAnalisaDiWorker(bahan, onProgress)` + `batalAnalisaDiWorker()`. Tombol "Batalkan" (A4) tetap berfungsi — `pembatalAnalisaRef` yang sudah mati di `App.tsx` dihapus, tidak dibiarkan menggantung.
+- Bahan run harus bisa di-structured-clone: `excludeFinalKeys` dikirim sebagai array lalu dibangun ulang jadi `Set` di dalam worker.
+- **Hambatan yang ditemukan dan diperbaiki:** worker mati sebelum mulai dengan `window is not defined`. Sumbernya `getUnitCategory` / `getWondrRecommendation` yang tinggal di file komponen React (`RoleMappingManager.tsx`) — begitu engine mengimpornya, React + lucide ikut masuk worker. Keduanya dipindah ke `src/utils/roleHelpers.ts` (murni) dan 7 import di 6 file diarahkan ke sana. Ukuran chunk worker turun 86 kB → 75,8 kB, bukti React benar-benar keluar.
+
+**Terukur di browser (bukan klaim):** run 1.200 baris selesai **3,2 d** di worker, 1.200/1.200 baris dapat Branch Code, 7 pesan progres masuk. Sementara worker menghitung, thread utama menjalankan loop kerja tetap dan menghasilkan **109% dari throughput baseline** (476.043 vs 436.132 iterasi/250 ms) — artinya mesin tidak lagi merebut thread tampilan sama sekali.
+Rantai: `tsc -b --force` 0 error · lint **80 warning / 0 error** (turun dari baseline 83) · `npm run build` ✓ · **9/9 suite LULUS**.
+**Belum terverifikasi:** run skala penuh 83 ribu baris di data nyata milik operator (butuh mata + waktunya sendiri), dan rasa scroll tab Fase 2 pada data itu setelah worker naik ke produksi.
+
 
 
 

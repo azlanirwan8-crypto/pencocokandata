@@ -20,7 +20,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import type { RoleMappingRecord } from '../../components/RoleMapping/RoleMappingManager';
-import { getUnitCategory, DEFAULT_ROLE_MAPPING_DATA } from '../../components/RoleMapping/RoleMappingManager';
+import { getUnitCategory } from '../../utils/roleHelpers';
+import { DEFAULT_ROLE_MAPPING_DATA } from '../../components/RoleMapping/RoleMappingManager';
 import { auditRoleMasterConsistency, resolveRoleMappingForBranch } from '../../utils/roleMatcher';
 import type { TargetRow, MasterRow, WilayahSetting } from '../../types';
 import {

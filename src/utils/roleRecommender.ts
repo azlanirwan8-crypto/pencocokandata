@@ -2,7 +2,7 @@
 // parameter & logika tidak diubah (3 cabang role lengkap terdekat, strict 1 pulau,
 // KC prioritas, cache 60fps).
 import type { RoleMappingRecord } from '../components/RoleMapping/RoleMappingManager';
-import { getUnitCategory } from '../components/RoleMapping/RoleMappingManager';
+import { getUnitCategory } from './roleHelpers';
 import { extractBranchAliases, normalizeIndonesianBranchAliases, normalizeBranchName, getIslandFromProvinsi } from './roleMatcher';
 import type { MasterRow, TargetRow } from '../types';
 import { calculateRealDistance } from './geoDistance';

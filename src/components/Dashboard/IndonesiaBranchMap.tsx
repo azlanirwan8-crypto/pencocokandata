@@ -50,7 +50,7 @@ import {
 import { get, keys } from 'idb-keyval';
 import { GoogleApiKeyModal } from '../GoogleApiKeyModal';
 import { cleanDati, cleanProvinsi } from '../../utils/normalizer';
-import { getUnitCategory } from '../RoleMapping/RoleMappingManager';
+import { getUnitCategory } from '../../utils/roleHelpers';
 import { useNotification } from '../Notification/NotificationContext';
 import { DialogPanel } from '../BaseModal';
 

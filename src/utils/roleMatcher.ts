@@ -1,5 +1,5 @@
 import type { RoleMappingRecord } from '../components/RoleMapping/RoleMappingManager';
-import { getUnitCategory, getWondrRecommendation } from '../components/RoleMapping/RoleMappingManager';
+import { getUnitCategory, getWondrRecommendation } from './roleHelpers';
 import { cleanDati, cleanText, textSimilarityScore, UNIT_NOISE_TOKENS } from './normalizer';
 
 /**
