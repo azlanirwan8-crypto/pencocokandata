@@ -14,15 +14,23 @@ self.onmessage = (e: MessageEvent) => {
   }
   pembatal.batal = false;
 
-  executeAnalystPipeline(
-    p.masterRows,
-    p.ptenList,
-    p.kodePosList,
-    p.wilayahSettings,
-    p.roleMappingList,
-    (phase: 1 | 2 | 3, pct: number, processed: number, total: number, msg: string) => {
-      self.postMessage({ type: 'progress', phase, pct, processed, total, msg });
-    },
+    let lastMsgTime = 0;
+
+    executeAnalystPipeline(
+      p.masterRows,
+      p.ptenList,
+      p.kodePosList,
+      p.wilayahSettings,
+      p.roleMappingList,
+      (phase: 1 | 2 | 3, pct: number, processed: number, total: number, msg: string) => {
+        const now = performance.now();
+        // Throttle progress ke max 10 pesan/detik agar UI thread tidak kewalahan, 
+        // kecuali saat progress mencapai 100% atau persis selesai.
+        if (processed === total || now - lastMsgTime > 100) {
+          lastMsgTime = now;
+          self.postMessage({ type: 'progress', phase, pct, processed, total, msg });
+        }
+      },
     p.reRunAnomaliesOnly,
     p.previousRows,
     p.excludeFinalKeys ? new Set<string>(p.excludeFinalKeys) : undefined,
