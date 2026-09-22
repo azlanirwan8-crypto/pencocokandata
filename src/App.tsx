@@ -877,6 +877,17 @@ export const App: React.FC = () => {
       void deleteFinalKeysInNeon([...ids]).then((ok) => laporkanSinkronFinal(ok, `hapus ${ids.size} baris`));
   };
 
+  // "Reset Data" di menu Final Data: kosongkan seluruh Final (lokal + cloud) TANPA
+  // memindahkan apa pun ke Data Analyst — beda dari "Kembalikan Semua".
+  const handleResetFinalData = () => {
+    const n = finalRows.length;
+    if (n === 0) return;
+    setFinalRows([]);
+    setItem('analyst_final_data', []).catch(() => {});
+    if (isNeonConnected) void clearFinalInNeon().then((ok) => laporkanSinkronFinal(ok, 'dikosongkan (reset)'));
+    notify(`Final Data direset — ${n.toLocaleString('id-ID')} baris dihapus permanen. Data Analyst tidak ikut berubah.`, 'info');
+  };
+
   // G1: Impor baris dari Excel di menu Final Data
   // Baris baru ditambahkan ke Data Analyst (agar melewati alur validasi)
   // dan di-deduplikasi terhadap finalRows & analystRows.
@@ -1371,6 +1382,7 @@ export const App: React.FC = () => {
             onReturnAll={handleReturnFinalToAnalyst}
             onReturnRows={handleReviseFinalRows}
             onDeleteRows={handleDeleteFinalRows}
+            onResetAll={handleResetFinalData}
             onImportRows={handleImportFinalToAnalyst}
           />
           )}

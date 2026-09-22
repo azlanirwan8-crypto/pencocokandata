@@ -35,6 +35,8 @@ interface FinalDataManagerProps {
   onReturnRows: (rowIds: string[]) => void;
   /** Hapus massal/per baris: ids hilang permanen dari Final Data. */
   onDeleteRows: (rowIds: string[]) => void;
+  /** "Reset Data": kosongkan SELURUH Final Data (lokal + cloud), tanpa menyentuh Data Analyst. */
+  onResetAll: () => void;
   onImportRows?: (rows: AnalystRow[]) => { imported: number; skippedFinal: number; skippedAnalyst: number };
 }
 
@@ -121,11 +123,11 @@ function parseFinalExcelRow(raw: Record<string, any>, idx: number): AnalystRow {
   };
 }
 
-type AksiKonfirmasi = { kind: 'returnAll' | 'return' | 'delete'; ids: string[] };
+type AksiKonfirmasi = { kind: 'returnAll' | 'return' | 'delete' | 'reset'; ids: string[] };
 
 // Final Data: hasil analisa 3 fase yang sudah disetujui operator.
 // Baris dipindah dari Data Analyst ke sini (IndexedDB `analyst_final_data`).
-export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onReturnAll, onReturnRows, onDeleteRows, onImportRows }) => {
+export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onReturnAll, onReturnRows, onDeleteRows, onResetAll, onImportRows }) => {
   const { add: notify } = useNotification();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -144,15 +146,6 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
   const [detailRow, setDetailRow] = useState<AnalystRow | null>(null);
   // Laporan hasil impor Excel
   const [importSummary, setImportSummary] = useState<{ imported: number; skippedFinal: number; skippedAnalyst: number; fileName: string } | null>(null);
-
-  // Card informasi ringkas (kebutuhan BRD 5d).
-  const metrics = useMemo(() => ({
-    total: rows.length,
-    kc: rows.filter((r) => r.tipeUnit === 'KC').length,
-    kcp: rows.filter((r) => r.tipeUnit === 'KCP').length,
-    roleLengkap: rows.filter((r) => is3Role(r)).length,
-    wilayah: new Set(rows.map((r) => r.wilayah).filter(Boolean)).size,
-  }), [rows]);
 
   const wilayahOptions = useMemo(() => {
     const s = new Set<string>();
@@ -189,6 +182,17 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
       );
     });
   }, [rows, deferredSearch, wilayahFilter]);
+
+  // Kartu metrik mengikuti apa yang SEDANG dilihat operator, bukan seluruh isi tabel.
+  // Sebelumnya angka besar selalu `rows.length`, jadi saat filter wilayah W01 membuat
+  // tabel kosong, kartu tetap tertulis "75.694" — terlihat seperti data tidak terhapus.
+  const metrics = useMemo(() => ({
+    total: tersaring.length,
+    kc: tersaring.filter((r) => r.tipeUnit === 'KC').length,
+    kcp: tersaring.filter((r) => r.tipeUnit === 'KCP').length,
+    roleLengkap: tersaring.filter((r) => is3Role(r)).length,
+    wilayah: new Set(tersaring.map((r) => r.wilayah).filter(Boolean)).size,
+  }), [tersaring]);
 
   const terurut = useMemo(() => {
     const kolom = KOLOM_FINAL.find((k) => k.judul === sortKolom);
@@ -353,6 +357,19 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
           <button
             type="button"
             className="btn btn-outline btn-sm"
+            onClick={() => {
+              if (rows.length === 0) return;
+              setKonfirmasi({ kind: 'reset', ids: [] });
+            }}
+            disabled={rows.length === 0}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.76rem', color: '#f06548', borderColor: 'rgba(240,101,72,0.45)' }}
+            title="Kosongkan seluruh Final Data (lokal + cloud). Baris TIDAK dikembalikan ke Data Analyst."
+          >
+            <Trash2 size={13} /> Reset Data
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
             onClick={() => fileInputRef.current?.click()}
             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.76rem', color: '#405189', borderColor: '#405189' }}
             title="Unggah berkas Excel (.xlsx) — baris baru masuk ke Data Analyst untuk divalidasi"
@@ -394,7 +411,9 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
           </div>
           <div className="metric-value">{metrics.total.toLocaleString('id-ID')}</div>
           <div className="metric-footer">
-            {wilayahFilter === 'ALL' ? 'seluruh wilayah' : `filter aktif: ${formatWilayahCode(wilayahFilter)}`} · {tersaring.length.toLocaleString('id-ID')} tampil
+            {wilayahFilter === 'ALL'
+              ? 'seluruh wilayah'
+              : `filter aktif: ${formatWilayahCode(wilayahFilter)} · ${rows.length.toLocaleString('id-ID')} baris final keseluruhan`}
           </div>
         </div>
         <div className="metric-card cyan">
@@ -662,23 +681,27 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
       <ConfirmDialog
         isOpen={konfirmasi !== null}
         icon={<AlertTriangle size={20} />}
-        accent={konfirmasi?.kind === 'delete' ? '#f06548' : '#f7b84b'}
+        accent={konfirmasi?.kind === 'delete' || konfirmasi?.kind === 'reset' ? '#f06548' : '#f7b84b'}
         title={
-          konfirmasi?.kind === 'delete' ? 'Hapus Data Final?'
-            : konfirmasi?.kind === 'return' ? 'Kembalikan ke Data Analyst?'
-              : 'Kembalikan SELURUH Data Final?'
+          konfirmasi?.kind === 'reset' ? 'Reset seluruh Data Final?'
+            : konfirmasi?.kind === 'delete' ? 'Hapus Data Final?'
+              : konfirmasi?.kind === 'return' ? 'Kembalikan ke Data Analyst?'
+                : 'Kembalikan SELURUH Data Final?'
         }
         message={
-          konfirmasi?.kind === 'delete'
+          konfirmasi?.kind === 'reset'
+            ? `${rows.length.toLocaleString('id-ID')} baris Final Data akan DIHAPUS PERMANEN dari penyimpanan lokal dan cloud. Baris TIDAK dikembalikan ke Data Analyst — pakai "Kembalikan Semua" kalau Anda ingin memindahkannya. Setelah ini Final Data kosong.`
+            : konfirmasi?.kind === 'delete'
             ? `${(konfirmasi.ids.length).toLocaleString('id-ID')} baris akan DIHAPUS PERMANEN dari Final Data. Baris yang dihapus tidak lagi dikecualikan, jadi Analisa berikutnya memproses kelurahan itu dari awal.`
             : konfirmasi?.kind === 'return'
               ? `${konfirmasi.ids.length.toLocaleString('id-ID')} baris akan keluar dari Final Data dan kembali ke Data Analyst mulai Fase 1 (persetujuan tiap fase dilepas).`
               : `${rows.length.toLocaleString('id-ID')} baris akan dikembalikan ke Data Analyst mulai Fase 1. Final Data akan kosong.`
         }
-        confirmLabel={konfirmasi?.kind === 'delete' ? 'Ya, Hapus Permanen' : 'Ya, Lanjutkan'}
+        confirmLabel={konfirmasi?.kind === 'delete' || konfirmasi?.kind === 'reset' ? 'Ya, Hapus Permanen' : 'Ya, Lanjutkan'}
         onConfirm={() => {
           if (!konfirmasi) return;
           if (konfirmasi.kind === 'returnAll') onReturnAll();
+          else if (konfirmasi.kind === 'reset') onResetAll();
           else if (konfirmasi.kind === 'return') onReturnRows(konfirmasi.ids);
           else onDeleteRows(konfirmasi.ids);
           setTerpilih(new Set());
