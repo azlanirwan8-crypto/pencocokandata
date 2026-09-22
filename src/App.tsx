@@ -961,12 +961,11 @@ export const App: React.FC = () => {
     });
     setAnalystRows(baru);
     setItemDebounced('analyst_results_data', baru);
-    // Mesin fase berikutnya LANGSUNG dijalankan, jadi kolom Fase 2 (Kanwil, Sandi
-    // Cabang, Branch Code, Kode Cabang, Nama Outlet, Alamat) dan Fase 3 terisi dari
-    // rekomendasi Rank-1 tanpa operator harus menekan "Gunakan Cabang Ini" per baris.
-    // Run ini memakai `baru` sebagai dasar supaya persetujuan yang barusan diberikan
-    // tidak hilang tertimpa hasil run.
-    if (fase < 3) void handleStartAnalystPipeline(false, undefined, (fase + 1) as 1 | 2 | 3, baru);
+    // Persetujuan TIDAK lagi memicu mesin fase berikutnya. Run Fase 2 atas 83 ribu baris
+    // itu ±10 ms/baris dan dulu jalan tepat saat operator pindah tab — tab-nya membeku
+    // persis di momen "masuk Fase 2". Kolom Fase 2 kini ditampilkan dari kandidat rank-1
+    // (lihat `paketFase2DariMaster` + `f2Aktif` di grid), jadi datanya tetap muncul tanpa
+    // run; jalankan fasenya sendiri lewat tombol saat field-nya perlu ditulis ke baris.
   };
 
   // Master Actions (Appends new rows to existing master data with strict deduplication)

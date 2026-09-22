@@ -393,7 +393,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     if (confirmKind === 'fase1') {
       onApproveFase(1);
       setActiveSubTab('fase2');
-      showToast('Fase 1 disetujui — Fase 2 (Wilayah & Cabang) kini terbuka untuk direview!');
+      showToast('Fase 1 disetujui — Fase 2 terbuka, kolom cabang sudah terisi mengikuti Pilihan 1');
     } else if (confirmKind === 'fase2') {
       onApproveFase(2);
       setActiveSubTab('fase3');

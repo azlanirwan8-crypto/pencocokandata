@@ -1062,6 +1062,8 @@ Windowing tab kartu ikut diturunkan (mulai 20 baris, overscan 6, tinggi estimasi
 
 **Terukur di tree final:** `tsc` 0 error · lint **82/0** (turun 1 dari baseline 83) · build ✓ · 9/9 suite LULUS · `main` = `3dfbc61`. **Milik operator:** rasa scroll "Semua" di tab Fase 2 pada data nyata.
 
+**Susulan (laporan operator 2026-09-22, screenshot ACEH BARAT / Gunung Sitoli — "berat, tidak bisa digerakkan begitu masuk Fase 2"):** penyebabnya bukan grid, tapi `App.tsx:969` — menyetujui Fase 1 **langsung** menjalankan mesin fase berikutnya atas 83 ribu baris di thread yang sama (±10 ms/baris = tab beku tepat di momen pindah tab). Sekarang persetujuan hanya menandai fase; kolom Fase 2 tetap terisi karena diturunkan dari kandidat rank-1 (N8), dan mesin fasenya dijalankan lewat tombolnya sendiri. Ini **mencabut** perilaku "isi otomatis saat fase disetujui" (task #37) — diganti turunan layar, bukan dikembalikan menjadi kosong. Toast persetujuan ikut disesuaikan.
+
 
 
 
