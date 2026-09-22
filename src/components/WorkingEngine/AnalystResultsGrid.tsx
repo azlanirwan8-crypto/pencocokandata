@@ -547,13 +547,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     }
   }, [wilayahList, selectedWilayah, setSelectedWilayah]);
 
-  // Auto-reset innerTab ke BERES bila MANUAL kosong dan BERES ada isinya
-  React.useEffect(() => {
-    const b = stageBuckets[stageTab];
-    if (innerTab === 'MANUAL' && b.manual.length === 0 && b.beres.length > 0) {
-      setInnerTab('BERES');
-    }
-  }, [stageBuckets, stageTab, innerTab, setInnerTab]);
+  // Auto-reset innerTab ke BERES bila MANUAL kosong dan BERES ada isinya — butuh
+  // `stageTab`, jadi efeknya di bawah deklarasinya.
 
   // Tab aktif mengikuti fase yang sedang punya antrean kerja
   const viewTab = phaseState.locked[activeSubTab]
@@ -561,6 +556,13 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     : activeSubTab;
 
   const stageTab: 1 | 2 | 3 | 4 = viewTab === 'fase1' ? 1 : viewTab === 'fase2' ? 2 : viewTab === 'fase3' ? 3 : 4;
+
+  React.useEffect(() => {
+    const b = stageBuckets[stageTab];
+    if (innerTab === 'MANUAL' && b.manual.length === 0 && b.beres.length > 0) {
+      setInnerTab('BERES');
+    }
+  }, [stageBuckets, stageTab, innerTab, setInnerTab]);
 
   // Jumlah per inner tab pada fase yang sedang dibuka (instan O(1) dari stageBuckets)
   const hitunganInner = useMemo(() => {
