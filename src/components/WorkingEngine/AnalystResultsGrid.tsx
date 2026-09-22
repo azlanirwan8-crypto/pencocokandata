@@ -137,6 +137,16 @@ interface AnalystResultsGridProps {
   onBukaMasterCabang?: () => void;
 }
 
+// Cache rekomendasi Fase 2: mesin ini ±10 ms/baris dan dipanggil ulang tiap jendela
+// luncatan bergeser. Ditaruh di luar komponen (map komponen mati saat unmount) dan
+// dikunci per indeks master + cabang yang sedang terpasang — lihat `fase2Recs`.
+const kunciFase2 = (r: AnalystRow) =>
+  `${r.kodePosKelurahan || r.kodePosPten}|${r.kelurahan}|${r.kecamatan}|${r.groupKota || r.kotaPten}|${r.sandiCabang}|${r.namaOutlet}|${r.branchCode}`;
+const cacheRecFase2 = new WeakMap<
+  ReturnType<typeof buildMasterProximityIndex>,
+  Map<string, RecommendationResult | null>
+>();
+
 export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   rows,
   onUpdateRow,
@@ -292,9 +302,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     _originalFilledSandiCabang: r.sandiCabang,
     _originalFilledNamaOutlet: r.namaOutlet,
   } as unknown as TargetRow);
-  // Cache rekomendasi Fase 2: kunci alami baris (kode pos + kelurahan + kecamatan).
-  // Dipakai `fase2Recs` di bawah, setelah baris yang tampil diketahui.
-  const fase2RecCacheRef = useRef(new Map<string, { sig: string; rec: RecommendationResult | null }>());
+
   const applyFase2Candidate = (r: AnalystRow, master: MasterRow) => {
     const branchCode = String(master['Branch Code'] || master['Kode Cabang'] || '').trim();
     const resolved = extractWilayahFromBranchCode(branchCode, wilayahSettings, r.wilayah || master.Wilayah || '');
@@ -636,18 +644,15 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   // Windowing: "Semua" pada puluhan ribu baris hanya boleh memasukkan baris
   // yang terlihat ke DOM, sisanya diwakili dua <tr> spacer.
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
-  // Tab Fase 2/3 menampilkan KARTU kandidat (tinggi tak seragam). A8 pernah
-  // mematikan windowing di sini karena scroll melompat — tapi akibatnya "Semua
-  // (83 ribu)" di tab itu memasukkan 83 ribu kartu ke DOM dan tab membeku.
-  // Windowing dipakai lagi dengan estimasi tinggi kartu + overscan lebar; tinggi
-  // sejati dikoreksi otomatis dari baris pertama yang ter-render.
+  // Tab Fase 2/3 menampilkan KARTU kandidat (tinggi tak seragam).
+  // Windowing diaktifkan mulai dari 20 baris agar DOM selalu ringan dan responsif.
   const tabKartu = activeSubTab === 'fase2' || activeSubTab === 'fase3';
   const win = useVirtualWindow({
     containerRef: tableScrollRef,
     itemCount: paginatedRows.length,
-    minRowsToWindow: tabKartu ? 60 : 200,
-    fallbackRowHeight: tabKartu ? 250 : 44,
-    overscan: tabKartu ? 12 : 8,
+    minRowsToWindow: tabKartu ? 20 : 50,
+    fallbackRowHeight: tabKartu ? 180 : 44,
+    overscan: tabKartu ? 6 : 8,
   });
   const renderedRows = win.active ? paginatedRows.slice(win.start, win.end) : paginatedRows;
   const rowOffset = win.active ? win.start : 0;
@@ -741,29 +746,28 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     }
   };
 
-  // C2d: kandidat Fase 2 dihitung PER BARIS (kelurahan), bukan per kota, dan hanya
-  // untuk baris yang sedang tampil — dulu satu kota = satu daftar kandidat sehingga
-  // semua kelurahan di kota itu melihat (dan otomatis dapat) cabang yang sama.
+  // C2d: kandidat Fase 2 dihitung PER BARIS (kelurahan), bukan per kota — dulu satu kota
+  // = satu daftar kandidat sehingga semua kelurahan di kota itu melihat cabang yang sama.
   const fase2Recs = useMemo(() => {
     const m = new Map<string, { rec: RecommendationResult | null; target: TargetRow }>();
     if (!masterIndex) return m;
-    const cache = fase2RecCacheRef.current;
+    let cache = cacheRecFase2.get(masterIndex);
+    if (!cache) {
+      cache = new Map();
+      cacheRecFase2.set(masterIndex, cache);
+    }
     renderedRows.forEach((r) => {
       if (r.kategori === 'TIDAK_ANALISA') return;
       const target = targetFromAnalystRow(r);
-      const kunci = `${r.kodePosKelurahan || r.kodePosPten}|${r.kelurahan}|${r.kecamatan}`;
-      const sig = `${r.sandiCabang}|${r.namaOutlet}|${r.branchCode}`;
-      const cached = cache.get(kunci);
-      let rec: RecommendationResult | null;
-      if (cached && cached.sig === sig) {
-        rec = cached.rec;
-      } else {
+      const kunci = kunciFase2(r);
+      let rec: RecommendationResult | null | undefined = cache.get(kunci);
+      if (rec === undefined) {
         try {
           rec = findClosestMasterRecommendation(target, masterIndex);
         } catch {
           rec = null;
         }
-        cache.set(kunci, { sig, rec });
+        cache.set(kunci, rec);
       }
       m.set(r.id, { rec, target });
     });
