@@ -539,6 +539,22 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
 
   const { wilayahList, stats, phaseState, stageBuckets } = rowAnalytics;
 
+  // Auto-reset selectedWilayah bila nilai tersimpan (sessionStorage) sudah tidak ada
+  // di wilayahList saat ini — mencegah 0 baris tampil setelah data berganti/di-reset.
+  React.useEffect(() => {
+    if (selectedWilayah !== 'ALL' && !wilayahList.includes(selectedWilayah)) {
+      setSelectedWilayah('ALL');
+    }
+  }, [wilayahList, selectedWilayah, setSelectedWilayah]);
+
+  // Auto-reset innerTab ke BERES bila MANUAL kosong dan BERES ada isinya
+  React.useEffect(() => {
+    const b = stageBuckets[stageTab];
+    if (innerTab === 'MANUAL' && b.manual.length === 0 && b.beres.length > 0) {
+      setInnerTab('BERES');
+    }
+  }, [stageBuckets, stageTab, innerTab, setInnerTab]);
+
   // Tab aktif mengikuti fase yang sedang punya antrean kerja
   const viewTab = phaseState.locked[activeSubTab]
     ? (['fase1', 'fase2', 'fase3', 'all'][phaseState.step - 1] as 'all' | 'fase1' | 'fase2' | 'fase3')
