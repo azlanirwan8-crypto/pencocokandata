@@ -649,13 +649,18 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   // Windowing: "Semua" pada puluhan ribu baris hanya boleh memasukkan baris
   // yang terlihat ke DOM, sisanya diwakili dua <tr> spacer.
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
-  // A8: tab Fase 2/3 menampilkan kartu kandidat tinggi tak seragam. Mengukur tinggi dari
-  // baris pertama (fallback 44px) membuat scroll melompat di sana, jadi windowing hanya
-  // dipakai pada tabel baris datar (Fase 1 / ringkasan).
+  // Tab Fase 2/3 menampilkan KARTU kandidat (tinggi tak seragam). A8 pernah
+  // mematikan windowing di sini karena scroll melompat — tapi akibatnya "Semua
+  // (83 ribu)" di tab itu memasukkan 83 ribu kartu ke DOM dan tab membeku.
+  // Windowing dipakai lagi dengan estimasi tinggi kartu + overscan lebar; tinggi
+  // sejati dikoreksi otomatis dari baris pertama yang ter-render.
+  const tabKartu = activeSubTab === 'fase2' || activeSubTab === 'fase3';
   const win = useVirtualWindow({
     containerRef: tableScrollRef,
     itemCount: paginatedRows.length,
-    minRowsToWindow: activeSubTab === 'fase2' || activeSubTab === 'fase3' ? Number.POSITIVE_INFINITY : 200,
+    minRowsToWindow: tabKartu ? 60 : 200,
+    fallbackRowHeight: tabKartu ? 250 : 44,
+    overscan: tabKartu ? 12 : 8,
   });
   const renderedRows = win.active ? paginatedRows.slice(win.start, win.end) : paginatedRows;
   const rowOffset = win.active ? win.start : 0;

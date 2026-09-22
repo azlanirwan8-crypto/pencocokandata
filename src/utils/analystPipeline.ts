@@ -2046,6 +2046,12 @@ export async function executeAnalystPipeline(
     if (geoVerifiedCityKeys.has(ck)) verifiedKodePosRows += entries.length;
   });
 
+  // Jeda per sejumlah baris (lihat loop di bawah). 150 ≈ satu frame kerja ringan: cukup
+  // sering supaya peta progres & tombol Batalkan hidup, cukup jarang supaya tidak
+  // menambah biaya bolak-balik event loop secara berarti.
+  const YIELD_PER_BARIS = 150;
+  let barisSejakYield = 0;
+
   for (let i = 0; i < itemsToProcess.length; i++) {
     const meta = rowMetaCache[i];
     const prevRow = previousRows?.[i];
@@ -2081,8 +2087,17 @@ export async function executeAnalystPipeline(
 
     const allKelurahanCount = meta.matchedKodePosEntries.length;
 
-    // Hasilkan 1 baris per kelurahan/kecamatan
-    meta.matchedKodePosEntries.forEach((kpEntry, seq) => {
+    // Hasilkan 1 baris per kelurahan/kecamatan. Dulu `forEach` dan satu-satunya jeda
+    // ada di loop kota (`i % 50`) — satu kota bisa membawa ribuan kelurahan, jadi
+    // thread utama tersumbat belasan detik dan Chrome menyebut tab tidak merespons.
+    // Sekarang loop-nya `for` dan yielded dihitung PER BARIS.
+    for (let seq = 0; seq < meta.matchedKodePosEntries.length; seq++) {
+      const kpEntry = meta.matchedKodePosEntries[seq];
+      barisSejakYield++;
+      if (barisSejakYield >= YIELD_PER_BARIS) {
+        barisSejakYield = 0;
+        await tick();
+      }
       // Baris hasil jaring pengaman membawa metode aslinya sendiri (status tetap konsisten per kota)
       const snNote = meta.safetyNetByCity?.get(cityMatchKey(kpEntry.kabupatenKota || ''));
       const kelurahan = kpEntry.kelurahan || meta.finalKotaPten;
@@ -2151,7 +2166,7 @@ export async function executeAnalystPipeline(
         if (skippedFinalSampleList.length < 20) {
           skippedFinalSampleList.push({ kelurahan, kodePos: meta.finalKodePosPten, kota: meta.finalKotaPten });
         }
-        return;
+        continue;
       }
 
       results.push({
@@ -2223,7 +2238,7 @@ export async function executeAnalystPipeline(
           !hanyaBuktiFonetik(meta.citySinyalBit) &&
           !meta.usedFallback,
       });
-    });
+    }
   }
 
   // Progres tahap akhir — dilaporkan untuk fase yang memang sedang dijalankan.
