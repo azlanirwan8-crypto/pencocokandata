@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef, useEffect, useDeferredValue } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useDeferredValue } from 'react';
 import {
   CheckCircle2,
   RotateCcw,
@@ -32,7 +32,7 @@ import type { PTENRecord } from '../PTENData/PTENManager';
 import type { MasterRow, TargetRow, WilayahSetting } from '../../types';
 import type { RoleMappingRecord } from '../RoleMapping/RoleMappingManager';
 import { buildMasterProximityIndex, findClosestMasterRecommendation, type CandidateOption, type RecommendationResult } from '../../utils/recommender';
-import { findTopRoleMatchesByLocation } from '../../utils/roleRecommender';
+import { findTopRoleMatchesByLocation, type RoleMatchScored } from '../../utils/roleRecommender';
 import { getUnitCategory, getWondrRecommendation } from '../RoleMapping/RoleMappingManager';
 import { extractWilayahFromBranchCode } from '../../utils/normalizer';
 import { CandidateDetailModal } from './CandidateDetailModal';
@@ -45,17 +45,6 @@ import { formatWilayahCode, applyStandardSheetStyle } from '../../utils/excel';
 import { exportAnalystExecutivePdf } from '../../utils/pdfExport';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
 import { useNotification } from '../Notification/NotificationContext';
-
-// Posisi antrean kerja satu baris: baris HANYA tampil di tab fase yang belum disetujui.
-// Fase 1 = menunggu setujui PTEN; Fase 2 = menunggu wilayah/cabang; Fase 3 = menunggu role;
-// 4 = seluruh fase selesai → tab Data Final. Baris "TIDAK_ANALISA" menetap di Fase 1 (manual).
-function stageOf(r: AnalystRow): 1 | 2 | 3 | 4 {
-  if (r.kategori === 'TIDAK_ANALISA') return 1;
-  if (!r.fase1Approved) return 1;
-  if (!r.fase2Approved) return 2;
-  if (!r.fase3Approved) return 3;
-  return 4;
-}
 
 /** Satu sel "validasi fase N" di tab Data Final: badge hasil + alasannya satu baris. */
 const SelValidasi: React.FC<{
