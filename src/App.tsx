@@ -326,6 +326,18 @@ export const App: React.FC = () => {
             'info'
           );
         } else if (lokal.length > 0 && cloud.rows.length === 0) {
+          // Cloud kosong padahal browser punya hasil. Dulu selalu ditanamkan lagi —
+          // akibatnya "Reset Data" di satu browser bangkit kembali dari salinan lama di
+          // browser/tab lain. Reset sekarang dicatat, dan catatan itu menang.
+          const diresetPada = await getItem<number>('final_data_direset');
+          if (diresetPada) {
+            setFinalRows([]);
+            void setItem('analyst_final_data', []);
+            notify(
+              `${lokal.length.toLocaleString('id-ID')} baris Data Final lama dibuang — final data sudah direset dari menu Final Data.`,
+              'info'
+            );
+          } else {
           // Cloud kosong padahal browser punya hasil: tanamkan sekali sebagai salinan kedua.
           const ok = await saveFinalToNeon(lokal, 'replace');
           notify(
@@ -334,6 +346,7 @@ export const App: React.FC = () => {
               : 'Penanaman awal Data Final ke cloud gagal — hasil tetap aman di browser ini.',
             ok ? 'success' : 'warning'
           );
+          }
         }
       })().catch((err) => console.warn('Sinkron Final latar belakang dilewati:', err));
     };
@@ -802,6 +815,8 @@ export const App: React.FC = () => {
 
     setFinalRows(merged);
     setItem('analyst_final_data', merged).catch(() => {});
+    // Ada hasil baru yang disetujui: penanda reset tidak berlaku lagi.
+    void deleteKey('final_data_direset');
     void pushFinalSemuaKeNeon(merged);
     setAnalystRows(remaining);
     setItem('analyst_results_data', remaining).catch(() => {});
@@ -884,6 +899,9 @@ export const App: React.FC = () => {
     if (n === 0) return;
     setFinalRows([]);
     setItem('analyst_final_data', []).catch(() => {});
+    // Penanda bahwa pengosongan ini disengaja — jalur muat awal tidak boleh menanamkan
+    // lagi salinan lama dari browser/tab lain.
+    setItem('final_data_direset', Date.now()).catch(() => {});
     if (isNeonConnected) void clearFinalInNeon().then((ok) => laporkanSinkronFinal(ok, 'dikosongkan (reset)'));
     notify(`Final Data direset — ${n.toLocaleString('id-ID')} baris dihapus permanen. Data Analyst tidak ikut berubah.`, 'info');
   };
