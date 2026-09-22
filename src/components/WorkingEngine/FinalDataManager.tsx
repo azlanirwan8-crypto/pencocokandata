@@ -20,8 +20,9 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import type { AnalystRow } from '../../utils/analystPipeline';
-import { formatWilayahCode, applyStandardSheetStyle } from '../../utils/excel';
-import { WARNA_TH, KOLOM_FINAL, CONTOH_KOLOM_FINAL, barisKeExcelFinal } from '../../utils/finalColumns';
+import { formatWilayahCode, applyStandardSheetStyle, tulisLembarExcel } from '../../utils/excel';
+import { WARNA_TH, KOLOM_FINAL, CONTOH_KOLOM_FINAL, JUDUL_KOLOM_FINAL, barisKeExcelFinal } from '../../utils/finalColumns';
+import { tanggalBerkas } from '../../utils/normalizer';
 import { ConfirmDialog } from './ConfirmDialog';
 import { DialogPanel } from '../BaseModal';
 import { useTampilanTersimpan } from '../../utils/useTampilanTersimpan';
@@ -296,15 +297,19 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
   // Ekspor mengikuti FILTER wilayah yang aktif, tapi TIDAK mengikuti sort layar:
   // urutan baris tetap seperti saat data masuk (permintaan pemilik produk).
   const handleExport = () => {
-    const kolomJudul = KOLOM_FINAL.map((k) => k.judul);
     const data = tersaring.map((r, i) => barisKeExcelFinal(r, i + 1));
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(data, { header: kolomJudul });
-    applyStandardSheetStyle(ws, kolomJudul, data.length);
-    XLSX.utils.book_append_sheet(wb, ws, 'FINAL_DATA');
+    if (data.length === 0) {
+      notify('Tidak ada baris Data Final pada saringan ini — tidak ada yang bisa diunduh.', 'warning');
+      return;
+    }
     const lingkup = wilayahFilter === 'ALL' ? 'Semua_Wilayah' : formatWilayahCode(wilayahFilter).replace(/\s+/g, '_');
-    XLSX.writeFile(wb, `Final_Data_${lingkup}_${new Date().toISOString().slice(0, 10)}.xlsx`);
-    notify(`Mengekspor ${data.length.toLocaleString('id-ID')} baris (${lingkup.replace('_', ' ')}) sesuai urutan data masuk.`, 'info');
+    tulisLembarExcel({
+      namaLembar: 'FINAL_DATA',
+      namaBerkas: `Final_Data_${lingkup}_${tanggalBerkas()}.xlsx`,
+      kolom: JUDUL_KOLOM_FINAL,
+      baris: data,
+    });
+    notify(`${data.length.toLocaleString('id-ID')} baris Data Final diunduh (${lingkup.replace('_', ' ')}), sesuai urutan data masuk.`, 'success');
   };
 
   const adaPilihan = idTerpilihAktif.length > 0;

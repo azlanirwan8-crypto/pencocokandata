@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Key, X } from 'lucide-react';
 import { getStoredGoogleApiKey, setStoredGoogleApiKey } from '../utils/onlineGeoCoder';
 import { DialogPanel } from './BaseModal';
+import { useNotification } from './Notification/NotificationContext';
 
 interface GoogleApiKeyModalProps {
   onClose: () => void;
@@ -11,10 +12,17 @@ interface GoogleApiKeyModalProps {
 /** Kunci Google Geocoding dipakai bersama oleh layar peta dan menu Data KodePos. Render hanya saat terbuka. */
 export const GoogleApiKeyModal: React.FC<GoogleApiKeyModalProps> = ({ onClose, onSaved }) => {
   const [draft, setDraft] = useState(() => getStoredGoogleApiKey());
+  const { add: notify } = useNotification();
 
   const apply = (key: string) => {
     setStoredGoogleApiKey(key);
     onSaved?.(key);
+    notify(
+      key
+        ? 'Kunci Google tersimpan di browser ini — validasi titik & lapisan peta memakai Google.'
+        : 'Kunci Google dikosongkan — titik dicari lewat ESRI/OpenStreetMap dan peta memakai OpenStreetMap.',
+      key ? 'success' : 'warning'
+    );
     onClose();
   };
 

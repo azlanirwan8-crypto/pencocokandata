@@ -676,3 +676,14 @@ export function findSharedStreetOrLandmark(
   return { isMatch: false };
 }
 
+
+/**
+ * Tanggal untuk nama berkas unduhan (yyyy-mm-dd) memakai waktu LOBAL browser.
+ * new Date().toISOString() dihitung dalam UTC, jadi berkas yang diunduh setelah
+ * pukul 17.00 WIB justru bernama tanggal besok.
+ */
+export function tanggalBerkas(d: Date = new Date()): string {
+  const bulan = String(d.getMonth() + 1).padStart(2, '0');
+  const hari = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${bulan}-${hari}`;
+}

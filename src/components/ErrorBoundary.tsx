@@ -9,6 +9,8 @@ interface State {
   hasError: boolean;
   error: Error | null;
   errorInfo: ErrorInfo | null;
+  /** Aksi menghapus cache lokal bersifat merusak, jadi tombolnya harus ditekan dua kali. */
+  konfirmasiReset: boolean;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -16,10 +18,11 @@ export class ErrorBoundary extends Component<Props, State> {
     hasError: false,
     error: null,
     errorInfo: null,
+    konfirmasiReset: false,
   };
 
   public static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error, errorInfo: null };
+    return { hasError: true, error, errorInfo: null, konfirmasiReset: false };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
@@ -29,6 +32,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public handleReload = () => {
     window.location.reload();
+  };
+
+  public mintaKonfirmasiReset = () => {
+    this.setState({ konfirmasiReset: true });
+    window.setTimeout(() => this.setState({ konfirmasiReset: false }), 8000);
   };
 
   public handleClearStorageAndReload = () => {
@@ -137,21 +145,28 @@ export class ErrorBoundary extends Component<Props, State> {
 
               <button
                 type="button"
-                onClick={this.handleClearStorageAndReload}
+                onClick={this.state.konfirmasiReset ? this.handleClearStorageAndReload : this.mintaKonfirmasiReset}
                 style={{
                   padding: '0.5rem 1.1rem',
                   borderRadius: '4px',
-                  background: '#ffffff',
-                  color: '#495057',
-                  border: '1px solid #ced4da',
+                  background: this.state.konfirmasiReset ? '#f06548' : '#ffffff',
+                  color: this.state.konfirmasiReset ? '#ffffff' : '#495057',
+                  border: `1px solid ${this.state.konfirmasiReset ? '#f06548' : '#ced4da'}`,
                   fontSize: '0.82rem',
                   fontWeight: 500,
                   cursor: 'pointer',
                 }}
               >
-                Reset Cache & Muat Ulang
+                {this.state.konfirmasiReset ? 'Ya, Hapus Cache Lokal' : 'Reset Cache & Muat Ulang'}
               </button>
             </div>
+
+            {this.state.konfirmasiReset && (
+              <p style={{ fontSize: '0.74rem', color: '#f06548', marginTop: '0.75rem', marginBottom: 0 }}>
+                Peringatan: seluruh data yang hanya tersimpan di browser ini (termasuk perubahan yang
+                belum terkirim ke cloud) akan terhapus. Tekan sekali lagi untuk melanjutkan.
+              </p>
+            )}
           </div>
         </div>
       );

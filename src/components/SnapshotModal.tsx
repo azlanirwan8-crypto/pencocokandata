@@ -12,6 +12,7 @@ import {
 import type { MasterRow, TargetRow } from '../types';
 import { DialogPanel } from './BaseModal';
 import { ConfirmDialog } from './WorkingEngine/ConfirmDialog';
+import { tanggalBerkas } from '../utils/normalizer';
 
 export interface WorkspaceSnapshot {
   app: 'tools-data-matcher';
@@ -98,7 +99,7 @@ export const SnapshotModal: React.FC<SnapshotModalProps> = ({
         },
       };
 
-      const datePart = now.toISOString().slice(0, 10);
+      const datePart = tanggalBerkas(now);
       const timePart = now.toTimeString().slice(0, 5).replace(':', '');
       const filename = `Snapshot_Data_Matcher_${datePart}_${timePart}.json`;
 

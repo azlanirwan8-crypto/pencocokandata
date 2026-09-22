@@ -20,6 +20,8 @@ import {
   ChevronsRight,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { tulisLembarExcel } from '../../utils/excel';
+import { tanggalBerkas } from '../../utils/normalizer';
 import type { TargetRow, MasterRow } from '../../types';
 import { getItem, setItem } from '../../utils/storage';
 import { loadPtenFromNeon, savePtenToNeon } from '../../utils/neonSync';
@@ -231,8 +233,8 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
+        const bytes = new Uint8Array(evt.target?.result as ArrayBuffer);
+        const wb = XLSX.read(bytes, { type: 'array' });
         const wsName = wb.SheetNames[0];
         const ws = wb.Sheets[wsName];
         const rawJson: any[] = XLSX.utils.sheet_to_json(ws);
@@ -330,7 +332,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
         notify('Gagal membaca format file Excel: ' + err.message, 'error');
       }
     };
-    reader.readAsBinaryString(file);
+    reader.readAsArrayBuffer(file);
   };
 
   // Download Template Excel PTEN matching user's exact columns
@@ -364,18 +366,32 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
 
   // Export PTEN Master to Excel matching exact column format
   const handleExport = () => {
-    const exportData = filteredPten.length > 0 ? filteredPten : ptenList;
-    const ws = XLSX.utils.json_to_sheet(
-      exportData.map((p, i) => ({
-        'No': i + 1,
-        'KODEPOS (yang digunakan untuk pendaftaran merchant)': p.kodePosPten,
-        'KOTA/KABUPATEN': p.kotaPten,
-        'KOTA/KABUPATEN MAX 15 DIGIT (yang digunakan untuk pendaftaran merchant)': p.kotaPtenMax15 || p.kotaPten,
-      }))
-    );
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Master_PTEN');
-    XLSX.writeFile(wb, `Data_Master_PTEN_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    // Dulu: kalau hasil saring kosong, diam-diam mengunduh SELURUH pustaka.
+    const exportData = filteredPten;
+    const kolom = [
+      'No',
+      'KODEPOS (yang digunakan untuk pendaftaran merchant)',
+      'KOTA/KABUPATEN',
+      'KOTA/KABUPATEN MAX 15 DIGIT (yang digunakan untuk pendaftaran merchant)',
+    ];
+    const baris = exportData.map((p, i) => ({
+      'No': i + 1,
+      'KODEPOS (yang digunakan untuk pendaftaran merchant)': p.kodePosPten,
+      'KOTA/KABUPATEN': p.kotaPten,
+      'KOTA/KABUPATEN MAX 15 DIGIT (yang digunakan untuk pendaftaran merchant)': p.kotaPtenMax15 || p.kotaPten,
+    }));
+
+    if (baris.length === 0) {
+      notify('Tidak ada baris PTEN yang cocok dengan filter — tidak ada yang bisa diunduh.', 'warning');
+      return;
+    }
+    tulisLembarExcel({
+      namaLembar: 'Master_PTEN',
+      namaBerkas: `Data_Master_PTEN_${tanggalBerkas()}.xlsx`,
+      kolom,
+      baris,
+    });
+    notify(`${baris.length.toLocaleString('id-ID')} baris PTEN diunduh${exportData.length !== ptenList.length ? ' (sesuai saringan di layar)' : ''}.`, 'success');
   };
 
   // Open Create Modal

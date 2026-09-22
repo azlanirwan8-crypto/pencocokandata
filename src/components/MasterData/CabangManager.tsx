@@ -23,9 +23,9 @@ import {
   ChevronsLeft,
   ChevronsRight,
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import type { MasterRow, MasterHealth, WilayahSetting } from '../../types';
-import { parseExcelFile, validateMasterHeaders, downloadMasterTemplate } from '../../utils/excel';
+import { parseExcelFile, validateMasterHeaders, downloadMasterTemplate, tulisLembarExcel } from '../../utils/excel';
+import { tanggalBerkas } from '../../utils/normalizer';
 import { MasterHealthCard } from './MasterHealthCard';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
 import { DialogPanel } from '../BaseModal';
@@ -238,9 +238,15 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
     }
   };
 
-  // Export Excel handler
+  // Export Excel handler — yang diunduh adalah daftar yang sedang tampil (ikut pencarian),
+  // bukan seluruh master, supaya angka di berkas sama dengan angka di layar.
   const handleExportExcel = () => {
-    const exportData = masterRows.map((r) => ({
+    const kolom = [
+      'Wilayah', 'Sandi Cabang', 'Sandi', 'Cabang', 'Nama Outlet', 'Branch Code', 'Kode Cabang',
+      'Status Outlet', 'KODE POS', 'Kelurahan', 'Kecamatan', 'Dati II', 'Kode Dati II', 'Provinsi',
+      'ALAMAT', 'Telp',
+    ];
+    const exportData = filteredRows.map((r) => ({
       Wilayah: r.Wilayah || '',
       'Sandi Cabang': r['Sandi Cabang'] || (r.Sandi && r.Cabang ? `${r.Sandi} - ${r.Cabang}` : r.Cabang || r.Sandi || ''),
       Sandi: r.Sandi || '',
@@ -259,10 +265,18 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
       Telp: r.Telp || '',
     }));
 
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Data_Master_Cabang');
-    XLSX.writeFile(wb, `Data_Master_Cabang_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    if (exportData.length === 0) {
+      notify('Tidak ada baris yang cocok dengan pencarian — tidak ada yang bisa diunduh.', 'warning');
+      return;
+    }
+
+    tulisLembarExcel({
+      namaLembar: 'Data_Master_Cabang',
+      namaBerkas: `Data_Master_Cabang_${tanggalBerkas()}.xlsx`,
+      kolom,
+      baris: exportData,
+    });
+    notify(`${exportData.length.toLocaleString('id-ID')} baris master cabang diunduh${searchTerm ? ` (hasil cari "${searchTerm}")` : ''}.`, 'success');
   };
 
   // Open Create Modal

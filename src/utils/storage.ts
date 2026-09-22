@@ -27,18 +27,39 @@ function getDB(): Promise<IDBDatabase> {
   return cachedDBPromise;
 }
 
-export async function setItem<T>(key: string, value: T): Promise<void> {
+export async function setItem<T>(key: string, value: T): Promise<boolean> {
+  const db = await getDB().catch((err) => {
+    console.warn('Gagal membuka IndexedDB:', err);
+    return null;
+  });
+  if (!db) {
+    laporGagalSimpan(key);
+    return false;
+  }
   try {
-    const db = await getDB();
-    return new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
       const req = store.put(value, key);
       req.onsuccess = () => resolve();
       req.onerror = () => reject(req.error);
     });
+    return true;
   } catch (err) {
-    console.warn('Gagal menyimpan ke IndexedDB:', err);
+    console.warn('Gagal menyimpan ke IndexedDB:', key, err);
+    laporGagalSimpan(key);
+    return false;
+  }
+}
+
+// Kegagalan tulis browser = risiko kehilangan kerjaan, jadi tidak boleh hilang tanpa suara.
+// Panggilan api/ dan satu-off membuang rejection-nya (`.catch(() => {})`), jadi laporan
+// dilakukan di sini dan App.tsx yang menerjemahkannya jadi satu notifikasi.
+export const PERISTIWA_GAGAL_LOKAL = 'pencocokan:gagal-simpan-lokal';
+
+function laporGagalSimpan(key: string) {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(PERISTIWA_GAGAL_LOKAL, { detail: { key } }));
   }
 }
 
@@ -79,13 +100,14 @@ export function cancelPendingWrite(key: string): void {
   pendingWrites.delete(key);
 }
 
-export async function flushPendingWrites(): Promise<void> {
+export async function flushPendingWrites(): Promise<{ jumlah: number; gagal: number }> {
   const jobs = Array.from(pendingWrites.entries());
   jobs.forEach(([key, job]) => {
     clearTimeout(job.timer);
     pendingWrites.delete(key);
   });
-  await Promise.all(jobs.map(([key, job]) => setItem(key, job.value)));
+  const hasil = await Promise.all(jobs.map(([key, job]) => setItem(key, job.value)));
+  return { jumlah: jobs.length, gagal: hasil.filter((ok) => !ok).length };
 }
 
 export async function deleteKey(key: string): Promise<void> {

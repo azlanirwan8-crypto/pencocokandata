@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Menu, Archive, Database, Save, KeyRound } from 'lucide-react';
 import { flushPendingWrites } from '../utils/storage';
 import { getStoredGoogleApiKey } from '../utils/onlineGeoCoder';
+import { useNotification } from './Notification/NotificationContext';
 
 interface TopbarProps {
   isSidebarCollapsed: boolean;
@@ -10,7 +11,6 @@ interface TopbarProps {
   lastSyncedAt?: string | null;
   onOpenSnapshotModal?: () => void;
   onOpenNeonModal?: () => void;
-  onOpenSupabaseModal?: () => void;
 }
 
 export const Topbar: React.FC<TopbarProps> = ({
@@ -22,12 +22,19 @@ export const Topbar: React.FC<TopbarProps> = ({
   onOpenNeonModal,
 }) => {
   const [savedTick, setSavedTick] = useState(false);
+  const { add: notify } = useNotification();
   // Kunci Google menentukan sumber titik koordinat & lapisan peta — statusnya sering
   // tidak terlihat padahal mengubah hasil, jadi tampil di baris atas.
   const kunciGoogle = Boolean(getStoredGoogleApiKey());
 
   const handleSaveNow = async () => {
-    await flushPendingWrites();
+    const { jumlah, gagal } = await flushPendingWrites();
+    if (gagal > 0) {
+      notify(`${gagal} dari ${jumlah} perubahan gagal ditulis di browser — tutup tab sebelum mencoba lagi berisiko kehilangan data.`, 'error');
+      return;
+    }
+    if (jumlah === 0) notify('Tidak ada perubahan tertunda — semua sudah tersimpan di browser.', 'info');
+    else notify(`${jumlah} perubahan tersimpan di browser.`, 'success');
     setSavedTick(true);
     setTimeout(() => setSavedTick(false), 2000);
   };

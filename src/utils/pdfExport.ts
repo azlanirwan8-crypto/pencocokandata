@@ -2,7 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { TargetRow } from '../types';
 import type { AnalystRow } from './analystPipeline';
-import { formatWilayahName } from './normalizer';
+import { formatWilayahName, tanggalBerkas } from './normalizer';
 
 interface ExportPdfOptions {
   wilayahLabel: string;
@@ -36,11 +36,11 @@ export function exportMatchedDataToPdf({
     });
 
     // 1. TOP CORPORATE HEADER BANNER
-    doc.setFillColor(33, 37, 41); // Slate 800 (#212529)
+    doc.setFillColor(33, 37, 41); // Velzon text-heading #212529
     doc.rect(0, 0, pageWidth, 24, 'F');
 
     // Accent line
-    doc.setFillColor(41, 156, 219); // Sky 500 (#299cdb)
+    doc.setFillColor(41, 156, 219); // Velzon cyan #299cdb
     doc.rect(0, 24, pageWidth, 1.5, 'F');
 
     // Title
@@ -52,7 +52,7 @@ export function exportMatchedDataToPdf({
     // Subtitle
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8.5);
-    doc.setTextColor(206, 212, 218); // Slate 300
+    doc.setTextColor(206, 212, 218); // Velzon #ced4da
     doc.text('Sistem Rekonsiliasi & Validasi Master Cabang Operasional', 14, 18);
 
     // Date & Wilayah on the right
@@ -75,10 +75,10 @@ export function exportMatchedDataToPdf({
     const cardW = (pageWidth - 28 - cardGap * 3) / 4;
 
     const cards = [
-      { label: 'WILAYAH LINGKUP', val: cleanWilayahName, bg: [248,249,250], border: [233,235,236], textCol: [33,37,41] },
-      { label: 'DATA BERSIH COCOK', val: `${rows.length.toLocaleString('id-ID')} Data`, bg: [232,247,245], border: [183,235,228], textCol: [10,179,156] },
-      { label: 'TOTAL DATA TARGET', val: `${totalTargetRows.toLocaleString('id-ID')} Baris`, bg: [243,246,249], border: [206,212,218], textCol: [73,80,87] },
-      { label: 'TINGKAT KEBERHASILAN', val: `${matchRate}% Selesai`, bg: [236,234,249], border: [218,213,243], textCol: [101,89,204] },
+      { label: 'WILAYAH LINGKUP', val: cleanWilayahName, bg: [248, 249, 250], border: [233, 235, 236], textCol: [33, 37, 41] },
+      { label: 'DATA BERSIH COCOK', val: `${rows.length.toLocaleString('id-ID')} Data`, bg: [232, 247, 245], border: [183, 235, 228], textCol: [10, 179, 156] },
+      { label: 'TOTAL DATA TARGET', val: `${totalTargetRows.toLocaleString('id-ID')} Baris`, bg: [243, 246, 249], border: [206, 212, 218], textCol: [73, 80, 87] },
+      { label: 'TINGKAT KEBERHASILAN', val: `${matchRate}% Selesai`, bg: [236, 234, 249], border: [218, 213, 243], textCol: [101, 89, 204] },
     ];
 
     cards.forEach((c, idx) => {
@@ -89,7 +89,7 @@ export function exportMatchedDataToPdf({
 
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(6.5);
-      doc.setTextColor(135, 138, 153); // Slate 500
+      doc.setTextColor(135, 138, 153); // Velzon muted #878a99
       doc.text(c.label, cx + 4, cardY + 5);
 
       doc.setFont('helvetica', 'bold');
@@ -132,19 +132,19 @@ export function exportMatchedDataToPdf({
         fontSize: 7.2,
         font: 'helvetica',
         cellPadding: 1.8,
-        lineColor: [233,235,236], // Slate 200
+        lineColor: [233, 235, 236], // Velzon border #e9ebec
         lineWidth: 0.1,
-        textColor: [33,37,41],
+        textColor: [33, 37, 41],
       },
       headStyles: {
-        fillColor: [33,37,41], // Slate 800
+        fillColor: [33, 37, 41], // Velzon text-heading #212529
         textColor: [255, 255, 255],
         fontStyle: 'bold',
         fontSize: 7.5,
         halign: 'left',
       },
       alternateRowStyles: {
-        fillColor: [248,249,250], // Slate 50
+        fillColor: [248, 249, 250], // Velzon subtle #f8f9fa
       },
       columnStyles: {
         no: { cellWidth: 10, halign: 'center' },
@@ -162,7 +162,7 @@ export function exportMatchedDataToPdf({
         // FOOTER ON EACH PAGE
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(7);
-        doc.setTextColor(173, 181, 189); // Slate 400
+        doc.setTextColor(173, 181, 189); // Velzon gray #adb5bd
         doc.text(
           'Dokumen Hasil Pencocokan Data Bersih & Terverifikasi • Diproduksi oleh Data Matcher System',
           14,
@@ -250,11 +250,11 @@ export function exportAnalystExecutivePdf({
     const cardW = (pageWidth - 28 - cardGap * 4) / 5;
 
     const cards = [
-      { label: 'TOTAL DATA', val: `${stats.total.toLocaleString('id-ID')}`, bg: [243,246,249], border: [206,212,218], textCol: [73,80,87] },
-      { label: 'AKURASI ENGINE', val: `${stats.accuracyRate}%`, bg: [232,247,245], border: [183,235,228], textCol: [10,179,156] },
-      { label: 'FASE 1: PTEN & POS', val: '100% Terpetakan', bg: [235,242,252], border: [170,205,248], textCol: [53,119,241] },
-      { label: 'FASE 2: WILAYAH', val: `${wilayahCount} Kanwil`, bg: [236,234,249], border: [218,213,243], textCol: [101,89,204] },
-      { label: 'FASE 3: 3 ROLE', val: `${stats.role3Complete} Lengkap`, bg: [232,247,245], border: [183,235,228], textCol: [10, 179, 156] },
+      { label: 'TOTAL DATA', val: `${stats.total.toLocaleString('id-ID')}`, bg: [243, 246, 249], border: [206, 212, 218], textCol: [73, 80, 87] },
+      { label: 'AKURASI ENGINE', val: `${stats.accuracyRate}%`, bg: [232, 247, 245], border: [183, 235, 228], textCol: [10, 179, 156] },
+      { label: 'FASE 1: PTEN & POS', val: '100% Terpetakan', bg: [235, 242, 252], border: [170, 205, 248], textCol: [53, 119, 241] },
+      { label: 'FASE 2: WILAYAH', val: `${wilayahCount} Kanwil`, bg: [236, 234, 249], border: [218, 213, 243], textCol: [101, 89, 204] },
+      { label: 'FASE 3: 3 ROLE', val: `${stats.role3Complete} Lengkap`, bg: [232, 247, 245], border: [183, 235, 228], textCol: [10, 179, 156] },
     ];
 
     cards.forEach((c, idx) => {
@@ -314,19 +314,19 @@ export function exportAnalystExecutivePdf({
         fontSize: 7,
         font: 'helvetica',
         cellPadding: 1.5,
-        lineColor: [233,235,236],
+        lineColor: [233, 235, 236],
         lineWidth: 0.1,
-        textColor: [33,37,41],
+        textColor: [33, 37, 41],
       },
       headStyles: {
-        fillColor: [33,37,41],
+        fillColor: [33, 37, 41],
         textColor: [255, 255, 255],
         fontStyle: 'bold',
         fontSize: 7.2,
         halign: 'left',
       },
       alternateRowStyles: {
-        fillColor: [248,249,250],
+        fillColor: [248, 249, 250],
       },
       columnStyles: {
         no: { cellWidth: 10, halign: 'center' },
@@ -357,7 +357,7 @@ export function exportAnalystExecutivePdf({
       },
     });
 
-    const filename = `Executive_Summary_Analista_${new Date().toISOString().slice(0, 10)}.pdf`;
+    const filename = `Executive_Summary_Analista_${tanggalBerkas()}.pdf`;
     doc.save(filename);
 
     return { success: true, filename };
@@ -421,9 +421,9 @@ export function exportFinalRowsToPdf({
     const cardGap = 4;
     const cardW = (pageWidth - 28 - cardGap * 2) / 3;
     const cards = [
-      { label: 'WILAYAH LINGKUP', val: cleanWilayahName, textCol: [33,37,41] },
-      { label: 'BARIS TERCETAK', val: `${rows.length.toLocaleString('id-ID')} Baris`, textCol: [10,179,156] },
-      { label: 'TOTAL BARIS WILAYAH', val: `${totalRows.toLocaleString('id-ID')} Baris · ${share}%`, textCol: [73,80,87] },
+      { label: 'WILAYAH LINGKUP', val: cleanWilayahName, textCol: [33, 37, 41] },
+      { label: 'BARIS TERCETAK', val: `${rows.length.toLocaleString('id-ID')} Baris`, textCol: [10, 179, 156] },
+      { label: 'TOTAL BARIS WILAYAH', val: `${totalRows.toLocaleString('id-ID')} Baris · ${share}%`, textCol: [73, 80, 87] },
     ];
     cards.forEach((c, idx) => {
       const cx = 14 + idx * (cardW + cardGap);
@@ -463,9 +463,9 @@ export function exportFinalRowsToPdf({
       ]],
       body: tableRows,
       theme: 'grid',
-      styles: { fontSize: 6.4, font: 'helvetica', cellPadding: 1.4, lineColor: [233,235,236], lineWidth: 0.1, textColor: [33,37,41] },
-      headStyles: { fillColor: [64,81,137], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 6.6 },
-      alternateRowStyles: { fillColor: [248,249,250] },
+      styles: { fontSize: 6.4, font: 'helvetica', cellPadding: 1.4, lineColor: [233, 235, 236], lineWidth: 0.1, textColor: [33, 37, 41] },
+      headStyles: { fillColor: [64, 81, 137], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 6.6 },
+      alternateRowStyles: { fillColor: [248, 249, 250] },
       columnStyles: {
         0: { cellWidth: 7, halign: 'center' },
         1: { cellWidth: 13, halign: 'center' },

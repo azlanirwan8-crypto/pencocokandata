@@ -40,8 +40,9 @@ import { AnalystRowDetailModal } from './AnalystRowDetailModal';
 import { PtenCityPicker } from './PtenCityPicker';
 import { CityOverrideModal } from './CityOverrideModal';
 import { ConfirmDialog } from './ConfirmDialog';
-import { formatWilayahName, cleanKelurahan, cleanKecamatan } from '../../utils/normalizer';
+import { formatWilayahName, cleanKelurahan, cleanKecamatan, tanggalBerkas } from '../../utils/normalizer';
 import { formatWilayahCode, applyStandardSheetStyle } from '../../utils/excel';
+import { barisKeExcelAnalyst, JUDUL_KOLOM_ANALYST } from '../../utils/finalColumns';
 import { exportAnalystExecutivePdf } from '../../utils/pdfExport';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
 import { useNotification } from '../Notification/NotificationContext';
@@ -842,20 +843,25 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     tableScrollRef.current?.scrollTo({ top: 0 });
   }, [page, pageSize, selectedWilayah, statusFilter, viewTab, innerTab, sortKolom, sortDir, deferredSearch]);
 
-  // Export Multi-Sheet per Wilayah (W01 - W17)
+  // Export Multi-Sheet per Wilayah (W01 - W17). Kolom diambil dari JUDUL_KOLOM_ANALYST
+  // supaya lembar per wilayah dan lembar SEMUA_DATA tidak bisa punya kolom berbeda.
   const handleExportExcel = () => {
     try {
       const wb = XLSX.utils.book_new();
+      // Baris "TIDAK_ANALISA" bukan keluaran engine, jadi tidak ikut lembar mana pun.
+      const keluaran = rows.filter((r) => r.kategori !== 'TIDAK_ANALISA');
+      if (keluaran.length === 0) {
+        notify('Belum ada hasil analisa untuk diunduh — semua baris masih berstatus TIDAK ANALISA.', 'warning');
+        return;
+      }
 
-      // 1. Group rows by Wilayah (hanya hasil analisa; baris "TIDAK_ANALISA" bukan keluaran engine)
       const wilayahMap = new Map<string, AnalystRow[]>();
-      rows.filter((r) => r.kategori !== 'TIDAK_ANALISA').forEach((r) => {
+      keluaran.forEach((r) => {
         const wKey = formatWilayahCode(r.wilayah || 'W01');
         if (!wilayahMap.has(wKey)) wilayahMap.set(wKey, []);
         wilayahMap.get(wKey)!.push(r);
       });
 
-      // Sort sheet keys W01, W02, ...
       const sortedKeys = Array.from(wilayahMap.keys()).sort((a, b) => {
         const numA = parseInt(a.replace(/\D/g, ''), 10) || 0;
         const numB = parseInt(b.replace(/\D/g, ''), 10) || 0;
@@ -864,67 +870,24 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
 
       sortedKeys.forEach((wKey) => {
         const groupRows = wilayahMap.get(wKey)!;
-        const exportData = groupRows.map((r, idx) => ({
-          'No': idx + 1,
-          'Wilayah': r.wilayah,
-          'Sandi Cabang': r.sandiCabang,
-          'Branch Code': r.branchCode,
-          'Kode Cabang': r.kodeCabang,
-          'Nama Outlet': r.namaOutlet,
-          'Status Outlet': r.statusOutlet,
-          'ALAMAT': r.alamat,
-          'KODE POS': r.kodePosKelurahan || r.kodePosPten,
-          'Kelurahan': r.kelurahan,
-          'Kecamatan': r.kecamatan,
-          'Dati II': r.kotaPtenMax15 || r.kotaPten,
-          'Provinsi': r.provinsi,
-          'KOTA PTEN': r.kotaPtenMax15 || r.kotaPten,
-          'KODE POS PTEN': r.kodePosPten,
-          // `CEK KODE POS + PTEN` membandingkan tingkat KOTA, bukan kode pos kelurahan di atas
-          'CEK KODE POS + PTEN': r.statusPten,
-          'VERIFIKASI PENEMPATAN': r.placementStatus === 'VERIFIED' ? 'TERVERIFIKASI' : r.placementStatus === 'REVIEW' ? 'PERLU REVIEW' : 'FALLBACK',
-          'METODE PENEMPATAN': r.placementMethod,
-          'ORGANISASI TUJUAN': r.organisasiTujuan,
-          'Tipe Unit': r.tipeUnit,
-          'Alur Wondr': r.alurWondr,
-          'QRS_CABSAL': r.roleCabsal,
-          'QRS_CABAPV1': r.roleCabapv1,
-          'QRS_CABAPV2': r.roleCabapv2,
-          'Grand Total': r.roleGrandTotal,
-          'Status Analisa': r.isFinalApproved ? 'VERIFIED' : r.statusAnalisa,
-        }));
-
-        const ws = XLSX.utils.json_to_sheet(exportData);
-        applyStandardSheetStyle(ws, Object.keys(exportData[0] || {}), exportData.length);
+        const exportData = groupRows.map((r, idx) => barisKeExcelAnalyst(r, idx + 1));
+        const ws = XLSX.utils.json_to_sheet(exportData, { header: JUDUL_KOLOM_ANALYST });
+        applyStandardSheetStyle(ws, JUDUL_KOLOM_ANALYST, exportData.length);
         XLSX.utils.book_append_sheet(wb, ws, wKey);
       });
 
-      // Sheet Summary All
-      const allExport = rows.filter((r) => r.kategori !== 'TIDAK_ANALISA').map((r, idx) => ({
-        'No': idx + 1,
-        'Wilayah': r.wilayah,
-        'Sandi Cabang': r.sandiCabang,
-        'Branch Code': r.branchCode,
-        'Kode Cabang': r.kodeCabang,
-        'Nama Outlet': r.namaOutlet,
-        'Status Outlet': r.statusOutlet,
-        'ALAMAT': r.alamat,
-        'KODE POS': r.kodePosKelurahan || r.kodePosPten,
-        'Kelurahan': r.kelurahan,
-        'Kecamatan': r.kecamatan,
-        'Dati II': r.kotaPtenMax15 || r.kotaPten,
-        'Provinsi': r.provinsi,
-        'KODE POS PTEN': r.kodePosPten,
-        'ORGANISASI TUJUAN': r.organisasiTujuan,
-        'Tipe Unit': r.tipeUnit,
-        'Alur Wondr': r.alurWondr,
-      }));
-      const wsAll = XLSX.utils.json_to_sheet(allExport);
-      applyStandardSheetStyle(wsAll, Object.keys(allExport[0] || {}), allExport.length);
+      const allExport = keluaran.map((r, idx) => barisKeExcelAnalyst(r, idx + 1));
+      const wsAll = XLSX.utils.json_to_sheet(allExport, { header: JUDUL_KOLOM_ANALYST });
+      applyStandardSheetStyle(wsAll, JUDUL_KOLOM_ANALYST, allExport.length);
       XLSX.utils.book_append_sheet(wb, wsAll, 'SEMUA_DATA');
 
-      XLSX.writeFile(wb, `Laporan_Final_Data_Analyst_${new Date().toISOString().slice(0, 10)}.xlsx`);
-      showToast(`Berhasil mengunduh ${rows.length.toLocaleString('id-ID')} baris data ke Excel Multi-Sheet!`);
+      XLSX.writeFile(wb, `Laporan_Final_Data_Analyst_${tanggalBerkas()}.xlsx`);
+      const diluar = rows.length - keluaran.length;
+      notify(
+        `${keluaran.length.toLocaleString('id-ID')} baris diunduh ke ${wilayahMap.size + 1} lembar (SEMUA_DATA + per wilayah)` +
+          `${diluar > 0 ? `, ${diluar.toLocaleString('id-ID')} baris TIDAK ANALISA tidak ikut` : ''}.`,
+        'success'
+      );
     } catch (e: any) {
       notify('Gagal mengekspor berkas Excel: ' + e.message, 'error');
     }

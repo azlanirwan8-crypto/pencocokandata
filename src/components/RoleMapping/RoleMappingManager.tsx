@@ -23,6 +23,8 @@ import {
   Filter,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { tulisLembarExcel } from '../../utils/excel';
+import { tanggalBerkas } from '../../utils/normalizer';
 import { getItem, setItem } from '../../utils/storage';
 import { getUnitCategory, getWondrRecommendation } from '../../utils/roleHelpers';
 import { loadRoleMappingFromNeon, saveRoleMappingToNeon } from '../../utils/neonSync';
@@ -467,8 +469,8 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
+        const bytes = new Uint8Array(evt.target?.result as ArrayBuffer);
+        const wb = XLSX.read(bytes, { type: 'array' });
         const wsName = wb.SheetNames[0];
         const ws = wb.Sheets[wsName];
         const rawJson: any[] = XLSX.utils.sheet_to_json(ws);
@@ -544,7 +546,7 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
         notify('Gagal membaca format file Excel: ' + err.message, 'error');
       }
     };
-    reader.readAsBinaryString(file);
+    reader.readAsArrayBuffer(file);
   };
 
   // Download Template Excel
@@ -595,19 +597,27 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
 
   // Export to Excel
   const handleExport = () => {
-    const exportData = filteredList.length > 0 ? filteredList : roleList;
-    const ws = XLSX.utils.json_to_sheet(
-      exportData.map((r) => ({
-        'ORGANISASI TUJUAN': r.organisasiTujuan,
-        'QRS_CABSAL': r.qrsCabsal === 1 ? 1 : '',
-        'QRS_CABAPV1': r.qrsCabapv1 === 1 ? 1 : '',
-        'QRS_CABAPV2': r.qrsCabapv2 === 1 ? 1 : '',
-        'Grand Total': r.grandTotal,
-      }))
-    );
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Mapping_Role');
-    XLSX.writeFile(wb, `Data_Mapping_Role_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    // Dulu: kalau hasil saring kosong, diam-diam mengunduh SELURUH mapping role.
+    const kolom = ['ORGANISASI TUJUAN', 'QRS_CABSAL', 'QRS_CABAPV1', 'QRS_CABAPV2', 'Grand Total'];
+    const baris = filteredList.map((r) => ({
+      'ORGANISASI TUJUAN': r.organisasiTujuan,
+      'QRS_CABSAL': r.qrsCabsal === 1 ? 1 : '',
+      'QRS_CABAPV1': r.qrsCabapv1 === 1 ? 1 : '',
+      'QRS_CABAPV2': r.qrsCabapv2 === 1 ? 1 : '',
+      'Grand Total': r.grandTotal,
+    }));
+
+    if (baris.length === 0) {
+      notify('Tidak ada mapping role yang cocok dengan saringan — tidak ada yang bisa diunduh.', 'warning');
+      return;
+    }
+    tulisLembarExcel({
+      namaLembar: 'Mapping_Role',
+      namaBerkas: `Data_Mapping_Role_${tanggalBerkas()}.xlsx`,
+      kolom,
+      baris,
+    });
+    notify(`${baris.length.toLocaleString('id-ID')} baris mapping role diunduh${filterUnit !== 'ALL' ? ' (sesuai saringan di layar)' : ''}.`, 'success');
   };
 
   // Open Create Modal

@@ -33,7 +33,7 @@ import { DEFAULT_PTEN_DATA } from './components/PTENData/defaultPtenData';
 import { DEFAULT_KODEPOS_DATA } from './components/KodePosData/defaultKodePosData';
 import { buildPtenIndex, validatePtenForTarget } from './utils/ptenMatcher';
 
-import { getItem, setItem, setItemDebounced, cancelPendingWrite, deleteKey } from './utils/storage';
+import { getItem, setItem, setItemDebounced, cancelPendingWrite, deleteKey, PERISTIWA_GAGAL_LOKAL } from './utils/storage';
 import {
   checkNeonStatus,
   loadMasterFromNeon,
@@ -141,6 +141,23 @@ export const App: React.FC = () => {
   const masterHealth = useMemo(() => {
     return analyzeMasterHealth(masterRows, masterIndex);
   }, [masterRows, masterIndex]);
+
+  // Tulis IndexedDB gagal itu nyata (kuota penuh / mode privat) dan mayoritas panggilan
+  // membuang rejection-nya, jadi storage.ts mengirim event dan hanya di sini notifikasinya muncul.
+  const efekGagalLokal = useRef(0);
+  useEffect(() => {
+    const handler = () => {
+      const sekarang = Date.now();
+      if (sekarang - efekGagalLokal.current < 15000) return;
+      efekGagalLokal.current = sekarang;
+      notify(
+        'Gagal menyimpan ke penyimpanan browser — perubahan terakhir bisa hilang bila tab ditutup. Buka menu Database untuk memastikan data sudah masuk cloud.',
+        'error'
+      );
+    };
+    window.addEventListener(PERISTIWA_GAGAL_LOKAL, handler);
+    return () => window.removeEventListener(PERISTIWA_GAGAL_LOKAL, handler);
+  }, [notify]);
 
   // Restore persisted data (Instant Cache-First + Parallel Cloud Revalidation)
   useEffect(() => {

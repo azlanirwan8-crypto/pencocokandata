@@ -26,6 +26,8 @@ import {
   ChevronsRight,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { tulisLembarExcel } from '../../utils/excel';
+import { tanggalBerkas } from '../../utils/normalizer';
 import type { WilayahSetting } from '../../types';
 import { DEFAULT_WILAYAH_DATA, normalizeWilayahItem } from '../../utils/defaultWilayah';
 import { loadWilayahFromNeon, saveWilayahToNeon, checkNeonStatus } from '../../utils/neonSync';
@@ -335,6 +337,10 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
 
   // Export to Excel
   const handleExportExcel = () => {
+    const kolom = [
+      'Wilayah', 'Sandi Cabang', 'Branch Code', 'Kode Cabang', 'Nama Outlet', 'Status Outlet',
+      'ALAMAT', 'KODE POS', 'Kelurahan', 'Kecamatan', 'Dati II', 'Provinsi', 'Telp',
+    ];
     const exportData = settings.map((item) => ({
       Wilayah: item.wilayah,
       'Sandi Cabang': item.sandiCabang,
@@ -351,10 +357,17 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
       Telp: item.telp,
     }));
 
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Setting_Wilayah');
-    XLSX.writeFile(wb, `Data_Setting_Wilayah_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    if (exportData.length === 0) {
+      notify('Belum ada data wilayah untuk diunduh.', 'warning');
+      return;
+    }
+    tulisLembarExcel({
+      namaLembar: 'Setting_Wilayah',
+      namaBerkas: `Data_Setting_Wilayah_${tanggalBerkas()}.xlsx`,
+      kolom,
+      baris: exportData,
+    });
+    notify(`${exportData.length} baris setting wilayah diunduh.`, 'success');
   };
 
   // Import from Excel
@@ -365,8 +378,8 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
+        const bytes = new Uint8Array(evt.target?.result as ArrayBuffer);
+        const wb = XLSX.read(bytes, { type: 'array' });
         const wsName = wb.SheetNames[0];
         const ws = wb.Sheets[wsName];
         const rawJson: any[] = XLSX.utils.sheet_to_json(ws);
@@ -397,11 +410,12 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
         setSettings(imported);
         handleSaveToDatabase(imported);
         if (fileInputRef.current) fileInputRef.current.value = '';
+        notify(`Impor Wilayah: ${imported.length.toLocaleString('id-ID')} baris masuk menggantikan daftar sebelumnya.`, 'success');
       } catch (err: any) {
         notify('Gagal membaca format file Excel: ' + err.message, 'error');
       }
     };
-    reader.readAsBinaryString(file);
+    reader.readAsArrayBuffer(file);
   };
 
   // Download Template Excel Wilayah

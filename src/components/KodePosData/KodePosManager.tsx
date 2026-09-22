@@ -24,7 +24,8 @@ import {
   ExternalLink,
   Navigation,
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { tulisLembarExcel } from '../../utils/excel';
+import { tanggalBerkas } from '../../utils/normalizer';
 import {
   clearKodePosFromNeon,
   fetchKodePosPage,
@@ -531,33 +532,47 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
 
   // Export to Excel (ambil semua baris yang cocok filter dari server)
   const handleExport = async () => {
-    const exportRows = await fetchKodePosExport({
-      search: debouncedSearch,
-      provinsi: selectedProvinsi,
-      kota: selectedKota,
-    });
+    let exportRows: Awaited<ReturnType<typeof fetchKodePosExport>>;
+    try {
+      exportRows = await fetchKodePosExport({
+        search: debouncedSearch,
+        provinsi: selectedProvinsi,
+        kota: selectedKota,
+      });
+    } catch (err: any) {
+      setErrorMsg('Gagal mengambil data untuk diekspor: ' + (err?.message || 'server tidak menjawab'));
+      setTimeout(() => setErrorMsg(null), 5000);
+      return;
+    }
     if (!exportRows || exportRows.length === 0) {
       setErrorMsg('Tidak ada data untuk diekspor.');
       setTimeout(() => setErrorMsg(null), 4000);
       return;
     }
-    const ws = XLSX.utils.json_to_sheet(
-      exportRows.map((r, idx) => ({
-        'NO': idx + 1,
-        'KODE POS': r.kodePos,
-        'KELURAHAN / DESA': r.kelurahan,
-        'KECAMATAN': r.kecamatan,
-        'KABUPATEN / KOTA': r.kabupatenKota,
-        'PROVINSI': r.provinsi,
-        'STATUS': r.status || 'AKTIF',
-        'LATITUDE': r.latitude ?? '',
-        'LONGITUDE': r.longitude ?? '',
-        'SUMBER KOORDINAT': r.latitude == null ? '' : geoLabel(r).replace('Sumber: ', ''),
-      }))
-    );
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Master_Kode_Pos');
-    XLSX.writeFile(wb, `Master_Kode_Pos_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    const kolom = [
+      'NO', 'KODE POS', 'KELURAHAN / DESA', 'KECAMATAN', 'KABUPATEN / KOTA', 'PROVINSI',
+      'STATUS', 'LATITUDE', 'LONGITUDE', 'SUMBER KOORDINAT',
+    ];
+    const baris = exportRows.map((r, idx) => ({
+      'NO': idx + 1,
+      'KODE POS': r.kodePos,
+      'KELURAHAN / DESA': r.kelurahan,
+      'KECAMATAN': r.kecamatan,
+      'KABUPATEN / KOTA': r.kabupatenKota,
+      'PROVINSI': r.provinsi,
+      'STATUS': r.status || 'AKTIF',
+      'LATITUDE': r.latitude ?? '',
+      'LONGITUDE': r.longitude ?? '',
+      'SUMBER KOORDINAT': r.latitude == null ? '' : geoLabel(r).replace('Sumber: ', ''),
+    }));
+    tulisLembarExcel({
+      namaLembar: 'Master_Kode_Pos',
+      namaBerkas: `Master_Kode_Pos_${tanggalBerkas()}.xlsx`,
+      kolom,
+      baris,
+    });
+    setSuccessMsg(`${baris.length.toLocaleString('id-ID')} baris kode pos diunduh.`);
+    setTimeout(() => setSuccessMsg(null), 4000);
   };
 
   // Copy to clipboard helper

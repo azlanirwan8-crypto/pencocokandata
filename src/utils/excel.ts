@@ -3,7 +3,7 @@ import type { TargetRow, WilayahSetting } from '../types';
 import type { AnalystRow } from './analystPipeline';
 import { barisKeExcelFinal, JUDUL_KOLOM_FINAL } from './finalColumns';
 import { SAMPLE_MASTER_ROWS, SAMPLE_TARGET_ROWS } from './sampleData';
-import { formatWilayahName } from './normalizer';
+import { formatWilayahName, tanggalBerkas } from './normalizer';
 import { loadWilayahFromNeon } from './neonSync';
 
 export const MASTER_COLUMNS_WITH_SANDI_CABANG: string[] = [
@@ -317,16 +317,17 @@ export function formatWilayahCode(rawWilayah: string | number): string {
 }
 
 /**
- * Gaya Header Excel Sesuai Warna Asli File Unggahan:
- * - Biru (#405189): Kolom Master Cabang (No, Wilayah, Sandi Cabang, Branch Code, Kode Cabang, Nama Outlet, Status Outlet)
+ * Gaya Header Excel Sesuai Warna Asli File Unggahan (kode warna di bawah = kode RGB sel,
+ * sengaja mengikuti berkas sumber operator, bukan token Velzon layar):
+ * - Biru (#366092): Kolom Master Cabang (No, Wilayah, Sandi Cabang, Branch Code, Kode Cabang, Nama Outlet, Status Outlet)
  * - Oranye (#E97132): Kolom Dati II / Kota
- * - Hijau (#0ab39c): Kolom Alamat & Lokasi Target (ALAMAT, KODE POS, Kelurahan, Kecamatan, Kode Dati II, Provinsi, Telp)
+ * - Hijau (#47D359): Kolom Alamat & Lokasi Target (ALAMAT, KODE POS, Kelurahan, Kecamatan, Kode Dati II, Provinsi, Telp)
  * - Kuning (#FFFF00): Kolom PTEN & Validasi (KOTA PTEN, KODE POS PTEN, CEK KODE POS + PTEN, SUMBER DATA, CEK DUPLIKAT KODE POS)
  */
 export function getHeaderStyle(col: string) {
   const norm = col.trim().toUpperCase();
 
-  // 1. Biru Navy (#405189) untuk Identitas Cabang / Master
+  // 1. Biru Navy (#366092) untuk Identitas Cabang / Master
   if ([
     'NO',
     'WILAYAH',
@@ -337,6 +338,7 @@ export function getHeaderStyle(col: string) {
     'KODE CABANG',
     'NAMA OUTLET',
     'STATUS OUTLET',
+    'STATUS',
   ].includes(norm)) {
     return {
       fill: { fgColor: { rgb: '366092' } },
@@ -366,7 +368,7 @@ export function getHeaderStyle(col: string) {
     };
   }
 
-  // 3. Hijau Cerah (#0ab39c) untuk Wilayah Administratif & Alamat Target
+  // 3. Hijau Cerah (#47D359) untuk Wilayah Administratif & Alamat Target
   if ([
     'ALAMAT',
     'KODE POS',
@@ -375,6 +377,11 @@ export function getHeaderStyle(col: string) {
     'KODE DATI II',
     'PROVINSI',
     'TELP',
+    'KELURAHAN / DESA',
+    'KABUPATEN / KOTA',
+    'LATITUDE',
+    'LONGITUDE',
+    'SUMBER KOORDINAT',
   ].includes(norm)) {
     return {
       fill: { fgColor: { rgb: '47D359' } },
@@ -413,6 +420,7 @@ export function getDataCellStyle(col: string) {
     'WILAYAH',
     'KODE CABANG',
     'STATUS OUTLET',
+    'STATUS',
     'KODE POS',
     'KODE DATI II',
     'KODE POS PTEN',
@@ -501,44 +509,7 @@ function createTargetWorksheet(rows: TargetRow[], exportColumns: string[]): XLSX
   });
 
   const worksheet = XLSX.utils.json_to_sheet(exportData, { header: exportColumns });
-
-  // Terapkan Styling Header Asli Sesuai Warna Unggahan
-  exportColumns.forEach((col, cIdx) => {
-    const headerRef = XLSX.utils.encode_cell({ r: 0, c: cIdx });
-    if (worksheet[headerRef]) {
-      worksheet[headerRef].s = getHeaderStyle(col);
-    }
-  });
-
-  // Terapkan Styling Baris Data (Border & Alignment Rapi)
-  const totalRows = rows.length;
-  for (let rIdx = 1; rIdx <= totalRows; rIdx++) {
-    exportColumns.forEach((col, cIdx) => {
-      const cellRef = XLSX.utils.encode_cell({ r: rIdx, c: cIdx });
-      if (worksheet[cellRef]) {
-        worksheet[cellRef].s = getDataCellStyle(col);
-      }
-    });
-  }
-
-  // Atur Tinggi Header agar Lega & Elegan
-  worksheet['!rows'] = [{ hpt: 26 }];
-
-  // Atur Lebar Kolom yang Ideal
-  const colWidths = exportColumns.map((col) => {
-    const norm = col.trim().toUpperCase();
-    if (norm === 'NO') return { wch: 8 };
-    if (norm === 'WILAYAH') return { wch: 14 };
-    if (norm === 'ALAMAT') return { wch: 45 };
-    if (norm === 'CABANG' || norm === 'NAMA OUTLET' || norm === 'SANDI CABANG') return { wch: 28 };
-    if (norm === 'KODE POS' || norm === 'KODE POS PTEN') return { wch: 15 };
-    if (norm === 'CEK KODE POS + PTEN') return { wch: 22 };
-    if (norm === 'SUMBER DATA') return { wch: 18 };
-    if (norm === 'CEK DUPLIKAT KODE POS') return { wch: 24 };
-    return { wch: Math.max(col.length + 3, 16) };
-  });
-  worksheet['!cols'] = colWidths;
-
+  applyStandardSheetStyle(worksheet, exportColumns, rows.length);
   return worksheet;
 }
 
@@ -632,28 +603,7 @@ export function exportTargetToExcel(
 export function downloadMasterTemplate(withSample = false) {
   const data = withSample ? SAMPLE_MASTER_ROWS : [];
   const worksheet = XLSX.utils.json_to_sheet(data, { header: MASTER_COLUMNS_WITH_SANDI_CABANG });
-  
-  // Terapkan Gaya Header Asli
-  MASTER_COLUMNS_WITH_SANDI_CABANG.forEach((col, cIdx) => {
-    const headerRef = XLSX.utils.encode_cell({ r: 0, c: cIdx });
-    if (worksheet[headerRef]) {
-      worksheet[headerRef].s = getHeaderStyle(col);
-    }
-  });
-
-  if (withSample) {
-    for (let rIdx = 1; rIdx <= data.length; rIdx++) {
-      MASTER_COLUMNS_WITH_SANDI_CABANG.forEach((col, cIdx) => {
-        const cellRef = XLSX.utils.encode_cell({ r: rIdx, c: cIdx });
-        if (worksheet[cellRef]) {
-          worksheet[cellRef].s = getDataCellStyle(col);
-        }
-      });
-    }
-  }
-
-  worksheet['!rows'] = [{ hpt: 26 }];
-  worksheet['!cols'] = MASTER_COLUMNS_WITH_SANDI_CABANG.map(col => ({ wch: Math.max(col.length + 3, 16) }));
+  applyStandardSheetStyle(worksheet, MASTER_COLUMNS_WITH_SANDI_CABANG, data.length);
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Master_Cabang');
 
@@ -667,33 +617,30 @@ export function downloadMasterTemplate(withSample = false) {
 export function downloadTargetTemplate(withSample = false) {
   const data = withSample ? SAMPLE_TARGET_ROWS : [];
   const worksheet = XLSX.utils.json_to_sheet(data, { header: TARGET_COLUMNS_WITH_SANDI_CABANG });
-
-  // Terapkan Gaya Header Asli
-  TARGET_COLUMNS_WITH_SANDI_CABANG.forEach((col, cIdx) => {
-    const headerRef = XLSX.utils.encode_cell({ r: 0, c: cIdx });
-    if (worksheet[headerRef]) {
-      worksheet[headerRef].s = getHeaderStyle(col);
-    }
-  });
-
-  if (withSample) {
-    for (let rIdx = 1; rIdx <= data.length; rIdx++) {
-      TARGET_COLUMNS_WITH_SANDI_CABANG.forEach((col, cIdx) => {
-        const cellRef = XLSX.utils.encode_cell({ r: rIdx, c: cIdx });
-        if (worksheet[cellRef]) {
-          worksheet[cellRef].s = getDataCellStyle(col);
-        }
-      });
-    }
-  }
-
-  worksheet['!rows'] = [{ hpt: 26 }];
-  worksheet['!cols'] = TARGET_COLUMNS_WITH_SANDI_CABANG.map(col => ({ wch: Math.max(col.length + 3, 16) }));
+  applyStandardSheetStyle(worksheet, TARGET_COLUMNS_WITH_SANDI_CABANG, data.length);
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Data_Target_Dicocokan');
 
   const filename = withSample ? 'Template_Target_Dengan_Sampel.xlsx' : 'Template_Target_Kosong.xlsx';
   XLSX.writeFile(workbook, filename);
+}
+
+/**
+ * SATU jalur tulis untuk semua export menu master: gaya header, border, lebar kolom,
+ * penyaring otomatis dan nama berkas ikut applyStandardSheetStyle supaya hasilnya
+ * identik di semua menu (sebelumnya tiap menu menulis XLSX sendiri tanpa gaya sama sekali).
+ */
+export function tulisLembarExcel(opts: {
+  namaLembar: string;
+  namaBerkas: string;
+  kolom: string[];
+  baris: Record<string, unknown>[];
+}): void {
+  const worksheet = XLSX.utils.json_to_sheet(opts.baris, { header: opts.kolom });
+  applyStandardSheetStyle(worksheet, opts.kolom, opts.baris.length);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, opts.namaLembar.slice(0, 31));
+  XLSX.writeFile(workbook, opts.namaBerkas);
 }
 
 /**
@@ -747,7 +694,7 @@ export function exportFinalRowsToExcel(
     const worksheet = XLSX.utils.json_to_sheet(data, { header: JUDUL_KOLOM_FINAL });
     applyStandardSheetStyle(worksheet, JUDUL_KOLOM_FINAL, data.length);
     XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
-    const filename = `Final_Data_${sheetName}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    const filename = `Final_Data_${sheetName}_${tanggalBerkas()}.xlsx`;
     XLSX.writeFile(workbook, filename);
     return { success: true, filename, rowCount: rows.length };
   } catch (err: any) {
