@@ -1,5 +1,5 @@
 # RENCANA PERBAIKAN SELURUH APLIKASI
-> **STATUS 2026-09-22: BELUM SELESAI — 55 dari 71 item Bagian 0 `SELESAI`, 1 `SEDANG` (A9), 15 `BELUM`. Lampiran: M SELESAI (+M9), N0/N1/N3/N4 SELESAI, N2 & O BELUM.** **Seluruh menu Data Analyst (Bagian B, C, D, E, M, N0/N1/N3) sudah beres** — sisa di dalam menu itu tinggal N2 (inline style → kelas) + Bagian O (token desain) + A9, dan dua keputusan pemilik produk: C7 (15 baris kode pos kembar di cloud) serta N0 butir 4 (tombol "Buka Data Cabang"). Sisa TERBERAT ada di 5 menu data master: **F1-W2, F2-P2/P3, F3-C3, F4-R2/R3, F5-K1/K2/K3, F6-X1/X2/X3**, lalu **A10**, **G11/G12**, dan Bagian H/I/J/K.
+> **STATUS 2026-09-22: BELUM SELESAI — 55 dari 71 item Bagian 0 `SELESAI`, 1 `SEDANG` (A9), 15 `BELUM`. Lampiran: M SELESAI (+M9), N0/N1/N3/N4 SELESAI, N2 & O BELUM.** **Seluruh menu Data Analyst (Bagian B, C, D, E, M, N0/N1/N3) sudah beres** — sisa di dalam menu itu tinggal N2 (inline style → kelas) + Bagian O (token desain) + A9, dan satu keputusan pemilik produk: C7 (15 baris kode pos kembar di cloud). Sisa TERBERAT ada di 5 menu data master: **F1-W2, F2-P2/P3, F3-C3, F4-R2/R3, F5-K1/K2/K3, F6-X1/X2/X3**, lalu **A10**, **G11/G12**, dan Bagian H/I/J/K.
 > Baca Bagian 0 sebelum mengerjakan apa pun. Titik lanjut: **N2 dikerjakan bersama O** (satu sweep gaya, jangan dua kali), lalu F (5 menu master). Rincian & bukti verifikasi ada di sana.
 
 **Aplikasi:** Tools Data Matcher Cabang & Outlet v2.x â€” React + TypeScript + Vite; IndexedDB (lokal) + Neon Postgres (cloud via serverless `api/`).
@@ -803,7 +803,7 @@ Di luar itu — termasuk baris Aceh dan baris yang cabangnya sudah Rank-1 — **
 
 > Ditambahkan 2026-09-21 atas permintaan pemilik produk. Status per bagian: **N0 SELESAI 2026-09-22** (butir 4 belum), **N1 SELESAI 2026-09-22** (kontrol densitas ditunda dengan alasan), **N3 SELESAI 2026-09-22**, N2 masih `BELUM`.
 
-### N0 — ATURAN PRODUK: FASE 1/2/3 TIDAK ADA EDIT, HANYA REVISI (status `SELESAI 2026-09-22` kecuali butir 4)
+### N0 — ATURAN PRODUK: FASE 1/2/3 TIDAK ADA EDIT, HANYA REVISI (status `SELESAI 2026-09-22` — keenam butir)
 
 **Aturan:**
 - Di dalam Data Analyst (Fase 1, 2, 3) **tidak ada Edit field**. Yang tersedia hanya **Revisi** (mengembalikan baris agar diproses ulang) dan aksi kandidat (pilih cabang / terapkan role).
@@ -820,7 +820,7 @@ Di luar itu — termasuk baris Aceh dan baris yang cabangnya sudah Rank-1 — **
 - Butir 3 ✅ `onUpdateRow` dipertahankan; pemakai yang tersisa sekarang hanya 4 jalur yang diizinkan aturan: `applyFase2Candidate` (`:285`), `applyFase3Role` (`:324`), Setujui per baris (`:2167-2169`), dan konfirmasi Revisi (`:2417`).
 - Butir 5 ✅ keterangan dipasang di bawah banner langkah Fase 1-3: "Salah data? Perbaiki di menu Data Master lalu jalankan ulang fase ini — di sini hanya ada Setujui dan Revisi, tidak ada edit field."
 - Butir 6 ✅ diaudit: `CandidateDetailModal` dan `CityOverrideModal` tidak menulis field baris dari dalam fase (yang pertama read-only, yang kedua hanya menyimpan override kota yang memang aksi resmi N3).
-- Butir 4 ❌ BELUM — tombol "Buka Data Cabang" (navigasi ke tab master) belum dipasang; butuh prop navigasi baru dari `App.tsx` dan bukan bagian dari permintaan mendata operator hari ini.
+- Butir 4 ✅ `SELESAI 2026-09-22` — tombol **`Data Cabang`** (ikon `Store`) dipasang di sel aksi baris **hanya pada tab Perlu Analisa Manual** (`AnalystResultsGrid.tsx`, blok aksi): prop baru `onBukaMasterCabang` dari `App.tsx` memanggil `setActiveTab('master')` yang memang me-render `CabangManager`. Tidak ada field edit yang ditambahkan — pintunya navigasi, bukan input. Hasil: `tsc` 0 error · lint 83 warning (baseline) · build ✓. Belum diklik di browser (butuh data nyata + pindah menu saat hasil analisa terbuka; state analisa sudah persist lewat IndexedDB jadi tidak hilang).
 
 **Uji:** buka Fase 1/2/3, tombol Edit tidak ada; tombol Revisi tetap ada; mengubah data hanya bisa dari menu Data Master. → **Terbukti di kode** (jumlah `Edit` di grid = 0; `tsc -b --force` bersih, `npm run lint` 83 warning / 0 error, `npm run build` sukses 2026-09-22). Belum diklik pada data nyata karena sesi browser lokal sedang 0 data.
 

@@ -21,6 +21,7 @@ import {
   AlertTriangle,
   ExternalLink,
   Shield,
+  Store,
 } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import type { AnalystRow, AnalystCoverage } from '../../utils/analystPipeline';
@@ -143,6 +144,8 @@ interface AnalystResultsGridProps {
   onRemoveCityOverride?: (masterKey: string) => void;
   masterRows?: MasterRow[];
   roleMappingList?: RoleMappingRecord[];
+  /** N0 butir 4: baris manual tidak bisa dibetulkan di sini — bawa operator ke menu Data Cabang. */
+  onBukaMasterCabang?: () => void;
 }
 
 export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
@@ -167,6 +170,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   onRemoveCityOverride,
   masterRows = [],
   roleMappingList = [],
+  onBukaMasterCabang,
 }) => {
   const { add: notify } = useNotification();
   // A6: tampilan (tab/filter/cari/urut/halaman) bertahan saat pindah menu — komponen ini
@@ -2275,6 +2279,33 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                             >
                               <RotateCcw size={12} />
                               <span>Revisi</span>
+                            </button>
+                          )}
+                          {/* N0 butir 4: baris di antrean manual biasanya butuh perbaikan di
+                              data master — sediakan pintunya, bukan field edit di sini. */}
+                          {innerTab === 'MANUAL' && onBukaMasterCabang && (
+                            <button
+                              type="button"
+                              onClick={onBukaMasterCabang}
+                              title="Perbaiki data cabangnya di menu Data Cabang, lalu jalankan ulang fase ini"
+                              style={{
+                                background: 'rgba(64, 81, 137, 0.1)',
+                                border: '1px solid rgba(64, 81, 137, 0.3)',
+                                color: '#405189',
+                                borderRadius: '4px',
+                                padding: '0.22rem 0.55rem',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '0.25rem',
+                                fontSize: '0.72rem',
+                                fontWeight: 700,
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              <Store size={12} />
+                              <span>Data Cabang</span>
                             </button>
                           )}
                           {viewTab === 'all' && (

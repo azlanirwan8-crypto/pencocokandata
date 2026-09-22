@@ -1390,6 +1390,7 @@ export const App: React.FC = () => {
                   onApproveFase={handleApproveAnalystFase}
                   onBersihkanManual={handleBersihkanManualAnalyst}
                   onPatchMassal={handlePatchMassalAnalyst}
+                  onBukaMasterCabang={() => setActiveTab('master')}
                   filterBelumSetuju={lihatBelumSetuju}
                   onResetBelumSetuju={() => setLihatBelumSetuju(null)}
                   onReRunAll={() => handleStartAnalystPipeline(false)}
