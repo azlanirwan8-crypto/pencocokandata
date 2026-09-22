@@ -1,4 +1,4 @@
-import { rest, pesanRest } from './rest';
+import { rest, pesanRest } from './status';
 
 /**
  * /api/kodepos-geo — satu titik koordinat per kode pos.

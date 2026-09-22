@@ -1,4 +1,4 @@
-import { rest, pesanRest } from './rest';
+import { rest, pesanRest } from './status';
 
 /**
  * /api/kodepos-source — audit database kode pos terhadap sumber eksternal.

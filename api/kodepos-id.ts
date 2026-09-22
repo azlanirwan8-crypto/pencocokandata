@@ -1,4 +1,4 @@
-import { rest, pesanRest } from './rest';
+import { rest, pesanRest } from './status';
 import { createHash } from 'node:crypto';
 
 /**
