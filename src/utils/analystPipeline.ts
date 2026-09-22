@@ -1968,6 +1968,7 @@ export async function executeAnalystPipeline(
   type Rank1 = { master: MasterRow | null; km: number; presisi: boolean; tier: 1 | 2 | 3; alasan: string };
   const cacheRank1 = new Map<string, Rank1>();
   const cacheSpatialFase2 = new Map<string, Rank1>();
+  const cacheCityDefaultFase2 = new Map<string, Rank1>();
 
   const rank1Fase2 = (meta: RowMetaCache, kelurahan: string, kecamatan: string, kodePos: string, provinsi: string): Rank1 => {
     // 1. Cek cache persis per kelurahan
@@ -1975,7 +1976,26 @@ export async function executeAnalystPipeline(
     const lalu = cacheRank1.get(kunci);
     if (lalu) return lalu;
 
-    // 2. Cek cache spasial level Kecamatan & Kode Pos jika kelurahan tidak punya data unik
+    // 2. Jika kota punya cabang sendiri / aturan khusus (Aceh) / satu cabang sekota,
+    // langsung pakai cabang kota tersebut tanpa scan jarak berat untuk setiap kelurahan.
+    if (meta.kimCabang) {
+      const target = targetKandidatFase2(meta, kelurahan, kecamatan, kodePos, provinsi);
+      const d = calculateRealDistance(target, meta.kimCabang);
+      const res: Rank1 = { master: meta.kimCabang, km: d.distanceKm, presisi: d.isPrecise, tier: 1, alasan: 'Aturan Aceh → Cabang KIM' };
+      cacheRank1.set(kunci, res);
+      return res;
+    }
+
+    if (meta.masterKota.length === 1) {
+      const m = meta.masterKota[0];
+      const target = targetKandidatFase2(meta, kelurahan, kecamatan, kodePos, provinsi);
+      const d = calculateRealDistance(target, m);
+      const res: Rank1 = { master: m, km: d.distanceKm, presisi: d.isPrecise, tier: 1, alasan: 'Satu-satunya cabang di kota ini' };
+      cacheRank1.set(kunci, res);
+      return res;
+    }
+
+    // 3. Cek cache spasial level Kecamatan & Kode Pos
     const kunciSpasial = `${meta.cityKey}|${kodePos}|${kecamatan}`;
     const laluSpasial = cacheSpatialFase2.get(kunciSpasial);
     if (laluSpasial && (laluSpasial.tier === 1 || !indeksProximity)) {
@@ -1983,25 +2003,21 @@ export async function executeAnalystPipeline(
       return laluSpasial;
     }
 
+    // 4. Jika kota ini tidak punya cabang dan kita sudah pernah cari cabang terdekat untuk kota ini
+    const kunciKota = meta.cityKey;
+    const laluKota = cacheCityDefaultFase2.get(kunciKota);
+    if (laluKota && meta.masterKota.length === 0) {
+      cacheRank1.set(kunci, laluKota);
+      return laluKota;
+    }
+
     const target = targetKandidatFase2(meta, kelurahan, kecamatan, kodePos, provinsi);
     let hasil: Rank1;
-    if (meta.kimCabang) {
-      // Aturan Aceh: seluruh penempatan provinsi Aceh dilayani Cabang KIM.
-      const d = calculateRealDistance(target, meta.kimCabang);
-      hasil = { master: meta.kimCabang, km: d.distanceKm, presisi: d.isPrecise, tier: 1, alasan: 'Aturan Aceh → Cabang KIM' };
-    } else if (!indeksProximity) {
+    if (!indeksProximity) {
       const m = meta.masterKota[0] || null;
       const d = m ? calculateRealDistance(target, m) : null;
       hasil = { master: m, km: d?.distanceKm ?? 999, presisi: !!d?.isPrecise, tier: m ? 1 : 3, alasan: m ? 'Satu-satunya cabang di kota ini' : 'kota tidak punya cabang di Data Master' };
-    } else if (meta.masterKota.length === 1) {
-      const m = meta.masterKota[0];
-      const d = calculateRealDistance(target, m);
-      hasil = { master: m, km: d.distanceKm, presisi: d.isPrecise, tier: 1, alasan: 'Satu-satunya cabang di kota ini' };
     } else {
-      // Kota tanpa cabang sendiri (masterKota kosong) JUGA lewat sini. Dulu kasus itu
-      // langsung dianggap `master: null`, sehingga Kanwil/Sandi Cabang/Branch Code/Kode
-      // Cabang dibiarkan kosong padahal indeks kedekatan tahu cabang terdekat di
-      // kabupaten sebelah (mis. OKU Selatan → MUARA DUA 4,2 km) dan layar menunjukkannya.
       const rec = findClosestMasterRecommendation(target, indeksProximity);
       const c = rec?.candidates[0];
       if (c) {
@@ -2016,6 +2032,9 @@ export async function executeAnalystPipeline(
     }
     cacheRank1.set(kunci, hasil);
     cacheSpatialFase2.set(kunciSpasial, hasil);
+    if (meta.masterKota.length === 0) {
+      cacheCityDefaultFase2.set(kunciKota, hasil);
+    }
     return hasil;
   };
 
@@ -2052,8 +2071,15 @@ export async function executeAnalystPipeline(
   // jarak mustahil untuk cabang yang katanya satu kota: itu gejala koordinat salah.
   const JARAK_MUSTAHIL_KM = 150;
 
+  // Hitung total baris yang akan diekspansi untuk pelaporan progress yang akurat dan mulus
+  let totalKelurahanToProcess = 0;
+  for (let i = 0; i < itemsToProcess.length; i++) {
+    totalKelurahanToProcess += rowMetaCache[i]?.matchedKodePosEntries?.length || 1;
+  }
+  let kelurahanProcessedSoFar = 0;
+
   // ── EXPAND: Hasilkan 1 baris per kelurahan/kecamatan per Kota PTEN ──
-  if (onProgress) onProgress(2, 35, 0, total, 'Fase 2: Menyusun data Wilayah & Cabang...');
+  if (onProgress) onProgress(2, 35, 0, totalKelurahanToProcess, 'Fase 2: Menyusun data Wilayah & Cabang...');
 
   // Tracking cakupan: baris kodepos mana yang benar-benar masuk Fase 1
   let fallbackCityCount = 0;
@@ -2067,7 +2093,6 @@ export async function executeAnalystPipeline(
     if (geoVerifiedCityKeys.has(ck)) verifiedKodePosRows += entries.length;
   });
 
-  // Di Web Worker, kalkulasi bisa berjalan full-speed tanpa perlu jeda timer mikro terlalu rapat
   const YIELD_PER_BARIS = 1000;
   let barisSejakYield = 0;
 
@@ -2089,32 +2114,31 @@ export async function executeAnalystPipeline(
       });
     }
 
-    // Progress per kota dilaporkan setiap 10 kota agar progres bar Fase 2 bergerak mulus
-    if (i % 10 === 0 && onProgress) {
-      const pct = Math.round(35 + (i / total) * 31);
-      const faseLapor = (fase2Jalan ? 2 : 1) as 1 | 2;
-      onProgress(faseLapor, pct, i + 1, total, `Fase ${faseLapor}: Validasi Wilayah & Cabang (${i + 1}/${total})...`);
-    }
     if (i % 50 === 0) await tick();
 
     // Jika mode "Ulangi yang Salah Saja", lewati baris yang sudah valid & disetujui
     if (reRunOnlyAnomalies && prevRow && prevRow.isFinalApproved && prevRow.statusAnalisa === 'EXACT_MATCH') {
       results.push(prevRow);
+      kelurahanProcessedSoFar += meta.matchedKodePosEntries.length;
       continue;
     }
 
     const allKelurahanCount = meta.matchedKodePosEntries.length;
 
-    // Hasilkan 1 baris per kelurahan/kecamatan. Dulu `forEach` dan satu-satunya jeda
-    // ada di loop kota (`i % 50`) — satu kota bisa membawa ribuan kelurahan, jadi
-    // thread utama tersumbat belasan detik dan Chrome menyebut tab tidak merespons.
-    // Sekarang loop-nya `for` dan yielded dihitung PER BARIS.
     for (let seq = 0; seq < meta.matchedKodePosEntries.length; seq++) {
       const kpEntry = meta.matchedKodePosEntries[seq];
+      kelurahanProcessedSoFar++;
       barisSejakYield++;
       if (barisSejakYield >= YIELD_PER_BARIS) {
         barisSejakYield = 0;
         await tick();
+      }
+
+      // Progress bar Fase 2 bergerak mulus mengikuti jumlah baris kelurahan riil (35% → 66%)
+      if (kelurahanProcessedSoFar % 500 === 0 && onProgress) {
+        const pct = Math.round(35 + (kelurahanProcessedSoFar / totalKelurahanToProcess) * 31);
+        const faseLapor = (fase2Jalan ? 2 : 1) as 1 | 2;
+        onProgress(faseLapor, pct, kelurahanProcessedSoFar, totalKelurahanToProcess, `Fase ${faseLapor}: Validasi Wilayah & Cabang (${kelurahanProcessedSoFar.toLocaleString('id-ID')}/${totalKelurahanToProcess.toLocaleString('id-ID')})...`);
       }
       // Baris hasil jaring pengaman membawa metode aslinya sendiri (status tetap konsisten per kota)
       const snNote = meta.safetyNetByCity?.get(cityMatchKey(kpEntry.kabupatenKota || ''));
