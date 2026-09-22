@@ -50,9 +50,21 @@
   --accent-cyan: #299cdb;          /* Velzon Info Cyan */
   --accent-cyan-subtle: rgba(41, 156, 219, 0.1);
 
-  /* Typography */
-  --font-sans: 'Inter', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+  /* Velzon Sidebar & Header — disalin dari token tema: --vz-vertical-menu-* varian
+     [data-sidebar="dark"] (varian yang dipakai demo resmi Velzon) */
+  --sidebar-bg: #405189;                     /* --vz-vertical-menu-bg */
+  --sidebar-border: #405189;                 /* --vz-vertical-menu-border */
+  --sidebar-item: #abb9e8;                   /* --vz-vertical-menu-item-color */
+  --sidebar-item-hover: #ffffff;             /* --vz-vertical-menu-item-hover-color */
+  --sidebar-item-bg: rgba(255, 255, 255, 0.15); /* --vz-vertical-menu-item-bg / -active-bg */
+  --sidebar-title: #838fb9;                  /* --vz-vertical-menu-title-color */
+  --sidebar-shadow: 0 2px 4px rgba(15, 34, 58, 0.12); /* --vz-vertical-menu-box-shadow */
+  --sidebar-width: 250px;                    /* --vz-vertical-menu-width */
+  --sidebar-width-sm: 70px;                  /* --vz-vertical-menu-width-sm */
+
+  /* Typography — nilai resmi template: --vz-font-sans-serif "Poppins", --vz-font-monospace stack sistem */
+  --font-sans: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
 
   /* Velzon Shadows */
   --shadow-sm: 0 1px 2px rgba(56, 65, 74, 0.08);
@@ -60,11 +72,11 @@
   --shadow-lg: 0 5px 10px rgba(30, 32, 37, 0.12);
   --shadow-card: 0 1px 2px rgba(56, 65, 74, 0.1);
 
-  /* Velzon Radiuses */
-  --radius-xs: 3px;
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
+  /* Velzon Radiuses — skala template: --vz-border-radius-sm .2rem / base .25rem / lg .3rem */
+  --radius-xs: 3px;                /* ≈ .2rem */
+  --radius-sm: 4px;                /* = .25rem (kartu, tombol, input) */
+  --radius-md: 4px;                /* Velzon tidak punya langkah 6px: sama dengan base */
+  --radius-lg: 5px;                /* ≈ .3rem (modal, dropdown) */
   --radius-full: 9999px;
 }
 
@@ -86,8 +98,8 @@ body {
   background-color: var(--bg-main);
   color: var(--text-primary);
   min-height: 100vh;
-  line-height: 1.45;
-  letter-spacing: -0.01em;
+  line-height: 1.5; /* --vz-body-line-height */
+  letter-spacing: normal; /* Velzon tidak memakai tracking negatif */
   background-image: none; /* Pure clean Velzon light background */
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
@@ -104,11 +116,12 @@ body {
   background-color: var(--bg-main);
 }
 
-/* Velzon Left Sidebar */
+/* Velzon Left Sidebar — varian data-sidebar="dark" */
 .app-sidebar {
-  width: 240px;
-  background: #111c38; /* Velzon signature deep navy sidebar */
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  width: var(--sidebar-width);
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
+  box-shadow: var(--sidebar-shadow);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -120,24 +133,23 @@ body {
   overflow-x: hidden;
 }
 
-/* Collapsed Mini Sidebar (Velzon Style) */
+/* Collapsed Mini Sidebar (= --vz-vertical-menu-width-sm) */
 .app-sidebar.collapsed {
-  width: 70px;
+  width: var(--sidebar-width-sm);
 }
 
 /* When collapsed, hovering expands it smoothly over content (Velzon signature hover flyout) */
 .app-sidebar.collapsed:hover {
-  width: 240px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  width: var(--sidebar-width);
+  box-shadow: var(--sidebar-shadow);
 }
 
 .sidebar-brand {
-  height: 48px;
+  height: 46px; /* sama tinggi dengan .app-topbar supaya garis batas tidak bertingkat */
   display: flex;
   align-items: center;
   gap: 0.65rem;
   padding: 0 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   white-space: nowrap;
   transition: all 0.2s ease;
 }
@@ -198,12 +210,13 @@ body {
   width: 28px;
   height: 28px;
   border-radius: var(--radius-sm);
-  background: linear-gradient(135deg, #405189, #0ab39c);
+  /* Logo terang di atas sidebar navy — konvensi `logo-light` Velzon ([data-sidebar=dark] .logo-light) */
+  background: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ffffff;
-  box-shadow: 0 2px 5px rgba(64, 81, 137, 0.3);
+  color: var(--accent-blue);
+  box-shadow: 0 1px 2px rgba(15, 34, 58, 0.25);
   flex-shrink: 0;
 }
 
@@ -221,11 +234,12 @@ body {
 }
 
 .sidebar-menu-title {
-  font-size: 0.65rem;
+  /* = .menu-title Velzon: 11px, uppercase, tracking .05em, --vz-vertical-menu-title-color */
+  font-size: 11px;
   font-weight: 600;
-  color: #8392a5;
+  color: var(--sidebar-title);
   text-transform: uppercase;
-  padding: 0.75rem 1rem 0.3rem;
+  padding: 12px 20px;
   letter-spacing: 0.05em;
 }
 
@@ -240,12 +254,11 @@ body {
   display: flex;
   align-items: center;
   gap: 0.65rem;
-  padding: 0.5rem 0.75rem;
+  padding: 0.5rem 0.8rem;
   border-radius: var(--radius-sm);
   background: transparent;
   border: none;
-  border-left: 3px solid transparent;
-  color: #abb9e8;
+  color: var(--sidebar-item);
   font-size: 0.81rem;
   font-weight: 500;
   text-align: left;
@@ -257,14 +270,15 @@ body {
 }
 
 .sidebar-nav-item:hover {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.05);
+  color: var(--sidebar-item-hover);
+  background: var(--sidebar-item-bg);
 }
 
+/* Velzon menandai item aktif dengan pil (rgba(255,255,255,.15) + teks putih),
+   bukan garis kiri berwarna — bentuk lamanya menyimpang dari template. */
 .sidebar-nav-item.active {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.09);
-  border-left-color: #0ab39c;
+  color: var(--sidebar-item-hover);
+  background: var(--sidebar-item-bg);
   font-weight: 600;
 }
 
@@ -288,8 +302,9 @@ body {
 }
 
 .badge-master {
-  background: rgba(64, 81, 137, 0.45);
-  color: #abb9e8;
+  /* pil sidebar: warna aktif template, bukan navy di atas navy */
+  background: var(--sidebar-item-bg);
+  color: var(--sidebar-item-hover);
 }
 
 /* Submenu Styling */
@@ -312,8 +327,7 @@ body {
   border-radius: var(--radius-sm);
   background: transparent;
   border: none;
-  border-left: 2px solid rgba(255, 255, 255, 0.12);
-  color: #8c9cd0;
+  color: var(--sidebar-item); /* --vz-vertical-menu-sub-item-color */
   font-size: 0.77rem;
   font-weight: 500;
   text-align: left;
@@ -324,21 +338,20 @@ body {
 }
 
 .sidebar-sub-item:hover {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.05);
-  border-left-color: #abb9e8;
+  color: var(--sidebar-item-hover);
+  background: var(--sidebar-item-bg);
 }
 
 .sidebar-sub-item.active {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.08);
-  border-left-color: #0ab39c;
+  color: var(--sidebar-item-hover);
+  background: var(--sidebar-item-bg);
   font-weight: 600;
 }
 
 .badge-target {
-  background: rgba(10, 179, 156, 0.25);
-  color: #0ab39c;
+  /* badge solid Velzon (.badge.bg-success): teks putih di atas warna sukses */
+  background: var(--accent-emerald);
+  color: #ffffff;
 }
 
 .sidebar-sub-badge {
@@ -347,14 +360,14 @@ body {
   font-weight: 600;
   padding: 0.05rem 0.35rem;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.08);
-  color: #8c9cd0;
+  background: var(--sidebar-item-bg);
+  color: var(--sidebar-item);
   font-family: var(--font-mono);
 }
 
 .sidebar-sub-item.active .sidebar-sub-badge {
-  background: rgba(10, 179, 156, 0.2);
-  color: #0ab39c;
+  background: var(--accent-emerald);
+  color: #ffffff;
 }
 
 /* Topbar Hamburger Button */

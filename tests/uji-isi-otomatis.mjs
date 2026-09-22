@@ -7,7 +7,7 @@
 // Jalankan:
 //   npx vite build --ssr tests/entry-uji.ts --outDir tests/out
 //   node tests/uji-isi-otomatis.mjs
-import { executeAnalystPipeline, buildMasterProximityIndex, findClosestMasterRecommendation } from './out/entry-uji.js';
+import { executeAnalystPipeline, buildMasterProximityIndex, findClosestMasterRecommendation, paketFase2DariMaster } from './out/entry-uji.js';
 
 let gagal = 0;
 const asa = (label, dapat, harus) => {
@@ -108,6 +108,24 @@ const k1 = hasilF1.find((r) => r.kelurahan === '19 NOVEMBER');
 asa('AO8 run Fase 1 saja: kolom identitas masih kosong (kondisi "belum jalan")', [k1?.sandiCabang, k1?.branchCode, k1?.kodeCabang], ['', '', '']);
 asa('AO9 dan barisnya berstatus SIAP_DIPROSES, bukan OTOMATIS_VALID', k1?.fase2Status, 'SIAP_DIPROSES');
 asa('AO10 Fase 1 tetap mengisi kelurahan/kecamatan/kota', [k1?.kelurahan, k1?.kecamatan, k1?.kotaPten], ['19 NOVEMBER', 'WUNDULAKO', 'KOLAKA']);
+
+// ── SATU RUMUS: nilai yang ditampilkan grid = nilai yang ditulis pipeline ──
+let bedaRumus = 0;
+const kolomBandin = ['wilayah', 'sandiCabang', 'branchCode', 'kodeCabang', 'namaOutlet', 'statusOutlet', 'alamat'];
+for (const r of hasilF2) {
+  const m = findClosestMasterRecommendation(targetSepertiGrid(r), indeks)?.candidates?.[0]?.master;
+  const p = paketFase2DariMaster(m, wilayahSettings);
+  const salah = kolomBandin.find((k) => r[k] !== p[k]);
+  if (salah) { bedaRumus++; console.log(`       GAGAL ${r.kelurahan}.${salah}: baris=${JSON.stringify(r[salah])} rumus=${JSON.stringify(p[salah])}`); }
+}
+asa('AO11 rumus tampilan grid == rumus tulis pipeline untuk SEMUA baris', bedaRumus, 0);
+
+// ── Janji ke operator: baris yang belum lewat Fase 2 tetap menampilkan kandidatnya ──
+const kartuK1 = findClosestMasterRecommendation(targetSepertiGrid(k1), indeks)?.candidates?.[0]?.master;
+const p1 = paketFase2DariMaster(kartuK1, wilayahSettings);
+asa('AO12 nilai tampilan baris Fase 1 == nilai yang ditulis saat Fase 2 nanti',
+  [p1.sandiCabang, p1.branchCode, p1.kodeCabang, p1.wilayah],
+  [kolaka.sandiCabang, kolaka.branchCode, kolaka.kodeCabang, kolaka.wilayah]);
 
 console.log(gagal === 0 ? '\nSEMUA LULUS' : `\n${gagal} PENGUJIAN GAGAL`);
 process.exit(gagal === 0 ? 0 : 1);

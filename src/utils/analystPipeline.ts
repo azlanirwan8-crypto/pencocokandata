@@ -1132,6 +1132,32 @@ export class AnalisaDibatalkan extends Error {
 /**
  * Menjalankan Pipeline Analisis 3 Fase langsung dari 5 Data Master
  */
+/**
+ * Paket field Fase 2 dari satu baris master — TIDAK ada nilai yang dikarang.
+ * Dipakai pipeline (menulis field baris) DAN grid Fase 2 (menampilkan kolom sebelum
+ * run fase itu selesai). Satu rumus di dua tempat = kolom layar tidak mungkin beda
+ * dari yang nanti tersimpan.
+ */
+export function paketFase2DariMaster(m: MasterRow | null, wilayahSettings: WilayahSetting[]) {
+  if (!m) {
+    return { wilayah: '', sandiCabang: '', branchCode: '', kodeCabang: '', sandi: '', cabang: '', namaOutlet: '', statusOutlet: '', alamat: '' };
+  }
+  const branchCode = String(m['Branch Code'] || m['Kode Cabang'] || '').trim();
+  const resolved = extractWilayahFromBranchCode(branchCode, wilayahSettings, m.Wilayah || '');
+  const fallbackWilayah = resolved.wilayahName && resolved.wilayahName !== '-' ? resolved.wilayahName : (m.Wilayah || '');
+  return {
+    wilayah: fallbackWilayah,
+    sandiCabang: String(m['Sandi Cabang'] || (m.Sandi && m.Cabang ? `${m.Sandi} - ${m.Cabang}` : m.Cabang || m.Sandi || '')),
+    branchCode,
+    kodeCabang: String(m['Kode Cabang'] || branchCode),
+    sandi: String(m.Sandi || m['Sandi Cabang'] || ''),
+    cabang: String(m.Cabang || m['Sandi Cabang'] || ''),
+    namaOutlet: String(m['Nama Outlet'] || m.Cabang || ''),
+    statusOutlet: String(m['Status Outlet'] || ''),
+    alamat: String(m.ALAMAT || ''),
+  };
+}
+
 export async function executeAnalystPipeline(
   masterCabangRows: MasterRow[],
   ptenList: PTENRecord[],
@@ -1981,25 +2007,7 @@ export async function executeAnalystPipeline(
   };
 
   /** Field Fase 2 sebuah baris, diambil apa adanya dari baris master terpilih (tidak dikarang). */
-  const paketFase2 = (m: MasterRow | null) => {
-    if (!m) {
-      return { wilayah: '', sandiCabang: '', branchCode: '', kodeCabang: '', sandi: '', cabang: '', namaOutlet: '', statusOutlet: '', alamat: '' };
-    }
-    const branchCode = String(m['Branch Code'] || m['Kode Cabang'] || '').trim();
-    const resolved = extractWilayahFromBranchCode(branchCode, wilayahSettings, m.Wilayah || '');
-    const fallbackWilayah = resolved.wilayahName && resolved.wilayahName !== '-' ? resolved.wilayahName : (m.Wilayah || '');
-    return {
-      wilayah: fallbackWilayah,
-      sandiCabang: String(m['Sandi Cabang'] || (m.Sandi && m.Cabang ? `${m.Sandi} - ${m.Cabang}` : m.Cabang || m.Sandi || '')),
-      branchCode,
-      kodeCabang: String(m['Kode Cabang'] || branchCode),
-      sandi: String(m.Sandi || m['Sandi Cabang'] || ''),
-      cabang: String(m.Cabang || m['Sandi Cabang'] || ''),
-      namaOutlet: String(m['Nama Outlet'] || m.Cabang || ''),
-      statusOutlet: String(m['Status Outlet'] || ''),
-      alamat: String(m.ALAMAT || ''),
-    };
-  };
+  const paketFase2 = (m: MasterRow | null) => paketFase2DariMaster(m, wilayahSettings);
 
   // Fase 3 ikut per baris karena kandidat master-nya bisa beda antar kelurahan (C2a).
   const cacheRoleBaris = new Map<string, ReturnType<typeof matchRoleForOutlet>>();

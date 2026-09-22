@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import type { AnalystRow, AnalystCoverage } from '../../utils/analystPipeline';
-import { cityMatchKey, matchRoleForOutlet, penjelasanFase1, penjelasanFase2, penjelasanFase3 } from '../../utils/analystPipeline';
+import { cityMatchKey, matchRoleForOutlet, penjelasanFase1, penjelasanFase2, penjelasanFase3, paketFase2DariMaster } from '../../utils/analystPipeline';
 import { useTampilanTersimpan } from '../../utils/useTampilanTersimpan';
 import type { KodePosRow } from '../../utils/neonSync';
 import type { PTENRecord } from '../PTENData/PTENManager';
@@ -782,6 +782,29 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     });
     return m;
   }, [renderedRows, masterIndex]);
+
+  // ── Kolom Fase 2 diisi dari kandidat AKTIF baris itu ─────────────────────────
+  // Run Fase 2 atas puluhan ribu baris butuh menitan; selama run itu belum selesai
+  // (atau tab di-reload di tengah jalan) field baris masih kosong padahal kartunya
+  // sudah menampilkan Pilihan 1. Kolom dibaca dari kandidat yang sama, memakai
+  // rumus tulis yang sama (`paketFase2DariMaster`), jadi layar dan berkas bicara
+  // bahasa yang sama dan operator tidak perlu menekan "Gunakan Cabang Ini".
+  const f2Aktif = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof paketFase2DariMaster>>();
+    if (!masterIndex) return map;
+    renderedRows.forEach((r) => {
+      if (r.kategori === 'TIDAK_ANALISA') return;
+      const entry = fase2Recs.get(r.id);
+      const cands = entry?.rec?.candidates || [];
+      if (!cands.length) return;
+      const audit = entry!.rec!.userPrefilledAudit;
+      const rankAktif =
+        fase2Choice[r.id] || (audit?.matchedRank && audit.matchedRank <= 3 ? audit.matchedRank : 1);
+      const cand = cands.find((c) => c.rank === rankAktif) || cands[0];
+      map.set(r.id, paketFase2DariMaster(cand.master, wilayahSettings));
+    });
+    return map;
+  }, [renderedRows, fase2Recs, fase2Choice, wilayahSettings, masterIndex]);
 
   // Kolom Fase 2 diisi MESIN, bukan efek React: `handleApproveAnalystFase` di App.tsx
   // langsung menjalankan fase berikutnya setelah "Setujui Fase", jadi Rank-1 tertulis
@@ -1692,6 +1715,18 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                   {renderedRows.map((r, i) => {
                     const idx = rowOffset + i;
                     const displayIdx = pageSize === 'ALL' ? idx + 1 : (page - 1) * (pageSize as number) + idx + 1;
+                    const p2 = f2Aktif.get(r.id);
+
+                    // Kandidat aktif (Pilihan 1 atau pilihan operator) — dipakai sebagai
+                    // fallback ke-3 untuk kolom Fase 2 agar data muncul otomatis meski
+                    // pipeline Fase 2 belum dijalankan atau r.* masih kosong.
+                    const _f2Entry = fase2Recs.get(r.id);
+                    const _f2Cands = _f2Entry?.rec?.candidates || [];
+                    const _f2Audit = _f2Entry?.rec?.userPrefilledAudit;
+                    const _f2ActiveRank = fase2Choice[r.id] || (_f2Audit?.matchedRank && _f2Audit.matchedRank <= 3 ? _f2Audit.matchedRank : 1);
+                    const _activeCandMaster = (_f2Cands.find((c) => c.rank === _f2ActiveRank) || _f2Cands[0])?.master ?? null;
+                    // paket field Fase 2 dari kandidat aktif (sama persis dengan rumus pipeline)
+                    const _p2Cand = _activeCandMaster ? paketFase2DariMaster(_activeCandMaster, wilayahSettings) : null;
 
                     return (
                     <tr
@@ -1716,14 +1751,14 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                         <>
                           <td style={{ textAlign: 'center', color: '#878a99', position: 'sticky', left: 34, zIndex: 5, background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd', borderRight: '1px solid #e9ebec' }}>{displayIdx}</td>
                           <td style={{ textAlign: 'center' }}>
-                            <span className="badge badge-level1">{r.wilayah || '-'}</span>
+                            <span className="badge badge-level1">{r.wilayah || p2?.wilayah || _p2Cand?.wilayah || '-'}</span>
                           </td>
-                          <td className="code-cell" style={{ textAlign: 'center' }}>{r.sandiCabang || '-'}</td>
-                          <td className="code-cell" style={{ textAlign: 'center' }}>{r.branchCode || '-'}</td>
-                          <td className="code-cell" style={{ textAlign: 'center' }}>{r.kodeCabang || '-'}</td>
-                          <td style={{ fontWeight: 600, color: '#405189' }}>{r.namaOutlet || '-'}</td>
-                          <td style={{ textAlign: 'center' }}>{r.statusOutlet || '-'}</td>
-                          <td title={r.alamat || ''}>{r.alamat || '-'}</td>
+                          <td className="code-cell" style={{ textAlign: 'center' }}>{r.sandiCabang || p2?.sandiCabang || _p2Cand?.sandiCabang || '-'}</td>
+                          <td className="code-cell" style={{ textAlign: 'center' }}>{r.branchCode || p2?.branchCode || _p2Cand?.branchCode || '-'}</td>
+                          <td className="code-cell" style={{ textAlign: 'center' }}>{r.kodeCabang || p2?.kodeCabang || _p2Cand?.kodeCabang || '-'}</td>
+                          <td style={{ fontWeight: 600, color: '#405189' }}>{r.namaOutlet || p2?.namaOutlet || _p2Cand?.namaOutlet || '-'}</td>
+                          <td style={{ textAlign: 'center' }}>{r.statusOutlet || p2?.statusOutlet || _p2Cand?.statusOutlet || '-'}</td>
+                          <td title={r.alamat || p2?.alamat || _p2Cand?.alamat || ''}>{r.alamat || p2?.alamat || _p2Cand?.alamat || '-'}</td>
                           <td className="code-cell" style={{ textAlign: 'center', color: '#0ab39c', fontWeight: 700 }}>{r.kodePosKelurahan || r.kodePosPten || '-'}</td>
                           <td style={{ fontWeight: 700 }}>{r.kelurahan}</td>
                           <td>{r.kecamatan}</td>
@@ -2042,11 +2077,11 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                             );
                           })()}
                           <td style={{ textAlign: 'center' }}>
-                            <span className="badge badge-level1">{r.wilayah}</span>
+                            <span className="badge badge-level1">{r.wilayah || p2?.wilayah || _p2Cand?.wilayah || '-'}</span>
                           </td>
-                          <td className="code-cell" style={{ textAlign: 'center' }}>{r.sandiCabang}</td>
-                          <td className="code-cell" style={{ textAlign: 'center' }}>{r.branchCode || '-'}</td>
-                          <td className="code-cell" style={{ textAlign: 'center' }}>{r.kodeCabang || '-'}</td>
+                          <td className="code-cell" style={{ textAlign: 'center' }}>{r.sandiCabang || p2?.sandiCabang || _p2Cand?.sandiCabang || '-'}</td>
+                          <td className="code-cell" style={{ textAlign: 'center' }}>{r.branchCode || p2?.branchCode || _p2Cand?.branchCode || '-'}</td>
+                          <td className="code-cell" style={{ textAlign: 'center' }}>{r.kodeCabang || p2?.kodeCabang || _p2Cand?.kodeCabang || '-'}</td>
                           <td style={{ fontWeight: 700 }}>{r.kelurahan}</td>
                           <td>{r.kecamatan}</td>
                           <td style={{ fontWeight: 600 }} title="Kolom PTEN KOTA/KABUPATEN MAX 15 DIGIT">{r.kotaPtenMax15 || r.kotaPten}</td>
@@ -2060,7 +2095,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                           {/* Kolom 1 (sticky): 3 cabang role lengkap terdekat dari outlet hasil
                               Fase 2 — strict 1 pulau, KC diprioritaskan, cache per outlet. */}
                           {(() => {
-                            const activeMaster = masterByBranchCode.get(String(r.branchCode || '').trim());
+                            const activeBranchCode = r.branchCode || p2?.branchCode || _p2Cand?.branchCode || '';
+                            const activeMaster = masterByBranchCode.get(String(activeBranchCode).trim()) || _activeCandMaster;
                             const topRoles = findTopRoleMatchesByLocation(activeMaster, targetFromAnalystRow(r), roleMappingList, masterRows, 3);
                             const autoIdx = topRoles.findIndex((x) => x.rec.organisasiTujuan === r.organisasiTujuan);
                             const selectedIdx = fase3RoleChoice[r.id] ?? (autoIdx >= 0 ? autoIdx : 0);
@@ -2175,7 +2211,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                               seperti kandidat terpilih di tab Fase 2 supaya operator mengenali
                               objek yang sama di kedua tab. */}
                           {(() => {
-                            const m = masterByBranchCode.get(String(r.branchCode || '').trim());
+                            const m = masterByBranchCode.get(String(r.branchCode || p2?.branchCode || _p2Cand?.branchCode || '').trim()) || _activeCandMaster;
                             const tdMaster: React.CSSProperties = {
                               width: '400px',
                               minWidth: '400px',
@@ -2222,11 +2258,11 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                     )}
                                   </div>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', margin: '0.12rem 0 0.22rem', flexWrap: 'nowrap', overflow: 'hidden' }}>
-                                    <span className="code-cell" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.69rem', background: '#f3f6f9', color: '#405189', padding: '0.08rem 0.4rem', borderRadius: '3px', border: '1px solid #e9ebec', fontWeight: 600, flexShrink: 0 }} title={`Kode Cabang: ${r.kodeCabang || '-'}`}>
-                                      <Building2 size={10} /> Branch: <strong>{r.branchCode || '-'}</strong>
+                                    <span className="code-cell" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.69rem', background: '#f3f6f9', color: '#405189', padding: '0.08rem 0.4rem', borderRadius: '3px', border: '1px solid #e9ebec', fontWeight: 600, flexShrink: 0 }} title={`Kode Cabang: ${r.kodeCabang || p2?.kodeCabang || _p2Cand?.kodeCabang || '-'}`}>
+                                      <Building2 size={10} /> Branch: <strong>{r.branchCode || p2?.branchCode || _p2Cand?.branchCode || '-'}</strong>
                                     </span>
-                                    <span className="badge badge-match" style={{ fontSize: '0.69rem', padding: '0.08rem 0.45rem', display: 'inline-flex', alignItems: 'center', gap: '0.2rem', flexShrink: 0 }} title={`Wilayah hasil setting: ${wil.wilayahName}`}>
-                                      <MapPin size={9} /> {wil.wilayahName}
+                                    <span className="badge badge-match" style={{ fontSize: '0.69rem', padding: '0.08rem 0.45rem', display: 'inline-flex', alignItems: 'center', gap: '0.2rem', flexShrink: 0 }} title={`Wilayah hasil setting: ${wil.wilayahName || r.wilayah || p2?.wilayah || _p2Cand?.wilayah || '-'}`}>
+                                      <MapPin size={9} /> {wil.wilayahName || r.wilayah || p2?.wilayah || _p2Cand?.wilayah || '-'}
                                     </span>
                                   </div>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.69rem', color: '#495057', background: '#f8fafc', padding: '0.18rem 0.45rem', borderRadius: '4px', border: '1px solid #e2e8f0', flexWrap: 'nowrap', ...ell }}>
