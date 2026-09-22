@@ -1,4 +1,4 @@
-import { rest, pesanRest } from './_db';
+import { rest, pesanRest } from './rest';
 
 /**
  * /api/status — pil "Terhubung" di kepala aplikasi.

@@ -1,4 +1,4 @@
-import { rest, pesanRest } from './_db';
+import { rest, pesanRest } from './rest';
 
 /**
  * /api/kodepos-geo — satu titik koordinat per kode pos.

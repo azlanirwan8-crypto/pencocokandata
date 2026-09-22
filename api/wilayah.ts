@@ -1,4 +1,4 @@
-import { rest, bacaAppStore, tulisAppStore, hapusAppStore, pesanRest } from './_db';
+import { rest, bacaAppStore, tulisAppStore, hapusAppStore, pesanRest } from './rest';
 
 /**
  * /api/wilayah — setting wilayah tersimpan di app_store kunci `wilayah_data`.
