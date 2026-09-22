@@ -647,6 +647,13 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   // Tab Fase 2/3 menampilkan KARTU kandidat (tinggi tak seragam).
   // Windowing diaktifkan mulai dari 20 baris agar DOM selalu ringan dan responsif.
   const tabKartu = activeSubTab === 'fase2' || activeSubTab === 'fase3';
+  // Fase 2 sudah pernah dijalankan? `fase2Status` hanya ditulis engine saat fase itu
+  // selesai, jadi keberadaannya = bukti run, bukan tebakan. `some` berhenti di baris
+  // pertama yang kena, jadi biayanya tetap ringan walau 83 ribu baris.
+  const fase2SudahJalan = useMemo(() => {
+    for (let i = 0; i < rows.length; i++) if (rows[i].fase2Status) return true;
+    return false;
+  }, [rows]);
   const win = useVirtualWindow({
     containerRef: tableScrollRef,
     itemCount: paginatedRows.length,
@@ -751,6 +758,9 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   const fase2Recs = useMemo(() => {
     const m = new Map<string, { rec: RecommendationResult | null; target: TargetRow }>();
     if (!masterIndex) return m;
+    // Kartu tidak ditampilkan sebelum Fase 2 selesai → jangan bayar mesinnya
+    // (±10 ms/baris) untuk sesuatu yang sedang tidak dilihat operator.
+    if (activeSubTab === 'fase2' && !fase2SudahJalan) return m;
     let cache = cacheRecFase2.get(masterIndex);
     if (!cache) {
       cache = new Map();
@@ -772,7 +782,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       m.set(r.id, { rec, target });
     });
     return m;
-  }, [renderedRows, masterIndex]);
+  }, [renderedRows, masterIndex, activeSubTab, fase2SudahJalan]);
 
   // ── Kolom Fase 2 diisi dari kandidat AKTIF baris itu ─────────────────────────
   // Run Fase 2 atas puluhan ribu baris butuh menitan; selama run itu belum selesai
@@ -1700,7 +1710,15 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
               )}
             </thead>
             <tbody>
-              {filteredRows.length === 0 ? (
+              {activeSubTab === 'fase2' && !fase2SudahJalan ? (
+                <tr>
+                  <td colSpan={25} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
+                    {isProcessing
+                      ? 'Fase 2 sedang dianalisa — daftar kandidat ditampilkan setelah selesai.'
+                      : 'Fase 2 belum dijalankan. Jalankan fase ini pada kartu fase di atas; daftar kandidat sengaja belum ditampilkan supaya tab tetap ringan.'}
+                  </td>
+                </tr>
+              ) : filteredRows.length === 0 ? (
                 <tr>
                   <td colSpan={25} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
                     Tidak ada baris analisa yang cocok dengan filter pencarian "{searchTerm}".

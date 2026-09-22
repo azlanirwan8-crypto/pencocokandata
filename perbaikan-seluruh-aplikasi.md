@@ -1064,6 +1064,8 @@ Windowing tab kartu ikut diturunkan (mulai 20 baris, overscan 6, tinggi estimasi
 
 **Susulan (laporan operator 2026-09-22, screenshot ACEH BARAT / Gunung Sitoli — "berat, tidak bisa digerakkan begitu masuk Fase 2"):** penyebabnya bukan grid, tapi `App.tsx:969` — menyetujui Fase 1 **langsung** menjalankan mesin fase berikutnya atas 83 ribu baris di thread yang sama (±10 ms/baris = tab beku tepat di momen pindah tab). Sekarang persetujuan hanya menandai fase; kolom Fase 2 tetap terisi karena diturunkan dari kandidat rank-1 (N8), dan mesin fasenya dijalankan lewat tombolnya sendiri. Ini **mencabut** perilaku "isi otomatis saat fase disetujui" (task #37) — diganti turunan layar, bukan dikembalikan menjadi kosong. Toast persetujuan ikut disesuaikan.
 
+**Susulan 2 (operator masih melaporkan *This page isn't responding*, usulnya sendiri diterima):** tab Fase 2 kini **tidak menampilkan daftar kartu sama sekali sebelum fase itu selesai** — satu baris pesan pengganti, dan `fase2Recs` dikunci sehingga mesin ±10 ms/baris tidak dihitung untuk sesuatu yang memang tidak dilihat. Setelah Fase 2 dijalankan (`fase2Status` tertulis engine = bukti, bukan tebakan), kartu tampil seperti biasa. Catatan penting saat memverifikasi: tab yang dilaporkan beku itu **tidak mungkin** memuat kode `1c69742` — dev server baru hidup jam 19.44, jadi tab tersebut masih menjalankan bundle lama; `Ctrl+F5` lebih dulu.
+
 
 
 
