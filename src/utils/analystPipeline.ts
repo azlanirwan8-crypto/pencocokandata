@@ -1967,10 +1967,22 @@ export async function executeAnalystPipeline(
 
   type Rank1 = { master: MasterRow | null; km: number; presisi: boolean; tier: 1 | 2 | 3; alasan: string };
   const cacheRank1 = new Map<string, Rank1>();
+  const cacheSpatialFase2 = new Map<string, Rank1>();
+
   const rank1Fase2 = (meta: RowMetaCache, kelurahan: string, kecamatan: string, kodePos: string, provinsi: string): Rank1 => {
+    // 1. Cek cache persis per kelurahan
     const kunci = `${meta.cityKey}|${kodePos}|${kelurahan}|${kecamatan}`;
     const lalu = cacheRank1.get(kunci);
     if (lalu) return lalu;
+
+    // 2. Cek cache spasial level Kecamatan & Kode Pos jika kelurahan tidak punya data unik
+    const kunciSpasial = `${meta.cityKey}|${kodePos}|${kecamatan}`;
+    const laluSpasial = cacheSpatialFase2.get(kunciSpasial);
+    if (laluSpasial && (laluSpasial.tier === 1 || !indeksProximity)) {
+      cacheRank1.set(kunci, laluSpasial);
+      return laluSpasial;
+    }
+
     const target = targetKandidatFase2(meta, kelurahan, kecamatan, kodePos, provinsi);
     let hasil: Rank1;
     if (meta.kimCabang) {
@@ -2003,6 +2015,7 @@ export async function executeAnalystPipeline(
       }
     }
     cacheRank1.set(kunci, hasil);
+    cacheSpatialFase2.set(kunciSpasial, hasil);
     return hasil;
   };
 
@@ -2054,10 +2067,8 @@ export async function executeAnalystPipeline(
     if (geoVerifiedCityKeys.has(ck)) verifiedKodePosRows += entries.length;
   });
 
-  // Jeda per sejumlah baris (lihat loop di bawah). 150 ≈ satu frame kerja ringan: cukup
-  // sering supaya peta progres & tombol Batalkan hidup, cukup jarang supaya tidak
-  // menambah biaya bolak-balik event loop secara berarti.
-  const YIELD_PER_BARIS = 150;
+  // Di Web Worker, kalkulasi bisa berjalan full-speed tanpa perlu jeda timer mikro terlalu rapat
+  const YIELD_PER_BARIS = 1000;
   let barisSejakYield = 0;
 
   for (let i = 0; i < itemsToProcess.length; i++) {
@@ -2078,9 +2089,8 @@ export async function executeAnalystPipeline(
       });
     }
 
-    // Progress — hanya fase yang sedang dikerjakan yang melapor, supaya kartu fase
-    // berikutnya tetap kosong sampai gilirannya tiba.
-    if (i % 50 === 0 && onProgress) {
+    // Progress per kota dilaporkan setiap 10 kota agar progres bar Fase 2 bergerak mulus
+    if (i % 10 === 0 && onProgress) {
       const pct = Math.round(35 + (i / total) * 31);
       const faseLapor = (fase2Jalan ? 2 : 1) as 1 | 2;
       onProgress(faseLapor, pct, i + 1, total, `Fase ${faseLapor}: Validasi Wilayah & Cabang (${i + 1}/${total})...`);
