@@ -1,4 +1,4 @@
-import { neon } from '@neondatabase/serverless';
+import { buatSql, ambilUrlDb } from '../server/sql';
 
 /** DDL app_store cukup sekali per warm instance; kegagalan tidak memblokir baca. */
 let appStoreReady: Promise<void> | null = null;
@@ -34,22 +34,18 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
-  const connectionString =
-    process.env.DATABASE_URL ||
-    process.env.POSTGRES_URL ||
-    process.env.POSTGRES_URL_NON_POOLING ||
-    process.env.NEON_DATABASE_URL;
+  const connectionString = ambilUrlDb();
 
   if (!connectionString) {
     return res.status(200).json({
       ok: false,
       configured: false,
-      message: 'DATABASE_URL / POSTGRES_URL Neon belum terpasang di Vercel Environment Variables.',
+      message: 'DATABASE_URL (Supabase Postgres) belum terpasang di Vercel Environment Variables.',
     });
   }
 
   try {
-    const sql = neon(connectionString);
+    const sql = buatSql(connectionString);
     await ensureAppStore(sql);
 
     if (req.method === 'GET') {
@@ -74,12 +70,12 @@ export default async function handler(req: any, res: any) {
         ON CONFLICT (key)
         DO UPDATE SET data = EXCLUDED.data, updated_at = NOW();
       `;
-      return res.status(200).json({ ok: true, configured: true, message: 'Data master PTEN berhasil disimpan ke Neon Postgres.' });
+      return res.status(200).json({ ok: true, configured: true, message: 'Data master PTEN berhasil disimpan ke Supabase Postgres.' });
     }
 
     if (req.method === 'DELETE') {
       await sql`DELETE FROM app_store WHERE key = 'pten_data';`;
-      return res.status(200).json({ ok: true, configured: true, message: 'Data master PTEN berhasil dibersihkan dari Neon Postgres.' });
+      return res.status(200).json({ ok: true, configured: true, message: 'Data master PTEN berhasil dibersihkan dari Supabase Postgres.' });
     }
 
     return res.status(405).json({ ok: false, error: 'Method Not Allowed' });

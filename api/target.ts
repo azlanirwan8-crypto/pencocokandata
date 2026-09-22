@@ -1,7 +1,7 @@
-import { neon } from '@neondatabase/serverless';
+import { buatSql, ambilUrlDb } from '../server/sql';
 
 /**
- * /api/target — Neon Postgres CRUD Data Target & Match
+ * /api/target — Supabase Postgres CRUD Data Target & Match
  *
  * GET    ?limit=N&offset=M   → halaman saja + total (tanpa param = semua baris, kompatibel lama)
  * POST   body { rows, fileName, mode:'replace'|'append' }
@@ -112,22 +112,18 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
-  const connectionString =
-    process.env.DATABASE_URL ||
-    process.env.POSTGRES_URL ||
-    process.env.POSTGRES_URL_NON_POOLING ||
-    process.env.NEON_DATABASE_URL;
+  const connectionString = ambilUrlDb();
 
   if (!connectionString) {
     return res.status(200).json({
       ok: false,
       configured: false,
-      message: 'DATABASE_URL / POSTGRES_URL Neon belum terpasang di Vercel Environment Variables.',
+      message: 'DATABASE_URL (Supabase Postgres) belum terpasang di Vercel Environment Variables.',
     });
   }
 
   try {
-    const sql = neon(connectionString);
+    const sql = buatSql(connectionString);
     try {
       await ensureSchema(sql);
     } catch (err) {
@@ -296,7 +292,7 @@ export default async function handler(req: any, res: any) {
             table: 'final_rows',
             deleted: deleted?.length ?? 0,
             diminta: kunci.length,
-            message: `${deleted?.length ?? 0} dari ${kunci.length} baris Data Final terhapus dari Neon Postgres.`,
+            message: `${deleted?.length ?? 0} dari ${kunci.length} baris Data Final terhapus dari Supabase Postgres.`,
           });
         }
         const fMode = body?.mode === 'replace' ? 'replace' : 'upsert';
@@ -425,7 +421,7 @@ export default async function handler(req: any, res: any) {
         configured: true,
         table: 'target_records',
         totalRows: totalCount,
-        message: `Sebanyak ${rows.length} data target & status matching berhasil disimpan permanen ke tabel target_records di Neon Postgres.`,
+        message: `Sebanyak ${rows.length} data target & status matching berhasil disimpan permanen ke tabel target_records di Supabase Postgres.`,
       });
     }
 
@@ -469,7 +465,7 @@ export default async function handler(req: any, res: any) {
             table: 'final_rows',
             deleted: deleted.length,
             message: deleted.length
-              ? `Baris Data Final ${oneKey} berhasil dihapus dari Neon Postgres.`
+              ? `Baris Data Final ${oneKey} berhasil dihapus dari Supabase Postgres.`
               : `Baris ${oneKey} tidak ditemukan di final_rows (mungkin belum pernah disinkronkan).`,
           });
         }
@@ -487,7 +483,7 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({
         ok: true,
         configured: true,
-        message: 'Tabel target_records dan target_meta berhasil direset/dikosongkan dari Neon Postgres.',
+        message: 'Tabel target_records dan target_meta berhasil direset/dikosongkan dari Supabase Postgres.',
       });
     }
 

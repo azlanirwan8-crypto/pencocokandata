@@ -198,7 +198,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     };
   }, [selectedProvinsi]);
 
-  // Muat SATU halaman data dari Neon (server-side pagination + filter)
+  // Muat SATU halaman data dari database (server-side pagination + filter)
   useEffect(() => {
     let alive = true;
     setLoading(true);

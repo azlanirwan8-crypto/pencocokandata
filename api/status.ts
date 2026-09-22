@@ -1,4 +1,4 @@
-import { neon } from '@neondatabase/serverless';
+import { buatSql, ambilUrlDb } from '../server/sql';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -8,11 +8,7 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
-  const connectionString =
-    process.env.DATABASE_URL ||
-    process.env.POSTGRES_URL ||
-    process.env.POSTGRES_URL_NON_POOLING ||
-    process.env.NEON_DATABASE_URL;
+  const connectionString = ambilUrlDb();
 
   if (!connectionString) {
     return res.status(200).json({
@@ -23,7 +19,7 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const sql = neon(connectionString);
+    const sql = buatSql(connectionString);
 
     // Semua query paralel: round-trip berurutan membuat boot aplikasi lambat
     const [timeRes, masterRes, targetRes, kodeposRes, finalRes] = await Promise.all([
@@ -37,7 +33,7 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json({
       connected: true,
-      provider: 'Neon Postgres (Vercel)',
+      provider: 'Supabase Postgres (Vercel)',
       serverTime: timeRes[0]?.current_time,
       tables: {
         masterRecords: masterRes[0]?.count || 0,
@@ -49,7 +45,7 @@ export default async function handler(req: any, res: any) {
   } catch (error: any) {
     return res.status(200).json({
       connected: false,
-      provider: 'Neon Postgres (Vercel)',
+      provider: 'Supabase Postgres (Vercel)',
       error: error.message,
     });
   }

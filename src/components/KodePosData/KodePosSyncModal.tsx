@@ -141,17 +141,17 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
   const handleImport = async () => {
     if (selectedRows.length === 0) return;
     setPhase('importing');
-    setStep(`Mengirim ${fmt(selectedRows.length)} baris ke Neon...`);
+    setStep(`Mengirim ${fmt(selectedRows.length)} baris ke database...`);
     setPct(0);
     try {
       const ok = await saveKodePosToNeon(selectedRows, 'append');
-      if (!ok) throw new Error('Neon menolak permintaan simpan.');
+      if (!ok) throw new Error('Server menolak permintaan simpan.');
       const msg = `${fmt(selectedRows.length)} baris berhasil dikirim ke database Neon.`;
       setImportMsg(msg);
       onImported?.();
       await startCheck(msg);
     } catch (err: any) {
-      setErrorMsg(err?.message || 'Gagal menyimpan ke Neon.');
+      setErrorMsg(err?.message || 'Gagal menyimpan ke database.');
       setPhase('ready');
     }
   };
@@ -355,7 +355,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                     {shownRows.length === 0 ? (
                       <tr>
                         <td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: '#878a99' }}>
-                          {rows.length === 0 ? 'Tidak ada baris yang perlu dikirim ke Neon.' : 'Tidak ada yang cocok dengan pencarian.'}
+                          {rows.length === 0 ? 'Tidak ada baris yang perlu dikirim ke database.' : 'Tidak ada yang cocok dengan pencarian.'}
                         </td>
                       </tr>
                     ) : (
@@ -473,7 +473,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
           >
             <CloudUpload size={13} />
-            {phase === 'importing' ? 'Menyimpan...' : `Simpan/Import Data Terpilih ke Neon (${fmt(selectedRows.length)})`}
+            {phase === 'importing' ? 'Menyimpan...' : `Simpan/Import Data Terpilih ke database (${fmt(selectedRows.length)})`}
           </button>
         </div>
       </DialogPanel>

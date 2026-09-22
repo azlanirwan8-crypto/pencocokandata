@@ -49,7 +49,7 @@ export interface KodePosSyncPlan {
   localTotal: number;
   cloudTotal: number;
   lastUpdated: string | null;
-  /** Baris lokal yang belum ada di cloud — kandidat import ke Neon. */
+  /** Baris lokal yang belum ada di cloud — kandidat import ke database. */
   missingInCloud: KodePosRow[];
   /** Contoh baris cloud yang tidak dimiliki lokal (maks. 500 per provinsi). */
   missingInLocal: KodePosRow[];
@@ -98,7 +98,7 @@ async function fetchJson(url: string, init?: RequestInit): Promise<any> {
     }
     const detail =
       json?.error || json?.message || (text ? text.slice(0, 200).replace(/\s+/g, ' ') : `HTTP ${res.status}`);
-    throw new Error(`Neon menolak ${url} (HTTP ${res.status}): ${detail}`);
+    throw new Error(`Server menolak ${url} (HTTP ${res.status}): ${detail}`);
   }
   return json;
 }
@@ -114,7 +114,7 @@ export async function runKodePosSync(onProgress?: SyncProgress): Promise<KodePos
     throw new Error('Master kode pos lokal kosong. Impor berkas kode pos terlebih dahulu.');
   }
 
-  onProgress?.('Mengambil sidik jari dari Neon...', 12);
+  onProgress?.('Mengambil sidik jari dari database...', 12);
   const meta = await fetchJson('/api/kodepos?view=sync-meta');
   const cloudProvinces: CloudProvince[] = meta.provinces || [];
   const cloudByName = new Map(cloudProvinces.map((p) => [p.provinsi, p]));

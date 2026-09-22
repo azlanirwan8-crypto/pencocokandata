@@ -1,7 +1,7 @@
-import { neon } from '@neondatabase/serverless';
+import { buatSql, ambilUrlDb } from '../server/sql';
 
 /**
- * /api/master — Neon Postgres CRUD Master Data Cabang
+ * /api/master — Supabase Postgres CRUD Master Data Cabang
  *
  * GET    ?limit=N&offset=M   → halaman saja + total (tanpa param = semua baris, kompatibel lama)
  * POST   body { rows, fileName, mode:'replace'|'append' }
@@ -87,22 +87,18 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
-  const connectionString =
-    process.env.DATABASE_URL ||
-    process.env.POSTGRES_URL ||
-    process.env.POSTGRES_URL_NON_POOLING ||
-    process.env.NEON_DATABASE_URL;
+  const connectionString = ambilUrlDb();
 
   if (!connectionString) {
     return res.status(200).json({
       ok: false,
       configured: false,
-      message: 'DATABASE_URL / POSTGRES_URL Neon belum terpasang di Vercel Environment Variables.',
+      message: 'DATABASE_URL (Supabase Postgres) belum terpasang di Vercel Environment Variables.',
     });
   }
 
   try {
-    const sql = neon(connectionString);
+    const sql = buatSql(connectionString);
     try {
       await ensureSchema(sql);
     } catch (err) {
@@ -270,7 +266,7 @@ export default async function handler(req: any, res: any) {
         configured: true,
         table: 'master_records',
         totalRows: totalCount,
-        message: `Sebanyak ${rows.length} data master berhasil disimpan permanen ke tabel master_records di Neon Postgres.`,
+        message: `Sebanyak ${rows.length} data master berhasil disimpan permanen ke tabel master_records di Supabase Postgres.`,
       });
     }
 
@@ -283,7 +279,7 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({
         ok: true,
         configured: true,
-        message: 'Tabel master_records dan master_meta berhasil direset/dikosongkan dari Neon Postgres.',
+        message: 'Tabel master_records dan master_meta berhasil direset/dikosongkan dari Supabase Postgres.',
       });
     }
 

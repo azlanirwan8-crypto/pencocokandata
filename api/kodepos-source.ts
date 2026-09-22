@@ -1,4 +1,4 @@
-import { neon } from '@neondatabase/serverless';
+import { buatSql, ambilUrlDb } from '../server/sql';
 
 /**
  * /api/kodepos-source — audit database kode pos terhadap sumber eksternal.
@@ -117,14 +117,10 @@ export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const connectionString =
-    process.env.DATABASE_URL ||
-    process.env.POSTGRES_URL ||
-    process.env.POSTGRES_URL_NON_POOLING ||
-    process.env.NEON_DATABASE_URL;
+  const connectionString = ambilUrlDb();
 
   if (!connectionString) {
-    return res.status(200).json({ ok: false, configured: false, message: 'DATABASE_URL Neon belum terpasang.' });
+    return res.status(200).json({ ok: false, configured: false, message: 'DATABASE_URL (Supabase Postgres) belum terpasang.' });
   }
 
   const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
@@ -137,7 +133,7 @@ export default async function handler(req: any, res: any) {
 
     const [src, dbRes] = await Promise.all([
       sourceKey === 'resmi' ? loadOfficial() : loadCommunity(),
-      neon(connectionString)`SELECT DISTINCT upper(btrim(kode_pos)) AS kode_pos FROM kodepos_data;`,
+      buatSql(connectionString)`SELECT DISTINCT upper(btrim(kode_pos)) AS kode_pos FROM kodepos_data;`,
     ]);
     const dbCodes = new Set<string>((dbRes as any[]).map((r) => String(r.kode_pos).trim()));
 

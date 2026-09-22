@@ -1,4 +1,4 @@
-import { neon } from '@neondatabase/serverless';
+import { buatSql, ambilUrlDb } from '../server/sql';
 import { createHash } from 'node:crypto';
 
 /**
@@ -220,20 +220,16 @@ export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const connectionString =
-    process.env.DATABASE_URL ||
-    process.env.POSTGRES_URL ||
-    process.env.POSTGRES_URL_NON_POOLING ||
-    process.env.NEON_DATABASE_URL;
+  const connectionString = ambilUrlDb();
 
   if (!connectionString) {
-    return res.status(200).json({ ok: false, configured: false, message: 'DATABASE_URL Neon belum terpasang.' });
+    return res.status(200).json({ ok: false, configured: false, message: 'DATABASE_URL (Supabase Postgres) belum terpasang.' });
   }
 
   const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
 
   try {
-    const sql = neon(connectionString);
+    const sql = buatSql(connectionString);
     const view = url.searchParams.get('view') || 'provinces';
 
     if (req.method === 'GET' && view === 'provinces') {

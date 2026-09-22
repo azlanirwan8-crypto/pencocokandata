@@ -1,7 +1,7 @@
-import { neon } from '@neondatabase/serverless';
+import { buatSql, ambilUrlDb } from '../server/sql';
 
 /**
- * /api/kodepos — Neon Postgres CRUD for Master Data Kode Pos Indonesia
+ * /api/kodepos — Supabase Postgres CRUD for Master Data Kode Pos Indonesia
  *
  * GET    ?view=page|stats|options|export   (server-side pagination + filter)
  *          filter: search, provinsi, kota, status
@@ -175,22 +175,18 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
-  const connectionString =
-    process.env.DATABASE_URL ||
-    process.env.POSTGRES_URL ||
-    process.env.POSTGRES_URL_NON_POOLING ||
-    process.env.NEON_DATABASE_URL;
+  const connectionString = ambilUrlDb();
 
   if (!connectionString) {
     return res.status(200).json({
       ok: false,
       configured: false,
-      message: 'DATABASE_URL / POSTGRES_URL Neon belum terpasang di Vercel Environment Variables.',
+      message: 'DATABASE_URL (Supabase Postgres) belum terpasang di Vercel Environment Variables.',
     });
   }
 
   try {
-    const sql = neon(connectionString);
+    const sql = buatSql(connectionString);
 
     // Auto-migrate sekali per warm instance. Kegagalan DDL sengaja tidak dilempar ke
     // pemanggil: tabel sudah ada di deployment aktif, jadi baca tetap jalan terus.
@@ -555,7 +551,7 @@ export default async function handler(req: any, res: any) {
         inserted += batch.length;
       }
 
-      return res.status(200).json({ ok: true, configured: true, inserted, total: rows.length, message: `${inserted} data kode pos berhasil disimpan ke Neon Postgres.` });
+      return res.status(200).json({ ok: true, configured: true, inserted, total: rows.length, message: `${inserted} data kode pos berhasil disimpan ke Supabase Postgres.` });
     }
 
     // ─────────────── DELETE ───────────────
@@ -567,7 +563,7 @@ export default async function handler(req: any, res: any) {
       }
       if (url.searchParams.get('all') === '1') {
         await sql`TRUNCATE TABLE kodepos_data RESTART IDENTITY;`;
-        return res.status(200).json({ ok: true, configured: true, message: 'Semua data kode pos berhasil dihapus dari Neon Postgres.' });
+        return res.status(200).json({ ok: true, configured: true, message: 'Semua data kode pos berhasil dihapus dari Supabase Postgres.' });
       }
       return res.status(400).json({ ok: false, error: 'DELETE butuh ?id=X (satu baris) atau ?all=1 (truncate).' });
     }

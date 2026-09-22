@@ -615,7 +615,7 @@ export interface KodePosGeoRunResult {
   error?: string;
 }
 
-/** Ambil ringkasan titik koordinat kode pos dari Neon. */
+/** Ambil ringkasan titik koordinat kode pos dari database. */
 export async function fetchKodePosGeoStats(): Promise<KodePosGeoStats | null> {
   try {
     const res = await fetchWithRetry('/api/kodepos-geo?view=stats', {}, 15000, 1);
@@ -736,7 +736,7 @@ export interface KodePosPageResult {
 }
 
 /**
- * Ambil SATU halaman data kode pos dari Neon (server-side pagination + filter)
+ * Ambil SATU halaman data kode pos dari database (server-side pagination + filter)
  */
 export async function fetchKodePosPage(q: KodePosPageQuery): Promise<KodePosPageResult | null> {
   try {

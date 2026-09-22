@@ -278,7 +278,7 @@ export const App: React.FC = () => {
 
             // PENTING: Hanya timpa state lokal jika data di Neon memiliki jumlah data match LEBIH BANYAK!
             // Jika data lokal IndexedDB memiliki data match lebih banyak (baru disetujui),
-            // pertahankan data lokal dan langsung dorong (push) pembaruan tersebut ke Neon DB!
+            // pertahankan data lokal dan langsung dorong (push) pembaruan tersebut ke database DB!
             if (neonMatchedCount > localMatchedCount) {
               setTargetRows(neonRows);
               setTargetFileName(neonTarget.value.fileName || '');
@@ -286,7 +286,7 @@ export const App: React.FC = () => {
               setMatchedDone(neonTarget.value.matchedDone || false);
               setItem('target_data', { ...neonTarget.value, rows: neonRows }).catch(() => {});
             } else if (localTarget && localTarget.rows && localTarget.rows.length > 0) {
-              // Data lokal lebih mutakhir -> sinkronkan data lokal ke Neon Postgres
+              // Data lokal lebih mutakhir -> sinkronkan data lokal ke database Postgres
               saveTargetToNeon(localTarget).catch(() => {});
             }
           }
@@ -785,7 +785,7 @@ export const App: React.FC = () => {
   };
 
   // ---------------------------------------------------------------------------
-  // Sinkron Data Final ke Neon (G9). Cloud = salinan kedua; IndexedDB tetap sumber
+  // Sinkron Data Final ke database (G9). Cloud = salinan kedua; IndexedDB tetap sumber
   // tampilan. Kegagalan push dilaporkan, tidak pernah diam-diam.
   // ---------------------------------------------------------------------------
   const laporkanSinkronFinal = (ok: boolean, label: string) => {
