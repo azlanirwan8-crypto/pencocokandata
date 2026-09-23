@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import type { AnalystRow, AnalystCoverage } from '../../utils/analystPipeline';
-import { cityMatchKey, matchRoleForOutlet, penjelasanFase1, penjelasanFase2, penjelasanFase3, paketFase2DariMaster } from '../../utils/analystPipeline';
+import { cityMatchKey, matchRoleForOutlet, penjelasanFase1, penjelasanFase2, penjelasanFase3, paketFase2DariMaster, barisFinalLengkap } from '../../utils/analystPipeline';
 import { useTampilanTersimpan } from '../../utils/useTampilanTersimpan';
 import type { KodePosRow } from '../../utils/neonSync';
 import type { PTENRecord } from '../PTENData/PTENManager';
@@ -440,6 +440,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     let f1ApprovedCount = 0;
     let f2ApprovedCount = 0;
     let f3ApprovedCount = 0;
+    let f2TertulisCount = 0;
+    let f3TertulisCount = 0;
 
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
@@ -473,6 +475,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
         if (r.fase1Approved) f1ApprovedCount++;
         if (r.fase2Approved) f2ApprovedCount++;
         if (r.fase3Approved) f3ApprovedCount++;
+        if (barisFinalLengkap(r)) f2TertulisCount++;
+        if (r.statusAnalisa && r.statusAnalisa !== 'MENUNGGU') f3TertulisCount++;
 
         if (r.statusAnalisa === 'EXACT_MATCH') exact++;
         else if (r.statusAnalisa === 'HIGH_CONFIDENCE') highConf++;
@@ -532,6 +536,14 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
         fase1Done: total > 0 && f1ApprovedCount === total,
         fase2Done: total > 0 && f2ApprovedCount === total,
         fase3Done: total > 0 && f3ApprovedCount === total,
+        // Fase yang belum PERNAH ditulis ke baris tidak boleh disetujui: grid menampilkan
+        // kolom Fase 2 dari kandidat master (`f2Aktif`), jadi layarnya bisa tampak penuh
+        // padahal field barisnya masih kosong — menyetujui tanpa menjalankan fasenya
+        // itulah yang dulu mengisi Data Final dengan puluhan ribu tanda "-".
+        // Gerbangnya "nol baris tertulis", bukan "semua baris tertulis": sebagian kelurahan
+        // memang tidak punya cabang, dan itu ditahan satu per satu di pintu Data Final.
+        fase2Tertulis: total > 0 && f2TertulisCount > 0,
+        fase3Tertulis: total > 0 && f3TertulisCount > 0,
         queue,
         step,
         locked: {
@@ -1169,22 +1181,22 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
               type="button"
               className="btn btn-outline btn-sm"
               onClick={() => setConfirmKind('fase2')}
-              disabled={isProcessing || !phaseState.fase1Done || phaseState.fase2Done}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.65rem', fontSize: '0.74rem', color: phaseState.fase2Done ? '#0ab39c' : !phaseState.fase1Done ? '#a2a7b0' : '#405189', borderColor: phaseState.fase2Done ? 'rgba(10, 179, 156, 0.35)' : 'rgba(64, 81, 137, 0.3)' }}
-              title={phaseState.fase2Done ? 'Fase 2 sudah disetujui' : !phaseState.fase1Done ? 'Terkunci — setujui Fase 1 terlebih dahulu' : 'Setujui seluruh hasil analisa Fase 2 dan buka Fase 3'}
+              disabled={isProcessing || !phaseState.fase1Done || phaseState.fase2Done || !phaseState.fase2Tertulis}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.65rem', fontSize: '0.74rem', color: phaseState.fase2Done ? '#0ab39c' : !phaseState.fase1Done || !phaseState.fase2Tertulis ? '#a2a7b0' : '#405189', borderColor: phaseState.fase2Done ? 'rgba(10, 179, 156, 0.35)' : 'rgba(64, 81, 137, 0.3)' }}
+              title={phaseState.fase2Done ? 'Fase 2 sudah disetujui' : !phaseState.fase1Done ? 'Terkunci — setujui Fase 1 terlebih dahulu' : !phaseState.fase2Tertulis ? 'Terkunci — Fase 2 belum dijalankan. Kolom cabang di layar baru pratinjau kandidat, belum tertulis ke barisnya. Tekan Jalankan Analisa.' : 'Setujui seluruh hasil analisa Fase 2 dan buka Fase 3'}
             >
-              {phaseState.fase2Done ? <Check size={12} /> : !phaseState.fase1Done ? <Lock size={12} /> : <Building2 size={12} />}
+              {phaseState.fase2Done ? <Check size={12} /> : !phaseState.fase1Done || !phaseState.fase2Tertulis ? <Lock size={12} /> : <Building2 size={12} />}
               <span>{phaseState.fase2Done ? 'Fase 2 Disetujui' : 'Setujui Fase 2'}</span>
             </button>
             <button
               type="button"
               className="btn btn-outline btn-sm"
               onClick={() => setConfirmKind('fase3')}
-              disabled={isProcessing || !phaseState.fase2Done || phaseState.fase3Done}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.65rem', fontSize: '0.74rem', color: phaseState.fase3Done ? '#0ab39c' : !phaseState.fase2Done ? '#a2a7b0' : '#0ab39c', borderColor: 'rgba(10, 179, 156, 0.3)' }}
-              title={phaseState.fase3Done ? 'Fase 3 sudah disetujui' : !phaseState.fase2Done ? 'Terkunci — setujui Fase 2 terlebih dahulu' : 'Setujui seluruh hasil analisa Fase 3 dan buka Data Final'}
+              disabled={isProcessing || !phaseState.fase2Done || phaseState.fase3Done || !phaseState.fase3Tertulis}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.65rem', fontSize: '0.74rem', color: phaseState.fase3Done ? '#0ab39c' : !phaseState.fase2Done || !phaseState.fase3Tertulis ? '#a2a7b0' : '#0ab39c', borderColor: 'rgba(10, 179, 156, 0.3)' }}
+              title={phaseState.fase3Done ? 'Fase 3 sudah disetujui' : !phaseState.fase2Done ? 'Terkunci — setujui Fase 2 terlebih dahulu' : !phaseState.fase3Tertulis ? 'Terkunci — Fase 3 belum dijalankan. Status role/Wondr di layar baru pratinjau, belum tertulis ke barisnya. Tekan Jalankan Analisa.' : 'Setujui seluruh hasil analisa Fase 3 dan buka Data Final'}
             >
-              {phaseState.fase3Done ? <Check size={12} /> : !phaseState.fase2Done ? <Lock size={12} /> : <Users size={12} />}
+              {phaseState.fase3Done ? <Check size={12} /> : !phaseState.fase2Done || !phaseState.fase3Tertulis ? <Lock size={12} /> : <Users size={12} />}
               <span>{phaseState.fase3Done ? 'Fase 3 Disetujui' : 'Setujui Fase 3'}</span>
             </button>
           </div>

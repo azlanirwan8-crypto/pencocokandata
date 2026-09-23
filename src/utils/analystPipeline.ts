@@ -234,6 +234,15 @@ export function makeFinalKey(kodePosPten: string, kelurahan: string, kecamatan =
 }
 
 /**
+ * Baris yang boleh disebut "hasil": kolom identitas cabang dari Fase 2 benar-benar
+ * tertulis di barisnya. Hanya `namaOutlet` yang dipakai menahan — `wilayah` dan
+ * `branchCode` memang boleh kosong di Data Cabang asli.
+ */
+export function barisFinalLengkap(r: Pick<AnalystRow, 'namaOutlet'> | null | undefined): boolean {
+  return Boolean(String(r?.namaOutlet || '').trim());
+}
+
+/**
  * Baris salinan cloud `final_rows` yang BELUM ada di daftar lokal (G9).
  * Non-destruktif: baris lokal tidak pernah ditimpa, hanya ditambah; penyaringan pakai
  * kunci alami (makeFinalKey), bukan `id` yang berubah tiap run (G12) — kalau tidak,
@@ -246,6 +255,9 @@ export function pilFinalDariCloud(lokal: AnalystRow[], cloudRows: any[]): Analys
   const hasil: AnalystRow[] = [];
   for (const r of cloudRows || []) {
     if (!r || typeof r.id !== 'string' || r.kodePosPten === undefined) continue;
+    // Salinan cloud bisa berisi baris tanpa cabang (warisan persetujuan lama). Memulihkannya
+    // membuat Data Final tampak penuh padahal kolomnya "-" di semua baris.
+    if (!barisFinalLengkap(r)) continue;
     const k = makeFinalKey(r.kodePosPten, r.kelurahan, r.kecamatan, r.kotaPten);
     if (kunci.has(k)) continue;
     kunci.add(k);

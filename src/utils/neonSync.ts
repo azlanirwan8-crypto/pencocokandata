@@ -62,6 +62,41 @@ export async function checkNeonStatus(): Promise<NeonStatus> {
 }
 
 /**
+ * 16 kolom MasterRow dijanjikan string. UI Data Cabang memanggil `.trim()` pada kolom
+ * ini, dan angka mentah dari Excel (`Wilayah: 1`, `KODE POS: 22312`) bisa masuk lewat
+ * dua pintu: balasan API lama ATAU cache IndexedDB browser yang tersimpan sebelum jalur
+ * baca dibetulkan. Kolom ekstra (mis. `No`) ikut apa adanya.
+ */
+const KOLOM_STRING_MASTER = [
+  'Wilayah',
+  'Sandi Cabang',
+  'Sandi',
+  'Cabang',
+  'Branch Code',
+  'Kode Cabang',
+  'Nama Outlet',
+  'Status Outlet',
+  'ALAMAT',
+  'KODE POS',
+  'Kelurahan',
+  'Kecamatan',
+  'Dati II',
+  'Kode Dati II',
+  'Provinsi',
+  'Telp',
+] as const;
+
+export function jaminBarisMaster(rows: any[]): MasterRow[] {
+  return (Array.isArray(rows) ? rows : []).map((raw) => {
+    const bulat: MasterRow = { ...raw };
+    for (const kolom of KOLOM_STRING_MASTER) {
+      if (typeof bulat[kolom] !== 'string') bulat[kolom] = String(bulat[kolom] ?? '').trim();
+    }
+    return bulat;
+  });
+}
+
+/**
  * Load Data Cabang dari cloud lewat /api/master
  */
 export async function loadMasterFromNeon(): Promise<{ rows: MasterRow[]; fileName: string } | null> {
@@ -72,7 +107,7 @@ export async function loadMasterFromNeon(): Promise<{ rows: MasterRow[]; fileNam
     if (!json?.ok) return null;
     // `null` = baca gagal, `{rows: []}` = cloud memang kosong — mencampurnya membuat
     // browser menimpa cloud lewat mode replace yang sekarang sungguh-sungguh menghapus.
-    const rows = Array.isArray(json.data?.rows) ? json.data.rows : [];
+    const rows = jaminBarisMaster(Array.isArray(json.data?.rows) ? json.data.rows : []);
     return { rows, fileName: String(json.data?.fileName || 'Master_Supabase.xlsx') };
   } catch (err) {
     console.warn('cloud load error (fallbacking to local):', err);

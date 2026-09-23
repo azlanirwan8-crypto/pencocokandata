@@ -16,7 +16,7 @@ import { KodePosManager } from './components/KodePosData/KodePosManager';
 import { AnalystCanvas } from './components/WorkingEngine/AnalystCanvas';
 import { AnalystResultsGrid } from './components/WorkingEngine/AnalystResultsGrid';
 import { FinalDataManager } from './components/WorkingEngine/FinalDataManager';
-import { cityMatchKey, makeFinalKey, pilFinalDariCloud, hitungBit, bitTemuanBaris, AnalisaDibatalkan, type AnalystRow, type AnalystCoverage } from './utils/analystPipeline';
+import { cityMatchKey, makeFinalKey, barisFinalLengkap, pilFinalDariCloud, hitungBit, bitTemuanBaris, AnalisaDibatalkan, type AnalystRow, type AnalystCoverage } from './utils/analystPipeline';
 import { jalankanAnalisaDiWorker, batalAnalisaDiWorker } from './utils/analystRunner';
 import { SinyalTemuanModal } from './components/WorkingEngine/SinyalTemuanModal';
 import { detectFinalAnomalies } from './utils/finalAnomaly';
@@ -37,6 +37,7 @@ import { getItem, setItem, setItemDebounced, cancelPendingWrite, deleteKey, PERI
 import {
   checkNeonStatus,
   loadMasterFromNeon,
+  jaminBarisMaster,
   saveMasterToNeon,
   clearMasterFromNeon,
   loadTargetFromNeon,
@@ -182,7 +183,7 @@ export const App: React.FC = () => {
         ]);
 
         if (savedMaster && savedMaster.rows && savedMaster.rows.length > 0) {
-          setMasterRows(savedMaster.rows);
+          setMasterRows(jaminBarisMaster(savedMaster.rows));
         }
 
         if (savedTarget && savedTarget.rows && savedTarget.rows.length > 0) {
@@ -658,7 +659,10 @@ export const App: React.FC = () => {
           reRunAnomaliesOnly,
           previousRows: lama,
           // Analisis inkremental: kelurahan yang sudah ada di Final Data tidak diulang.
-          excludeFinalKeys: finalRows.map((fr) => makeFinalKey(fr.kodePosPten, fr.kelurahan, fr.kecamatan, fr.kotaPten)),
+          // Hanya baris Final yang benar-benar punya cabang yang boleh dilewati — baris
+          // Final berdashes justru harus bisa dikerjakan ulang, kalau tidak Final yang
+          // kosong terkunci selamanya (jalur perbaikan lewat "Ulangi Analisa" mati).
+          excludeFinalKeys: finalRows.filter(barisFinalLengkap).map((fr) => makeFinalKey(fr.kodePosPten, fr.kelurahan, fr.kecamatan, fr.kotaPten)),
           sampaiFase: targetFase,
         },
         (phase, pct, _processed, _total, msg) => {
@@ -873,15 +877,32 @@ export const App: React.FC = () => {
   // "Saya Setuju (Masuk ke Final Analisa)": pindahkan baris hasil analisa ke menu Final Data.
   // Baris TIDAK_ANALISA (kota belum terpetakan) TETAP di Data Analyst sebagai antrean kerja —
   // bukan hasil final, jadi tidak ikut dipindahkan agar Final Data berisi data yang benar/real.
+  // Baris yang kolom cabangnya masih kosong juga ditahan: layar Data Analyst menampilkan kolom
+  // Fase 2 dari kandidat master (f2Aktif), bukan dari isi baris, jadi menyetujui fase tanpa
+  // menjalankannya menghasilkan Final Data berisi puluhan ribu tanda "-".
   const handleApproveAllAnalystFinal = () => {
-    const moving = analystRows.filter((r) => r.kategori !== 'TIDAK_ANALISA').map((r) => ({ ...r, isFinalApproved: true }));
-    if (moving.length === 0) return;
-    const remaining = analystRows.filter((r) => r.kategori === 'TIDAK_ANALISA');
+    const lulus = (r: AnalystRow) => r.kategori !== 'TIDAK_ANALISA' && barisFinalLengkap(r);
+    const moving = analystRows.filter(lulus).map((r) => ({ ...r, isFinalApproved: true }));
+    const ditahan = analystRows.filter((r) => r.kategori !== 'TIDAK_ANALISA' && !barisFinalLengkap(r)).length;
+    if (moving.length === 0) {
+      notify(
+        ditahan > 0
+          ? `${ditahan.toLocaleString('id-ID')} baris ditahan — kolom cabangnya masih kosong. Tekan "Ulangi Analisa Total" untuk menjalankan Fase 2, tunggu sampai Nama Outlet terisi, lalu setujui lagi.`
+          : 'Tidak ada baris yang siap disetujui.',
+        'warning'
+      );
+      return;
+    }
+    const idPindah = new Set(moving.map((r) => r.id));
+    const remaining = analystRows.filter((r) => !idPindah.has(r.id));
 
-    const byId = new Map<string, AnalystRow>();
-    for (const r of finalRows) byId.set(r.id, r);
-    for (const r of moving) byId.set(r.id, r); // baris terbaru menimpa yang lama
-    const merged = Array.from(byId.values());
+    // Kunci alami, bukan `id`: `id` dibuat ulang tiap run (G12), jadi menimpa lewat `id`
+    // membiarkan baris kosong lama menumpuk di samping baris barunya yang sudah terisi.
+    const kunci = (r: AnalystRow) => makeFinalKey(r.kodePosPten, r.kelurahan, r.kecamatan, r.kotaPten);
+    const byKey = new Map<string, AnalystRow>();
+    for (const r of finalRows) byKey.set(kunci(r), r);
+    for (const r of moving) byKey.set(kunci(r), r); // baris terbaru menimpa yang lama
+    const merged = Array.from(byKey.values());
 
     setFinalRows(merged);
     setItem('analyst_final_data', merged).catch(() => {});
@@ -892,9 +913,11 @@ export const App: React.FC = () => {
     setItem('analyst_results_data', remaining).catch(() => {});
     setAnalystCoverage(null);
     setActiveTab('final');
+    const menungguKota = remaining.length - ditahan;
     notify(
       `${moving.length.toLocaleString('id-ID')} baris disetujui masuk Data Final` +
-        (remaining.length ? ` — ${remaining.length.toLocaleString('id-ID')} baris TIDAK_ANALISA tetap di antrean.` : '.'),
+        (ditahan > 0 ? ` — ${ditahan.toLocaleString('id-ID')} baris tanpa cabang tetap di antrean.` : '') +
+        (menungguKota > 0 ? ` ${menungguKota.toLocaleString('id-ID')} baris TIDAK_ANALISA menunggu pemetaan kota.` : '.'),
       'success'
     );
   };
@@ -1084,7 +1107,11 @@ export const App: React.FC = () => {
   };
 
   // Master Actions (Appends new rows to existing master data with strict deduplication)
-  const handleMasterLoaded = async (newRows: MasterRow[], fileName: string, mode?: 'replace' | 'append' | 'update') => {
+  const handleMasterLoaded = async (rowsMasuk: MasterRow[], fileName: string, mode?: 'replace' | 'append' | 'update') => {
+    // Sel angka dari Excel (`Wilayah: 1`, `KODE POS: 22312`) dibulatkan ke string di sini,
+    // SEBELUM barisnya dipakai state, cache browser, maupun kiriman cloud — jadi tidak ada
+    // lagi satu jalur pun yang bisa menyimpan baris berjenis angka.
+    const newRows = jaminBarisMaster(rowsMasuk);
     const kunciBaris = (r: MasterRow) => {
       const bc = String(r['Branch Code'] || r['Kode Cabang'] || '').trim().toUpperCase();
       const name = String(r['Nama Outlet'] || r['Sandi Cabang'] || r.Cabang || '').trim().toUpperCase();
@@ -1241,10 +1268,11 @@ export const App: React.FC = () => {
   const handleRestoreSnapshot = async (snapshot: WorkspaceSnapshot) => {
     if (snapshot.masterData && Array.isArray(snapshot.masterData.rows)) {
       const nama = snapshot.masterData.fileName || 'Snapshot Master';
-      setMasterRows(snapshot.masterData.rows);
-      setItem('master_data', { rows: snapshot.masterData.rows, fileName: nama });
-      const ok = await saveMasterToNeon(snapshot.masterData.rows, nama).catch(() => false);
-      if (!ok) notify(`${snapshot.masterData.rows.length.toLocaleString('id-ID')} baris master dipulihkan di browser, tetapi GAGAL dikirim ke cloud.`, 'warning');
+      const baris = jaminBarisMaster(snapshot.masterData.rows);
+      setMasterRows(baris);
+      setItem('master_data', { rows: baris, fileName: nama });
+      const ok = await saveMasterToNeon(baris, nama).catch(() => false);
+      if (!ok) notify(`${baris.length.toLocaleString('id-ID')} baris master dipulihkan di browser, tetapi GAGAL dikirim ke cloud.`, 'warning');
     }
 
     if (snapshot.targetData && Array.isArray(snapshot.targetData.rows)) {

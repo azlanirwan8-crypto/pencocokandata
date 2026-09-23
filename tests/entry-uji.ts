@@ -1,4 +1,4 @@
-export { matchRoleForOutlet, executeAnalystPipeline, cityMatchKey, calculateCityMatchScore, makeFinalKey, paketFase2DariMaster } from '../src/utils/analystPipeline';
+export { matchRoleForOutlet, executeAnalystPipeline, cityMatchKey, calculateCityMatchScore, makeFinalKey, barisFinalLengkap, pilFinalDariCloud, paketFase2DariMaster } from '../src/utils/analystPipeline';
 export { findTopRoleMatchesByLocation } from '../src/utils/roleRecommender';
 export { getHeaderStyle, getDataCellStyle, applyStandardSheetStyle, exportFinalRowsToExcel, formatWilayahCode } from '../src/utils/excel';
 export { exportFinalRowsToPdf } from '../src/utils/pdfExport';
