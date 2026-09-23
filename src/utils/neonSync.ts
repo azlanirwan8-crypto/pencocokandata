@@ -85,12 +85,19 @@ export async function loadMasterFromNeon(): Promise<{ rows: MasterRow[]; fileNam
 /**
  * Save Master Data to Neon DB via /api/master
  */
+/**
+ * Kirim Data Cabang ke cloud. Dulu satu permintaan berisi SEMUA baris dengan batas
+ * 8 detik, sementara server menulis per 200 baris: master beberapa ribu baris hampir
+ * selalu terputus di tengah dan pelaporannya "GAGAL terkirim ke cloud". Sekarang
+ * dipecah sama seperti Target/Final: potongan pertama `replace`, sisanya `append`.
+ */
 export async function saveMasterToNeon(
   rows: MasterRow[],
   fileName: string,
   mode: 'replace' | 'append' = 'replace'
 ): Promise<boolean> {
-  try {
+  const CHUNK_SIZE = 1500;
+  const kirim = async (bagian: MasterRow[], bagianMode: string) => {
     const res = await fetchWithRetry(
       '/api/master',
       {
@@ -100,17 +107,28 @@ export async function saveMasterToNeon(
         },
         body: JSON.stringify({
           fileName,
-          rows,
-          mode,
+          rows: bagian,
+          mode: bagianMode,
           updatedAt: new Date().toISOString(),
         }),
       },
-      8000,
+      20000,
       2
     );
     if (!res.ok) return false;
-    const json = await res.json();
-    return Boolean(json.ok);
+    return Boolean((await res.json().catch(() => ({}))).ok);
+  };
+
+  try {
+    if (rows.length <= CHUNK_SIZE) return kirim(rows, mode);
+
+    let semuaSukses = true;
+    for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+      const bagian = rows.slice(i, i + CHUNK_SIZE);
+      const ok = await kirim(bagian, i === 0 ? mode : 'append');
+      if (!ok) semuaSukses = false;
+    }
+    return semuaSukses;
   } catch (err) {
     console.warn('Neon save error:', err);
     return false;

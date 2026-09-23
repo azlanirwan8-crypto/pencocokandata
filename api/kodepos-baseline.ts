@@ -670,6 +670,146 @@ async function probeSumber(): Promise<Record<string, string>> {
   return out;
 }
 
+/** Titik per desa diambil dari sini; sitemap kecamatan-nya daftar lengkapnya. */
+const SITUS_TITIK = 'https://kodepos.co.id';
+const SITEMAP_TITIK = `${SITUS_TITIK}/sitemaps/kecamatan.xml`;
+const TITIK_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
+
+/**
+ * Satu-satunya daftar lengkap per halaman: payload Next.js di dalam self.__next_f.
+ * Tabel HTML-nya dipotong 25 desa (terukur 2026-09-20: 214 kecamatan kehilangan 2.865 desa).
+ */
+const DESA_RE =
+  /"nama":"((?:[^"\\]|\\.)*)","slug":"[^"]*","kodePos":"(\d{5})","kodeKemendagri":"(\d{2}\.\d{2}\.\d{2}\.\d{4})","lat":(-?\d+(?:\.\d+)?),"lng":(-?\d+(?:\.\d+)?)(?:,"elevasi":(-?\d+(?:\.\d+)?))?/g;
+
+function unescapePayload(html: string): string {
+  let teks = '';
+  for (const m of html.matchAll(/self\.__next_f\.push\(\[1,("(?:[^"\\]|\\.)*")\]\)/g)) {
+    try {
+      teks += JSON.parse(m[1]);
+    } catch {
+      /* chunk tidak lengkap — lewati */
+    }
+  }
+  return teks;
+}
+
+/** Desa berkoordinat pada satu halaman kecamatan, sudah dilewatkan pemeriksaan kewarasan. */
+function parseTitikHalaman(html: string) {
+  const rows: { kode: string; kodePos: string; lat: number; lng: number; elev: number | null }[] = [];
+  for (const m of unescapePayload(html).matchAll(DESA_RE)) {
+    const lat = Number(m[4]);
+    const lng = Number(m[5]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    if (lat < -11 || lat > 41 || lng < 89 || lng > 145) continue;
+    const elev = Number(m[6]);
+    rows.push({ kode: m[3], kodePos: m[2], lat, lng, elev: Number.isFinite(elev) ? Math.round(elev) : null });
+  }
+  return rows;
+}
+
+/** Daftar URL kecamatan dari sitemap; di-cache per instance 1 jam (7.277 URL). */
+let sitemapCache: { at: number; url: string[] } | null = null;
+
+async function daftarUrlKecamatan(): Promise<string[]> {
+  if (sitemapCache && Date.now() - sitemapCache.at < 60 * 60 * 1000) return sitemapCache.url;
+  const res = await fetch(SITEMAP_TITIK, { headers: { 'User-Agent': TITIK_UA } });
+  if (!res.ok) throw new Error(`Sitemap kecamatan menolak (HTTP ${res.status}).`);
+  const xml = await res.text();
+  const url = [...xml.matchAll(/<loc>(https?:\/\/[^<]+)<\/loc>/g)]
+    .map((m) => m[1])
+    .filter((u) => !u.endsWith('kecamatan.xml'));
+  if (url.length < 1000) throw new Error(`Hanya ${url.length} URL kecamatan terbaca — sitemap berubah atau diblokir.`);
+  sitemapCache = { at: Date.now(), url };
+  return url;
+}
+
+async function ambilHalamanTitik(url: string): Promise<string> {
+  for (let coba = 1; coba <= 2; coba++) {
+    try {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': TITIK_UA, Accept: 'text/html,application/xhtml+xml' },
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (res.ok) return await res.text();
+      if (res.status === 404) return '';
+    } catch {
+      /* timeout / koneksi putus — dicoba sekali lagi */
+    }
+    if (coba === 2) return '';
+  }
+  return '';
+}
+
+/**
+ * Crawl SEBAGIAN halaman kecamatan per panggilan. Terukur dari Vercel 2026-09-23:
+ * 98.719 byte per halaman, ±220 ms untuk sitemap + satu halaman, HTTP 200 tanpa blok.
+ * 800 halaman pada paralel 8 ≈ 20 detik ambil + beberapa detik tulis — aman di dalam
+ * anggaran 60 detik fungsi, dan seluruh Indonesia (7.277 halaman) butuh ±10 panggilan.
+ * Dari laptop dulu 460 detik; sekarang tombol cukup.
+ */
+async function crawlTitik(sb: ReturnType<typeof rest>, mulai: number, jumlah: number, onProgress?: (s: string) => void) {
+  const urls = await daftarUrlKecamatan();
+  const ambil = Math.max(0, Math.min(jumlah, urls.length - mulai));
+  const target = urls.slice(mulai, mulai + ambil);
+  const CONC = 8;
+  const rows: { kode: string; kodePos: string; lat: number; lng: number; elev: number | null }[] = [];
+  let sukses = 0;
+  let gagal = 0;
+
+  for (let i = 0; i < target.length; i += CONC) {
+    const rombongan = target.slice(i, i + CONC);
+    const hasil = await Promise.all(rombongan.map((u) => ambilHalamanTitik(u).catch(() => '')));
+    for (const html of hasil) {
+      if (!html) {
+        gagal++;
+        continue;
+      }
+      const desa = parseTitikHalaman(html);
+      if (desa.length === 0) gagal++;
+      else sukses++;
+      rows.push(...desa);
+    }
+    onProgress?.(`${sukses + gagal}/${target.length} halaman`);
+  }
+
+  const unik = new Map<string, (typeof rows)[number]>();
+  for (const r of rows) if (!unik.has(r.kode)) unik.set(r.kode, r);
+  const titik = [...unik.values()];
+  const diambil_pada = new Date().toISOString();
+  /*
+   * 500 baris per statement — ukuran yang sudah terbukti di ?view=koordinat-ingest —
+   * dan maksimal 5 statement berjalan bersamaan supaya tidak menghabiskan kolam
+   * koneksi Supabase.
+   */
+  const POTONG = 500;
+  const PARALEL_TULIS = 5;
+  const potongan: typeof titik[] = [];
+  for (let i = 0; i < titik.length; i += POTONG) potongan.push(titik.slice(i, i + POTONG));
+  for (let i = 0; i < potongan.length; i += PARALEL_TULIS) {
+    await Promise.all(
+      potongan.slice(i, i + PARALEL_TULIS).map((bagian) =>
+        sb.simpan(
+          'kodepos_koordinat',
+          bagian.map((x) => ({
+            kode_wilayah: x.kode,
+            kode_pos: x.kodePos || null,
+            latitude: x.lat,
+            longitude: x.lng,
+            elevasi: x.elev,
+            sumber: 'kodepos.co.id',
+            diambil_pada,
+          })),
+          { onKonflik: 'kode_wilayah' }
+        )
+      )
+    );
+  }
+
+  return { masuk: titik.length, barisDibaca: rows.length, sukses, gagal, total: urls.length, berikutnya: mulai + ambil };
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST,DELETE');
@@ -838,12 +978,14 @@ export default async function handler(req: any, res: any) {
           .map((c) => bersih(r[c]).toUpperCase())
           .join('|');
 
+      const KOLOM_PATOKAN = `kode_wilayah,${KOLOM_KUNCI}`;
+
       const halaman = Math.ceil(batas / PER_HALAMAN);
       const hasilHalaman = await Promise.all(
         Array.from({ length: halaman }, (_, i) =>
           sb
             .baris<Record<string, unknown>>('kodepos_baseline', {
-              kolom: KOLOM_KUNCI,
+              kolom: KOLOM_PATOKAN,
               urut: 'kode_wilayah.asc',
               batas: PER_HALAMAN,
               mulai: mulai + i * PER_HALAMAN,
@@ -884,11 +1026,51 @@ export default async function handler(req: any, res: any) {
         )
       ).forEach((rows) => rows.forEach((r) => sudahAda.add(kunci(r))));
 
-      const baru = new Map<string, unknown>();
+      const baru = new Map<string, Record<string, unknown>>();
+
+      /*
+       * Titik per desa ikut dibawa SEJAK PENYALINAN, bukan lewat `koordinat_salin`
+       * di belakang: fungsi SQL itu harus memindahkan 85 ribu baris dalam satu
+       * statement dan dipotong 8 detik oleh batas role `anon` — persis cacat yang
+       * baru saja diperbaiki pada baris patokan. Kuncinya kode wilayah, sama seperti
+       * saat crawl titik menyimpannya.
+       */
+      const kodeDesa = [...new Set(patokan.map((r) => bersih(r.kode_wilayah)).filter((k) => k.length === 13))];
+      const titik = new Map<string, Record<string, unknown>>();
+      const rombangKode: string[][] = [];
+      for (let i = 0; i < kodeDesa.length; i += 400) rombangKode.push(kodeDesa.slice(i, i + 400));
+      (
+        await Promise.all(
+          rombangKode.map((bagian) =>
+            sb.semuaBaris<Record<string, unknown>>('kodepos_koordinat', {
+              kolom: 'kode_wilayah,latitude,longitude,sumber,diambil_pada',
+              filter: { kode_wilayah: `in.(${bagian.join(',')})` },
+            })
+          )
+        )
+      ).forEach((rows) => rows.forEach((t) => titik.set(bersih(t.kode_wilayah), t)));
+      let bertitik = 0;
+
       for (const r of patokan) {
         const k = kunci(r);
         if (sudahAda.has(k) || baru.has(k)) continue;
-        baru.set(k, { ...r, status: 'AKTIF' });
+        const t = titik.get(bersih(r.kode_wilayah));
+        const lat = Number(t?.latitude);
+        const lng = Number(t?.longitude);
+        const punyaTitik = Number.isFinite(lat) && Number.isFinite(lng);
+        if (punyaTitik) bertitik++;
+        baru.set(k, {
+          kode_pos: bersih(r.kode_pos),
+          kelurahan: bersih(r.kelurahan),
+          kecamatan: bersih(r.kecamatan),
+          kabupaten_kota: bersih(r.kabupaten_kota),
+          provinsi: bersih(r.provinsi),
+          status: 'AKTIF',
+          latitude: punyaTitik ? lat : null,
+          longitude: punyaTitik ? lng : null,
+          sumber_koordinat: punyaTitik ? String(t?.sumber || 'kodepos.co.id') : null,
+          diambil_pada: punyaTitik ? t?.diambil_pada ?? null : null,
+        });
       }
       const kiriman = [...baru.values()];
 
@@ -905,6 +1087,7 @@ export default async function handler(req: any, res: any) {
         ok: true,
         configured: true,
         masuk: kiriman.length,
+        bertitik,
         totalSetelah: await sb.hitung('kodepos_data'),
         berikutnya: mulai + patokan.length,
         selesai: mulai + patokan.length >= (totalPatokan ?? 0),
@@ -961,6 +1144,25 @@ export default async function handler(req: any, res: any) {
         );
       }
       return res.status(200).json({ ok: true, configured: true, masuk: rows.length, ditolak: raw.length - rows.length });
+    }
+
+    // ─────────────── KOORDINAT: crawl halaman kecamatan ───────────────
+    if (req.method === 'POST' && view === 'koordinat-crawl') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
+      const mulai = Math.max(0, Number(body.mulai) || 0);
+      const jumlah = Math.min(1500, Math.max(50, Number(body.jumlah) || 800));
+      const r = await crawlTitik(sb, mulai, jumlah);
+      return res.status(200).json({
+        ok: true,
+        configured: true,
+        masuk: r.masuk,
+        barisDibaca: r.barisDibaca,
+        sukses: r.sukses,
+        gagal: r.gagal,
+        total: r.total,
+        berikutnya: r.berikutnya,
+        selesai: r.berikutnya >= r.total,
+      });
     }
 
     // ─────────────── KOORDINAT: turunkan ke tabel kerja ───────────────

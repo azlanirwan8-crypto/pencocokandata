@@ -358,6 +358,13 @@ function planFromBaselineDiff(json: any, noteTambahan?: string): KodePosSyncPlan
 const PATOKAN_LANTAI_BARIS = 83_000;
 const PATOKAN_MAKS_UMUR_HARI = 30;
 
+/**
+ * Lantai titik koordinat: crawl penuh kodepos.co.id menghasilkan ±81.654 titik desa
+ * (diukur 2026-09-20) — bukan 83.762, karena situs itu tidak memuat setiap desa.
+ * Di bawah angka ini berarti crawl-nya belum pernah selesai, bukan belum pernah jalan.
+ */
+const TITIK_LANTAI = 75_000;
+
 /** Alasan penarikan ulang, atau null bila patokan sudah layak dipakai. */
 function alasanTarikPatokan(json: any): string | null {
   if (!json?.ready) return 'Patokan belum ada';
@@ -373,15 +380,51 @@ function alasanTarikPatokan(json: any): string | null {
 }
 
 /**
+ * Crawl titik koordinat per desa dari kodepos.co.id, dipanggil per ±1.500 halaman
+ * kecamatan. Sumbernya sama seperti dulu saat masih harus dari laptop — hanya sekarang
+ * server yang mengambilnya (terukur: 220 ms per halaman dari Vercel, 7.277 halaman).
+ */
+export async function crawlKoordinatPatokan(onProgress?: SyncProgress): Promise<number> {
+  let mulai = 0;
+  let masuk = 0;
+  let total = 0;
+  let gagal = 0;
+  for (let tahap = 0; tahap < 40; tahap++) {
+    const json = await fetchJson('/api/kodepos-baseline?view=koordinat-crawl', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mulai }),
+    });
+    masuk += Number(json.masuk || 0);
+    gagal += Number(json.gagal || 0);
+    total = Number(json.total || total);
+    if (json.selesai) {
+      onProgress?.('Titik koordinat tersimpan', 100);
+      return masuk;
+    }
+    if (json.berikutnya == null || Number(json.berikutnya) <= mulai) {
+      throw new Error('Crawl koordinat berhenti tanpa kemajuan.');
+    }
+    mulai = Number(json.berikutnya);
+    onProgress?.(
+      `Mengambil titik koordinat dari kodepos.co.id: ${mulai.toLocaleString('id-ID')} dari ${total.toLocaleString('id-ID')} kecamatan — ${masuk.toLocaleString('id-ID')} titik${gagal ? ` (${gagal.toLocaleString('id-ID')} halaman bolong)` : ''}...`,
+      Math.round((mulai / Math.max(1, total)) * 100)
+    );
+  }
+  throw new Error(`Crawl koordinat berhenti di halaman ke-${mulai.toLocaleString('id-ID')}; tekan Sync Data lagi untuk melanjutkan.`);
+}
+
+/**
  * Salin SELURUH baris patokan yang belum ada ke tabel kerja. Server memindahkan satu
  * window per panggilan — statement panjang dipotong ±8 detik oleh role `anon`, dan
  * tiap balasan baca dipotong 1.000 baris — jadi fungsi ini yang mengulang sampai selesai.
  */
 export async function importSemuaPatokan(
   onProgress?: SyncProgress
-): Promise<{ masuk: number; totalSetelah: number }> {
+): Promise<{ masuk: number; bertitik: number; totalSetelah: number }> {
   let mulai = 0;
   let masuk = 0;
+  let bertitik = 0;
   let totalSetelah = 0;
   let totalPatokan = 0;
   // Batas lama 60 pernah menghentikan pengisian di tengah jalan (server membalas
@@ -394,11 +437,12 @@ export async function importSemuaPatokan(
     });
     if (!json?.ok) throw new Error(json?.error || 'Penyalinan patokan ke tabel kerja gagal.');
     masuk += Number(json.masuk || 0);
+    bertitik += Number(json.bertitik || 0);
     totalSetelah = Number(json.totalSetelah || 0);
     totalPatokan = Number(json.totalPatokan || totalPatokan);
     if (json.selesai || json.berikutnya == null) {
       onProgress?.('Penyalinan patokan selesai', 100);
-      return { masuk, totalSetelah };
+      return { masuk, bertitik, totalSetelah };
     }
     mulai = Number(json.berikutnya);
     onProgress?.(
@@ -564,8 +608,8 @@ async function pastikanPatokanTerisi(onProgress?: SyncProgress): Promise<number>
 
   const alasan = alasanTarikPatokan(await bacaPatokan());
   if (!alasan) return 0;
-  onProgress?.(`${alasan} — menarik dump resmi Kemendagri...`, 8);
-  const hasil = await pullKodePosBaseline((pesan, pct) => onProgress?.(pesan, 8 + Math.round(pct * 0.3)));
+  onProgress?.(`${alasan} — menarik dump resmi Kemendagri...`, 5);
+  const hasil = await pullKodePosBaseline((pesan, pct) => onProgress?.(pesan, 5 + Math.round(pct * 0.25)));
   const sesudah = await bacaPatokan();
   if (sesudah.baselineRows < PATOKAN_LANTAI_BARIS) {
     throw new Error(
@@ -578,23 +622,29 @@ async function pastikanPatokanTerisi(onProgress?: SyncProgress): Promise<number>
 }
 
 /**
- * INI YANG JALAN SAAT KLIK "Sync Data".
- * 1) pastikan tabel patokan terisi — kalau kosong/kurang/usang, tarik dump resmi Kemendagri
- * 2) tanya kodepos.id: ada provinsi yang berubah sejak patokan diambil? kalau ada, crawl provinsinya
- * 3) adukan kodepos_data (tabel kerja) terhadap patokan di level kode pos
- * 4) kalau tabel kerja masih kosong sama sekali, salin patokan penuh ke dalamnya
- *
- * Cloudflare kodepos.id menolak IP datacenter, jadi langkah (2) dilewati saat server
- * diblokir — itu tidak lagi menghentikan pemeriksaan karena (1) tidak lewat kodepos.id.
+ * INI YANG JALAN SAAT KLIK "Sync Data" — satu tekan, tabel kerja berdiri lengkap:
+ * 1) patokan terisi: kosong / kurang / usang -> tarik dump resmi Kemendagri (GitHub)
+ * 2) titik per desa terisi: belum ada -> crawl 7.277 halaman kecamatan kodepos.co.id
+ *    dari server (terukur 220 ms + 98.719 byte per halaman, HTTP 200, tidak diblokir)
+ * 3) kodepos.id ditanya untuk perubahan provinsi — diblokir Cloudflare: dilewati, dicatat
+ * 4) tabel kerja diisi penuh dari patokan, SEKALIAN titik tiap desanya
+ * 5) selisih dibaca ulang supaya angka di layar kondisi terakhir, bukan perkiraan
  */
 export async function runKodePosLiveSync(onProgress?: SyncProgress): Promise<KodePosSyncPlan> {
   const barisPatokanBaru = await pastikanPatokanTerisi(onProgress);
 
-  onProgress?.('Menanyakan kondisi terbaru ke kodepos.id...', 40);
+  const titikAwal = await cakupanKoordinat();
+  let titikBaru = 0;
+  if (!titikAwal || titikAwal.patokanTitik < TITIK_LANTAI) {
+    onProgress?.('Titik koordinat belum ada — mengambil dari kodepos.co.id...', 30);
+    titikBaru = await crawlKoordinatPatokan((pesan, pct) => onProgress?.(pesan, 30 + Math.round(pct * 0.25)));
+  }
+
+  onProgress?.('Menanyakan kondisi terbaru ke kodepos.id...', 58);
   const fresh = await fetchJson('/api/kodepos-id?view=fresh');
 
   const ambilPatokan = async () => {
-    onProgress?.('Membandingkan dengan database Supabase...', 88);
+    onProgress?.('Membandingkan dengan database Supabase...', 62);
     const json = await fetchJson('/api/kodepos-baseline?view=diff');
     if (!json.ready) {
       throw new Error('Patokan masih kosong setelah ditarik dari sumber resmi. Coba lagi satu kali.');
@@ -613,7 +663,7 @@ export async function runKodePosLiveSync(onProgress?: SyncProgress): Promise<Kod
   for (let i = 0; i < perlu.length; i++) {
     onProgress?.(
       `Ada perubahan — mengambil ulang ${perlu[i]} (${i + 1}/${perlu.length})...`,
-      40 + Math.round(((i + 1) / perlu.length) * 48)
+      58 + Math.round(((i + 1) / perlu.length) * 4)
     );
     const r = await crawlKodePosIdProvince(perlu[i], versi);
     versi = r.versi;
@@ -629,25 +679,46 @@ export async function runKodePosLiveSync(onProgress?: SyncProgress): Promise<Kod
   if (barisPatokanBaru > 0) {
     catatan = `Patokan resmi baru ditarik ke database (${barisPatokanBaru.toLocaleString('id-ID')} baris). ` + catatan;
   }
+  if (titikBaru > 0) {
+    catatan = `Titik koordinat per desa baru diambil dari kodepos.co.id (${titikBaru.toLocaleString('id-ID')} titik). ` + catatan;
+  }
 
   /*
-   * Tabel kerja masih kosong = pertama kali dipakai. Salin penuh sekaligus titik
-   * koordinatnya supaya satu kali tekan Sync Data langsung menampilkan data,
-   * lalu baca ulang selisihnya agar angka yang tampil benar-benar kondisi terakhir.
+   * Tabel kerja masih kosong = pertama kali dipakai. Salin penuh supaya satu kali
+   * tekan Sync Data langsung menampilkan data beserta titik tiap desa.
    */
   let disalin = 0;
   if (Number(json.dbRows || 0) === 0 && Number(json.missingCodesTotal || 0) > 0) {
-    onProgress?.('Tabel kerja kosong — menyalin seluruh patokan ke tabel kerja...', 92);
-    const { masuk, totalSetelah } = await importSemuaPatokan((pesan, pct) =>
-      onProgress?.(pesan, 92 + Math.round(pct * 0.06))
+    onProgress?.('Tabel kerja kosong — menyalin seluruh patokan ke tabel kerja...', 66);
+    const { masuk, bertitik, totalSetelah } = await importSemuaPatokan((pesan, pct) =>
+      onProgress?.(pesan, 66 + Math.round(pct * 0.3))
     );
     const titik = await salinKoordinatPatokan();
     json = await ambilPatokan();
     disalin = masuk;
     catatan =
       `${masuk.toLocaleString('id-ID')} baris patokan disalin ke tabel kerja (total ${totalSetelah.toLocaleString('id-ID')} baris)` +
-      (titik && titik.disalin > 0 ? `, ${titik.disalin.toLocaleString('id-ID')} baris mendapat titik koordinat` : '') +
+      `, ${Math.max(bertitik, 0).toLocaleString('id-ID')} baris langsung membawa titik koordinat` +
+      (titik && titik.disalin > 0 ? `, ${titik.disalin.toLocaleString('id-ID')} baris lama menyusul` : '') +
       `. ` + catatan;
+  } else if (titikBaru > 0 || (titikAwal?.patokanTitik ?? 0) >= TITIK_LANTAI) {
+    /*
+     * Titik sudah tersedia tapi tabel kerja terisi sebelum fitur titik ada: salin
+     * penuh tidak jalan (barisnya sudah ada), dan memperbarui 85 ribu baris dalam
+     * satu statement akan dipotong 8 detik oleh batas role `anon`. Yang aman dan
+     * tidak menghapus apa pun: isi ulang dari nol sekali, itu perintah operator.
+     */
+    const cakupan = await cakupanKoordinat();
+    if (Number(json.dbRows || 0) > 0 && Number(cakupan?.dataTitik || 0) === 0) {
+      const salinan = await salinKoordinatPatokan();
+      if (!salinan || salinan.disalin === 0) {
+        catatan =
+          `Titik per desa sudah ada di database (${(cakupan?.patokanTitik ?? 0).toLocaleString('id-ID')} titik) ` +
+          `tetapi ${(json.dbRows || 0).toLocaleString('id-ID')} baris kerja terisi sebelum titik itu ada. ` +
+          'Tekan "Kosongkan Data" lalu Sync Data sekali lagi supaya setiap baris ikut membawa titiknya. ' +
+          catatan;
+      }
+    }
   }
 
   const plan = planFromBaselineDiff(json, catatan);
