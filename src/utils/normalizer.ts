@@ -101,6 +101,30 @@ export function hasDirectionalConflict(a: string, b: string): boolean {
 }
 
 /**
+ * Penjaga identitas (kartu sinyal 13): dua nama tidak boleh dianggap sama hanya
+ * karena hurufnya mirip, kalau
+ *  (1) angkanya beda — angka adalah identifier unit: "KCP 001" ≠ "KCP 002";
+ *  (2) penanda arah/wilayah hanya ada di satu sisi — "ALAM SUTRA" ≠ "ALAM SUTRA UTARA".
+ * Mengembalikan alasan (bahasa awam, untuk catatan baris) atau `null` bila tidak ada
+ * benturan. Dua nama kosong / identik tidak pernah benturan.
+ */
+export function benturanIdentitas(a: string, b: string): string | null {
+  const normA = cleanText(a);
+  const normB = cleanText(b);
+  if (!normA || !normB || normA === normB) return null;
+
+  const angkaA = (normA.match(/\d+/g) || []).sort().join(',');
+  const angkaB = (normB.match(/\d+/g) || []).sort().join(',');
+  if (angkaA !== angkaB) {
+    return `angka identitas beda (${angkaA || 'tanpa angka'} ≠ ${angkaB || 'tanpa angka'})`;
+  }
+  if (hasDirectionalConflict(normA, normB)) {
+    return 'penanda wilayah/arah hanya ada di satu nama';
+  }
+  return null;
+}
+
+/**
  * Kamus Alias Resmi & Singkatan Umum Dati II (Kota/Kabupaten) di Indonesia
  */
 const KNOWN_DATI_ALIASES: Record<string, string> = {

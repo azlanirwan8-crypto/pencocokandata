@@ -3,7 +3,7 @@
 // Jalankan:
 //   npx vite build --ssr tests/entry-uji.ts --outDir tests/out
 //   node tests/uji-mesin-role.mjs
-import { matchRoleForOutlet, findTopRoleMatchesByLocation, isKimBranchAceh, findKimBranch } from './out/entry-uji.js';
+import { matchRoleForOutlet, findTopRoleMatchesByLocation, isKimBranchAceh, findKimBranch, benturanIdentitas } from './out/entry-uji.js';
 
 const row = (o) => ({
   Wilayah: '', 'Branch Code': '', 'Kode Cabang': '', 'Sandi Cabang': '', 'Nama Outlet': '',
@@ -73,6 +73,27 @@ asa('  → dipaksa REVIEW (skor 60) + catatan pulau', [tanpaPulau.auto.confidenc
 
 const kosong = matchRoleForOutlet(kcBandung, undefined, [], masterRows);
 asa('Daftar role kosong → ANOMALI', [kosong.organisasiTujuan, kosong.statusAnalisa, kosong.alurWondr], ['', 'ANOMALI', '']);
+
+// ── PENJAGA IDENTITAS (kartu sinyal 13) ────────────────────────────────────
+asa('penjaga: angka identitas beda → alasan', /angka identitas/.test(benturanIdentitas('BANDUNG 001', 'BANDUNG 002') || ''), true);
+asa('penjaga: angka sama → tidak benturan', benturanIdentitas('BANDUNG 001', 'BANDUNG 001'), null);
+asa('penjaga: dua nama tanpa angka → tidak benturan', benturanIdentitas('BANDUNG ASIA AFRIKA', 'BANDUNG AFRIKA ASIA'), null);
+asa('penjaga: penanda arah beda → alasan', /penanda wilayah/.test(benturanIdentitas('ALAM SUTRA', 'ALAM SUTRA UTARA') || ''), true);
+asa('penjaga: angka di kedua sisi sama meski urutan kata beda → tidak benturan', benturanIdentitas('BANDUNG 001 KCP', 'KCP 001 BANDUNG'), null);
+
+// KCP "BANDUNG 001" vs record role "BANDUNG 002": Jaro-Winkler 0,96 dan selisih
+// panjang 0, jadi sebelum penjaga ini dipasang keduanya naik ke skor 95 → EXACT_MATCH.
+const kcpSatu = row({ 'Sandi Cabang': '031-001', 'Branch Code': '031-001', 'Nama Outlet': 'BANDUNG 001', Cabang: 'BANDUNG 001', 'Status Outlet': 'KCP', ALAMAT: 'JL DAGO BANDUNG', 'KODE POS': '40132', Kelurahan: 'LEBAK GEBANG', Kecamatan: 'COBLONG', 'Dati II': 'BANDUNG', Provinsi: 'JAWA BARAT' });
+masterRows.push(kcpSatu);
+const bedaNomor = jalankan('KCP BANDUNG 001 vs record BANDUNG 002', kcpSatu, [role('BANDUNG 002')]);
+asa('  → tidak boleh EXACT_MATCH (penjaga menang atas kemiripan huruf)', bedaNomor.auto.statusAnalisa === 'EXACT_MATCH', false);
+asa('  → peran tidak ditulis sebagai hasil siap-final', bedaNomor.auto.is3RoleLengkap === true && bedaNomor.auto.confidenceScore >= 90, false);
+const catatan13 = (bedaNomor.auto.temuanCatatan?.[13] || []).join(' ');
+asa('  → kartu sinyal 13 ikut terisi (tulis di kartu: 13)', /penjaga|identitas/i.test(catatan13) && /BANDUNG 002/.test(catatan13), true);
+
+// Pasangan yang angkanya memang sama harus tetap lolos — penjaga jangan pembungkam.
+const samaNomor = jalankan('KCP BANDUNG 001 vs record BANDUNG 001', kcpSatu, [role('BANDUNG 001')]);
+asa('  → tetap keyakinan penuh karena identitas sama', [samaNomor.auto.confidenceScore >= 90, (samaNomor.auto.temuanCatatan?.[13] || []).length], [true, 0]);
 
 const t0 = performance.now();
 for (let i = 0; i < 400; i++) matchRoleForOutlet(i % 2 ? kcBandung : kcpDago, undefined, roleList, masterRows);

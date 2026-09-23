@@ -80,6 +80,17 @@ asa('M7.4 Singkawang → cabang terpasang, warning non-fatal', singkawang?.fase2
 asa('M7.4 Singkawang → sumber: cabang terdekat, bukan dibiarkan kosong', singkawang?.fase2Sumber, 'OTOMATIS_TERDEKAT');
 asa('M7.4 kolom cabang terisi (bukan strip kosong)', (singkawang?.branchCode || '').length > 0, true);
 asa('M7.4 alasannya menyebut di luar provinsi', (singkawang?.fase2Temuan || []).some((t) => /di luar provinsi/.test(t)), true);
+// "Perlu diputuskan" harus berarti benar-benar perlu diputuskan: baris yang buktinya
+// menunjukkan penempatannya salah (luar kota/provinsi, beda pulau, jarak mustahil,
+// mesin buta nama) tidak boleh lolos ke Data Final tanpa operator.
+asa('M7.4 Singkawang → TIDAK auto-final walau fase2Status OTOMATIS_VALID', singkawang?.isFinalApproved, false);
+// Bukti bahwa yang menahan adalah penjaga penempatan (bukan syarat lain yang kebetulan
+// belum terpenuhi): semua syarat auto-final versi lama sudah dipenuhi baris ini.
+asa(
+  'M7.4 bukti: syarat lama (EXACT_MATCH + OTOMATIS_VALID + penempatan TERBUKTI) sudah terpenuhi',
+  [singkawang?.statusAnalisa, singkawang?.fase2Status, singkawang?.placementStatus],
+  ['EXACT_MATCH', 'OTOMATIS_VALID', 'VERIFIED']
+);
 
 // 5 — Fase 2 belum dijalankan = SIAP DIPROSES, bukan manual
 const hasil1 = utama((await jalankan(1)).rows);

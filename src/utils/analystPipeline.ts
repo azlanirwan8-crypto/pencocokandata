@@ -1063,6 +1063,18 @@ export function matchRoleForOutlet(
     sinyalRoleBit = SINYAL_BIT.geo;
     temuanCatatan = { 11: ['role dipilih hanya karena jarak terdekat satu pulau — tidak ada bukti nama, mohon diperiksa'] };
   }
+  // Kartu sinyal 13: nama kandidat sebenarnya mirip, tapi dibuang penjaga identitas
+  // (angka unit / penanda arah beda). Baris harus tetap PERLU_REVIEW dan alasannya
+  // ditulis, bukan diam-diam dianggap "tidak ada bukti nama".
+  if (pilihan.identitasTerbentur && nameMatchScore < 70) {
+    matchingAlgorithm = 'Nama Mirip Tapi Identitas Beda (Engine Layar)';
+    confidenceScore = Math.min(confidenceScore, 60);
+    sinyalRoleBit |= SINYAL_BIT.penjaga;
+    temuanCatatan = {
+      ...(temuanCatatan || {}),
+      13: [...((temuanCatatan && temuanCatatan[13]) || []), `calon role "${organisasiTujuan}" mirip tapi ${pilihan.identitasTerbentur} — tidak diterima`],
+    };
+  }
   // D5: pulau tak teridentifikasi bukan berarti "satu pulau" — jangan pernah auto-final.
   if (pilihan.islandUnknown && confidenceScore > 60) {
     confidenceScore = 60;
@@ -2167,6 +2179,10 @@ export async function executeAnalystPipeline(
       // M1 + M6: penanda "perlu diputuskan operator". Wajib TIDAK manual: baris aturan
       // Aceh (deterministik) dan baris yang cabangnya memang Rank-1 mesin.
       const temuanFase2: string[] = [];
+      // Bukti bahwa penempatannya SALAH (bukan cuma catatan kualitas data) — menahan
+      // auto-final di bawah. Dulu `fase2Status` murni "ada cabang Rank-1", jadi baris
+      // beda pulau / beda provinsi bisa ikut masuk Data Final tanpa pernah ditinjau.
+      let penempatanSalah = false;
       const kotaCabang = r1?.master ? String(r1.master['Dati II'] || r1.master['Kota/Dati II'] || '') : '';
       const buktiF2 = r1?.master ? buktiFase2(meta.cityRawName || meta.finalKotaPten, kotaCabang) : null;
       const aturanAceh = !!meta.kimCabang;
@@ -2176,18 +2192,22 @@ export async function executeAnalystPipeline(
         } else {
           if (r1.tier === 2) temuanFase2.push('cabang terpilih di luar kota (masih satu provinsi)');
           else if (r1.tier === 3) temuanFase2.push('cabang terpilih di luar provinsi');
+          if (r1.tier >= 2) penempatanSalah = true;
           // M6(3): beda pulau — aturan Aceh dikecualikan karena memang penempatannya khusus.
           const pulauBaris = getIslandFromProvinsi(provinsi, meta.cityRawName, `${kelurahan} ${kecamatan}`);
           const pulauCabang = getIslandFromProvinsi(String(r1.master.Provinsi || ''), kotaCabang, String(r1.master.ALAMAT || ''));
           if (!aturanAceh && pulauBaris !== 'Lainnya' && pulauCabang !== 'Lainnya' && pulauBaris !== pulauCabang) {
             temuanFase2.push(`cabang terpilih beda pulau (${pulauCabang} vs ${pulauBaris})`);
+            penempatanSalah = true;
           }
           if (r1.tier === 1 && r1.km > JARAK_MUSTAHIL_KM) {
             temuanFase2.push(`jarak ${r1.km.toLocaleString('id-ID')} km padahal satu kota — koordinat perlu diperiksa`);
+            penempatanSalah = true;
           }
           // M6(5): jarak tidak terukur DAN nama kota tidak saling mendukung → mesin buta.
           if (!aturanAceh && !r1.presisi && (buktiF2?.skor ?? 0) < 0.75) {
             temuanFase2.push('jarak tidak terukur dan nama kota cabang tidak mendukung');
+            penempatanSalah = true;
           }
           if (!aturanAceh && r1.tier === 1 && !adalahKcFase2(r1.master) && !meta.masterKota.some(adalahKcFase2)) {
             temuanFase2.push('tidak ada KC di kota ini — KCP yang terpilih');
@@ -2282,11 +2302,14 @@ export async function executeAnalystPipeline(
         statusAnalisa: statusBaris,
         // D3 + C3 + M1: otomatis-final hanya untuk baris Fase 2 yang benar-benar
         // OTOMATIS_VALID, penempatannya TERBUKTI (kode pos + kecamatan), bukan hasil
-        // fallback, dan Fase 3-nya EXACT_MATCH.
+        // fallback, dan Fase 3-nya EXACT_MATCH. Ditambah: baris yang buktinya justru
+        // menunjukkan penempatannya salah (luar kota/provinsi, beda pulau, jarak
+        // mustahil, atau mesin buta nama) harus tetap ditinjau operator.
         isFinalApproved:
           fase3Jalan &&
           statusBaris === 'EXACT_MATCH' &&
           fase2Status === 'OTOMATIS_VALID' &&
+          !penempatanSalah &&
           meta.placementStatus === 'VERIFIED' &&
           !hanyaBuktiFonetik(meta.citySinyalBit) &&
           !meta.usedFallback,

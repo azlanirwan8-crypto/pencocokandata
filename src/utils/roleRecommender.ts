@@ -6,7 +6,7 @@ import { getUnitCategory } from './roleHelpers';
 import { extractBranchAliases, normalizeIndonesianBranchAliases, normalizeBranchName, getIslandFromProvinsi } from './roleMatcher';
 import type { MasterRow, TargetRow } from '../types';
 import { calculateRealDistance } from './geoDistance';
-import { cleanText, textSimilarityScore } from './normalizer';
+import { cleanText, textSimilarityScore, benturanIdentitas } from './normalizer';
 
 // E6: definisi pulau SATU sumber (`roleMatcher.getIslandFromProvinsi`). Dulu file ini
 // punya salinannya sendiri, jadi Fase 2 dan Fase 3 bisa menyebut dua kota "beda pulau".
@@ -31,6 +31,8 @@ export interface RoleMatchScored extends RoleMatchWithDistance {
   synthetic: boolean;
   /** D5: pulau kandidat atau cabang tidak teridentifikasi — jangan dianggap sama pulau. */
   islandUnknown: boolean;
+  /** Alasan kandidat ditolak penjaga identitas (kartu sinyal 13), bila pernah terjadi. */
+  identitasTerbentur?: string;
 }
 
 /**
@@ -373,15 +375,27 @@ export function findTopRoleMatchesByLocation(
     }
 
     let nameMatchScore = 0;
+    // Kartu sinyal 13: kemiripan huruf tidak boleh menimpa identitas. Tanpa ini
+    // "KCP BANDUNG 001" bisa menang atas "KCP BANDUNG 002" (Jaro-Winkler 0,97) dan
+    // langsung jadi EXACT_MATCH yang ikut auto-final.
+    let identitasTerbentur = '';
+    const identitasAman = (alias: string, kunci: string) => {
+      const alasan = benturanIdentitas(alias, kunci);
+      if (alasan) {
+        if (!identitasTerbentur) identitasTerbentur = alasan;
+        return false;
+      }
+      return true;
+    };
 
     const subPartNoSpace = subPartClean ? subPartClean.replace(/\s+/g, '') : '';
     const isExactSubPart = subPartClean && (
       candOutletAliases.some(a => a === subPartClean || (subPartNoSpace.length >= 3 && a.replace(/\s+/g, '') === subPartNoSpace)) ||
       candCabangAliases.some(a => a === subPartClean || (subPartNoSpace.length >= 3 && a.replace(/\s+/g, '') === subPartNoSpace))
     );
-    const isSpecificSubPart = subPartClean && (
-      candOutletAliases.some(a => a.includes(subPartClean) || (subPartNoSpace.length >= 3 && a.replace(/\s+/g, '').includes(subPartNoSpace))) ||
-      candCabangAliases.some(a => a.includes(subPartClean) || (subPartNoSpace.length >= 3 && a.replace(/\s+/g, '').includes(subPartNoSpace)))
+    const isSpecificSubPart = Boolean(subPartClean) && (
+      candOutletAliases.some(a => (a.includes(subPartClean) || (subPartNoSpace.length >= 3 && a.replace(/\s+/g, '').includes(subPartNoSpace))) && identitasAman(a, subPartClean)) ||
+      candCabangAliases.some(a => (a.includes(subPartClean) || (subPartNoSpace.length >= 3 && a.replace(/\s+/g, '').includes(subPartNoSpace))) && identitasAman(a, subPartClean))
     );
 
     if (isExactSubPart) {
@@ -392,15 +406,15 @@ export function findTopRoleMatchesByLocation(
       nameMatchScore = 100;
     } else if (
       subPartClean &&
-      (candOutletAliases.some(a => Math.abs(a.length - subPartClean.length) <= 3 && textSimilarityScore(a, subPartClean) >= 0.85) ||
-       candCabangAliases.some(a => Math.abs(a.length - subPartClean.length) <= 3 && textSimilarityScore(a, subPartClean) >= 0.85))
+      (candOutletAliases.some(a => identitasAman(a, subPartClean) && Math.abs(a.length - subPartClean.length) <= 3 && textSimilarityScore(a, subPartClean) >= 0.85) ||
+       candCabangAliases.some(a => identitasAman(a, subPartClean) && Math.abs(a.length - subPartClean.length) <= 3 && textSimilarityScore(a, subPartClean) >= 0.85))
     ) {
       nameMatchScore = 98;
-    } else if (candOutletAliases.some(a => Math.abs(a.length - orgClean.length) <= 3 && textSimilarityScore(a, orgClean) >= 0.85)) {
+    } else if (candOutletAliases.some(a => identitasAman(a, orgClean) && Math.abs(a.length - orgClean.length) <= 3 && textSimilarityScore(a, orgClean) >= 0.85)) {
       nameMatchScore = 95;
     } else if (candCabangAliases.some(a => a === orgClean || (parentClean && a === parentClean))) {
       nameMatchScore = 85;
-    } else if (candOutletAliases.some(a => a.length >= 4 && orgClean.includes(a))) {
+    } else if (candOutletAliases.some(a => a.length >= 4 && orgClean.includes(a) && identitasAman(a, orgClean))) {
       nameMatchScore = 70;
     }
 
@@ -415,6 +429,7 @@ export function findTopRoleMatchesByLocation(
       isFullRole,
       synthetic: false,
       islandUnknown,
+      identitasTerbentur: identitasTerbentur || undefined,
     });
     addedOrgKeys.add(rec.organisasiTujuan.toUpperCase());
     addedOrgKeys.add(orgClean.toUpperCase());
