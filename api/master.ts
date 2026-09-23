@@ -246,6 +246,11 @@ export class Rest {
     filter: Record<string, string | number | undefined> = {},
     opts: { kembalikan?: boolean } = {}
   ): Promise<T[]> {
+    // PostgREST menolak DELETE tanpa WHERE (HTTP 400) dan fungsi API hanya akan
+    // membalas 500 tanpa jejak. Lebih baik gagal di sini, dengan nama tabel.
+    if (Object.keys(filter).length === 0) {
+      throw new Error(`hapus(${tabel}) butuh filter — DELETE tanpa WHERE selalu ditolak.`);
+    }
     const { data } = await this.minta<T[]>(`/rest/v1/${tabel}`, {
       method: 'DELETE',
       query: filter,
@@ -414,24 +419,27 @@ export default async function handler(req: any, res: any) {
 
         const fileName = meta?.file_name || `${records.length} Cabang (Master_Neon.xlsx)`;
 
+        // `raw_data` harus tersebar lebih dulu: kolom bertipe di bawah menjamin 16 field
+        // ini string bagi UI (yang memanggil `.trim()`), sementara angka mentah dari Excel
+        // (`Wilayah: 1`, `KODE POS: 22312`) kalau menyebar di akhir justru menimpanya.
         const mappedRows = records.map((raw: any) => ({
-          Wilayah: raw.wilayah || '',
-          'Sandi Cabang': raw.sandi_cabang || '',
-          Sandi: raw.sandi || '',
-          Cabang: raw.cabang || '',
-          'Branch Code': raw.branch_code || '',
-          'Kode Cabang': raw.kode_cabang || '',
-          'Nama Outlet': raw.nama_outlet || '',
-          'Status Outlet': raw.status_outlet || '',
-          ALAMAT: raw.alamat || '',
-          'KODE POS': raw.kode_pos || '',
-          Kelurahan: raw.kelurahan || '',
-          Kecamatan: raw.kecamatan || '',
-          'Dati II': raw.dati_ii || '',
-          'Kode Dati II': raw.kode_dati_ii || '',
-          Provinsi: raw.provinsi || '',
-          Telp: raw.telp || '',
           ...(raw.raw_data || {}),
+          Wilayah: String(raw.wilayah ?? '').trim(),
+          'Sandi Cabang': String(raw.sandi_cabang ?? '').trim(),
+          Sandi: String(raw.sandi ?? '').trim(),
+          Cabang: String(raw.cabang ?? '').trim(),
+          'Branch Code': String(raw.branch_code ?? '').trim(),
+          'Kode Cabang': String(raw.kode_cabang ?? '').trim(),
+          'Nama Outlet': String(raw.nama_outlet ?? '').trim(),
+          'Status Outlet': String(raw.status_outlet ?? '').trim(),
+          ALAMAT: String(raw.alamat ?? '').trim(),
+          'KODE POS': String(raw.kode_pos ?? '').trim(),
+          Kelurahan: String(raw.kelurahan ?? '').trim(),
+          Kecamatan: String(raw.kecamatan ?? '').trim(),
+          'Dati II': String(raw.dati_ii ?? '').trim(),
+          'Kode Dati II': String(raw.kode_dati_ii ?? '').trim(),
+          Provinsi: String(raw.provinsi ?? '').trim(),
+          Telp: String(raw.telp ?? '').trim(),
         }));
 
         // Saat dipaging, total = jumlah seluruh baris (untuk kalkulasi halaman klien).
@@ -466,7 +474,11 @@ export default async function handler(req: any, res: any) {
       const mode = body?.mode || 'replace';
 
       if (mode === 'replace') {
-        await r.hapus('master_records');
+        // `id=gt.0` adalah WHERE sah yang tetap menyapu seluruh baris: DELETE tanpa
+        // filter ditolak PostgREST, dan jalur ini dulu selalu balas 500 sebelum satu
+        // barispun masuk — itulah sebabnya impor Data Cabang dari browser tidak pernah
+        // bisa berhasil.
+        await r.hapus('master_records', { id: 'gt.0' });
       }
 
       for (let i = 0; i < rows.length; i += CHUNK) {
