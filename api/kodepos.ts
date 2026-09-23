@@ -484,16 +484,31 @@ export default async function handler(req: any, res: any) {
       }
 
       if (view === 'export') {
-        // Satu panggilan ke database, bukan puluhan putaran halaman: dengan loop
-        // halaman fungsi serverless kehabisan waktu lalu klien jatuh ke data contoh.
-        const semua =
-          (await r.rpc<any[]>('kp_semua', {
-            p_search: search?.trim() || null,
-            p_provinsi: provinsi || null,
-            p_kota: kota || null,
-            p_status: status || null,
-          })) || [];
-        return res.status(200).json({ ok: true, configured: true, count: semua.length, data: semua.map(mapRow) });
+        // `kp_semua` membaca SELURUH tabel dalam satu statement dan dipotong Supabase di
+        // ±8 detik (terukur: HTTP 500 "canceling statement due to statement timeout" pada
+        // 83 ribu baris). Klien lalu jatuh diam-diam ke DEFAULT_KODEPOS_DATA ~140 baris,
+        // sehingga Analisa Fase 1 menampilkan angka kecil tanpa peringatan apa pun.
+        // Dibaca per window memakai `kp_halaman` yang sama dengan ?view=page (terbukti
+        // 200 OK); `p_sort` null berarti urut `id asc`, jadi offsetnya stabil antar panggilan.
+        const batas = Math.min(10000, Math.max(500, Number(url.searchParams.get('batas')) || 5000));
+        const mulai = Math.max(0, Number(url.searchParams.get('mulai')) || 0);
+        const dibaca = await r.rpc<{ rows: any[]; total: number }>(
+          'kp_halaman',
+          argumenBaca({ search, provinsi, kota, status, sort: null, dir: null, limit: batas, offset: mulai })
+        );
+        const rows = dibaca?.rows || [];
+        const total = Number(dibaca?.total || 0);
+        const sudah = mulai + rows.length;
+        return res.status(200).json({
+          ok: true,
+          configured: true,
+          count: rows.length,
+          total,
+          mulai,
+          batas,
+          berikutnya: rows.length > 0 && sudah < total ? sudah : null,
+          data: rows.map(mapRow),
+        });
       }
 
       if (view === 'sync-meta') {

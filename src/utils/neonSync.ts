@@ -820,20 +820,39 @@ export async function fetchKodePosOptions(provinsi?: string): Promise<{ provinsi
 }
 
 /**
- * Ambil semua baris yang cocok filter (untuk Ekspor Excel)
+ * Ambil semua baris yang cocok filter (Ekspor Excel + master pipeline Analisa).
+ * Dibaca per window: satu permintaan puluhan ribu baris dipotong Supabase di ±8 detik,
+ * dan balasan 500 itu selama ini membuat pipeline jatuh diam-diam ke seed. `null` berarti
+ * master TIDAK lengkap — pemanggil wajib berhenti, bukan menggantinya dengan seed.
  */
+const JENDELA_EXPORT = 5000;
 export async function fetchKodePosExport(q: KodePosPageQuery): Promise<KodePosRow[] | null> {
+  const { page: _page, pageSize: _pageSize, ...filter } = q;
+  const dasar = kodePosQuery(filter as KodePosPageQuery).replace('?', '&');
+  const semua: KodePosRow[] = [];
   try {
-    const res = await fetchWithRetry(`/api/kodepos?view=export${kodePosQuery(q).replace('?', '&')}`, {}, 60000, 1);
-    if (!res.ok) return null;
-    const json = await res.json();
-    if (json.ok && Array.isArray(json.data)) return json.data as KodePosRow[];
+    let mulai = 0;
+    for (let putaran = 0; putaran < 40; putaran++) {
+      const res = await fetchWithRetry(
+        `/api/kodepos?view=export${dasar}&mulai=${mulai}&batas=${JENDELA_EXPORT}`,
+        {},
+        30000,
+        2
+      );
+      if (!res.ok) return null;
+      const json = await res.json();
+      if (!json.ok || !Array.isArray(json.data)) return null;
+      semua.push(...(json.data as KodePosRow[]));
+      if (json.berikutnya == null) return Number(json.total || 0) > semua.length ? null : semua;
+      mulai = Number(json.berikutnya);
+    }
     return null;
   } catch (err) {
-    console.warn('Neon kodepos export error:', err);
+    console.warn('Pengambilan master kode pos gagal:', err);
     return null;
   }
 }
+
 
 /**
  * Update satu baris kode pos berdasarkan id

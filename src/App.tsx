@@ -607,15 +607,24 @@ export const App: React.FC = () => {
       if (!kodePosForPipeline) {
         setAnalystMessage('Mengunduh seluruh Master Data Kode Pos dari cloud (83 ribu+ baris)...');
         const cloudKodePos = await fetchKodePosExport({});
-        if (cloudKodePos && cloudKodePos.length > 0) {
-          kodePosForPipeline = cloudKodePos;
-          setKodePosCount(cloudKodePos.length);
+        // "lengkap" = lebih dari data contoh bawaan. Tanpa gerbang ini Analisa jalan di
+        // atas ±140 baris DEFAULT_KODEPOS_DATA dan layar menampilkan angka kecil seolah
+        // itulah isi database — yang terjadi saat /api/kodepos?view=export balas 500.
+        const masterLengkap = (rows: KodePosRow[] | null | undefined) =>
+          !!rows && rows.length > DEFAULT_KODEPOS_DATA.length;
+        if (masterLengkap(cloudKodePos)) {
+          kodePosForPipeline = cloudKodePos as KodePosRow[];
+          setKodePosCount((cloudKodePos as KodePosRow[]).length);
         } else {
           const savedKodePos = await getItem<KodePosRow[]>('kodepos_master_data');
-          kodePosForPipeline =
-            savedKodePos && savedKodePos.length > DEFAULT_KODEPOS_DATA.length
-              ? savedKodePos
-              : (DEFAULT_KODEPOS_DATA as unknown as KodePosRow[]);
+          if (masterLengkap(savedKodePos)) {
+            kodePosForPipeline = savedKodePos as KodePosRow[];
+          } else {
+            throw new Error(
+              'Master Kode Pos tidak lengkap — cloud gagal dibaca dan simpanan lokal hanya data contoh. '
+                + 'Buka Data Kode Pos → Sync Data, tunggu sampai jumlah baris muncul, lalu jalankan analisa lagi.'
+            );
+          }
         }
         kodePosListRef.current = kodePosForPipeline;
         setKodePosMasterRows(kodePosForPipeline);
