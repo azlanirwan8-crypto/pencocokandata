@@ -693,14 +693,18 @@ export async function runKodePosLiveSync(onProgress?: SyncProgress): Promise<Kod
     const { masuk, bertitik, totalSetelah } = await importSemuaPatokan((pesan, pct) =>
       onProgress?.(pesan, 66 + Math.round(pct * 0.3))
     );
-    const titik = await salinKoordinatPatokan();
+    /*
+     * `koordinat_salin()` sengaja TIDAK dipanggil di sini: penyalinan di atas sudah
+     * membawa titik tiap desa, sedangkan statement UPDATE itu menyapu seluruh tabel
+     * dan akan menimpa koordinat yang Anda edit manual. Ia hanya dipakai pada jalur
+     * "tabel kerja sudah terisi padahal nol baris punya titik" — kondisi di mana
+     * memang tidak ada nilai manual yang bisa tertimpa.
+     */
     json = await ambilPatokan();
     disalin = masuk;
     catatan =
       `${masuk.toLocaleString('id-ID')} baris patokan disalin ke tabel kerja (total ${totalSetelah.toLocaleString('id-ID')} baris)` +
-      `, ${Math.max(bertitik, 0).toLocaleString('id-ID')} baris langsung membawa titik koordinat` +
-      (titik && titik.disalin > 0 ? `, ${titik.disalin.toLocaleString('id-ID')} baris lama menyusul` : '') +
-      `. ` + catatan;
+      `, ${bertitik.toLocaleString('id-ID')} baris langsung membawa titik koordinat. ` + catatan;
   } else if (titikBaru > 0 || (titikAwal?.patokanTitik ?? 0) >= TITIK_LANTAI) {
     /*
      * Titik sudah tersedia tapi tabel kerja terisi sebelum fitur titik ada: salin

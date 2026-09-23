@@ -923,8 +923,12 @@ export default async function handler(req: any, res: any) {
 
       // Tarikan selesai -> buang versi lama. Diff membaca seluruh tabel tanpa filter versi,
       // jadi baris sumber lama yang tertinggal akan muncul sebagai desa ganda di atas yang baru.
+      //
+      // HANYA untuk dump resmi: kalau GitHub sedang menolak dan `resolveSource()` jatuh ke
+      // mirror komunitas (terukur 81.061 baris vs 83.762 resmi), pembersihan ini akan
+      // menguras patokan resmi yang sudah ada demi sumber yang lebih kecil.
       let dibuang = 0;
-      if (done && upserted > 0) {
+      if (done && upserted > 0 && source.id === 'kemendagri') {
         const filterLama = { versi: `neq.${vers}` };
         dibuang = await sb.hitung('kodepos_baseline', filterLama);
         await sb.hapus('kodepos_baseline', filterLama);
