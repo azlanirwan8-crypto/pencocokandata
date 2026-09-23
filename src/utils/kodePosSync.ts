@@ -66,6 +66,8 @@ export interface KodePosSyncPlan {
   dbRows?: number;
   /** Jumlah baris/kode pos di pembanding (master perangkat ini atau sumber internet). */
   compareTotal: number;
+  /** Baris patokan yang baru saja disalin ke tabel kerja oleh pemeriksaan ini. */
+  barisDisalin?: number;
   compareLabel: string;
   /** Asal angka pada kartu "belum ada di Supabase". */
   sourceDetail: string;
@@ -630,6 +632,7 @@ export async function runKodePosLiveSync(onProgress?: SyncProgress): Promise<Kod
    * koordinatnya supaya satu kali tekan Sync Data langsung menampilkan data,
    * lalu baca ulang selisihnya agar angka yang tampil benar-benar kondisi terakhir.
    */
+  let disalin = 0;
   if (Number(json.dbRows || 0) === 0 && Number(json.missingCodesTotal || 0) > 0) {
     onProgress?.('Tabel kerja kosong — menyalin seluruh patokan ke tabel kerja...', 92);
     const { masuk, totalSetelah } = await importSemuaPatokan((pesan, pct) =>
@@ -637,12 +640,15 @@ export async function runKodePosLiveSync(onProgress?: SyncProgress): Promise<Kod
     );
     const titik = await salinKoordinatPatokan();
     json = await ambilPatokan();
+    disalin = masuk;
     catatan =
       `${masuk.toLocaleString('id-ID')} baris patokan disalin ke tabel kerja (total ${totalSetelah.toLocaleString('id-ID')} baris)` +
       (titik && titik.disalin > 0 ? `, ${titik.disalin.toLocaleString('id-ID')} baris mendapat titik koordinat` : '') +
       `. ` + catatan;
   }
 
-  return planFromBaselineDiff(json, catatan);
+  const plan = planFromBaselineDiff(json, catatan);
+  if (disalin > 0) plan.barisDisalin = disalin;
+  return plan;
 }
 

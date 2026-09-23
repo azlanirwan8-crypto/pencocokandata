@@ -88,6 +88,10 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
       setPlan(result);
       setSelected(new Set(result.missingInCloud.map(rowKey)));
       setPhase('ready');
+      if (result.barisDisalin) {
+        setImportMsg(`${fmt(result.barisDisalin)} baris patokan disalin ke tabel kerja — tabel di belakang jendela ini dimuat ulang.`);
+        onImported?.();
+      }
       void cakupanKoordinat().then((c) => c && setCakupan(c));
     } catch (err: any) {
       setErrorMsg(err?.message || 'Pemeriksaan sinkronisasi gagal.');
