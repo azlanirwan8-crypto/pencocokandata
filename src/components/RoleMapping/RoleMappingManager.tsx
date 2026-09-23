@@ -693,9 +693,14 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
     setShowResetConfirm(false);
     await setItem('role_mapping_data', DEFAULT_ROLE_MAPPING_DATA);
     onRoleMappingCountChange?.(DEFAULT_ROLE_MAPPING_DATA.length);
-    setSuccessMsg('Data mapping role berhasil dikembalikan ke data standar bawaan!');
-    setTimeout(() => setSuccessMsg(null), 4000);
-    saveRoleMappingToNeon(DEFAULT_ROLE_MAPPING_DATA).catch(() => undefined);
+    // Dulu kegagalan cloud ditelan `.catch(() => undefined)` sementara banner tetap bilang "berhasil".
+    const sinkron = await saveRoleMappingToNeon(DEFAULT_ROLE_MAPPING_DATA).catch(() => false);
+    setSuccessMsg(
+      sinkron
+        ? `Mapping role dikembalikan ke ${DEFAULT_ROLE_MAPPING_DATA.length} baris standar (browser + cloud).`
+        : `Mapping role kembali ke standar di browser, tetapi GAGAL dikirim ke cloud.`
+    );
+    setTimeout(() => setSuccessMsg(null), 5000);
   };
 
   // Reset / Clear all Records

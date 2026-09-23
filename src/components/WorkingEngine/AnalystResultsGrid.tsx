@@ -377,7 +377,13 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   const openOverrideModal = (masterCity: string) => {
     const k = cityMatchKey(masterCity);
     const ptenKota = overrideDrafts[k] || cityOverrides[k];
-    if (!ptenKota || !onApproveCityOverride) return;
+    // Klik "Revisi" tanpa kota usulan tidak boleh jadi tombol mati: operator perlu tahu
+    // kenapa dialog tidak muncul dan apa yang harus diisi lebih dulu.
+    if (!ptenKota) {
+      notify(`Kota "${masterCity}" belum punya usulan kota PTEN — pilih kota PTEN lebih dulu di baris ini, lalu buka Revisi.`, 'warning');
+      return;
+    }
+    if (!onApproveCityOverride) return;
     const ptenKodePos = Array.from(
       new Set(ptenList.filter((p) => p.kotaPten === ptenKota).map((p) => String(p.kodePosPten || '').trim()).filter(Boolean))
     );

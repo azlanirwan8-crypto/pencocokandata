@@ -13,6 +13,7 @@ import { saveKodePosToNeon, mapsUrlFor, geoLabel, type KodePosRow } from '../../
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
 import { useGeoTooltip } from '../GeoTooltip';
 import { DialogPanel } from '../BaseModal';
+import { ConfirmDialog } from '../WorkingEngine/ConfirmDialog';
 
 interface KodePosSyncModalProps {
   open: boolean;
@@ -50,6 +51,9 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [cakupan, setCakupan] = useState<KoordinatCakupan | null>(null);
+  // "Isi Semua Patokan + Titik" menulis langsung ke database produksi, jadi tidak
+  // boleh jalan dari satu klik tanpa angka berapa yang akan masuk terlihat lebih dulu.
+  const [konfirmasiIsiSemua, setKonfirmasiIsiSemua] = useState(false);
 
   const [search, setSearch] = useState('');
   const deferredSearch = useDeferredValue(search);
@@ -139,14 +143,17 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
   );
 
   const handleImport = async () => {
-    if (selectedRows.length === 0) return;
+    if (selectedRows.length === 0) {
+      setErrorMsg('Pilih dulu minimal satu baris patokan untuk disalin.');
+      return;
+    }
     setPhase('importing');
     setStep(`Mengirim ${fmt(selectedRows.length)} baris ke database...`);
     setPct(0);
     try {
       const ok = await saveKodePosToNeon(selectedRows, 'append');
       if (!ok) throw new Error('Server menolak permintaan simpan.');
-      const msg = `${fmt(selectedRows.length)} baris berhasil dikirim ke database Neon.`;
+      const msg = `${fmt(selectedRows.length)} baris berhasil dikirim ke database Supabase.`;
       setImportMsg(msg);
       onImported?.();
       await startCheck(msg);
@@ -456,7 +463,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
             <button
               type="button"
               className="btn btn-primary btn-sm"
-              onClick={() => void handleImportAll()}
+              onClick={() => setKonfirmasiIsiSemua(true)}
               disabled={phase !== 'ready'}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
               title="Menyalin semua baris patokan yang belum ada dan menurunkan titik koordinat per desa — bukan hanya daftar contoh yang tampil di layar ini."
@@ -477,6 +484,26 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
           </button>
         </div>
       </DialogPanel>
+      <ConfirmDialog
+        isOpen={konfirmasiIsiSemua}
+        icon={<CloudUpload size={20} />}
+        accent="#405189"
+        title="Salin seluruh patokan ke tabel kerja?"
+        message={
+          <>
+            {fmt(plan?.missingTotal ?? 0)} baris patokan yang belum ada akan disalin ke tabel kerja,
+            lalu titik koordinat per desa ikut diturunkan.
+          </>
+        }
+        detail="Penulisan ini masuk ke database cloud (Supabase) dan memakan tempat — bukan hanya daftar contoh yang tampil di layar ini."
+        confirmLabel="Ya, Isi Semua"
+        cancelLabel="Batal"
+        onClose={() => setKonfirmasiIsiSemua(false)}
+        onConfirm={() => {
+          setKonfirmasiIsiSemua(false);
+          void handleImportAll();
+        }}
+      />
       {tooltipNode}
     </>
   );

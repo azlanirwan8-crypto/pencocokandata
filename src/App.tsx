@@ -760,12 +760,19 @@ export const App: React.FC = () => {
   const tombolAnalisaTerkunci = !isAnalyzing && faseSudahDikerjakan;
 
   const handleResetAnalyst = async () => {
+    const tadi = analystRows.length;
     cancelPendingWrite('analyst_results_data');
     setAnalystRows([]);
     setAnalystCoverage(null);
     setAnalystProgress(0);
     setAnalystMessage('');
-    await setItem('analyst_results_data', []);
+    const tersimpan = await setItem('analyst_results_data', []);
+    notify(
+      `${tadi.toLocaleString('id-ID')} baris antrean analisa dikosongkan${
+        tersimpan ? '' : ' — gagal dicatat di browser, muat ulang halaman akan memunculkannya lagi'
+      }.`,
+      tersimpan ? 'info' : 'warning'
+    );
   };
 
   // Operator memetakan 1 kota master (dari tab "belum terpetakan") ke kota PTEN pilihan.
@@ -774,14 +781,22 @@ export const App: React.FC = () => {
     const next = { ...cityOverrides, [cityMatchKey(masterCity)]: ptenKota };
     setCityOverrides(next);
     await setItem('analyst_city_overrides', next);
+    notify(`Peta kota "${masterCity}" → PTEN ${ptenKota} disimpan — analisa dijalankan ulang dengan aturan baru.`, 'info');
     await handleStartAnalystPipeline(false, next);
   };
 
   const handleRemoveCityOverride = async (masterKey: string) => {
     const next = { ...cityOverrides };
+    const tadi = next[masterKey];
     delete next[masterKey];
     setCityOverrides(next);
     await setItem('analyst_city_overrides', next);
+    notify(
+      `Peta kota "${masterKey}" → ${tadi ?? '-'} dihapus${
+        analystRows.length > 0 ? ' — analisa dijalankan ulang tanpa peta itu.' : '.'
+      }`,
+      'info'
+    );
     if (analystRows.length > 0) await handleStartAnalystPipeline(false, next);
   };
 
@@ -1035,81 +1050,86 @@ export const App: React.FC = () => {
 
   // Master Actions (Appends new rows to existing master data with strict deduplication)
   const handleMasterLoaded = async (newRows: MasterRow[], fileName: string, mode?: 'replace' | 'append' | 'update') => {
-    // mode 'update' (edit/hapus manual di menu Data Cabang): `newRows` adalah daftar
-    // LENGKAP hasil perubahan — terapkan apa adanya. Jangan merge/dedup, karena
-    // seluruh barisnya memang sudah ada di data lama sehingga akan dianggap duplikat
-    // dan perubahan (edit/hapus) hilang diam-diam.
-    if (mode === 'update') {
+    const kunciBaris = (r: MasterRow) => {
+      const bc = String(r['Branch Code'] || r['Kode Cabang'] || '').trim().toUpperCase();
+      const name = String(r['Nama Outlet'] || r['Sandi Cabang'] || r.Cabang || '').trim().toUpperCase();
+      const kp = String(r['KODE POS'] || '').trim();
+      const addr = String(r.ALAMAT || '').trim().toUpperCase();
+      const kunci: string[] = [];
+      if (bc && bc !== '-' && bc !== '0') kunci.push(`bc:${bc}`);
+      if (name && kp) kunci.push(`ot:${name}|${kp}`);
+      if (name && addr) kunci.push(`oa:${name}|${addr}`);
+      return kunci;
+    };
+
+    // mode 'update' (edit/hapus manual) dan 'replace' (unggah berkas baru menimpa yang
+    // lama): `newRows` adalah daftar LENGKAP hasil perubahan — terapkan apa adanya.
+    // Jangan merge/dedup, karena seluruh barisnya memang sudah ada di data lama sehingga
+    // akan dianggap duplikat dan perubahan (edit/hapus/ganti berkas) hilang diam-diam.
+    // Sebelum 2026-09-23 'replace' masuk ke jalur append, jadi unggah berkas master baru
+    // di atas data lama justru mempertahankan data lama.
+    if (mode === 'update' || mode === 'replace') {
       setMasterRows(newRows);
       setItem('master_data', { rows: newRows, fileName });
-      try {
-        saveMasterToNeon(newRows, fileName);
-      } catch (e) {
-        console.warn('Neon auto-save skipped:', e);
-      }
+      // Dulunya dipanggil tanpa await, jadi kegagalan cloud tidak pernah bisa tertangkap.
+      const ok = await saveMasterToNeon(newRows, fileName).catch(() => false);
+      notify(
+        ok
+          ? `${newRows.length.toLocaleString('id-ID')} baris master cabang${mode === 'replace' ? ' diganti' : ' diperbarui'} — tersimpan di browser dan cloud.`
+          : `${newRows.length.toLocaleString('id-ID')} baris cabang tersimpan di browser, tetapi GAGAL terkirim ke cloud.`,
+        ok ? 'success' : 'warning'
+      );
       return;
     }
-    setMasterRows((prev) => {
-      // Indeks kunci unik dari data master yang sudah tersimpan
-      const existingKeys = new Set<string>();
-      for (const r of prev) {
-        const bc = String(r['Branch Code'] || r['Kode Cabang'] || '').trim().toUpperCase();
-        const name = String(r['Nama Outlet'] || r['Sandi Cabang'] || r.Cabang || '').trim().toUpperCase();
-        const kp = String(r['KODE POS'] || '').trim();
-        const addr = String(r.ALAMAT || '').trim().toUpperCase();
 
-        if (bc && bc !== '-' && bc !== '0') existingKeys.add(`bc:${bc}`);
-        if (name && kp) existingKeys.add(`ot:${name}|${kp}`);
-        if (name && addr) existingKeys.add(`oa:${name}|${addr}`);
+    // Dihitung di luar setState updater supaya jumlahnya bisa dilaporkan ke operator —
+    // sebelumnya baris duplikat dibuang tanpa satu pun keterangan.
+    const existingKeys = new Set<string>();
+    for (const r of masterRows) for (const k of kunciBaris(r)) existingKeys.add(k);
+
+    const uniqueAppended: MasterRow[] = [];
+    let terlewat = 0;
+    for (const r of newRows) {
+      const kunci = kunciBaris(r);
+      if (kunci.some((k) => existingKeys.has(k))) {
+        terlewat++;
+        continue;
       }
+      for (const k of kunci) existingKeys.add(k);
+      uniqueAppended.push(r);
+    }
 
-      // Saring hanya baris yang benar-benar baru
-      const uniqueAppended: MasterRow[] = [];
-      for (const r of newRows) {
-        const bc = String(r['Branch Code'] || r['Kode Cabang'] || '').trim().toUpperCase();
-        const name = String(r['Nama Outlet'] || r['Sandi Cabang'] || r.Cabang || '').trim().toUpperCase();
-        const kp = String(r['KODE POS'] || '').trim();
-        const addr = String(r.ALAMAT || '').trim().toUpperCase();
+    const combined = [...masterRows, ...uniqueAppended];
+    const combinedFileName = masterRows.length > 0 ? `${combined.length} Cabang (${fileName})` : fileName;
+    setMasterRows(combined);
+    setItem('master_data', { rows: combined, fileName: combinedFileName });
 
-        const branchKey = bc && bc !== '-' && bc !== '0' ? `bc:${bc}` : '';
-        const outletKey = name && kp ? `ot:${name}|${kp}` : '';
-        const outletAddrKey = name && addr ? `oa:${name}|${addr}` : '';
+    if (uniqueAppended.length === 0 && terlewat > 0) {
+      notify(`${terlewat.toLocaleString('id-ID')} baris "${fileName}" sudah ada di master (Branch Code / outlet+kode pos sama) — tidak ada yang ditambahkan.`, 'warning');
+    } else {
+      notify(
+        `${uniqueAppended.length.toLocaleString('id-ID')} baris cabang baru masuk${
+          terlewat > 0 ? `, ${terlewat.toLocaleString('id-ID')} duplikat dilewati` : ''
+        } — total ${combined.length.toLocaleString('id-ID')}.`,
+        'success'
+      );
+    }
 
-        const isDuplicate =
-          (branchKey && existingKeys.has(branchKey)) ||
-          (outletKey && existingKeys.has(outletKey)) ||
-          (outletAddrKey && existingKeys.has(outletAddrKey));
-
-        if (isDuplicate) continue;
-
-        if (branchKey) existingKeys.add(branchKey);
-        if (outletKey) existingKeys.add(outletKey);
-        if (outletAddrKey) existingKeys.add(outletAddrKey);
-        uniqueAppended.push(r);
-      }
-
-      const combined = [...prev, ...uniqueAppended];
-      const combinedFileName = prev.length > 0 ? `${combined.length} Cabang (${fileName})` : fileName;
-      // setMasterFileName(combinedFileName);
-      setItem('master_data', { rows: combined, fileName: combinedFileName });
-
-      // Sync to Vercel Neon DB (Serverless)
-      try {
-        saveMasterToNeon(combined, combinedFileName);
-      } catch (e) {
-        console.warn('Neon auto-save skipped:', e);
-      }
-
-      return combined;
-    });
+    const ok = await saveMasterToNeon(combined, combinedFileName).catch(() => false);
+    if (!ok) notify('Master cabang gagal terkirim ke cloud — data masih aman di browser ini.', 'warning');
   };
 
   const handleResetMaster = async () => {
+    const tadi = masterRows.length;
     try {
       setMasterRows([]);
-      await setItem('master_data', { rows: [], fileName: '' });
+      const tersimpan = await setItem('master_data', { rows: [], fileName: '' });
       try {
         await clearMasterFromNeon();
+        notify(
+          `${tadi.toLocaleString('id-ID')} baris Data Cabang dikosongkan${tersimpan ? '' : ' (catatan browser gagal ditulis — muat ulang bisa memunculkannya lagi)'}, browser dan cloud sudah bersih.`,
+          tersimpan ? 'info' : 'warning'
+        );
       } catch (e) {
         // F3-C3: cloud gagal saat reset — beri tahu operator, jangan diam-diam
         console.warn('Neon clear warning:', e);
@@ -1135,65 +1155,61 @@ export const App: React.FC = () => {
     fileName: string,
     mode: 'replace' | 'append' = 'replace'
   ) => {
-    setTargetRows((prev) => {
-      let finalRows: TargetRow[];
-      if (mode === 'append' && prev.length > 0) {
-        const startNo = prev.length;
-        const indexedNewRows = newRows.map((r, idx) => {
-          const ptenRes = validatePtenForTarget(r['KODE POS'], r['Dati II'] || r.Kota || '', ptenIndex);
-          return {
-            ...r,
-            No: r.No !== undefined && String(r.No).trim() !== '' ? r.No : startNo + idx + 1,
-            _excelRowIndex: startNo + idx + 1,
-            'KOTA PTEN': r['KOTA PTEN'] || ptenRes.kotaPten,
-            'KODE POS PTEN': r['KODE POS PTEN'] || ptenRes.kodePosPten,
-            'CEK KODE POS + PTEN': r['CEK KODE POS + PTEN'] || ptenRes.statusPten,
-          };
-        });
-        finalRows = [...prev, ...indexedNewRows];
-      } else {
-        // Mode Replace (default): Urutan 100% murni persis sesuai file Excel yang diunggah (0ms instan tanpa lag)
-        finalRows = newRows.map((r, idx) => {
-          const ptenRes = validatePtenForTarget(r['KODE POS'], r['Dati II'] || r.Kota || '', ptenIndex);
-          return {
-            ...r,
-            No: r.No !== undefined && String(r.No).trim() !== '' ? r.No : idx + 1,
-            _excelRowIndex: idx + 1,
-            'KOTA PTEN': r['KOTA PTEN'] || ptenRes.kotaPten,
-            'KODE POS PTEN': r['KODE POS PTEN'] || ptenRes.kodePosPten,
-            'CEK KODE POS + PTEN': r['CEK KODE POS + PTEN'] || ptenRes.statusPten,
-          };
-        });
-      }
+    // Dulu seluruh isi fungsi ini berjalan di dalam updater setTargetRows(), jadi effect
+    // samping (persist, setState lain) bisa dijalankan dua kali oleh React dan jumlahnya
+    // tidak bisa dilaporkan ke operator. Sekarang dihitung lurus di luar updater.
+    const sebelum = targetRows;
+    const append = mode === 'append' && sebelum.length > 0;
+    const mulaiNo = append ? sebelum.length : 0;
+    const cocokSebelum = sebelum.filter((r) => Boolean(r._isMatched) || Boolean(r.Sandi) || Boolean(r.Cabang)).length;
 
-      const finalFileName =
-        mode === 'append' && prev.length > 0 ? `${finalRows.length} Data Target (${fileName})` : fileName;
-      setTargetFileName(finalFileName);
-      setInitialTargetCount(finalRows.length);
-      setMatchedDone(false);
+    const indeks = (r: TargetRow, idx: number): TargetRow => {
+      const ptenRes = validatePtenForTarget(r['KODE POS'], r['Dati II'] || r.Kota || '', ptenIndex);
+      return {
+        ...r,
+        No: r.No !== undefined && String(r.No).trim() !== '' ? r.No : mulaiNo + idx + 1,
+        _excelRowIndex: mulaiNo + idx + 1,
+        'KOTA PTEN': r['KOTA PTEN'] || ptenRes.kotaPten,
+        'KODE POS PTEN': r['KODE POS PTEN'] || ptenRes.kodePosPten,
+        'CEK KODE POS + PTEN': r['CEK KODE POS + PTEN'] || ptenRes.statusPten,
+      };
+    };
 
-      persistTargetData({
-        rows: finalRows,
-        fileName: finalFileName,
-        initialCount: finalRows.length,
-        matchedDone: false,
-      });
+    const bernomor = newRows.map(indeks);
+    // Mode Replace (default): urutan 100% murni persis sesuai file Excel yang diunggah.
+    const finalRows = append ? [...sebelum, ...bernomor] : bernomor;
+    const finalFileName = append ? `${finalRows.length} Data Target (${fileName})` : fileName;
 
-      return finalRows;
+    setTargetRows(finalRows);
+    setTargetFileName(finalFileName);
+    setInitialTargetCount(finalRows.length);
+    setMatchedDone(false);
+
+    persistTargetData({
+      rows: finalRows,
+      fileName: finalFileName,
+      initialCount: finalRows.length,
+      matchedDone: false,
     });
+
+    const ganti = !append && cocokSebelum > 0;
+    notify(
+      `${bernomor.length.toLocaleString('id-ID')} baris target dimuat dari "${fileName}"` +
+        (append ? `, total kini ${finalRows.length.toLocaleString('id-ID')} baris` : '') +
+        (ganti ? ` — hasil pencocokan ${cocokSebelum.toLocaleString('id-ID')} baris sebelumnya ikut diganti` : '') +
+        '.',
+      ganti ? 'warning' : 'success'
+    );
   };
 
   // Restore Session Snapshot (.json) - Memulihkan data Master, Target, dan Hasil Pencocokan
-  const handleRestoreSnapshot = (snapshot: WorkspaceSnapshot) => {
+  const handleRestoreSnapshot = async (snapshot: WorkspaceSnapshot) => {
     if (snapshot.masterData && Array.isArray(snapshot.masterData.rows)) {
+      const nama = snapshot.masterData.fileName || 'Snapshot Master';
       setMasterRows(snapshot.masterData.rows);
-      setItem('master_data', {
-        rows: snapshot.masterData.rows,
-        fileName: snapshot.masterData.fileName || 'Snapshot Master',
-      });
-      saveMasterToNeon(snapshot.masterData.rows, snapshot.masterData.fileName || 'Snapshot Master').catch((e) =>
-        console.warn('Neon snapshot master save skipped:', e)
-      );
+      setItem('master_data', { rows: snapshot.masterData.rows, fileName: nama });
+      const ok = await saveMasterToNeon(snapshot.masterData.rows, nama).catch(() => false);
+      if (!ok) notify(`${snapshot.masterData.rows.length.toLocaleString('id-ID')} baris master dipulihkan di browser, tetapi GAGAL dikirim ke cloud.`, 'warning');
     }
 
     if (snapshot.targetData && Array.isArray(snapshot.targetData.rows)) {
@@ -1212,6 +1228,12 @@ export const App: React.FC = () => {
 
     setLastSyncedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
     setIsSnapshotModalOpen(false);
+    notify(
+      `Cadangan dipulihkan: ${(snapshot.masterData?.rows.length ?? 0).toLocaleString('id-ID')} baris master` +
+        ` dan ${(snapshot.targetData?.rows.length ?? 0).toLocaleString('id-ID')} baris target.` +
+        (snapshot.note ? ` Catatan: ${snapshot.note}.` : ''),
+      'success'
+    );
   };
 
   return (

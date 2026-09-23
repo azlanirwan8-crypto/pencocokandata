@@ -1464,6 +1464,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       );
       if (found && mapInstanceRef.current) {
         handleSelectSuggestion(found);
+      } else {
+        notify(`Pencarian "${searchQuery.trim()}" tidak ketemu di ${allPins.length.toLocaleString('id-ID')} titik cabang yang ada di peta.`, 'warning');
       }
     }
   };

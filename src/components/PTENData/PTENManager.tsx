@@ -466,9 +466,14 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
     setShowResetConfirm(false);
     await setItem('pten_master_data', DEFAULT_PTEN_DATA);
     onPtenCountChange?.(DEFAULT_PTEN_DATA.length);
-    setSuccessMsg('Data master PTEN berhasil dikembalikan ke data standar bawaan!');
-    setTimeout(() => setSuccessMsg(null), 4000);
-    savePtenToNeon(DEFAULT_PTEN_DATA).catch(() => undefined);
+    // Dulu kegagalan cloud ditelan `.catch(() => undefined)` sementara banner tetap bilang "berhasil".
+    const sinkron = await savePtenToNeon(DEFAULT_PTEN_DATA).catch(() => false);
+    setSuccessMsg(
+      sinkron
+        ? `Data master PTEN dikembalikan ke ${DEFAULT_PTEN_DATA.length} baris standar (browser + cloud).`
+        : `Data master PTEN kembali ke standar di browser, tetapi GAGAL dikirim ke cloud.`
+    );
+    setTimeout(() => setSuccessMsg(null), 5000);
   };
 
   // Reset / Clear all PTEN records

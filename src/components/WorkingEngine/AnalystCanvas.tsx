@@ -12,6 +12,7 @@ import {
   Award,
 } from 'lucide-react';
 import { SINYAL_PENCOCOKAN } from '../../utils/analystPipeline';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface AnalystCanvasProps {
   isAnalyzing: boolean;
@@ -77,6 +78,9 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
   bitmaskBelumAda = false,
 }) => {
   const [showTheories, setShowTheories] = useState<boolean>(true);
+  // Reset Analisa menghapus seluruh hasil kerja (bukan cuma menyembunyikan),
+  // jadi tidak boleh jalan dari satu klik tanpa konfirmasi.
+  const [konfirmasiReset, setKonfirmasiReset] = useState<boolean>(false);
 
   // Pesan langkah terbaru tampil di kartu fase yang sedang berjalan (prefix [Fase n] dibuang).
   const stepText = (fallback: string) => {
@@ -230,7 +234,7 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
               <button
                 type="button"
                 className="btn btn-outline btn-sm"
-                onClick={onResetAnalysis}
+                onClick={() => setKonfirmasiReset(true)}
                 disabled={isAnalyzing}
                 style={{ color: '#f06548', borderColor: 'rgba(240, 101, 72, 0.35)', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
                 title="Reset seluruh hasil analisa"
@@ -459,6 +463,22 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={konfirmasiReset}
+        icon={<RotateCcw size={20} />}
+        accent="#f06548"
+        title="Reset seluruh hasil analisa?"
+        message="Semua baris hasil Fase 1-3 di layar ini akan dihapus dan harus dikerjakan ulang dari awal."
+        detail="Data Final yang sudah disetujui di menu Data Final TIDAK terhapus — hanya antrean analisa yang kembali kosong."
+        confirmLabel="Ya, Reset Analisa"
+        cancelLabel="Batal"
+        onClose={() => setKonfirmasiReset(false)}
+        onConfirm={() => {
+          setKonfirmasiReset(false);
+          onResetAnalysis();
+        }}
+      />
     </div>
   );
 };
