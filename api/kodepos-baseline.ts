@@ -614,6 +614,31 @@ async function simpanBaseline(sb: ReturnType<typeof rest>, rows: NormRow[], sumb
   }
 }
 
+/**
+ * Probe murah: minta 1 byte dari tiap sumber. Dipakai `?view=meta&probe=1` untuk
+ * menjawab "kenapa penarikan gagal" tanpa menulis apa pun ke database.
+ */
+async function probeSumber(): Promise<Record<string, string>> {
+  const target: Record<string, string> = {
+    kemendagri_wilayah: WILAYAH_URL,
+    kemendagri_kodepos: KODEPOS_SQL_URL,
+    pemda: PEMDA_URL,
+    cadangan: CSV_URL,
+  };
+  const out: Record<string, string> = {};
+  await Promise.all(
+    Object.entries(target).map(async ([id, u]) => {
+      try {
+        const r = await fetch(u, { headers: { Range: 'bytes=0-0' }, redirect: 'follow' });
+        out[id] = String(r.status);
+      } catch (err: any) {
+        out[id] = String(err?.message || err).slice(0, 90);
+      }
+    })
+  );
+  return out;
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST,DELETE');
@@ -635,6 +660,7 @@ export default async function handler(req: any, res: any) {
         ready: Number(stats?.baris || 0) > 0,
         sumber: SOURCES.map((s) => s.label).join(' → '),
         stats: stats || null,
+        probe: url.searchParams.get('probe') === '1' ? await probeSumber() : undefined,
       });
     }
 

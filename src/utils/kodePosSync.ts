@@ -371,31 +371,6 @@ function alasanTarikPatokan(json: any): string | null {
 }
 
 /**
- * Patokan tersimpan di database sendiri (tabel kodepos_baseline). Kalau belum ada, kurang
- * lengkap, atau sudah usang, pemeriksaan ini menariknya sendiri dari sumber resmi —
- * pengguna cukup menekan Sync Data satu kali.
- */
-export async function runKodePosBaselineAudit(onProgress?: SyncProgress): Promise<KodePosSyncPlan> {
-  onProgress?.('Membandingkan database dengan patokan tersimpan...', 40);
-  let json = await fetchJson('/api/kodepos-baseline?view=diff');
-  const alasan = alasanTarikPatokan(json);
-  if (alasan) {
-    onProgress?.(`${alasan} — menarik dari dump resmi Kemendagri...`, 8);
-    await pullKodePosBaseline(onProgress);
-    json = await fetchJson('/api/kodepos-baseline?view=diff');
-    if (!json.ready) {
-      throw new Error('Patokan masih kosong setelah ditarik dari sumber resmi. Coba lagi.');
-    }
-  }
-  onProgress?.('Selesai', 100);
-  const plan = planFromBaselineDiff(json);
-  if (Number(json.baselineRows || 0) < PATOKAN_LANTAI_BARIS) {
-    plan.note += ` Perhatian: patokan hanya ${Number(json.baselineRows || 0).toLocaleString('id-ID')} baris — di bawah ${PATOKAN_LANTAI_BARIS.toLocaleString('id-ID')} daftar resmi, kemungkinan sumber cadangan yang terpakai.`;
-  }
-  return plan;
-}
-
-/**
  * Salin SELURUH baris patokan yang belum ada ke tabel kerja, langsung di database.
  * Daftar contoh di modal terbatas beberapa ribu baris, jadi tombol ini yang mengisi penuh.
  */
@@ -542,56 +517,104 @@ export async function crawlKodePosId(
 }
 
 /**
+ * Pastikan tabel patokan terisi dan layak dipakai: kosong, di bawah daftar resmi,
+ * atau lebih dari 30 hari -> tarik sendiri dari dump resmi Kemendagri. Sumber ini
+ * layanannya GitHub, jadi tidak ikut diblokir Cloudflare saat aplikasi jalan di server.
+ */
+async function pastikanPatokanTerisi(onProgress?: SyncProgress): Promise<number> {
+  const bacaPatokan = async () => {
+    const m = await fetchJson('/api/kodepos-baseline?view=meta');
+    return {
+      ready: Boolean(m.ready),
+      baselineRows: Number(m.stats?.baris || 0),
+      takenAt: m.stats?.diambil_pada || null,
+    };
+  };
+
+  const alasan = alasanTarikPatokan(await bacaPatokan());
+  if (!alasan) return 0;
+  onProgress?.(`${alasan} — menarik dump resmi Kemendagri...`, 8);
+  const hasil = await pullKodePosBaseline((pesan, pct) => onProgress?.(pesan, 8 + Math.round(pct * 0.3)));
+  const sesudah = await bacaPatokan();
+  if (sesudah.baselineRows < PATOKAN_LANTAI_BARIS) {
+    throw new Error(
+      `Patokan baru ${sesudah.baselineRows.toLocaleString('id-ID')} baris setelah ditarik, ` +
+      `di bawah ${PATOKAN_LANTAI_BARIS.toLocaleString('id-ID')} daftar resmi — sumber cadangan yang terpakai. ` +
+      'Coba lagi, atau periksa apakah GitHub sedang menolak server ini.'
+    );
+  }
+  return hasil.rows;
+}
+
+/**
  * INI YANG JALAN SAAT KLIK "Sync Data".
- * 1) tanya kodepos.id: ada provinsi yang bertambah/berubah sejak patokan diambil?
- * 2) kalau ada, crawl hanya provinsi itu dan perbarui tabel patokan
- * 3) adukan kodepos_data (Supabase) terhadap tabel patokan — di level kode pos
+ * 1) pastikan tabel patokan terisi — kalau kosong/kurang/usang, tarik dump resmi Kemendagri
+ * 2) tanya kodepos.id: ada provinsi yang berubah sejak patokan diambil? kalau ada, crawl provinsinya
+ * 3) adukan kodepos_data (tabel kerja) terhadap patokan di level kode pos
+ * 4) kalau tabel kerja masih kosong sama sekali, salin patokan penuh ke dalamnya
  *
- * Cloudflare kodepos.id menolak IP datacenter, jadi kalau server diblokir (403)
- * pemeriksaan tetap jalan memakai patokan terakhir dan alasannya ditampilkan.
+ * Cloudflare kodepos.id menolak IP datacenter, jadi langkah (2) dilewati saat server
+ * diblokir — itu tidak lagi menghentikan pemeriksaan karena (1) tidak lewat kodepos.id.
  */
 export async function runKodePosLiveSync(onProgress?: SyncProgress): Promise<KodePosSyncPlan> {
-  onProgress?.('Menanyakan kondisi terbaru ke kodepos.id...', 6);
+  const barisPatokanBaru = await pastikanPatokanTerisi(onProgress);
+
+  onProgress?.('Menanyakan kondisi terbaru ke kodepos.id...', 40);
   const fresh = await fetchJson('/api/kodepos-id?view=fresh');
 
   const ambilPatokan = async () => {
     onProgress?.('Membandingkan dengan database Supabase...', 88);
     const json = await fetchJson('/api/kodepos-baseline?view=diff');
     if (!json.ready) {
-      throw new Error(
-        fresh.blocked
-          ? 'kodepos.id menolak server ini, dan patokan belum terisi. Jalankan sekali dari laptop: node tools/crawl-kodepos-id.mjs --base <alamat-app>'
-          : 'Patokan belum terisi — jalankan pemeriksaan ini sekali lagi sampai kodepos.id terkumpul.'
-      );
+      throw new Error('Patokan masih kosong setelah ditarik dari sumber resmi. Coba lagi satu kali.');
     }
     return { ...json, source: fresh.source || json.source };
   };
 
-  if (fresh.blocked) {
-    const json = await ambilPatokan();
-    return planFromBaselineDiff(json, `kodepos.id menolak server ini (${fresh.reason || '403'}) — hasil di bawah memakai patokan terakhir.`);
-  }
-
-  const perlu: string[] = [
-    ...((fresh.belumPernah || []) as string[]),
-    ...((fresh.berubah || []) as any[]).map((b) => String(b.provinsi)),
-  ];
+  const perlu: string[] = fresh.blocked
+    ? []
+    : [
+        ...((fresh.belumPernah || []) as string[]),
+        ...((fresh.berubah || []) as any[]).map((b) => String(b.provinsi)),
+      ];
 
   let versi: number | undefined;
-  if (perlu.length > 0) {
-    for (let i = 0; i < perlu.length; i++) {
-      onProgress?.(
-        `Ada perubahan — mengambil ulang ${perlu[i]} (${i + 1}/${perlu.length})...`,
-        10 + Math.round(((i + 1) / perlu.length) * 70)
-      );
-      const r = await crawlKodePosIdProvince(perlu[i], versi);
-      versi = r.versi;
-    }
+  for (let i = 0; i < perlu.length; i++) {
+    onProgress?.(
+      `Ada perubahan — mengambil ulang ${perlu[i]} (${i + 1}/${perlu.length})...`,
+      40 + Math.round(((i + 1) / perlu.length) * 48)
+    );
+    const r = await crawlKodePosIdProvince(perlu[i], versi);
+    versi = r.versi;
   }
 
-  const json = await ambilPatokan();
-  const catatan = perlu.length
-    ? `${perlu.length} provinsi diperbarui barusan dari kodepos.id (${perlu.slice(0, 4).join(', ')}${perlu.length > 4 ? ', ...' : ''}).`
-    : 'kodepos.id masih sama dengan patokan terakhir, jadi tidak perlu ambil ulang.';
+  let json = await ambilPatokan();
+
+  let catatan = fresh.blocked
+    ? `kodepos.id menolak server ini (${fresh.reason || '403'}) — perbandingan memakai patokan resmi di database.`
+    : perlu.length
+      ? `${perlu.length} provinsi diperbarui barusan dari kodepos.id (${perlu.slice(0, 4).join(', ')}${perlu.length > 4 ? ', ...' : ''}).`
+      : 'kodepos.id masih sama dengan patokan terakhir, jadi tidak perlu ambil ulang.';
+  if (barisPatokanBaru > 0) {
+    catatan = `Patokan resmi baru ditarik ke database (${barisPatokanBaru.toLocaleString('id-ID')} baris). ` + catatan;
+  }
+
+  /*
+   * Tabel kerja masih kosong = pertama kali dipakai. Salin penuh sekaligus titik
+   * koordinatnya supaya satu kali tekan Sync Data langsung menampilkan data,
+   * lalu baca ulang selisihnya agar angka yang tampil benar-benar kondisi terakhir.
+   */
+  if (Number(json.dbRows || 0) === 0 && Number(json.missingCodesTotal || 0) > 0) {
+    onProgress?.('Tabel kerja kosong — menyalin seluruh patokan ke tabel kerja...', 94);
+    const { masuk, totalSetelah } = await importSemuaPatokan();
+    const titik = await salinKoordinatPatokan();
+    json = await ambilPatokan();
+    catatan =
+      `${masuk.toLocaleString('id-ID')} baris patokan disalin ke tabel kerja (total ${totalSetelah.toLocaleString('id-ID')} baris)` +
+      (titik && titik.disalin > 0 ? `, ${titik.disalin.toLocaleString('id-ID')} baris mendapat titik koordinat` : '') +
+      `. ` + catatan;
+  }
+
   return planFromBaselineDiff(json, catatan);
 }
+
