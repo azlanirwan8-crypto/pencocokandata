@@ -377,13 +377,14 @@ export const App: React.FC = () => {
               'info'
             );
           } else {
-          // Cloud kosong padahal browser punya hasil: tanamkan sekali sebagai salinan kedua.
-          const ok = await saveFinalToNeon(lokal, 'replace');
+          // Dulu cabang ini menanam ulang salinan browser ke cloud diam-diam. Itulah
+          // sebabnya "Reset Data Final" terasa gagal: tabel dikosongkan, lalu tab lain
+          // yang masih punya salinan mengisinya kembali. Cloud yang jadi kebenaran;
+          // penanaman sekarang harus keputusan user, bukan efek samping memuat halaman.
           notify(
-            ok
-              ? `${lokal.length} baris Data Final ditanamkan ke cloud sebagai salinan kedua.`
-              : 'Penanaman awal Data Final ke cloud gagal — hasil tetap aman di browser ini.',
-            ok ? 'success' : 'warning'
+            `${lokal.length.toLocaleString('id-ID')} baris Data Final hanya ada di browser ini, cloud kosong. ` +
+              'Tekan Reset Data Final untuk membuang salinan lokal ini, atau Simpan ke Cloud kalau memang mau menanamnya kembali.',
+            'warning'
           );
           }
         }

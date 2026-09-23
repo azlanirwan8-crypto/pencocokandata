@@ -394,6 +394,29 @@ const FINAL_PAGE_DEFAULT = 500;
 const FINAL_INSERT_CHUNK = 200;
 const CHUNK = 200;
 
+/**
+ * Kosongkan `final_rows`. `hapus('final_rows', { row_key: 'not.is.null' })` selalu ditolak
+ * Supabase (terukur: HTTP 500 "Supabase menolak permintaan" bahkan saat tabel 0 baris),
+ * sehingga "Kosongkan Data Final" tidak pernah benar-benar kosong dan baris lama bangkit
+ * lagi dari salinan browser. Dibaca per halaman lalu dihapus lewat `final_hapus` per 1000
+ * kunci — jalur yang terbukti menghapus nyata (terukur 500 + 86 baris).
+ */
+async function kosongkanFinal(r: Rest): Promise<number> {
+  let terhapus = 0;
+  for (let putaran = 0; putaran < 200; putaran++) {
+    const halaman = await r.baris<{ row_key: string }>('final_rows', {
+      kolom: 'row_key',
+      urut: 'row_key.asc',
+      batas: 1000,
+    });
+    const kunci = [...new Set(halaman.rows.map((x) => String(x.row_key ?? '').trim()).filter(Boolean))];
+    if (kunci.length === 0) break;
+    const habis = (await r.rpc<string[]>('final_hapus', { p_keys: kunci })) || [];
+    if (habis.length === 0) break;
+    terhapus += habis.length;
+  }
+  return terhapus;
+}
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -448,7 +471,7 @@ export default async function handler(req: any, res: any) {
           )
           .then((x) => x.rows[0]);
 
-        const fileName = meta?.file_name || `${records.length} Data Target (Target_Neon.xlsx)`;
+        const fileName = meta?.file_name || `${records.length} Data Target (Target_Supabase.xlsx)`;
         const initialCount = meta?.initial_count || records.length;
         const matchedDone = Boolean(meta?.matched_done);
 
@@ -542,7 +565,7 @@ export default async function handler(req: any, res: any) {
         }
 
         const fMode = body?.mode === 'replace' ? 'replace' : 'upsert';
-        if (fMode === 'replace') await r.hapus('final_rows', { row_key: 'not.is.null' });
+        if (fMode === 'replace') await kosongkanFinal(r);
 
         let written = 0;
         for (let i = 0; i < rows.length; i += FINAL_INSERT_CHUNK) {
@@ -566,7 +589,7 @@ export default async function handler(req: any, res: any) {
         });
       }
 
-      const fileName = body?.fileName || 'Target_Neon_Vercel.xlsx';
+      const fileName = body?.fileName || 'Target_Supabase.xlsx';
       const initialCount = body?.initialCount || rows.length;
       const matchedDone = Boolean(body?.matchedDone);
       const mode = body?.mode || 'replace';
@@ -645,14 +668,13 @@ export default async function handler(req: any, res: any) {
       if (viewDel === 'final') {
         const oneKey = (url.searchParams.get('key') || '').trim();
         if (url.searchParams.get('all') === '1') {
-          const sebelum = await r.hitung('final_rows');
-          await r.hapus('final_rows', { row_key: 'not.is.null' });
+          const terhapus = await kosongkanFinal(r);
           return res.status(200).json({
             ok: true,
             configured: true,
             table: 'final_rows',
-            deleted: sebelum,
-            message: `Tabel final_rows berhasil dikosongkan (${sebelum} baris dihapus).`,
+            deleted: terhapus,
+            message: `Tabel final_rows dikosongkan (${terhapus} baris dihapus).`,
           });
         }
         if (oneKey) {
