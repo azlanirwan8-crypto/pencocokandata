@@ -637,6 +637,36 @@ async function probeSumber(): Promise<Record<string, string>> {
       }
     })
   );
+
+  /*
+   * Satu halaman kecamatan sungguhan: status + ukuran + berapa desa yang terbaca di
+   * payload Next.js. Angka ini yang menentukan apakah crawl koordinat bisa dijalankan
+   * dari server (bukan hanya dari laptop) — dan berapa panggilan yang dibutuhkan.
+   */
+  try {
+    const t0 = Date.now();
+    const xml = await (await fetch(target.titik_situs)).text();
+    const url = (xml.match(/<loc>(https?:\/\/[^<]+)<\/loc>/g) || [])
+      .map((s) => s.replace(/<\/?loc>/g, ''))
+      .find((s) => !s.endsWith('kecamatan.xml'));
+    if (!url) {
+      out.titik_halaman = 'sitemap tidak memuat URL halaman';
+    } else {
+      const html = await (await fetch(url)).text();
+      let teks = '';
+      for (const m of html.matchAll(/self\.__next_f\.push\(\[1,("(?:[^"\\]|\\.)*")\]\)/g)) {
+        try {
+          teks += JSON.parse(m[1]);
+        } catch {
+          /* chunk tidak lengkap */
+        }
+      }
+      const desa = (teks.match(/"kodeKemendagri":"\d{2}\.\d{2}\.\d{2}\.\d{4}","lat":-?\d+(\.\d+)?/g) || []).length;
+      out.titik_halaman = `${url.split('/').slice(-1)[0]}: ${html.length} byte, ${desa} desa berkoordinat, ${Date.now() - t0} ms`;
+    }
+  } catch (err: any) {
+    out.titik_halaman = String(err?.message || err).slice(0, 90);
+  }
   return out;
 }
 
