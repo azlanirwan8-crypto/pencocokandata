@@ -624,6 +624,7 @@ async function probeSumber(): Promise<Record<string, string>> {
     kemendagri_kodepos: KODEPOS_SQL_URL,
     pemda: PEMDA_URL,
     cadangan: CSV_URL,
+    titik_situs: 'https://kodepos.co.id/sitemaps/kecamatan.xml',
   };
   const out: Record<string, string> = {};
   await Promise.all(
