@@ -154,6 +154,7 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
             String(r.Kecamatan || '').toLowerCase().includes(q) ||
             String(r.Kelurahan || '').toLowerCase().includes(q) ||
             String(r['Dati II'] || '').toLowerCase().includes(q) ||
+            String(r.Provinsi || '').toLowerCase().includes(q) ||
             String(r.ALAMAT || '').toLowerCase().includes(q)
           );
       }
@@ -673,7 +674,7 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
                 {searchTerm && (
                   <button
                     type="button"
-                    onClick={() => setSearchTerm('')}
+                    onClick={() => { setSearchTerm(''); setPage(1); }}
                     style={{
                       position: 'absolute',
                       right: '8px',

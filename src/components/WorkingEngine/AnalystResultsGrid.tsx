@@ -1347,7 +1347,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
               {searchTerm && (
                 <button
                   type="button"
-                  onClick={() => setSearchTerm('')}
+                  onClick={() => { setSearchTerm(''); setPage(1); }}
                   style={{ position: 'absolute', right: '8px', background: 'none', border: 'none', cursor: 'pointer', color: '#878a99' }}
                 >
                   <X size={13} />

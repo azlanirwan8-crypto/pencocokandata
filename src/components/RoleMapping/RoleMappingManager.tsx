@@ -421,7 +421,7 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
       const q = searchTerm.toLowerCase();
       return (
         r.organisasiTujuan?.toLowerCase().includes(q) ||
-        String(r.grandTotal).includes(q)
+        (r.keterangan || '').toLowerCase().includes(q)
       );
     });
   }, [roleList, filterUnit, searchTerm]);
