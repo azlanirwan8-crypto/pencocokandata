@@ -115,7 +115,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
     };
   }, []);
 
-  // Save to IndexedDB + mirror to Neon DB
+  // Save to IndexedDB + mirror to cloud (Supabase)
   const handleSaveData = async (listToSave = ptenList) => {
     setErrorMsg(null);
     try {

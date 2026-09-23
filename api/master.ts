@@ -417,7 +417,7 @@ export default async function handler(req: any, res: any) {
           })
           .then((x) => x.rows[0]);
 
-        const fileName = meta?.file_name || `${records.length} Cabang (Master_Neon.xlsx)`;
+        const fileName = meta?.file_name || `${records.length} Cabang (Master_Supabase.xlsx)`;
 
         // `raw_data` harus tersebar lebih dulu: kolom bertipe di bawah menjamin 16 field
         // ini string bagi UI (yang memanggil `.trim()`), sementara angka mentah dari Excel
@@ -470,7 +470,7 @@ export default async function handler(req: any, res: any) {
     if (req.method === 'POST') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
       const rows = Array.isArray(body?.rows) ? body.rows : [];
-      const fileName = body?.fileName || 'Master_Neon_Vercel.xlsx';
+      const fileName = body?.fileName || 'Master_Supabase.xlsx';
       const mode = body?.mode || 'replace';
 
       if (mode === 'replace') {

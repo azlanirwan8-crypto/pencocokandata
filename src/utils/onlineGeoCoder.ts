@@ -25,7 +25,7 @@ export function kodePosUjung(query: string): string | undefined {
 }
 
 /**
- * Titik kode pos yang sudah tersimpan di Neon — prioritas rata-rata titik desa per kode
+ * Titik kode pos yang sudah tersimpan di cloud — prioritas rata-rata titik desa per kode
  * pos (kodepos_data), sisanya cache geocoding (kodepos_geo). Inilah sumber lokasi peta
  * dashboard: sekali muat per sesi, tidak menebak ulang lewat internet.
  */
@@ -112,7 +112,7 @@ export function buildTargetQuery(row: TargetRow): string {
 
 /**
  * Single realtime online geocoding lookup.
- * Kode pos yang sudah punya titik di Neon dipakai lebih dulu; selain itu baru cache,
+ * Kode pos yang sudah punya titik di cloud dipakai lebih dulu; selain itu baru cache,
  * lalu proxy backend /api/geocode dan penyedia publik.
  */
 export async function geocodeRealtime(
@@ -133,7 +133,7 @@ export async function geocodeRealtime(
       const result: GeoLocationResult = {
         lat: titik.lat,
         lng: titik.lng,
-        formattedAddress: `Titik kode pos ${kodePos} (tersimpan di Neon)`,
+        formattedAddress: `Titik kode pos ${kodePos} (tersimpan di Supabase Postgres)`,
         source: titik.sumber,
       };
       sessionCache.set(cacheKey, result);

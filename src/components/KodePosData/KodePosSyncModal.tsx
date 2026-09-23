@@ -227,8 +227,9 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                 <div style={{ width: `${pct}%`, height: '100%', background: '#299cdb', transition: 'width .2s' }} />
               </div>
               <p style={{ fontSize: '0.76rem', color: '#878a99', marginTop: '0.7rem' }}>
-                Server membuka halaman provinsi kodepos.id, membandingkan beberapa halaman sampel dengan
-                jejak terakhir, mengambil ulang yang berubah, lalu database Neon diadu terhadapnya.
+                Server mengambil halaman kecamatan kodepos.co.id sebagai patokan (wilayah, kode pos,
+                titik sekaligus), memeriksa jejak terakhir kodepos.id, lalu hasilnya diadu dengan
+                basis data Supabase.
               </p>
             </div>
           )}
@@ -260,7 +261,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                   tipProps={tipProps}
                   label="1. Total Kode Pos"
                   value={fmt(plan.dbRows || 0)}
-                  sub="baris wilayah tersimpan di Neon"
+                  sub="baris wilayah tersimpan di Supabase Postgres"
                   tip={`${fmt(plan.dbTotal)} kode pos unik dipakai ${fmt(plan.dbRows || 0)} baris wilayah`}
                   color="#405189"
                 />
@@ -268,7 +269,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                   tipProps={tipProps}
                   label="2. Kode Pos belum ada"
                   value={fmt(rows.length)}
-                  sub="baris patokan yang belum tersimpan di Neon"
+                  sub="baris patokan yang belum tersimpan di Supabase Postgres"
                   color={rows.length > 0 ? '#f06548' : '#0ab39c'}
                 />
                 <StatCard
@@ -314,7 +315,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                   Database kita sudah versi terbaru dan valid.
                 </div>
                 <div style={{ fontSize: '0.79rem', color: '#495057', marginTop: '0.3rem', lineHeight: 1.6 }}>
-                  Tidak ada selisih: seluruh kode pos dari {plan.compareLabel.toLowerCase()} sudah tersimpan di Neon.
+                  Tidak ada selisih: seluruh kode pos dari {plan.compareLabel.toLowerCase()} sudah tersimpan di Supabase Postgres.
                   {plan.lastUpdated ? ` Diperbarui: ${new Date(plan.lastUpdated).toLocaleString('id-ID')}.` : ''}
                 </div>
               </div>

@@ -267,7 +267,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   const [cachePreloaded, setCachePreloaded] = useState(false);
   // Flag: true once the stored kode pos points (kodepos_geo) are loaded into memory
   const [titikKodePosSiap, setTitikKodePosSiap] = useState(false);
-  // Indeks titik kode pos tersimpan (Neon kodepos_geo): kodePos(5 digit) → {lat,lng,sumber}.
+  // Indeks titik kode pos tersimpan (tabel kodepos_geo): kodePos(5 digit) → {lat,lng,sumber}.
   // Dipakai layer Final Data agar tidak men-geocode ulang dari nol.
   const [titikKodePos, setTitikKodePos] = useState<Record<string, { lat: number; lng: number; sumber?: string }>>({});
 
@@ -346,7 +346,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     return () => { cancelled = true; };
   }, []); // run once on mount
 
-  // Titik kode pos tersimpan (kodepos_geo di Neon) menjadi lokasi baris target:
+  // Titik kode pos tersimpan (tabel kodepos_geo) menjadi lokasi baris target:
   // satu sumber dengan menu Kode Pos, jadi peta tidak menebak sendiri.
   useEffect(() => {
     if (!cachePreloaded) return;
@@ -363,7 +363,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         seed.set(q, {
           lat: p.lat,
           lng: p.lng,
-          formattedAddress: `Titik kode pos ${kode} (tersimpan di Neon)`,
+          formattedAddress: `Titik kode pos ${kode} (tersimpan di Supabase Postgres)`,
           source: p.sumber,
         });
       }
@@ -545,7 +545,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     return pin.branchCount > 1 || (kodePos !== '' && multiOutletKodePos.has(kodePos));
   };
 
-  // ── Layer FINAL DATA: titik dari menu Final Data, koordinat dari kodepos_geo Neon ──
+  // ── Layer FINAL DATA: titik dari menu Final Data, koordinat dari tabel kodepos_geo ──
   // Baris dikelompokkan per kode pos PTEN; status pin = terburuk di antara barisnya.
   const finalPins = useMemo<PlottedBranchPin[]>(() => {
     if (!finalRows || finalRows.length === 0) return [];

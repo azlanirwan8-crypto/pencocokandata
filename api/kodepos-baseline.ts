@@ -714,6 +714,68 @@ function parseTitikHalaman(html: string) {
   return rows;
 }
 
+/** Daftar desa pada satu halaman, TANPA menuntut koordinat (titik boleh kosong). */
+const DESA_PATOKAN_RE =
+  /"id":"\d+","nama":"((?:[^"\\]|\\.)*)","slug":"[^"]*","kodePos":"(\d{5})","kodeKemendagri":"(\d{2}\.\d{2}\.\d{2}\.\d{4})"(?:,"lat":(-?\d+(?:\.\d+)?),"lng":(-?\d+(?:\.\d+)?))?(?:,"elevasi":(-?\d+(?:\.\d+)?))?/g;
+
+/** Objek kecamatan di payload: satu-satunya tempat nama kabupaten + provinsi berdiri sendiri. */
+const KECAMATAN_SITUS_RE =
+  /"nama":"((?:[^"\\]|\\.)*)","slug":"[^"]*","kodeKemendagri":"(\d{2}\.\d{2}\.\d{2})","kotaNama":"((?:[^"\\]|\\.)*)","kotaSlug":"[^"]*","provinsiNama":"((?:[^"\\]|\\.)*)"/;
+
+function kutip(s: string): string {
+  try {
+    return JSON.parse(`"${s}"`);
+  } catch {
+    return s;
+  }
+}
+
+interface BarisSitus {
+  kode: string;
+  kodePos: string;
+  kelurahan: string;
+  kecamatan: string;
+  kabupaten: string;
+  provinsi: string;
+  lat: number | null;
+  lng: number | null;
+  elev: number | null;
+}
+
+/**
+ * Satu halaman kecamatan -> baris patokan 5 level + titiknya, semuanya dari
+ * kodepos.co.id. Nama induk diambil dari objek kecamatan di payload (terukur
+ * 2026-09-23: `"kotaNama":"Kabupaten Karangasem","provinsiNama":"Bali"`), bukan
+ * dari slug URL, jadi ejaannya sama dengan yang dipakai Data Cabang.
+ */
+function parseWilayahHalaman(html: string): { baris: BarisSitus[]; induk: boolean } {
+  const p = unescapePayload(html);
+  const m = KECAMATAN_SITUS_RE.exec(p);
+  const kecamatan = m ? kutip(m[1]) : '';
+  const kabupaten = m ? kutip(m[3]) : '';
+  const provinsi = m ? kutip(m[4]) : '';
+  const baris: BarisSitus[] = [];
+  for (const d of p.matchAll(DESA_PATOKAN_RE)) {
+    // grup: 1 nama, 2 kodePos, 3 kodeKemendagri, 4 lat, 5 lng, 6 elevasi
+    const lat = d[4] == null ? null : Number(d[4]);
+    const lng = d[5] == null ? null : Number(d[5]);
+    if (lat != null && lng != null && (lat < -11 || lat > 41 || lng < 89 || lng > 145)) continue;
+    const elev = Number(d[6]);
+    baris.push({
+      kode: d[3],
+      kodePos: d[2],
+      kelurahan: kutip(d[1]),
+      kecamatan,
+      kabupaten,
+      provinsi,
+      lat,
+      lng,
+      elev: Number.isFinite(elev) ? Math.round(elev) : null,
+    });
+  }
+  return { baris, induk: Boolean(kecamatan && kabupaten && provinsi) };
+}
+
 /** Daftar URL kecamatan dari sitemap; di-cache per instance 1 jam (7.277 URL). */
 let sitemapCache: { at: number; url: string[] } | null = null;
 
@@ -813,6 +875,132 @@ async function crawlTitik(sb: ReturnType<typeof rest>, mulai: number, jumlah: nu
   }
 
   return { masuk: titik.length, barisDibaca: rows.length, sukses, gagal, total: urls.length, berikutnya: mulai + ambil };
+}
+
+/** Label yang dibaca `?view=meta.sumber` begitu patokan berasal dari situs. */
+const SUMBER_SITUS = 'kodepos.co.id (scrape 7.277 halaman kecamatan)';
+
+/** Bawah ini dianggap tarikan belum lengkap -> versi lama JANGAN dibuang. */
+const PATOKAN_MIN_BUANG = 60_000;
+
+/**
+ * Crawl patokan DAN titik sekaligus dari kodepos.co.id, satu window halaman kecamatan
+ * per panggilan (sama seperti `crawlTitik`, tapi barisnya lengkap 5 level nama).
+ * Upsert pada `kode_wilayah` -> panggilan ulang tidak pernah membuat baris ganda,
+ * dan penarikan yang terputus bisa dilanjutkan dari `berikutnya`.
+ */
+async function crawlPatokanSitus(sb: ReturnType<typeof rest>, mulai: number, jumlah: number, versi: number) {
+  const urls = await daftarUrlKecamatan();
+  const ambil = Math.max(0, Math.min(jumlah, urls.length - mulai));
+  const target = urls.slice(mulai, mulai + ambil);
+  const CONC = 8;
+  const semua: BarisSitus[] = [];
+  let sukses = 0;
+  let gagal = 0;
+  let tanpaInduk = 0;
+
+  for (let i = 0; i < target.length; i += CONC) {
+    const rombongan = target.slice(i, i + CONC);
+    const hasil = await Promise.all(rombongan.map((u) => ambilHalamanTitik(u)));
+    for (const html of hasil) {
+      if (!html) {
+        gagal++;
+        continue;
+      }
+      const diuraikan = parseWilayahHalaman(html);
+      if (!diuraikan.baris.length) {
+        gagal++;
+        continue;
+      }
+      if (!diuraikan.induk) tanpaInduk++;
+      sukses++;
+      semua.push(...diuraikan.baris);
+    }
+  }
+
+  const unik = new Map<string, BarisSitus>();
+  for (const r of semua) if (!unik.has(r.kode)) unik.set(r.kode, r);
+  const baris = [...unik.values()];
+  const diambil_pada = new Date().toISOString();
+  const POTONG = 500;
+  const PARALEL_TULIS = 5;
+
+  for (let i = 0; i < baris.length; i += POTONG * PARALEL_TULIS) {
+    const potongan: BarisSitus[][] = [];
+    for (let j = i; j < Math.min(i + POTONG * PARALEL_TULIS, baris.length); j += POTONG) potongan.push(baris.slice(j, j + POTONG));
+    await Promise.all(
+      potongan.map((bagian) =>
+        sb.simpan(
+          'kodepos_baseline',
+          bagian.map((r) => ({
+            kode_wilayah: r.kode,
+            kode_pos: r.kodePos,
+            kelurahan: r.kelurahan,
+            kecamatan: r.kecamatan || null,
+            kabupaten_kota: r.kabupaten || null,
+            provinsi: r.provinsi || null,
+            sumber: SUMBER_SITUS,
+            versi,
+            diambil_pada,
+          })),
+          { onKonflik: 'kode_wilayah' }
+        )
+      )
+    );
+  }
+
+  const titik = baris.filter((r) => r.lat != null && r.lng != null);
+  for (let i = 0; i < titik.length; i += POTONG * PARALEL_TULIS) {
+    const potongan: BarisSitus[][] = [];
+    for (let j = i; j < Math.min(i + POTONG * PARALEL_TULIS, titik.length); j += POTONG) potongan.push(titik.slice(j, j + POTONG));
+    await Promise.all(
+      potongan.map((bagian) =>
+        sb.simpan(
+          'kodepos_koordinat',
+          bagian.map((r) => ({
+            kode_wilayah: r.kode,
+            kode_pos: r.kodePos || null,
+            latitude: r.lat,
+            longitude: r.lng,
+            elevasi: r.elev,
+            sumber: 'kodepos.co.id',
+            diambil_pada,
+          })),
+          { onKonflik: 'kode_wilayah' }
+        )
+      )
+    );
+  }
+
+  const selesai = mulai + ambil >= urls.length;
+
+  /*
+   * Buang versi lama HANYA kalau tarikan baru ini benar-benar berdiri penuh. Tanpa
+   * penjaga itu, scrape yang mati di tengah (situs menolak / fungsi kehabisan waktu)
+   * akan menguras patokan yang sudah ada.
+   */
+  let dibuang = 0;
+  if (selesai && baris.length > 0) {
+    const jumlahBaru = await sb.hitung('kodepos_baseline', { versi: `eq.${versi}` });
+    if (jumlahBaru >= PATOKAN_MIN_BUANG) {
+      const filterLama = { versi: `neq.${versi}` };
+      dibuang = await sb.hitung('kodepos_baseline', filterLama);
+      await sb.hapus('kodepos_baseline', filterLama);
+    }
+  }
+
+  return {
+    masuk: baris.length,
+    titik: titik.length,
+    sukses,
+    gagal,
+    tanpaInduk,
+    total: urls.length,
+    berikutnya: mulai + ambil,
+    selesai,
+    versi,
+    dibuang,
+  };
 }
 
 export default async function handler(req: any, res: any) {
@@ -1153,6 +1341,34 @@ export default async function handler(req: any, res: any) {
         );
       }
       return res.status(200).json({ ok: true, configured: true, masuk: rows.length, ditolak: raw.length - rows.length });
+    }
+
+    /*
+     * GET ?view=situs-meta  — NOL tulis. Menjawab "apakah server ini bisa menjangkau
+     * kodepos.co.id dan berapa halaman yang akan discrape", jadi jalur sumber baru bisa
+     * dibuktikan live tanpa menyentuh database.
+     */
+    if (req.method === 'GET' && view === 'situs-meta') {
+      const urls = await daftarUrlKecamatan();
+      const terpasang = await sb.hitung('kodepos_baseline', { sumber: `eq.${SUMBER_SITUS}` });
+      return res.status(200).json({
+        ok: true,
+        configured: true,
+        sumber: SUMBER_SITUS,
+        halamanTotal: urls.length,
+        barisSitusTerpasang: terpasang,
+      });
+    }
+
+    // POST ?view=situs-baseline { mulai, jumlah, versi } — patokan + titik dari kodepos.co.id.
+    if (req.method === 'POST' && view === 'situs-baseline') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
+      const mulai = Math.max(0, Number(body.mulai) || 0);
+      const jumlah = Math.min(1500, Math.max(1, Number(body.jumlah) || 800));
+      let vers = Number(body.versi) || 0;
+      if (!vers) vers = await sb.rpc<number>('base_next_versi');
+      const hasil = await crawlPatokanSitus(sb, mulai, jumlah, vers);
+      return res.status(200).json({ ok: true, configured: true, sumber: SUMBER_SITUS, ...hasil });
     }
 
     // ─────────────── KOORDINAT: crawl halaman kecamatan ───────────────

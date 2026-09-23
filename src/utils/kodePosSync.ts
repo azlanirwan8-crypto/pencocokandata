@@ -541,7 +541,49 @@ export async function pullKodePosBaseline(
 }
 
 /**
- * Crawl satu provinsi dari kodepos.id sampai halamannya habis, lalu simpan
+ * Sumber PATOKANUtama: scrape seluruh halaman kecamatan kodepos.co.id dari server.
+ * Satu panggilan = satu window ±800 halaman (terukur: 17,0-34,8 d per window 800
+ * halaman, anggaran fungsi 60 d), jadi 7.277 halaman butuh ±10 panggilan. Setiap
+ * baris membawa kode pos, nama 5 level, dan titik koordinatnya sekaligus.
+ */
+export async function pullPatokanDariSitus(
+  onProgress?: SyncProgress
+): Promise<{ rows: number; titik: number; versi: number; halaman: number; gagal: number }> {
+  let mulai = 0;
+  let versi = 0;
+  let rows = 0;
+  let titik = 0;
+  let gagal = 0;
+  let total = 0;
+  for (let tahap = 0; tahap < 40; tahap++) {
+    const json = await fetchJson('/api/kodepos-baseline?view=situs-baseline', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mulai, versi: versi || undefined }),
+    });
+    versi = Number(json.versi) || versi;
+    rows += Number(json.masuk || 0);
+    titik += Number(json.titik || 0);
+    gagal += Number(json.gagal || 0);
+    total = Number(json.total || total);
+    if (json.selesai) {
+      if (!rows) throw new Error('kodepos.co.id tidak mengirim satu barispun.');
+      onProgress?.('Patokan kodepos.co.id tersimpan', 100);
+      return { rows, titik, versi, halaman: total, gagal };
+    }
+    if (json.berikutnya == null || Number(json.berikutnya) <= mulai) {
+      throw new Error('Scrape kodepos.co.id berhenti tanpa kemajuan.');
+    }
+    mulai = Number(json.berikutnya);
+    onProgress?.(
+      `Mengambil wilayah + kode pos + titik dari kodepos.co.id: ${mulai.toLocaleString('id-ID')} dari ${total.toLocaleString('id-ID')} kecamatan — ${rows.toLocaleString('id-ID')} baris${gagal ? ` (${gagal.toLocaleString('id-ID')} halaman bolong)` : ''}...`,
+      Math.min(95, Math.round((mulai / Math.max(1, total)) * 100))
+    );
+  }
+  throw new Error(`Scrape kodepos.co.id berhenti di halaman ke-${mulai.toLocaleString('id-ID')}; tekan Sync Data lagi untuk melanjutkan.`);
+}
+
+/**
  * jejaknya (jumlah halaman + hash halaman sampel) supaya pemeriksaan berikutnya
  * cukup membandingkan beberapa halaman saja.
  */
@@ -605,34 +647,57 @@ export async function crawlKodePosId(
  * atau lebih dari 30 hari -> tarik sendiri dari dump resmi Kemendagri. Sumber ini
  * layanannya GitHub, jadi tidak ikut diblokir Cloudflare saat aplikasi jalan di server.
  */
-async function pastikanPatokanTerisi(onProgress?: SyncProgress): Promise<number> {
+async function pastikanPatokanTerisi(
+  onProgress?: SyncProgress
+): Promise<{ baris: number; sumber: string; cadangan: boolean }> {
   const bacaPatokan = async () => {
     const m = await fetchJson('/api/kodepos-baseline?view=meta');
     return {
       ready: Boolean(m.ready),
       baselineRows: Number(m.stats?.baris || 0),
       takenAt: m.stats?.diambil_pada || null,
+      sumber: String(m.stats?.sumber || ''),
     };
   };
 
   const alasan = alasanTarikPatokan(await bacaPatokan());
-  if (!alasan) return 0;
-  onProgress?.(`${alasan} — menarik dump resmi Kemendagri...`, 5);
-  const hasil = await pullKodePosBaseline((pesan, pct) => onProgress?.(pesan, 5 + Math.round(pct * 0.25)));
+  if (!alasan) return { baris: 0, sumber: (await bacaPatokan()).sumber, cadangan: false };
+
+  /*
+   * URUTAN SUMBER (permintaan pemilik produk 2026-09-23): kodepos.co.id dulu, dump
+   * Kemendagri HANYA kalau situs gagal. Setiap kali cadangan terpakai, alasannya dan
+   * jumlah barisnya ikut dilaporkan — tidak diam-diam.
+   */
+  onProgress?.(`${alasan} — mengambil wilayah + kode pos + titik dari kodepos.co.id...`, 5);
+  let sebabCadangan = '';
+  try {
+    const situs = await pullPatokanDariSitus((pesan, pct) => onProgress?.(pesan, 5 + Math.round(pct * 0.25)));
+    const sesudah = await bacaPatokan();
+    if (sesudah.baselineRows >= PATOKAN_LANTAI_BARIS) {
+      return { baris: situs.rows, sumber: 'kodepos.co.id', cadangan: false };
+    }
+    sebabCadangan = `scrape kodepos.co.id hanya meninggalkan ${sesudah.baselineRows.toLocaleString('id-ID')} baris patokan (lantai ${PATOKAN_LANTAI_BARIS.toLocaleString('id-ID')})`;
+  } catch (err: any) {
+    sebabCadangan = `kodepos.co.id tidak selesai discrape: ${String(err?.message || err).slice(0, 150)}`;
+  }
+
+  onProgress?.(`${sebabCadangan} — memakai SUMBER CADANGAN dump resmi Kemendagri...`, 22);
+  const hasil = await pullKodePosBaseline((pesan, pct) => onProgress?.(pesan, 22 + Math.round(pct * 0.1)));
   const sesudah = await bacaPatokan();
   if (sesudah.baselineRows < PATOKAN_LANTAI_BARIS) {
     throw new Error(
-      `Patokan baru ${sesudah.baselineRows.toLocaleString('id-ID')} baris setelah ditarik, ` +
-      `di bawah ${PATOKAN_LANTAI_BARIS.toLocaleString('id-ID')} daftar resmi — sumber cadangan yang terpakai. ` +
-      'Coba lagi, atau periksa apakah GitHub sedang menolak server ini.'
+      `${sebabCadangan}; sumber cadangan Kemendagri pun hanya ${sesudah.baselineRows.toLocaleString('id-ID')} baris ` +
+        `(di bawah ${PATOKAN_LANTAI_BARIS.toLocaleString('id-ID')}). Coba lagi, atau periksa apakah GitHub/GitLab sedang menolak server ini.`
     );
   }
-  return hasil.rows;
+  return { baris: hasil.rows, sumber: `SUMBER CADANGAN ${hasil.sumber}`, cadangan: true };
 }
 
 /**
  * INI YANG JALAN SAAT KLIK "Sync Data" — satu tekan, tabel kerja berdiri lengkap:
- * 1) patokan terisi: kosong / kurang / usang -> tarik dump resmi Kemendagri (GitHub)
+ * 1) patokan terisi: kosong / kurang / usang -> scrape SEMUA dari kodepos.co.id
+ *    (wilayah 5 level + kode pos + titik); dump resmi Kemendagri hanya dipakai kalau
+ *    situs gagal, dan Pemakaian cadangan itu dilaporkan dengan angka barisnya
  * 2) titik per desa terisi: belum ada -> crawl 7.277 halaman kecamatan kodepos.co.id
  *    dari server (terukur 220 ms + 98.719 byte per halaman, HTTP 200, tidak diblokir)
  * 3) kodepos.id ditanya untuk perubahan provinsi — diblokir Cloudflare: dilewati, dicatat
@@ -640,7 +705,8 @@ async function pastikanPatokanTerisi(onProgress?: SyncProgress): Promise<number>
  * 5) selisih dibaca ulang supaya angka di layar kondisi terakhir, bukan perkiraan
  */
 export async function runKodePosLiveSync(onProgress?: SyncProgress): Promise<KodePosSyncPlan> {
-  const barisPatokanBaru = await pastikanPatokanTerisi(onProgress);
+  const patokan = await pastikanPatokanTerisi(onProgress);
+  const barisPatokanBaru = patokan.baris;
 
   const titikAwal = await cakupanKoordinat();
   let titikBaru = 0;
@@ -686,7 +752,11 @@ export async function runKodePosLiveSync(onProgress?: SyncProgress): Promise<Kod
       ? `${perlu.length} provinsi diperbarui barusan dari kodepos.id (${perlu.slice(0, 4).join(', ')}${perlu.length > 4 ? ', ...' : ''}).`
       : 'kodepos.id masih sama dengan patokan terakhir, jadi tidak perlu ambil ulang.';
   if (barisPatokanBaru > 0) {
-    catatan = `Patokan resmi baru ditarik ke database (${barisPatokanBaru.toLocaleString('id-ID')} baris). ` + catatan;
+    catatan =
+      `Patokan baru diambil dari ${patokan.sumber} (${barisPatokanBaru.toLocaleString('id-ID')} baris${patokan.cadangan ? ' — SUMBER CADANGAN, scrape kodepos.co.id gagal' : ''}). ` +
+      catatan;
+  } else if (patokan.sumber) {
+    catatan = `Patokan masih berasal dari ${patokan.sumber}. ` + catatan;
   }
   if (titikBaru > 0) {
     catatan = `Titik koordinat per desa baru diambil dari kodepos.co.id (${titikBaru.toLocaleString('id-ID')} titik). ` + catatan;

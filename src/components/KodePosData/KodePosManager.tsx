@@ -50,7 +50,7 @@ import { DialogPanel } from '../BaseModal';
 import { useNotification } from '../Notification/NotificationContext';
 
 // F5-K1: Threshold seed bawaan (~140 baris). Database dianggap belum diisi
-// bila total baris Neon masih di bawah nilai ini.
+// bila total baris cloud masih di bawah nilai ini.
 const SEED_THRESHOLD = 200;
 
 // F5-K2: Kunci unik per tab agar antrean geocoding tidak tabrakan antar-tab.
@@ -76,7 +76,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
   onKodePosCountChange,
 }) => {
   const { add: notify } = useNotification();
-  // Server-driven data (Neon Postgres adalah satu-satunya sumber data)
+  // Server-driven data (Supabase Postgres adalah satu-satunya sumber data)
   const [rows, setRows] = useState<KodePosRow[]>([]);
   const [total, setTotal] = useState<number>(0);
   const [totalPages, setTotalPages] = useState<number>(1);
@@ -122,7 +122,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
   const [showSyncModal, setShowSyncModal] = useState<boolean>(false);
   const [detailItem, setDetailItem] = useState<KodePosRow | null>(null);
 
-  // Titik koordinat (kodepos_geo di Neon)
+  // Titik koordinat (tabel kodepos_geo)
   const [geoStats, setGeoStats] = useState<KodePosGeoStats | null>(null);
   const [geoRun, setGeoRun] = useState<{ aktif: boolean; pesan: string; persen: number; diproses: number; sisa: number }>({
     aktif: false,

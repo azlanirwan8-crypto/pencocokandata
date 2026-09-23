@@ -45,7 +45,7 @@ async function fetchWithRetry(
 }
 
 /**
- * Check if Vercel Neon serverless endpoint is available and connected
+ * Check if the Vercel serverless cloud endpoint is available and connected
  */
 export async function checkNeonStatus(): Promise<NeonStatus> {
   try {
@@ -62,7 +62,7 @@ export async function checkNeonStatus(): Promise<NeonStatus> {
 }
 
 /**
- * Load Master Data from Neon DB via /api/master
+ * Load Data Cabang dari cloud lewat /api/master
  */
 export async function loadMasterFromNeon(): Promise<{ rows: MasterRow[]; fileName: string } | null> {
   try {
@@ -75,13 +75,13 @@ export async function loadMasterFromNeon(): Promise<{ rows: MasterRow[]; fileNam
     const rows = Array.isArray(json.data?.rows) ? json.data.rows : [];
     return { rows, fileName: String(json.data?.fileName || 'Master_Supabase.xlsx') };
   } catch (err) {
-    console.warn('Neon load error (fallbacking to local):', err);
+    console.warn('cloud load error (fallbacking to local):', err);
     return null;
   }
 }
 
 /**
- * Save Master Data to Neon DB via /api/master
+ * Simpan Data Cabang ke cloud lewat /api/master
  */
 /**
  * Kirim Data Cabang ke cloud. Dulu satu permintaan berisi SEMUA baris dengan batas
@@ -128,13 +128,13 @@ export async function saveMasterToNeon(
     }
     return semuaSukses;
   } catch (err) {
-    console.warn('Neon save error:', err);
+    console.warn('cloud save error:', err);
     return false;
   }
 }
 
 /**
- * Clear Master Data from Neon DB via /api/master
+ * Kosongkan Data Cabang di cloud lewat /api/master
  */
 export async function clearMasterFromNeon(): Promise<boolean> {
   try {
@@ -145,7 +145,7 @@ export async function clearMasterFromNeon(): Promise<boolean> {
     const json = await res.json();
     return Boolean(json.ok);
   } catch (err) {
-    console.warn('Neon delete error:', err);
+    console.warn('cloud delete error:', err);
     return false;
   }
 }
@@ -168,14 +168,14 @@ export async function loadTargetFromNeon(): Promise<SavedTargetPayload | null> {
     if (json.ok && json.data && Array.isArray(json.data.rows) && json.data.rows.length > 0) {
       return {
         rows: json.data.rows,
-        fileName: json.data.fileName || 'Target_Neon_Vercel.xlsx',
+        fileName: json.data.fileName || 'Target_Supabase.xlsx',
         initialCount: json.data.initialCount || json.data.rows.length,
         matchedDone: Boolean(json.data.matchedDone),
       };
     }
     return null;
   } catch (err) {
-    console.warn('Neon target load error:', err);
+    console.warn('cloud target load error:', err);
     return null;
   }
 }
@@ -298,7 +298,7 @@ export async function saveTargetToNeon(
 
     return allSuccess;
   } catch (err) {
-    console.warn('Neon target save error:', err);
+    console.warn('cloud target save error:', err);
     return false;
   }
 }
@@ -315,7 +315,7 @@ export async function clearTargetFromNeon(): Promise<boolean> {
     const json = await res.json();
     return Boolean(json.ok);
   } catch (err) {
-    console.warn('Neon target delete error:', err);
+    console.warn('cloud target delete error:', err);
     return false;
   }
 }
@@ -369,7 +369,7 @@ export async function loadFinalFromNeon(): Promise<FinalNeonPayload | null> {
     }
     return { rows: all, total };
   } catch (err) {
-    console.warn('Neon final load error:', err);
+    console.warn('cloud final load error:', err);
     return null;
   }
 }
@@ -404,7 +404,7 @@ export async function saveFinalToNeon(
     }
     return true;
   } catch (err) {
-    console.warn('Neon final save error:', err);
+    console.warn('cloud final save error:', err);
     return false;
   }
 }
@@ -422,7 +422,7 @@ export async function deleteFinalRowInNeon(rowKey: string): Promise<boolean> {
     const json = await res.json();
     return Boolean(json.ok);
   } catch (err) {
-    console.warn('Neon final delete error:', err);
+    console.warn('cloud final delete error:', err);
     return false;
   }
 }
@@ -453,7 +453,7 @@ export async function deleteFinalKeysInNeon(rowKeys: string[]): Promise<boolean>
     }
     return true;
   } catch (err) {
-    console.warn('Neon final bulk delete error:', err);
+    console.warn('cloud final bulk delete error:', err);
     return false;
   }
 }
@@ -466,7 +466,7 @@ export async function clearFinalInNeon(): Promise<boolean> {
     const json = await res.json();
     return Boolean(json.ok);
   } catch (err) {
-    console.warn('Neon final clear error:', err);
+    console.warn('cloud final clear error:', err);
     return false;
   }
 }
@@ -484,7 +484,7 @@ export async function loadWilayahFromNeon(): Promise<WilayahSetting[] | null> {
     }
     return null;
   } catch (err) {
-    console.warn('Neon wilayah load error:', err);
+    console.warn('cloud wilayah load error:', err);
     return null;
   }
 }
@@ -510,7 +510,7 @@ export async function saveWilayahToNeon(settings: WilayahSetting[]): Promise<boo
     const json = await res.json();
     return Boolean(json.ok);
   } catch (err) {
-    console.warn('Neon wilayah save error:', err);
+    console.warn('cloud wilayah save error:', err);
     return false;
   }
 }
@@ -528,7 +528,7 @@ export async function loadKodePosFromNeon(): Promise<any[] | null> {
     }
     return null;
   } catch (err) {
-    console.warn('Neon kodepos load error:', err);
+    console.warn('cloud kodepos load error:', err);
     return null;
   }
 }
@@ -568,7 +568,7 @@ export async function saveKodePosToNeon(
 
     return allSuccess;
   } catch (err) {
-    console.warn('Neon kodepos save error:', err);
+    console.warn('cloud kodepos save error:', err);
     return false;
   }
 }
@@ -583,7 +583,7 @@ export async function clearKodePosFromNeon(): Promise<boolean> {
     const json = await res.json();
     return Boolean(json.ok);
   } catch (err) {
-    console.warn('Neon kodepos delete error:', err);
+    console.warn('cloud kodepos delete error:', err);
     return false;
   }
 }
@@ -639,7 +639,7 @@ export async function fetchKodePosGeoStats(): Promise<KodePosGeoStats | null> {
     const json = await res.json();
     return json?.ok ? (json as KodePosGeoStats) : null;
   } catch (err) {
-    console.warn('Neon kodepos geo stats error:', err);
+    console.warn('cloud kodepos geo stats error:', err);
     return null;
   }
 }
@@ -675,7 +675,7 @@ export async function runKodePosGeoBatch(opts: {
     }
     return null;
   } catch (err) {
-    console.warn('Neon kodepos geo run error:', err);
+    console.warn('cloud kodepos geo run error:', err);
     return null;
   }
 }
@@ -770,7 +770,7 @@ export async function fetchKodePosPage(q: KodePosPageQuery): Promise<KodePosPage
     }
     return null;
   } catch (err) {
-    console.warn('Neon kodepos page error:', err);
+    console.warn('cloud kodepos page error:', err);
     return null;
   }
 }
@@ -797,7 +797,7 @@ export async function fetchKodePosStats(): Promise<KodePosStats | null> {
     if (json.ok && json.stats) return json.stats as KodePosStats;
     return null;
   } catch (err) {
-    console.warn('Neon kodepos stats error:', err);
+    console.warn('cloud kodepos stats error:', err);
     return null;
   }
 }
@@ -814,7 +814,7 @@ export async function fetchKodePosOptions(provinsi?: string): Promise<{ provinsi
     if (json.ok) return { provinsi: json.provinsi || [], kota: json.kota || [] };
     return null;
   } catch (err) {
-    console.warn('Neon kodepos options error:', err);
+    console.warn('cloud kodepos options error:', err);
     return null;
   }
 }
@@ -869,7 +869,7 @@ export async function updateKodePosRow(id: number, row: KodePosRow): Promise<boo
     const json = await res.json();
     return Boolean(json.ok);
   } catch (err) {
-    console.warn('Neon kodepos update error:', err);
+    console.warn('cloud kodepos update error:', err);
     return false;
   }
 }
@@ -884,7 +884,7 @@ export async function deleteKodePosRow(id: number): Promise<boolean> {
     const json = await res.json();
     return Boolean(json.ok);
   } catch (err) {
-    console.warn('Neon kodepos delete-row error:', err);
+    console.warn('cloud kodepos delete-row error:', err);
     return false;
   }
 }
