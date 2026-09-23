@@ -506,19 +506,14 @@ create or replace function public.geo_kandidat(
   p_mode text, p_provinsi text, p_limit int, p_ulang boolean
 ) returns jsonb
 language sql stable security definer set search_path = public as $$
-  with u as (
-    select upper(btrim(kode_pos)) as kode_pos, kecamatan, kabupaten_kota, provinsi, id
-    from kodepos_data
-    union all
-    select upper(btrim(kode_pos)), kecamatan, kabupaten_kota, provinsi, id + 900000000
-    from kodepos_baseline
-  ),
-  k as (
-    select distinct on (kode_pos) kode_pos, kecamatan, kabupaten_kota, provinsi
-    from u
-    where kode_pos ~ '^[0-9]{5}$'
-      and (p_provinsi is null or upper(btrim(provinsi)) = upper(btrim(p_provinsi)))
-    order by kode_pos, id
+  with k as (
+    select distinct on (upper(btrim(d.kode_pos)))
+           upper(btrim(d.kode_pos)) as kode_pos,
+           d.kecamatan, d.kabupaten_kota, d.provinsi, d.id
+    from kodepos_data d
+    where d.kode_pos ~ '^[0-9]{5}$'
+      and (p_provinsi is null or upper(btrim(d.provinsi)) = upper(btrim(p_provinsi)))
+    order by upper(btrim(d.kode_pos)), d.id
   ),
   p as (
     select k.kode_pos, k.kecamatan, k.kabupaten_kota, k.provinsi, g.diambil_pada as dicoba_pada
@@ -542,20 +537,14 @@ language sql stable security definer set search_path = public as $$
   );
 $$;
 
-/** Ringkasan isi kodepos_geo + tiga angka antrean, dalam satu panggilan. */
+/** Ringkasan isi kodepos_geo + tiga angka antrean, dalam satu panggilan cepat. */
 create or replace function public.geo_stats(p_provinsi text) returns jsonb
 language sql stable security definer set search_path = public as $$
-  with u as (
-    select upper(btrim(kode_pos)) as kode_pos, provinsi from kodepos_data
-    union all
-    select upper(btrim(kode_pos)), provinsi from kodepos_baseline
-  ),
-  k as (
-    select distinct on (kode_pos) kode_pos, provinsi
-    from u
-    where kode_pos ~ '^[0-9]{5}$'
-      and (p_provinsi is null or upper(btrim(provinsi)) = upper(btrim(p_provinsi)))
-    order by kode_pos
+  with k as (
+    select distinct upper(btrim(d.kode_pos)) as kode_pos
+    from kodepos_data d
+    where d.kode_pos ~ '^[0-9]{5}$'
+      and (p_provinsi is null or upper(btrim(d.provinsi)) = upper(btrim(p_provinsi)))
   ),
   p as (
     select k.kode_pos, g.latitude, g.sumber, g.terverifikasi_google
