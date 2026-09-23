@@ -10,7 +10,6 @@ import {
   FileText,
   MapPin,
   Building2,
-  Users,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
@@ -109,8 +108,6 @@ interface AnalystResultsGridProps {
   rows: AnalystRow[];
   onUpdateRow: (updatedRow: AnalystRow) => void;
   onApproveSingleRow: (rowId: string) => void;
-  onApproveAllFinal: () => void;
-  onApproveFase: (fase: 1 | 2 | 3) => void;
   /** "Setujui semua" pada tab manual: baris dianggap bersih, tetap di fase yang sama. */
   onBersihkanManual: (rowIds: string[]) => void;
   /**
@@ -119,9 +116,6 @@ interface AnalystResultsGridProps {
    * lewat jalur ini.
    */
   onPatchMassal: (rowIds: string[], patch: Partial<AnalystRow>) => void;
-  /** A7: disaring ke baris yang belum disetujui pada fase ini (null = tanpa saringan). */
-  filterBelumSetuju?: 1 | 2 | 3 | null;
-  onResetBelumSetuju?: () => void;
   onReRunAll: () => void;
   onReRunAnomaliesOnly: () => void;
   isProcessing: boolean;
@@ -152,12 +146,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   rows,
   onUpdateRow,
   onApproveSingleRow,
-  onApproveAllFinal,
-  onApproveFase,
   onBersihkanManual,
   onPatchMassal,
-  filterBelumSetuju = null,
-  onResetBelumSetuju,
   onReRunAll,
   onReRunAnomaliesOnly,
   isProcessing,
@@ -199,8 +189,6 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   // Pilihan role mapping per baris Fase 3 (index kandidat 0-2)
   const [fase3RoleChoice, setFase3RoleChoice] = useState<Record<string, number>>({});
 
-  // Dialog konfirmasi sebelum menyetujui tiap fase / final analisa
-  const [confirmKind, setConfirmKind] = useState<null | 'fase1' | 'fase2' | 'fase3' | 'final'>(null);
   // Konfirmasi "Revisi ke Perlu Analisa Manual" per baris (menggantikan window.confirm).
   const [confirmManualRow, setConfirmManualRow] = useState<AnalystRow | null>(null);
   // Jendela "Detail" per baris (tab Data Final) — baca saja, tidak mengubah data.
@@ -395,25 +383,6 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   // tanpa cleanup dan banner yang menempati ruang kerja operator.
   const showToast = (message: string, type: 'success' | 'info' = 'success') => notify(message, type);
 
-  // Jalankan aksi setujui setelah operator mengonfirmasi dialog
-  const handleConfirmApprove = () => {
-    if (confirmKind === 'fase1') {
-      onApproveFase(1);
-      setActiveSubTab('fase2');
-      showToast('Fase 1 disetujui — Fase 2 terbuka, kolom cabang sudah terisi mengikuti Pilihan 1');
-    } else if (confirmKind === 'fase2') {
-      onApproveFase(2);
-      setActiveSubTab('fase3');
-      showToast('Fase 2 disetujui — Fase 3 (Mapping Role & Wondr) kini terbuka untuk direview!');
-    } else if (confirmKind === 'fase3') {
-      onApproveFase(3);
-      setActiveSubTab('all');
-      showToast('Fase 3 disetujui — Data Final kini terbuka!');
-    } else if (confirmKind === 'final') {
-      onApproveAllFinal();
-    }
-    setConfirmKind(null);
-  };
 
   // ── HIGH-PERFORMANCE SINGLE-PASS STAGE PARTITIONING & ANALYTICS O(N) ──
   // Mengelompokkan seluruh dataset dalam 1 pass tunggal untuk menghilangkan loop berulang
@@ -592,20 +561,9 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   // Filtered rows (Hanya memproses subset stage yang aktif — 10x-20x lebih cepat)
   const filteredRows = useMemo(() => {
     const q = deferredSearch.trim().toLowerCase();
-    const sourceRows = filterBelumSetuju
-      ? rows
-      : innerTab === 'MANUAL'
-        ? stageBuckets[stageTab].manual
-        : stageBuckets[stageTab].beres;
+    const sourceRows = innerTab === 'MANUAL' ? stageBuckets[stageTab].manual : stageBuckets[stageTab].beres;
 
     const hasil = sourceRows.filter((r) => {
-      if (filterBelumSetuju) {
-        if (r.kategori === 'TIDAK_ANALISA') return false;
-        const sudah =
-          filterBelumSetuju === 1 ? r.fase1Approved : filterBelumSetuju === 2 ? r.fase2Approved : r.fase3Approved;
-        return !sudah;
-      }
-
       if (r.kategori !== 'TIDAK_ANALISA' && selectedWilayah !== 'ALL' && r.wilayah !== selectedWilayah) return false;
       if (statusFilter === 'ANOMALI' && r.statusAnalisa !== 'ANOMALI' && r.statusAnalisa !== 'PERLU_REVIEW') return false;
       if (statusFilter === 'EXACT_MATCH' && r.statusAnalisa !== 'EXACT_MATCH') return false;
@@ -633,7 +591,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       return true;
     });
     return terapkanSort(hasil, sortKolom, sortDir);
-  }, [rows, stageBuckets, stageTab, innerTab, selectedWilayah, statusFilter, deferredSearch, sortKolom, sortDir, filterBelumSetuju]);
+  }, [stageBuckets, stageTab, innerTab, selectedWilayah, statusFilter, deferredSearch, sortKolom, sortDir]);
 
   const toggleSort = (kolom: SortKolom) => {
     if (sortKolom === kolom) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -926,20 +884,42 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       {(coverage?.mergedCities?.length || 0) > 0 && (
         <details style={{ background: '#fff8ec', border: '1px solid #f2d9a8', borderRadius: '6px', padding: '0.6rem 1rem' }}>
           <summary style={{ cursor: 'pointer', fontWeight: 700, color: '#8a5a00', fontSize: '0.86rem' }}>
-            {coverage!.mergedCities.length} nama kota kembar digabung — kelurahan &ldquo;KOTA X&rdquo; dan
-            &nbsp;&ldquo;KABUPATEN X&rdquo; masuk satu grup analisa
+            {coverage!.mergedCities.length} nama kota kembar digabung — &ldquo;KOTA X&rdquo; dan
+            &ldquo;KABUPATEN X&rdquo; masuk satu grup analisa
           </summary>
-          <p style={{ fontSize: '0.78rem', color: '#6b5836', margin: '0.5rem 0' }}>
-            Nama kota dibandingkan tanpa kata KOTA/KABUPATEN, jadi daerah dengan nama sama diperlakukan sebagai
-            &nbsp;satu kota PTEN. Angka = jumlah baris kode pos pada grup itu (nama diambil dari versi Kabupaten):
+          <p style={{ fontSize: '0.76rem', color: '#6b5836', margin: '0.5rem 0 0.4rem' }}>
+            Nama kota dibandingkan tanpa kata KOTA/KABUPATEN, jadi daerah bernama sama diperlakukan sebagai satu
+            kota PTEN. Angka = jumlah baris kode pos pada grup itu (nama diambil dari versi Kabupaten).
           </p>
-          <p style={{ fontSize: '0.76rem', color: '#6b5836', margin: '0 0 0.2rem', lineHeight: 1.7 }}>
-            {coverage!.mergedCities.map((c) => (
-              <span key={c.kabupaten} title={`${c.kota} + ${c.kabupaten}`} style={{ display: 'inline-block', marginRight: '0.85rem', whiteSpace: 'nowrap' }}>
-                {c.kabupaten.replace(/^(KABUPATEN|KAB)\s+/i, '')} <strong>{c.rows.toLocaleString('id-ID')}</strong>
-              </span>
-            ))}
-          </p>
+          {/* Daftar berkolom rata: dulu nama+angka dialirkan inline sehingga angkanya jatuh di
+              posisi acak dari baris ke baris dan tidak bisa dibaca cepat. */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
+              gap: '0.15rem 1.1rem',
+              borderTop: '1px solid #f2d9a8',
+              paddingTop: '0.4rem',
+            }}
+          >
+            {[...coverage!.mergedCities]
+              .sort((a, b) => b.rows - a.rows || a.kabupaten.localeCompare(b.kabupaten, 'id'))
+              .map((c) => (
+                <div
+                  key={c.kabupaten}
+                  title={`${c.kota} + ${c.kabupaten}`}
+                  style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem', fontSize: '0.76rem', color: '#6b5836', minWidth: 0 }}
+                >
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {c.kabupaten.replace(/^(KABUPATEN|KAB)\s+/i, '')}
+                  </span>
+                  <span style={{ flex: 1, borderBottom: '1px dotted #e4cfa4', transform: 'translateY(-3px)' }} />
+                  <strong style={{ fontFamily: 'var(--font-mono)', color: '#8a5a00', fontVariantNumeric: 'tabular-nums' }}>
+                    {c.rows.toLocaleString('id-ID')}
+                  </strong>
+                </div>
+              ))}
+          </div>
         </details>
       )}
 
@@ -1165,71 +1145,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
             </button>
           )}
 
-          <div style={{ display: 'inline-flex', gap: '0.25rem', borderLeft: '1px solid #e9ebec', paddingLeft: '0.55rem' }}>
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => setConfirmKind('fase1')}
-              disabled={isProcessing || phaseState.fase1Done}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.65rem', fontSize: '0.74rem', color: phaseState.fase1Done ? '#0ab39c' : '#299cdb', borderColor: phaseState.fase1Done ? 'rgba(10, 179, 156, 0.35)' : 'rgba(41, 156, 219, 0.3)' }}
-              title={phaseState.fase1Done ? 'Fase 1 sudah disetujui' : 'Setujui seluruh hasil analisa Fase 1 dan buka Fase 2'}
-            >
-              {phaseState.fase1Done ? <Check size={12} /> : <MapPin size={12} />}
-              <span>{phaseState.fase1Done ? 'Fase 1 Disetujui' : 'Setujui Fase 1'}</span>
-            </button>
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => setConfirmKind('fase2')}
-              disabled={isProcessing || !phaseState.fase1Done || phaseState.fase2Done || !phaseState.fase2Tertulis}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.65rem', fontSize: '0.74rem', color: phaseState.fase2Done ? '#0ab39c' : !phaseState.fase1Done || !phaseState.fase2Tertulis ? '#a2a7b0' : '#405189', borderColor: phaseState.fase2Done ? 'rgba(10, 179, 156, 0.35)' : 'rgba(64, 81, 137, 0.3)' }}
-              title={phaseState.fase2Done ? 'Fase 2 sudah disetujui' : !phaseState.fase1Done ? 'Terkunci — setujui Fase 1 terlebih dahulu' : !phaseState.fase2Tertulis ? 'Terkunci — Fase 2 belum dijalankan. Kolom cabang di layar baru pratinjau kandidat, belum tertulis ke barisnya. Tekan Jalankan Analisa.' : 'Setujui seluruh hasil analisa Fase 2 dan buka Fase 3'}
-            >
-              {phaseState.fase2Done ? <Check size={12} /> : !phaseState.fase1Done || !phaseState.fase2Tertulis ? <Lock size={12} /> : <Building2 size={12} />}
-              <span>{phaseState.fase2Done ? 'Fase 2 Disetujui' : 'Setujui Fase 2'}</span>
-            </button>
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => setConfirmKind('fase3')}
-              disabled={isProcessing || !phaseState.fase2Done || phaseState.fase3Done || !phaseState.fase3Tertulis}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.65rem', fontSize: '0.74rem', color: phaseState.fase3Done ? '#0ab39c' : !phaseState.fase2Done || !phaseState.fase3Tertulis ? '#a2a7b0' : '#0ab39c', borderColor: 'rgba(10, 179, 156, 0.3)' }}
-              title={phaseState.fase3Done ? 'Fase 3 sudah disetujui' : !phaseState.fase2Done ? 'Terkunci — setujui Fase 2 terlebih dahulu' : !phaseState.fase3Tertulis ? 'Terkunci — Fase 3 belum dijalankan. Status role/Wondr di layar baru pratinjau, belum tertulis ke barisnya. Tekan Jalankan Analisa.' : 'Setujui seluruh hasil analisa Fase 3 dan buka Data Final'}
-            >
-              {phaseState.fase3Done ? <Check size={12} /> : !phaseState.fase2Done || !phaseState.fase3Tertulis ? <Lock size={12} /> : <Users size={12} />}
-              <span>{phaseState.fase3Done ? 'Fase 3 Disetujui' : 'Setujui Fase 3'}</span>
-            </button>
-          </div>
 
-          <button
-            type="button"
-            className="btn btn-success btn-sm"
-            onClick={() => setConfirmKind('final')}
-            disabled={isProcessing || !phaseState.fase3Done || stats.isAllApproved}
-            title={!phaseState.fase3Done ? 'Terkunci — setujui Fase 3 terlebih dahulu' : 'Setujui seluruh baris sebagai Final Analisa'}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              padding: '0.45rem 1.1rem',
-              fontWeight: 700,
-              fontSize: '0.8rem',
-              background: stats.isAllApproved ? '#34c38f' : !phaseState.fase3Done ? '#e9ebec' : '#0ab39c',
-              borderColor: '#0ab39c',
-            }}
-          >
-            {stats.isAllApproved ? (
-              <>
-                <Lock size={14} />
-                <span>Analisa Final Telah Disetujui</span>
-              </>
-            ) : (
-              <>
-                {!phaseState.fase3Done ? <Lock size={14} /> : <Check size={14} />}
-                <span>Saya Setuju (Masuk ke Final Analisa)</span>
-              </>
-            )}
-          </button>
         </div>
 
         {/* Right: Export Button */}
@@ -1400,18 +1316,6 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
               {stats.placementReview > 0 && <option value="PENEMPATAN_REVIEW">Penempatan Belum Terverifikasi ({stats.placementReview})</option>}
             </select>
           </div>
-
-          {filterBelumSetuju && (
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={onResetBelumSetuju}
-              title="Tampilkan kembali semua baris fase ini"
-              style={{ color: '#b06f0f', borderColor: 'rgba(240, 173, 78, 0.5)', fontWeight: 700, whiteSpace: 'nowrap' }}
-            >
-              Hanya baris Fase {filterBelumSetuju} yang belum disetujui — tampilkan semua
-            </button>
-          )}
 
           <div className="filter-group">
             <span style={{ fontSize: '0.78rem', color: '#878a99' }}>Tampilkan:</span>
@@ -2524,67 +2428,6 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
         onClose={() => setDetailRow(null)}
       />
 
-      {/* Dialog konfirmasi — wajib sebelum menyetujui Fase 1/2/3 & Final Analisa */}
-      {(() => {
-        const n = stats.total.toLocaleString('id-ID');
-        const cfg = {
-          fase1: {
-            accent: '#299cdb',
-            icon: <MapPin size={20} />,
-            title: 'Setujui Hasil Fase 1?',
-            msg: `Anda akan menyetujui ${n} baris hasil Fase 1 (PTEN & Kode Pos) dan lanjut ke Fase 2 — Wilayah & Master Cabang.`,
-            detail: stats.unanalysed > 0
-              ? `Masih ada ${stats.unanalysed.toLocaleString('id-ID')} baris kota yang belum terpetakan ("Perlu Analisa Manual"). Baris itu tidak ikut disetujui dan tetap tertinggal di Fase 1.`
-              : undefined,
-            confirm: 'Ya, Setujui & Lanjut ke Fase 2',
-          },
-          fase2: {
-            accent: '#405189',
-            icon: <Building2 size={20} />,
-            title: 'Setujui Hasil Fase 2?',
-            msg: `Anda akan menyetujui ${n} baris penempatan outlet ke cabang terdekat (Fase 2) dan lanjut ke Fase 3 — Mapping Role & Wondr.`,
-            detail: stats.placementReview > 0
-              ? `Masih ada ${stats.placementReview.toLocaleString('id-ID')} baris dengan penempatan berstatus "Perlu Review". Pastikan jarak & wilayahnya sudah benar sebelum lanjut.`
-              : undefined,
-            confirm: 'Ya, Setujui & Lanjut ke Fase 3',
-          },
-          fase3: {
-            accent: '#0ab39c',
-            icon: <Users size={20} />,
-            title: 'Setujui Hasil Fase 3?',
-            msg: `Anda akan menyetujui ${n} baris mapping role & alur Wondr (Fase 3) dan membuka tab Data Final.`,
-            detail: stats.anomalies > 0
-              ? `Masih ada ${stats.anomalies.toLocaleString('id-ID')} baris berstatus anomali / perlu review. Tinjau dahulu bila ragu.`
-              : undefined,
-            confirm: 'Ya, Setujui & Buka Data Final',
-          },
-          final: {
-            accent: '#0ab39c',
-            icon: <CheckCircle2 size={20} />,
-            title: 'Pindahkan ke Final Analisa?',
-            msg: `Seluruh ${n} baris hasil analisa Fase 1–3 akan DIPINDAHKAN ke menu Final Data. Menu Data Analyst akan kembali kosong (hanya menyisakan baris yang belum terpetakan).`,
-            detail:
-              stats.anomalies > 0
-                ? `Termasuk ${stats.perluReview.toLocaleString('id-ID')} baris berstatus "perlu direview" dan ${stats.anomali.toLocaleString('id-ID')} baris "anomali" — keduanya ikut dipindahkan dan masih bisa direvisi satu per satu dari menu Final Data. ` +
-                  'Tindakan ini bisa dibatalkan kapan saja lewat tombol "Kembalikan ke Data Analyst" di menu Final Data.'
-                : 'Tindakan ini bisa dibatalkan kapan saja lewat tombol "Kembalikan ke Data Analyst" di menu Final Data.',
-            confirm: 'Ya, Pindahkan ke Final Data',
-          },
-        }[confirmKind ?? 'fase1'];
-        return (
-          <ConfirmDialog
-            isOpen={confirmKind !== null}
-            icon={cfg.icon}
-            accent={cfg.accent}
-            title={cfg.title}
-            message={cfg.msg}
-            detail={cfg.detail}
-            confirmLabel={cfg.confirm}
-            onConfirm={handleConfirmApprove}
-            onClose={() => setConfirmKind(null)}
-          />
-        );
-      })()}
       {/* Konfirmasi revisi ke Perlu Analisa Manual (menggantikan window.confirm) */}
       <ConfirmDialog
         isOpen={confirmManualRow !== null}

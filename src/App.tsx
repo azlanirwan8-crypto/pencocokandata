@@ -110,7 +110,6 @@ export const App: React.FC = () => {
   // Kartu sinyal yang sedang dibuka detail temuannya (nomor 1..13, null = tertutup).
   const [sinyalDibuka, setSinyalDibuka] = useState<number | null>(null);
   // A7: penanda "N baris belum disetujui" yang bisa diklik — fase yang sedang disaring.
-  const [lihatBelumSetuju, setLihatBelumSetuju] = useState<null | 1 | 2 | 3>(null);
   // Full Master Kode Pos list (loaded once from cloud, cached in memory for pipeline runs)
   const kodePosListRef = useRef<KodePosRow[] | null>(null);
   // Cerminan reaktif dari kodePosListRef agar Dashboard bisa menghitung cakupan kode pos.
@@ -597,10 +596,12 @@ export const App: React.FC = () => {
     setIsAnalyzing(true);
     setAnalystProgress(10);
     setAnalystMessage(`Menyiapkan 5 Data Master & indeks memori O(1)... (Fase ${targetFase})`);
-    // Reset per-phase progress
-    setPhaseProgress({ 1: 0, 2: 0, 3: 0 });
+    // Hanya fase yang akan dijalankan yang di-reset. Dulu seluruh kartu dinolkan di sini,
+    // jadi menekan "Lanjut Fase 2" membuat kartu Fase 1 terlihat menghitung ulang dari 0
+    // padahal fase itu sudah selesai dan disetujui.
+    setPhaseProgress((prev) => ({ ...prev, [targetFase]: 0 }));
     setCurrentActivePhase(targetFase);
-    setCompletedPhases(new Set());
+    setCompletedPhases((prev) => new Set([...prev, targetFase]));
 
     try {
       // ── Pastikan pipeline memakai SELURUH Master Kode Pos (puluhan ribu baris),
@@ -636,7 +637,6 @@ export const App: React.FC = () => {
         setKodePosMasterRows(kodePosForPipeline);
       }
 
-      let lastPhase: 1 | 2 | 3 = 1;
       const activeOverrides = overrides || cityOverrides;
       // ── Pemetaan manual (Setujui di laporan cakupan): baris master kota yang
       //    dipetakan operator dipakai ATAS NAMA kota PTEN pilihan, sehingga ikut
@@ -668,31 +668,20 @@ export const App: React.FC = () => {
         (phase, pct, _processed, _total, msg) => {
           setAnalystProgress(pct);
           setAnalystMessage(`[Fase ${phase}] ${msg}`);
-          setCurrentActivePhase(phase);
-          // Calculate per-phase local percent (0-100)
+          // Pipeline memakai nomor fase internal untuk tahap pencarian kota. Kartu fase di
+          // bawah `targetFase` sudah selesai dan tidak boleh bergerak lagi — itu yang dulu
+          // membuat "Lanjut Fase 2" terlihat mengulang perhitungan dari Fase 1.
+          const kartu = Math.max(phase, targetFase) as 1 | 2 | 3;
+          setCurrentActivePhase(kartu);
           // Phase 1: global 0-33%, Phase 2: 33-66%, Phase 3: 66-100%
           const phaseRanges: Record<1 | 2 | 3, [number, number]> = {
             1: [0, 33],
             2: [33, 66],
             3: [66, 100],
           };
-          const [min, max] = phaseRanges[phase];
+          const [min, max] = phaseRanges[kartu];
           const localPct = max > min ? Math.min(100, Math.round(((pct - min) / (max - min)) * 100)) : 0;
-          setPhaseProgress((prev) => ({ ...prev, [phase]: localPct }));
-          // Mark previous phases completed when phase changes
-          if (phase > lastPhase) {
-            setCompletedPhases((prev) => {
-              const next = new Set(prev);
-              for (let p = 1; p < phase; p++) next.add(p);
-              return next;
-            });
-            setPhaseProgress((prev) => {
-              const next = { ...prev };
-              for (let p = 1 as 1 | 2 | 3; p < phase; p = (p + 1) as 1 | 2 | 3) next[p] = 100;
-              return next;
-            });
-          }
-          lastPhase = phase;
+          setPhaseProgress((prev) => ({ ...prev, [kartu]: localPct }));
         }
       );
 
@@ -754,6 +743,7 @@ export const App: React.FC = () => {
   const { phaseApproval, temuanSinyal } = useMemo(() => {
     let total = 0;
     let a = 0, b = 0, c = 0;
+    let t2 = 0, t3 = 0, final = 0;
     const sinyalOut: Record<number, number> = {};
 
     for (let i = 0; i < analystRows.length; i++) {
@@ -763,6 +753,9 @@ export const App: React.FC = () => {
         if (r.fase1Approved) a++;
         if (r.fase2Approved) b++;
         if (r.fase3Approved) c++;
+        if (barisFinalLengkap(r)) t2++;
+        if (r.statusAnalisa && r.statusAnalisa !== 'MENUNGGU') t3++;
+        if (r.isFinalApproved) final++;
       }
       const bit = bitTemuanBaris(r);
       if (bit) {
@@ -780,6 +773,16 @@ export const App: React.FC = () => {
           2: boolean;
           3: boolean;
         },
+        total,
+        // Fase yang kolomnya belum pernah ditulis mesin belum layak disetujui: layar Data
+        // Analyst menampilkan kolom Fase 2 dari kandidat, jadi barisnya bisa tetap kosong
+        // tanpa terlihat. Gerbang ini dipakai tombol di kartu ATAS dan baris tombol di grid.
+        tertulis: {
+          1: analystRows.length > 0,
+          2: total > 0 && t2 > 0,
+          3: total > 0 && t3 > 0,
+        } as { 1: boolean; 2: boolean; 3: boolean },
+        semuaSudahFinal: total > 0 && final === total,
       },
       temuanSinyal: sinyalOut,
     };
@@ -788,15 +791,6 @@ export const App: React.FC = () => {
   // Alur bertahap: fase pertama yang belum disetujui penuh adalah fase yang berikutnya
   // dikerjakan — tombol, kartu, dan engine memakai angka yang sama.
   const faseBerikutnya: 1 | 2 | 3 = !phaseApproval.selesai[1] ? 1 : !phaseApproval.selesai[2] ? 2 : 3;
-  // Fase yang sudah dieksekusi mesin tapi belum disetujui operator: jalankan ulang tidak
-  // menambah apa-apa, jadi tombol utama dikunci sampai fase itu disetujui.
-  const faseSudahDikerjakan =
-    faseBerikutnya === 1
-      ? analystRows.length > 0
-      : faseBerikutnya === 2
-        ? analystRows.some((r) => Boolean(r.namaOutlet))
-        : analystRows.some((r) => r.statusAnalisa !== 'MENUNGGU');
-  const tombolAnalisaTerkunci = !isAnalyzing && faseSudahDikerjakan;
 
   const handleResetAnalyst = async () => {
     const tadi = analystRows.length;
@@ -1475,10 +1469,12 @@ export const App: React.FC = () => {
                 completedPhases={completedPhases}
                 phaseApproval={phaseApproval}
                 faseBerikutnya={faseBerikutnya}
-                terkunciMenungguPersetujuan={tombolAnalisaTerkunci}
                 temuanSinyal={temuanSinyal}
                 onLihatTemuan={setSinyalDibuka}
-                onLihatBelumSetuju={setLihatBelumSetuju}
+                onApproveFase={handleApproveAnalystFase}
+                onApproveAllFinal={handleApproveAllAnalystFinal}
+                faseTertulis={phaseApproval.tertulis}
+                semuaSudahFinal={phaseApproval.semuaSudahFinal}
                 bitmaskBelumAda={analystRows.length > 0 && Object.keys(temuanSinyal).length === 0}
               />
 
@@ -1491,13 +1487,9 @@ export const App: React.FC = () => {
                   rows={analystRows}
                   onUpdateRow={handleUpdateAnalystRow}
                   onApproveSingleRow={handleApproveSingleAnalystRow}
-                  onApproveAllFinal={handleApproveAllAnalystFinal}
-                  onApproveFase={handleApproveAnalystFase}
                   onBersihkanManual={handleBersihkanManualAnalyst}
                   onPatchMassal={handlePatchMassalAnalyst}
                   onBukaMasterCabang={() => setActiveTab('master')}
-                  filterBelumSetuju={lihatBelumSetuju}
-                  onResetBelumSetuju={() => setLihatBelumSetuju(null)}
                   onReRunAll={() => handleStartAnalystPipeline(false)}
                   onReRunAnomaliesOnly={() => handleStartAnalystPipeline(true)}
                   isProcessing={isAnalyzing}

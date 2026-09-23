@@ -5,6 +5,8 @@ import {
   Building2,
   Users,
   Play,
+  Check,
+  ClipboardCheck,
   RotateCcw,
   X,
   ChevronDown,
@@ -41,19 +43,25 @@ interface AnalystCanvasProps {
     /** A7: jumlah baris fase itu yang BELUM di-approve (baris `TIDAK_ANALISA` tidak dihitung). */
     sisa?: { 1: number; 2: number; 3: number };
     selesai: { 1: boolean; 2: boolean; 3: boolean };
+    /** Baris yang ikut dihitung persetujuan (di luar TIDAK_ANALISA). */
+    total?: number;
   };
   /** Fase pertama yang belum disetujui penuh — yang dijalankan tombol utama. */
   faseBerikutnya?: 1 | 2 | 3;
-  /** Fase ini sudah dieksekusi tapi belum disetujui: tombol utama dikunci. */
-  terkunciMenungguPersetujuan?: boolean;
   /** Jumlah baris hasil analisa yang tertangkap tiap sinyal (nomor kartu 1..13). */
   temuanSinyal?: Record<number, number>;
   /** Buka modal detail temuan satu sinyal. */
   onLihatTemuan?: (no: number) => void;
-  /** A7: penanda "N baris belum disetujui" diklik → grid menyaring fase itu. */
-  onLihatBelumSetuju?: (fase: 1 | 2 | 3) => void;
   /** Ada hasil analisa lama yang belum menyimpan bitmask sinyal (sebelum fitur ini dibuat). */
   bitmaskBelumAda?: boolean;
+  /** Setujui satu fase (tombol "Setujui Fase N" pindah ke baris ini, lihat catatan di bawah). */
+  onApproveFase?: (fase: 1 | 2 | 3) => void;
+  /** Pindahkan seluruh baris ber-cabang ke Data Final. */
+  onApproveAllFinal?: () => void;
+  /** Fase yang kolomnya belum pernah ditulis mesin — belum layak disetujui. */
+  faseTertulis?: { 1: boolean; 2: boolean; 3: boolean };
+  /** Semua baris antrean sudah berstatus Final: tombol "Masuk ke Data Final" tidak aktif lagi. */
+  semuaSudahFinal?: boolean;
 }
 
 export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
@@ -71,16 +79,45 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
   completedPhases = new Set(),
   phaseApproval = { pct: { 1: 0, 2: 0, 3: 0 }, sisa: { 1: 0, 2: 0, 3: 0 }, selesai: { 1: false, 2: false, 3: false } },
   faseBerikutnya = 1,
-  terkunciMenungguPersetujuan = false,
   temuanSinyal = {},
   onLihatTemuan,
-  onLihatBelumSetuju,
   bitmaskBelumAda = false,
+  onApproveFase,
+  onApproveAllFinal,
+  faseTertulis = { 1: true, 2: true, 3: true },
+  semuaSudahFinal = false,
 }) => {
   const [showTheories, setShowTheories] = useState<boolean>(true);
   // Reset Analisa menghapus seluruh hasil kerja (bukan cuma menyembunyikan),
   // jadi tidak boleh jalan dari satu klik tanpa konfirmasi.
   const [konfirmasiReset, setKonfirmasiReset] = useState<boolean>(false);
+  const [konfirmasiLangkah, setKonfirmasiLangkah] = useState<null | 1 | 2 | 3 | 'final'>(null);
+
+  // SATU tombol = satu langkah berikutnya. Dulu "Jalankan Fase N" (kartu ini) dan
+  // "Setujui Fase N" (baris di bawah tabel) dua tombol terpisah, dan yang pertama mengunci
+  // dengan tulisan "setujui dulu di bawah" — operator harus mencari tombolnya sendiri.
+  const faseAktif: 1 | 2 | 3 = !phaseApproval.selesai[1] ? 1 : !phaseApproval.selesai[2] ? 2 : 3;
+  const sudahDijalankan = (f: 1 | 2 | 3) => (f === 1 ? !!hasExistingResults : faseTertulis[f]);
+  const semuaFaseSetuju = phaseApproval.selesai[1] && phaseApproval.selesai[2] && phaseApproval.selesai[3];
+  const langkah: { jenis: 'proses' | 'jalankan' | 'setujui' | 'final' | 'selesai'; label: string; ket: string } = isAnalyzing
+    ? { jenis: 'proses', label: `Sedang Memproses Fase ${faseBerikutnya} (${progressPercent}%)...`, ket: 'Tekan Batalkan untuk menghentikan run ini tanpa menyimpan.' }
+    : semuaFaseSetuju
+      ? semuaSudahFinal
+        ? { jenis: 'selesai', label: 'Semua baris sudah di Data Final', ket: 'Tidak ada yang menunggu persetujuan.' }
+        : { jenis: 'final', label: 'Masuk ke Data Final', ket: 'Baris yang sudah punya cabang dipindahkan ke menu Data Final.' }
+      : !sudahDijalankan(faseAktif)
+        ? {
+            jenis: 'jalankan',
+            label: hasExistingResults ? `Lanjut Fase ${faseAktif}` : `Jalankan Fase ${faseAktif}`,
+            ket: `Mesin mengerjakan Fase ${faseAktif} saja, lalu berhenti untuk kamu review.`,
+          }
+        : { jenis: 'setujui', label: `Setujui Fase ${faseAktif}`, ket: `Seluruh baris hasil Fase ${faseAktif} dinyatakan benar dan fase berikutnya terbuka.` };
+
+  const tekanLangkah = () => {
+    if (langkah.jenis === 'jalankan') onStartAnalysis();
+    else if (langkah.jenis === 'setujui') setKonfirmasiLangkah(faseAktif);
+    else if (langkah.jenis === 'final') setKonfirmasiLangkah('final');
+  };
 
   // Pesan langkah terbaru tampil di kartu fase yang sedang berjalan (prefix [Fase n] dibuang).
   const stepText = (fallback: string) => {
@@ -233,46 +270,44 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
             {hasExistingResults && (
               <button
                 type="button"
-                className="btn btn-outline btn-sm"
+                className="btn btn-outline"
                 onClick={() => setKonfirmasiReset(true)}
                 disabled={isAnalyzing}
-                style={{ color: '#f06548', borderColor: 'rgba(240, 101, 72, 0.35)', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                style={{ color: '#f06548', borderColor: 'rgba(240, 101, 72, 0.35)', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1.1rem', fontWeight: 700, fontSize: '0.84rem' }}
                 title="Reset seluruh hasil analisa"
               >
-                <RotateCcw size={13} />
+                <RotateCcw size={15} />
                 <span>Reset Analisa</span>
               </button>
             )}
 
             <button
               type="button"
-              className="btn btn-outline btn-sm"
+              className="btn btn-outline"
               onClick={onBatalkanAnalysis}
               disabled={!isAnalyzing || isCancelling}
               title={isCancelling ? 'Menghentikan pada langkah berjalan...' : 'Hentikan analisa — hasil run ini tidak akan disimpan'}
               style={{
                 display: isAnalyzing ? 'inline-flex' : 'none',
                 alignItems: 'center',
-                gap: '0.35rem',
+                gap: '0.4rem',
+                padding: '0.55rem 1.1rem',
+                fontSize: '0.84rem',
                 color: '#f06548',
                 borderColor: 'rgba(240, 101, 72, 0.45)',
                 fontWeight: 700,
               }}
             >
-              <X size={13} />
+              <X size={15} />
               <span>{isCancelling ? 'Membatalkan...' : 'Batalkan'}</span>
             </button>
 
             <button
               type="button"
               className="btn btn-primary"
-              onClick={onStartAnalysis}
-              disabled={isAnalyzing || terkunciMenungguPersetujuan}
-              title={
-                terkunciMenungguPersetujuan
-                  ? `Fase ${faseBerikutnya} sudah dikerjakan — setujui dulu di bawah sebelum lanjut`
-                  : `Mesin hanya mengerjakan Fase ${faseBerikutnya}, lalu berhenti untuk kamu review`
-              }
+              onClick={tekanLangkah}
+              disabled={isAnalyzing || langkah.jenis === 'proses' || langkah.jenis === 'selesai'}
+              title={langkah.ket}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -287,44 +322,15 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
               {isAnalyzing ? (
                 <>
                   <div className="spinner-border spinner-border-sm" role="status" style={{ width: '14px', height: '14px' }} />
-                  <span>
-                    Sedang Memproses Fase {faseBerikutnya} ({progressPercent}%)...
-                  </span>
+                  <span>{langkah.label}</span>
                 </>
               ) : (
                 <>
-                  <Play size={15} />
-                  <span>
-                    {terkunciMenungguPersetujuan
-                      ? `Setujui Fase ${faseBerikutnya} dulu`
-                      : hasExistingResults
-                        ? `Lanjut Fase ${faseBerikutnya}`
-                        : `Jalankan Fase ${faseBerikutnya}`}
-                  </span>
+                  {langkah.jenis === 'setujui' ? <Check size={15} /> : langkah.jenis === 'final' ? <ClipboardCheck size={15} /> : <Play size={15} />}
+                  <span>{langkah.label}</span>
                 </>
               )}
             </button>
-
-            {/* A7: tombol terkunci tanpa keterangan bikin operator bingung — sebut
-                sisa barisnya dan buka daftarnya sekali klik. */}
-            {!isAnalyzing && terkunciMenungguPersetujuan && (phaseApproval.sisa?.[faseBerikutnya] ?? 0) > 0 && (
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                onClick={() => onLihatBelumSetuju?.(faseBerikutnya)}
-                title={`Tampilkan hanya baris Fase ${faseBerikutnya} yang belum disetujui`}
-                style={{
-                  marginLeft: '0.6rem',
-                  color: '#b06f0f',
-                  borderColor: 'rgba(240, 173, 78, 0.5)',
-                  fontWeight: 700,
-                  fontSize: '0.78rem',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {phaseApproval.sisa?.[faseBerikutnya]?.toLocaleString('id-ID')} baris belum disetujui
-              </button>
-            )}
           </div>
         </div>
 
@@ -477,6 +483,27 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
         onConfirm={() => {
           setKonfirmasiReset(false);
           onResetAnalysis();
+        }}
+      />
+
+      <ConfirmDialog
+        isOpen={konfirmasiLangkah !== null}
+        icon={<Check size={20} />}
+        accent="#0ab39c"
+        title={konfirmasiLangkah === 'final' ? 'Pindahkan ke Data Final?' : `Setujui hasil Fase ${konfirmasiLangkah ?? ''}?`}
+        message={`${(phaseApproval.total ?? 0).toLocaleString('id-ID')} baris ikut disetujui.`}
+        detail={
+          konfirmasiLangkah === 'final'
+            ? 'Hanya baris yang kolom cabangnya sudah terisi yang pindah. Baris tanpa cabang tetap tertinggal di antrean Data Final agar tidak menjadi hasil kosong.'
+            : `Fase ${konfirmasiLangkah} dinyatakan benar dan fase berikutnya terbuka. Masih bisa direvisi dari menu Data Final.`
+        }
+        confirmLabel={konfirmasiLangkah === 'final' ? 'Ya, Masuk ke Data Final' : 'Ya, Setujui & Lanjut'}
+        cancelLabel="Batal"
+        onClose={() => setKonfirmasiLangkah(null)}
+        onConfirm={() => {
+          if (konfirmasiLangkah === 'final') onApproveAllFinal?.();
+          else if (konfirmasiLangkah) onApproveFase?.(konfirmasiLangkah);
+          setKonfirmasiLangkah(null);
         }}
       />
     </div>
