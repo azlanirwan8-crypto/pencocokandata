@@ -371,13 +371,39 @@ function alasanTarikPatokan(json: any): string | null {
 }
 
 /**
- * Salin SELURUH baris patokan yang belum ada ke tabel kerja, langsung di database.
- * Daftar contoh di modal terbatas beberapa ribu baris, jadi tombol ini yang mengisi penuh.
+ * Salin SELURUH baris patokan yang belum ada ke tabel kerja. Server membatasi satu
+ * window per panggilan (role `anon` Supabase memotong statement di 8 detik), jadi
+ * fungsi ini yang mengulang dari titik berhenti sampai selesai.
  */
-export async function importSemuaPatokan(): Promise<{ masuk: number; totalSetelah: number }> {
-  const json = await fetchJson('/api/kodepos-baseline?view=import-missing', { method: 'POST' });
-  if (!json?.ok) throw new Error(json?.error || 'Penyalinan patokan ke tabel kerja gagal.');
-  return { masuk: Number(json.masuk || 0), totalSetelah: Number(json.totalSetelah || 0) };
+export async function importSemuaPatokan(
+  onProgress?: SyncProgress
+): Promise<{ masuk: number; totalSetelah: number }> {
+  let mulai = 0;
+  let masuk = 0;
+  let totalSetelah = 0;
+  for (let tahap = 0; tahap < 60; tahap++) {
+    const json = await fetchJson('/api/kodepos-baseline?view=import-missing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mulai }),
+    });
+    if (!json?.ok) throw new Error(json?.error || 'Penyalinan patokan ke tabel kerja gagal.');
+    masuk += Number(json.masuk || 0);
+    totalSetelah = Number(json.totalSetelah || 0);
+    const totalPatokan = Number(json.totalPatokan || 0);
+    if (json.selesai || json.berikutnya == null) {
+      onProgress?.('Penyalinan patokan selesai', 100);
+      return { masuk, totalSetelah };
+    }
+    mulai = Number(json.berikutnya);
+    onProgress?.(
+      `Menyalin patokan ke tabel kerja: ${mulai.toLocaleString('id-ID')} dari ${totalPatokan.toLocaleString('id-ID')} baris...`,
+      Math.min(95, Math.round((mulai / Math.max(1, totalPatokan)) * 100))
+    );
+  }
+  throw new Error(
+    `Penyalinan patokan berhenti di baris ke-${mulai.toLocaleString('id-ID')} dari ${totalSetelah.toLocaleString('id-ID')} — tekan Sync Data lagi untuk melanjutkan.`
+  );
 }
 
 /** Cakupan titik koordinat per baris tabel kerja. */
@@ -605,8 +631,10 @@ export async function runKodePosLiveSync(onProgress?: SyncProgress): Promise<Kod
    * lalu baca ulang selisihnya agar angka yang tampil benar-benar kondisi terakhir.
    */
   if (Number(json.dbRows || 0) === 0 && Number(json.missingCodesTotal || 0) > 0) {
-    onProgress?.('Tabel kerja kosong — menyalin seluruh patokan ke tabel kerja...', 94);
-    const { masuk, totalSetelah } = await importSemuaPatokan();
+    onProgress?.('Tabel kerja kosong — menyalin seluruh patokan ke tabel kerja...', 92);
+    const { masuk, totalSetelah } = await importSemuaPatokan((pesan, pct) =>
+      onProgress?.(pesan, 92 + Math.round(pct * 0.06))
+    );
     const titik = await salinKoordinatPatokan();
     json = await ambilPatokan();
     catatan =

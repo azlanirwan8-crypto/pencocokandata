@@ -773,17 +773,77 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // ─────────────── POST import-missing ───────────────
-    // Salin SEMUA baris patokan yang belum ada ke tabel kerja, langsung di database
-    // (fungsi base_import_missing). Jalur browser biasa terbatas DIFF_CAP baris
-    // contoh, jadi tidak bisa dipakai untuk mengisi puluhan ribu baris sekali jalan.
+    /*
+     * POST ?view=import-missing  salin patokan ke tabel kerja, SATU WINDOW PER PANGGILAN.
+     *
+     * Fungsi base_import_missing() menyalin seluruhnya dalam satu statement dan itu
+     * selalu mati: Supabase memotong statement role `anon` (publishable key) pada 8
+     * detik, sedang patokan 83 ribu baris (terukur 2026-09-23: "canceling statement
+     * due to statement timeout"). Window per window lewat REST tetap di bawah batas
+     * itu, dan `{ mulai }` membuat penarikan yang terputus bisa dilanjutkan persis
+     * dari titik berhenti — tanpa langkah manual di konsol Supabase.
+     */
     if (req.method === 'POST' && view === 'import-missing') {
-      const hasil = await sb.rpc<{ masuk: number; totalSetelah: number }>('base_import_missing');
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
+      const mulai = Math.max(0, Number(body.mulai) || 0);
+      const batas = Math.min(10_000, Math.max(200, Number(body.batas) || 5_000));
+      const bersih = (v: unknown) => String(v ?? '').trim();
+      const kunci = (r: Record<string, unknown>) => `${bersih(r.kode_pos)}|${bersih(r.kelurahan)}`.toUpperCase();
+
+      const { rows: patokan, total: totalPatokan } = await sb.baris<Record<string, unknown>>(
+        'kodepos_baseline',
+        {
+          kolom: 'kode_pos,kelurahan,kecamatan,kabupaten_kota,provinsi',
+          urut: 'kode_wilayah.asc',
+          batas,
+          mulai,
+          count: true,
+        }
+      );
+      const totalSetelah = await sb.hitung('kodepos_data');
+      const habis = mulai >= (totalPatokan ?? 0) || patokan.length === 0;
+
+      if (habis) {
+        return res.status(200).json({
+          ok: true, configured: true, masuk: 0, totalSetelah,
+          selesai: true, berikutnya: null, totalPatokan: totalPatokan ?? 0,
+        });
+      }
+
+      // Yang diperiksa hanya kode pos yang muncul di window ini, dan idx_kodepos_kode
+      // memakainya — bukan membaca ulang seluruh tabel kerja tiap tahap.
+      const kodeUnik = [...new Set(patokan.map((r) => bersih(r.kode_pos)).filter((k) => /^\d{5}$/.test(k)))];
+      const sudahAda = new Set<string>();
+      for (let i = 0; i < kodeUnik.length; i += 500) {
+        const { rows } = await sb.baris<Record<string, unknown>>('kodepos_data', {
+          kolom: 'kode_pos,kelurahan',
+          filter: { kode_pos: `in.(${kodeUnik.slice(i, i + 500).join(',')})` },
+        });
+        for (const r of rows) sudahAda.add(kunci(r));
+      }
+
+      const baru = new Map<string, unknown>();
+      for (const r of patokan) {
+        const k = kunci(r);
+        if (sudahAda.has(k) || baru.has(k)) continue;
+        baru.set(k, { ...r, status: 'AKTIF' });
+      }
+      const kiriman = [...baru.values()];
+      // Insert dipecah per 1000 baris: satu statement 83 ribu baris dibolehkan oleh
+      // perannya (security definer) tapi tidak oleh batas 8 detik role `anon`, dan
+      // 500 baris per statement sudah terbukti aman di jalur ?view=fetch.
+      for (let i = 0; i < kiriman.length; i += 1000) {
+        await sb.simpan('kodepos_data', kiriman.slice(i, i + 1000));
+      }
+
       return res.status(200).json({
         ok: true,
         configured: true,
-        masuk: Number(hasil?.masuk || 0),
-        totalSetelah: Number(hasil?.totalSetelah || 0),
+        masuk: kiriman.length,
+        totalSetelah: await sb.hitung('kodepos_data'),
+        berikutnya: mulai + patokan.length,
+        selesai: mulai + patokan.length >= (totalPatokan ?? 0),
+        totalPatokan: totalPatokan ?? 0,
       });
     }
 

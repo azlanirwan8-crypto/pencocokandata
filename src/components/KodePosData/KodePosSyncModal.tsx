@@ -169,7 +169,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
     setPhase('importing');
     setStep('Menyalin seluruh patokan ke tabel kerja...');
     try {
-      const { masuk, totalSetelah } = await importSemuaPatokan();
+      const { masuk, totalSetelah } = await importSemuaPatokan(onProgress);
       setStep('Menyalin titik koordinat per desa ke baris kerja...');
       const titik = await salinKoordinatPatokan();
       const bagian = [`${fmt(masuk)} baris patokan disalin ke tabel kerja`];
