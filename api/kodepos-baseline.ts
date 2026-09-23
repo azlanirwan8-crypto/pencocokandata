@@ -790,18 +790,25 @@ export default async function handler(req: any, res: any) {
       const bersih = (v: unknown) => String(v ?? '').trim();
       const kunci = (r: Record<string, unknown>) => `${bersih(r.kode_pos)}|${bersih(r.kelurahan)}`.toUpperCase();
 
-      const { rows: patokan, total: totalPatokan } = await sb.baris<Record<string, unknown>>(
-        'kodepos_baseline',
-        {
-          kolom: 'kode_pos,kelurahan,kecamatan,kabupaten_kota,provinsi',
-          urut: 'kode_wilayah.asc',
-          batas,
-          mulai,
-          count: true,
+      const bacaWindow = async (dari: number) => {
+        try {
+          return await sb.baris<Record<string, unknown>>('kodepos_baseline', {
+            kolom: 'kode_pos,kelurahan,kecamatan,kabupaten_kota,provinsi',
+            urut: 'kode_wilayah.asc',
+            batas,
+            mulai: dari,
+            count: true,
+          });
+        } catch (err: any) {
+          // Offset lewat isi: PostgREST membalas 416, bukan baris kosong.
+          if (err?.status !== 416) throw err;
+          return { rows: [] as Record<string, unknown>[], total: null };
         }
-      );
+      };
+
+      const { rows: patokan, total: totalPatokan } = await bacaWindow(mulai);
       const totalSetelah = await sb.hitung('kodepos_data');
-      const habis = mulai >= (totalPatokan ?? 0) || patokan.length === 0;
+      const habis = patokan.length === 0;
 
       if (habis) {
         return res.status(200).json({
@@ -829,9 +836,9 @@ export default async function handler(req: any, res: any) {
         baru.set(k, { ...r, status: 'AKTIF' });
       }
       const kiriman = [...baru.values()];
-      // Insert dipecah per 1000 baris: satu statement 83 ribu baris dibolehkan oleh
-      // perannya (security definer) tapi tidak oleh batas 8 detik role `anon`, dan
-      // 500 baris per statement sudah terbukti aman di jalur ?view=fetch.
+      // Insert dipecah per 1000 baris per statement: yang 83 ribu sekali jalanlah yang
+      // dipotong 8 detik, dan jalur ?view=fetch sudah terbukti mengirim 500 baris per
+      // statement tanpa tersandung — 1000 masih jauh di bawah ambang itu.
       for (let i = 0; i < kiriman.length; i += 1000) {
         await sb.simpan('kodepos_data', kiriman.slice(i, i + 1000));
       }
