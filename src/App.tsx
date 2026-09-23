@@ -110,7 +110,7 @@ export const App: React.FC = () => {
   const [sinyalDibuka, setSinyalDibuka] = useState<number | null>(null);
   // A7: penanda "N baris belum disetujui" yang bisa diklik — fase yang sedang disaring.
   const [lihatBelumSetuju, setLihatBelumSetuju] = useState<null | 1 | 2 | 3>(null);
-  // Full Master Kode Pos list (loaded once from Neon, cached in memory for pipeline runs)
+  // Full Master Kode Pos list (loaded once from cloud, cached in memory for pipeline runs)
   const kodePosListRef = useRef<KodePosRow[] | null>(null);
   // Cerminan reaktif dari kodePosListRef agar Dashboard bisa menghitung cakupan kode pos.
   const [kodePosMasterRows, setKodePosMasterRows] = useState<KodePosRow[]>([]);
@@ -255,11 +255,11 @@ export const App: React.FC = () => {
 
       // -----------------------------------------------------------------------
       // STEP 2: PARALLEL BACKGROUND CLOUD SYNC (Non-blocking)
-      // Fetch latest updates from Neon Postgres and Supabase Cloud concurrently
+      // Fetch latest updates from cloud (Supabase Postgres) concurrently
       // -----------------------------------------------------------------------
       (async () => {
         try {
-          // Check Neon status & load data in parallel
+          // Check cloud status & load data in parallel
           const [neonCheck, neonMaster, neonTarget, neonWilayah, neonKodePosStats] = await Promise.allSettled([
             checkNeonStatus(),
             loadMasterFromNeon(),
@@ -314,7 +314,7 @@ export const App: React.FC = () => {
             const localMatchedCount = (localTarget?.rows || []).filter((r) => r._isMatched).length;
             const neonMatchedCount = neonRows.filter((r) => r._isMatched).length;
 
-            // PENTING: Hanya timpa state lokal jika data di Neon memiliki jumlah data match LEBIH BANYAK!
+            // PENTING: Hanya timpa state lokal jika data cloud memiliki jumlah data match LEBIH BANYAK!
             // Jika data lokal IndexedDB memiliki data match lebih banyak (baru disetujui),
             // pertahankan data lokal dan langsung dorong (push) pembaruan tersebut ke database DB!
             if (neonMatchedCount > localMatchedCount) {
@@ -337,7 +337,7 @@ export const App: React.FC = () => {
             await saveWilayahToNeon(DEFAULT_WILAYAH_DATA);
           }
         } catch (cloudErr) {
-          console.warn('Background Neon sync skipped:', cloudErr);
+          console.warn('Background cloud sync skipped:', cloudErr);
         }
       })();
 
@@ -397,7 +397,7 @@ export const App: React.FC = () => {
 
   const persistTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Helper to persist target & match data across IndexedDB and Neon Postgres asynchronously (0ms UI blocking)
+  // Helper to persist target & match data across IndexedDB and Supabase Postgres asynchronously (0ms UI blocking)
   const persistTargetData = (
     payload: {
       rows: TargetRow[];
@@ -415,7 +415,7 @@ export const App: React.FC = () => {
       // 1. Local IndexedDB (Instant asynchronous cache write)
       setItem('target_data', payload).catch((e) => console.warn('IndexedDB auto-save skipped:', e));
 
-      // 2. Neon Postgres (Serverless DB on Vercel)
+      // 2. Supabase Postgres (basis data cloud di Vercel)
       saveTargetToNeon(payload).catch((e) => console.warn('Neon target auto-save skipped:', e));
 
       setLastSyncedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
@@ -615,6 +615,10 @@ export const App: React.FC = () => {
         if (masterLengkap(cloudKodePos)) {
           kodePosForPipeline = cloudKodePos as KodePosRow[];
           setKodePosCount((cloudKodePos as KodePosRow[]).length);
+          // Simpan master penuh hasil unduhan: tanpa ini tiap Analisa mengunduh ulang
+          // 83 ribu baris (terukur 51,5 detik untuk 17 window), dan boot berikutnya
+          // masih menemukan seed 139 baris di 'kodepos_master_data'.
+          void setItem('kodepos_master_data', cloudKodePos);
         } else {
           const savedKodePos = await getItem<KodePosRow[]>('kodepos_master_data');
           if (masterLengkap(savedKodePos)) {
@@ -1162,7 +1166,7 @@ export const App: React.FC = () => {
         );
       } catch (e) {
         // F3-C3: cloud gagal saat reset — beri tahu operator, jangan diam-diam
-        console.warn('Neon clear warning:', e);
+        console.warn('Cloud clear warning:', e);
         notify(
           'Data Cabang dikosongkan di browser, tetapi GAGAL dihapus dari cloud. ' +
             'Sinkronkan ulang atau periksa koneksi database.',
