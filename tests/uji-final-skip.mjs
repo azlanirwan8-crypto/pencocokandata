@@ -115,9 +115,15 @@ asa('FS6 No ditulis ulang sesuai posisi ekspor', contohEkspor.No, 3);
 asa('FS6 baris ke-i tetap baris ke-i (ekspor tidak menukar urutan)', contohEkspor.Kelurahan, bersih[2].kelurahan);
 asa('FS6 Dati II memakai nama MAX 15 digit (aturan ekspor final)', contohEkspor['Dati II'], bersih[2].kotaPtenMax15 || bersih[2].kotaPten);
 asa('FS6 berkas Final Data tidak memuat kolom role/aksi', Object.keys(contohEkspor).some((k) => /ORGANISASI|WONDR|3 ROLE|AKSI|DETAIL|TIPE UNIT/i.test(k)), false);
-asa('FS6 grup warna layar = warna berkas (navy/hijau/oranye)',
-  KOLOM_FINAL.map((k) => k.grup),
-  ['navy', 'navy', 'navy', 'navy', 'navy', 'navy', 'navy', 'hijau', 'hijau', 'hijau', 'hijau', 'oranye', 'hijau']);
+// Kepala tabel DI LAYAR pakai 4 grup warna (permintaan pemilik produk 2026-09-24).
+// Sengaja TIDAK disamakan dengan FS5 di atas: kepala berkas Excel mengikuti palet berkas
+// sumber operator, bukan token layar. Yang dijaga di sini cuma satu hal — setiap kolom
+// punya grup, dan hanya grup yang berubah, tidak ada kolom yang kehilangan warna.
+const GRUP_LAYAR = ['wilayah', 'wilayah', 'outlet', 'outlet', 'outlet', 'outlet', 'outlet', 'outlet',
+  'pos', 'geo', 'geo', 'pos', 'geo'];
+const grupLayar = KOLOM_FINAL.map((k) => k.grup);
+asa('FS6 13 kolom layar punya grup warna, tidak ada yang kosong', grupLayar.filter(Boolean).length, 13);
+asa('FS6 kepala tabel layar = 4 grup sesuai permintaan', grupLayar, GRUP_LAYAR);
 
 console.log(gagal === 0 ? '\nSEMUA LULUS' : `\n${gagal} TEST GAGAL`);
 process.exit(gagal === 0 ? 0 : 1);

@@ -4,15 +4,22 @@ import type { AnalystRow } from './analystPipeline';
 /**
  * SATU sumber kebenaran untuk 13 kolom Data Final: dipakai tabel menu Final Data,
  * ekspor Excel dashboard, PDF, dan template unggah. Nama kolom di sini HARUS sama
- * dengan yang dikenali `getHeaderStyle()` (utils/excel) dan `parseFinalExcelRow()`,
- * supaya warna kepala berkas, kepala tabel, dan pembacaan ulang file unggah tidak
- * bisa lari satu sama lain.
+ * dengan yang dikenali `parseFinalExcelRow()` supaya pembacaan ulang berkas unggah
+ * tidak bisa lari.
  *
- * Urutan & penamaan = permintaan pemilik produk 2026-09-22; warna grup diukur
- * per-piksel dari tangkapan layar header yang dilampirkannya.
+ * Urutan & penamaan = permintaan pemilik produk 2026-09-22.
+ *
+ * CATATAN WARNA: `WARNA_TH` di bawah hanya mengatur kepala tabel DI LAYAR. Kepala
+ * berkas Excel sengaja memakai palet berkas sumber operator (`getHeaderStyle` di
+ * utils/excel) — bukan token layar — jadi keduanya memang tidak sama.
  */
-export type GrupWarna = 'navy' | 'hijau' | 'oranye';
-export const WARNA_TH: Record<GrupWarna, string> = { navy: '#405189', hijau: '#0ab39c', oranye: '#E97132' };
+export type GrupWarna = 'wilayah' | 'outlet' | 'pos' | 'geo';
+export const WARNA_TH: Record<GrupWarna, string> = {
+  wilayah: '#0ab39c',
+  outlet: '#405189',
+  pos: '#E97132',
+  geo: '#6C5CE7',
+};
 
 export type KolomFinal = {
   judul: string;
@@ -24,19 +31,19 @@ export type KolomFinal = {
 };
 
 export const KOLOM_FINAL: KolomFinal[] = [
-  { judul: 'No', grup: 'navy', tengah: true, style: { width: '54px' }, nilai: (r) => r.no },
-  { judul: 'Wilayah', grup: 'navy', tengah: true, style: { width: '92px' }, nilai: (r) => r.wilayah || '-' },
-  { judul: 'Sandi Cabang', grup: 'navy', tengah: true, mono: true, style: { width: '110px' }, nilai: (r) => r.sandiCabang || '-' },
-  { judul: 'Branch Code', grup: 'navy', tengah: true, mono: true, style: { width: '95px' }, nilai: (r) => r.branchCode || '-' },
-  { judul: 'Kode Cabang', grup: 'navy', tengah: true, mono: true, style: { width: '95px' }, nilai: (r) => r.kodeCabang || '-' },
-  { judul: 'Nama Outlet', grup: 'navy', style: { minWidth: '170px' }, nilai: (r) => r.namaOutlet || '-' },
-  { judul: 'Status Outlet', grup: 'navy', tengah: true, style: { width: '95px' }, nilai: (r) => r.statusOutlet || '-' },
-  { judul: 'ALAMAT', grup: 'hijau', style: { minWidth: '220px' }, nilai: (r) => r.alamat || '-' },
-  { judul: 'KODE POS', grup: 'hijau', tengah: true, mono: true, style: { width: '90px' }, nilai: (r) => r.kodePosKelurahan || r.kodePosPten || '-' },
-  { judul: 'Kelurahan', grup: 'hijau', style: { minWidth: '140px' }, nilai: (r) => r.kelurahan || '-' },
-  { judul: 'Kecamatan', grup: 'hijau', style: { minWidth: '140px' }, nilai: (r) => r.kecamatan || '-' },
-  { judul: 'Dati II', grup: 'oranye', style: { minWidth: '140px' }, nilai: (r) => r.kotaPtenMax15 || r.kotaPten || '-' },
-  { judul: 'Provinsi', grup: 'hijau', style: { minWidth: '130px' }, nilai: (r) => r.provinsi || '-' },
+  { judul: 'No', grup: 'wilayah', tengah: true, style: { width: '54px' }, nilai: (r) => r.no },
+  { judul: 'Wilayah', grup: 'wilayah', tengah: true, style: { width: '92px' }, nilai: (r) => r.wilayah || '-' },
+  { judul: 'Sandi Cabang', grup: 'outlet', tengah: true, mono: true, style: { width: '110px' }, nilai: (r) => r.sandiCabang || '-' },
+  { judul: 'Branch Code', grup: 'outlet', tengah: true, mono: true, style: { width: '95px' }, nilai: (r) => r.branchCode || '-' },
+  { judul: 'Kode Cabang', grup: 'outlet', tengah: true, mono: true, style: { width: '95px' }, nilai: (r) => r.kodeCabang || '-' },
+  { judul: 'Nama Outlet', grup: 'outlet', style: { minWidth: '170px' }, nilai: (r) => r.namaOutlet || '-' },
+  { judul: 'Status Outlet', grup: 'outlet', tengah: true, style: { width: '95px' }, nilai: (r) => r.statusOutlet || '-' },
+  { judul: 'ALAMAT', grup: 'outlet', style: { minWidth: '220px' }, nilai: (r) => r.alamat || '-' },
+  { judul: 'KODE POS', grup: 'pos', tengah: true, mono: true, style: { width: '90px' }, nilai: (r) => r.kodePosKelurahan || r.kodePosPten || '-' },
+  { judul: 'Kelurahan', grup: 'geo', style: { minWidth: '140px' }, nilai: (r) => r.kelurahan || '-' },
+  { judul: 'Kecamatan', grup: 'geo', style: { minWidth: '140px' }, nilai: (r) => r.kecamatan || '-' },
+  { judul: 'Dati II', grup: 'pos', style: { minWidth: '140px' }, nilai: (r) => r.kotaPtenMax15 || r.kotaPten || '-' },
+  { judul: 'Provinsi', grup: 'geo', style: { minWidth: '130px' }, nilai: (r) => r.provinsi || '-' },
 ];
 
 export const JUDUL_KOLOM_FINAL = KOLOM_FINAL.map((k) => k.judul);
@@ -79,39 +86,39 @@ export function barisKeExcelFinal(r: AnalystRow, noEkspor: number): Record<strin
  * SEMUA_DATA memakai daftar ini supaya kolomnya tidak bisa beda sendiri-sendiri.
  */
 export const KOLOM_ANALYST: KolomFinal[] = [
-  { judul: 'No', grup: 'navy', tengah: true, nilai: (r) => r.no },
-  { judul: 'Wilayah', grup: 'navy', tengah: true, nilai: (r) => r.wilayah || KOSONG_TAMPIL },
-  { judul: 'Sandi Cabang', grup: 'navy', tengah: true, mono: true, nilai: (r) => r.sandiCabang || KOSONG_TAMPIL },
-  { judul: 'Branch Code', grup: 'navy', tengah: true, mono: true, nilai: (r) => r.branchCode || KOSONG_TAMPIL },
-  { judul: 'Kode Cabang', grup: 'navy', tengah: true, mono: true, nilai: (r) => r.kodeCabang || KOSONG_TAMPIL },
-  { judul: 'Nama Outlet', grup: 'navy', nilai: (r) => r.namaOutlet || KOSONG_TAMPIL },
-  { judul: 'Status Outlet', grup: 'navy', tengah: true, nilai: (r) => r.statusOutlet || KOSONG_TAMPIL },
-  { judul: 'ALAMAT', grup: 'hijau', nilai: (r) => r.alamat || KOSONG_TAMPIL },
-  { judul: 'KODE POS', grup: 'hijau', tengah: true, mono: true, nilai: (r) => r.kodePosKelurahan || r.kodePosPten || KOSONG_TAMPIL },
-  { judul: 'Kelurahan', grup: 'hijau', nilai: (r) => r.kelurahan || KOSONG_TAMPIL },
-  { judul: 'Kecamatan', grup: 'hijau', nilai: (r) => r.kecamatan || KOSONG_TAMPIL },
-  { judul: 'Dati II', grup: 'oranye', nilai: (r) => r.kotaPtenMax15 || r.kotaPten || KOSONG_TAMPIL },
-  { judul: 'Provinsi', grup: 'hijau', nilai: (r) => r.provinsi || KOSONG_TAMPIL },
-  { judul: 'KOTA PTEN', grup: 'oranye', nilai: (r) => r.kotaPtenMax15 || r.kotaPten || KOSONG_TAMPIL },
-  { judul: 'KODE POS PTEN', grup: 'hijau', tengah: true, mono: true, nilai: (r) => r.kodePosPten || KOSONG_TAMPIL },
+  { judul: 'No', grup: 'wilayah', tengah: true, nilai: (r) => r.no },
+  { judul: 'Wilayah', grup: 'wilayah', tengah: true, nilai: (r) => r.wilayah || KOSONG_TAMPIL },
+  { judul: 'Sandi Cabang', grup: 'outlet', tengah: true, mono: true, nilai: (r) => r.sandiCabang || KOSONG_TAMPIL },
+  { judul: 'Branch Code', grup: 'outlet', tengah: true, mono: true, nilai: (r) => r.branchCode || KOSONG_TAMPIL },
+  { judul: 'Kode Cabang', grup: 'outlet', tengah: true, mono: true, nilai: (r) => r.kodeCabang || KOSONG_TAMPIL },
+  { judul: 'Nama Outlet', grup: 'outlet', nilai: (r) => r.namaOutlet || KOSONG_TAMPIL },
+  { judul: 'Status Outlet', grup: 'outlet', tengah: true, nilai: (r) => r.statusOutlet || KOSONG_TAMPIL },
+  { judul: 'ALAMAT', grup: 'outlet', nilai: (r) => r.alamat || KOSONG_TAMPIL },
+  { judul: 'KODE POS', grup: 'pos', tengah: true, mono: true, nilai: (r) => r.kodePosKelurahan || r.kodePosPten || KOSONG_TAMPIL },
+  { judul: 'Kelurahan', grup: 'geo', nilai: (r) => r.kelurahan || KOSONG_TAMPIL },
+  { judul: 'Kecamatan', grup: 'geo', nilai: (r) => r.kecamatan || KOSONG_TAMPIL },
+  { judul: 'Dati II', grup: 'pos', nilai: (r) => r.kotaPtenMax15 || r.kotaPten || KOSONG_TAMPIL },
+  { judul: 'Provinsi', grup: 'geo', nilai: (r) => r.provinsi || KOSONG_TAMPIL },
+  { judul: 'KOTA PTEN', grup: 'pos', nilai: (r) => r.kotaPtenMax15 || r.kotaPten || KOSONG_TAMPIL },
+  { judul: 'KODE POS PTEN', grup: 'pos', tengah: true, mono: true, nilai: (r) => r.kodePosPten || KOSONG_TAMPIL },
   // `CEK KODE POS + PTEN` membandingkan tingkat KOTA, bukan kode pos kelurahan di atas
-  { judul: 'CEK KODE POS + PTEN', grup: 'hijau', tengah: true, nilai: (r) => r.statusPten || KOSONG_TAMPIL },
+  { judul: 'CEK KODE POS + PTEN', grup: 'pos', tengah: true, nilai: (r) => r.statusPten || KOSONG_TAMPIL },
   {
     judul: 'VERIFIKASI PENEMPATAN',
-    grup: 'hijau',
+    grup: 'outlet',
     tengah: true,
     nilai: (r) =>
       r.placementStatus === 'VERIFIED' ? 'TERVERIFIKASI' : r.placementStatus === 'REVIEW' ? 'PERLU REVIEW' : r.placementStatus === 'FALLBACK' ? 'FALLBACK' : KOSONG_TAMPIL,
   },
-  { judul: 'METODE PENEMPATAN', grup: 'hijau', nilai: (r) => r.placementMethod || KOSONG_TAMPIL },
-  { judul: 'ORGANISASI TUJUAN', grup: 'navy', nilai: (r) => r.organisasiTujuan || KOSONG_TAMPIL },
-  { judul: 'Tipe Unit', grup: 'navy', tengah: true, nilai: (r) => r.tipeUnit || KOSONG_TAMPIL },
-  { judul: 'Alur Wondr', grup: 'navy', nilai: (r) => r.alurWondr || KOSONG_TAMPIL },
-  { judul: 'QRS_CABSAL', grup: 'hijau', tengah: true, nilai: (r) => r.roleCabsal },
-  { judul: 'QRS_CABAPV1', grup: 'hijau', tengah: true, nilai: (r) => r.roleCabapv1 },
-  { judul: 'QRS_CABAPV2', grup: 'hijau', tengah: true, nilai: (r) => r.roleCabapv2 },
-  { judul: 'Grand Total', grup: 'hijau', tengah: true, nilai: (r) => r.roleGrandTotal },
-  { judul: 'Status Analisa', grup: 'navy', tengah: true, nilai: (r) => (r.isFinalApproved ? 'VERIFIED' : r.statusAnalisa) || KOSONG_TAMPIL },
+  { judul: 'METODE PENEMPATAN', grup: 'outlet', nilai: (r) => r.placementMethod || KOSONG_TAMPIL },
+  { judul: 'ORGANISASI TUJUAN', grup: 'outlet', nilai: (r) => r.organisasiTujuan || KOSONG_TAMPIL },
+  { judul: 'Tipe Unit', grup: 'outlet', tengah: true, nilai: (r) => r.tipeUnit || KOSONG_TAMPIL },
+  { judul: 'Alur Wondr', grup: 'outlet', nilai: (r) => r.alurWondr || KOSONG_TAMPIL },
+  { judul: 'QRS_CABSAL', grup: 'outlet', tengah: true, nilai: (r) => r.roleCabsal },
+  { judul: 'QRS_CABAPV1', grup: 'outlet', tengah: true, nilai: (r) => r.roleCabapv1 },
+  { judul: 'QRS_CABAPV2', grup: 'outlet', tengah: true, nilai: (r) => r.roleCabapv2 },
+  { judul: 'Grand Total', grup: 'outlet', tengah: true, nilai: (r) => r.roleGrandTotal },
+  { judul: 'Status Analisa', grup: 'wilayah', tengah: true, nilai: (r) => (r.isFinalApproved ? 'VERIFIED' : r.statusAnalisa) || KOSONG_TAMPIL },
 ];
 
 export const JUDUL_KOLOM_ANALYST = KOLOM_ANALYST.map((k) => k.judul);
