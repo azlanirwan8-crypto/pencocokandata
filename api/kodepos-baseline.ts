@@ -796,14 +796,23 @@ export default async function handler(req: any, res: any) {
       const PER_HALAMAN = 1000;
       const PER_STATEMENT = 2000;
       const bersih = (v: unknown) => String(v ?? '').trim();
-      const kunci = (r: Record<string, unknown>) => `${bersih(r.kode_pos)}|${bersih(r.kelurahan)}`.toUpperCase();
+      /*
+       * Kunci baris = lima kolom penuh, SAMA dengan kodePosRowKey() di aplikasi.
+       * Kunci lama (kode pos + kelurahan saja) menekan 33 desa yang namanya memang
+       * kembar di kecamatan berbeda — data resmi hilang diam-diam di jalan masuk.
+       */
+      const KOLOM_KUNCI = 'kode_pos,kelurahan,kecamatan,kabupaten_kota,provinsi';
+      const kunci = (r: Record<string, unknown>) =>
+        ['kode_pos', 'kelurahan', 'kecamatan', 'kabupaten_kota', 'provinsi']
+          .map((c) => bersih(r[c]).toUpperCase())
+          .join('|');
 
       const halaman = Math.ceil(batas / PER_HALAMAN);
       const hasilHalaman = await Promise.all(
         Array.from({ length: halaman }, (_, i) =>
           sb
             .baris<Record<string, unknown>>('kodepos_baseline', {
-              kolom: 'kode_pos,kelurahan,kecamatan,kabupaten_kota,provinsi',
+              kolom: KOLOM_KUNCI,
               urut: 'kode_wilayah.asc',
               batas: PER_HALAMAN,
               mulai: mulai + i * PER_HALAMAN,
@@ -828,7 +837,7 @@ export default async function handler(req: any, res: any) {
 
       // Yang diperiksa hanya kode pos yang muncul di window ini, dan idx_kodepos_kode
       // memakainya — bukan membaca ulang seluruh tabel kerja tiap tahap. `semuaBaris`
-      // tetap dipakai karena satu kode pos bisa punya puluhan kelurahan kembar.
+      // wajib karena satu kode pos bisa membawa jauh lebih dari 1.000 baris kerja.
       const kodeUnik = [...new Set(patokan.map((r) => bersih(r.kode_pos)).filter((k) => /^\d{5}$/.test(k)))];
       const periksa: string[][] = [];
       for (let i = 0; i < kodeUnik.length; i += 500) periksa.push(kodeUnik.slice(i, i + 500));
@@ -837,7 +846,7 @@ export default async function handler(req: any, res: any) {
         await Promise.all(
           periksa.map((bagian) =>
             sb.semuaBaris<Record<string, unknown>>('kodepos_data', {
-              kolom: 'kode_pos,kelurahan',
+              kolom: KOLOM_KUNCI,
               filter: { kode_pos: `in.(${bagian.join(',')})` },
             })
           )

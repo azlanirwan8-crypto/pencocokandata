@@ -373,9 +373,9 @@ function alasanTarikPatokan(json: any): string | null {
 }
 
 /**
- * Salin SELURUH baris patokan yang belum ada ke tabel kerja. Server membatasi satu
- * window per panggilan (role `anon` Supabase memotong statement di 8 detik), jadi
- * fungsi ini yang mengulang dari titik berhenti sampai selesai.
+ * Salin SELURUH baris patokan yang belum ada ke tabel kerja. Server memindahkan satu
+ * window per panggilan — statement panjang dipotong ±8 detik oleh role `anon`, dan
+ * tiap balasan baca dipotong 1.000 baris — jadi fungsi ini yang mengulang sampai selesai.
  */
 export async function importSemuaPatokan(
   onProgress?: SyncProgress
@@ -383,7 +383,10 @@ export async function importSemuaPatokan(
   let mulai = 0;
   let masuk = 0;
   let totalSetelah = 0;
-  for (let tahap = 0; tahap < 60; tahap++) {
+  let totalPatokan = 0;
+  // Batas lama 60 pernah menghentikan pengisian di tengah jalan (server membalas
+  // 1.000 baris per halaman, jadi window kecil butuh puluhan tahap).
+  for (let tahap = 0; tahap < 400; tahap++) {
     const json = await fetchJson('/api/kodepos-baseline?view=import-missing', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -392,7 +395,7 @@ export async function importSemuaPatokan(
     if (!json?.ok) throw new Error(json?.error || 'Penyalinan patokan ke tabel kerja gagal.');
     masuk += Number(json.masuk || 0);
     totalSetelah = Number(json.totalSetelah || 0);
-    const totalPatokan = Number(json.totalPatokan || 0);
+    totalPatokan = Number(json.totalPatokan || totalPatokan);
     if (json.selesai || json.berikutnya == null) {
       onProgress?.('Penyalinan patokan selesai', 100);
       return { masuk, totalSetelah };
@@ -404,7 +407,7 @@ export async function importSemuaPatokan(
     );
   }
   throw new Error(
-    `Penyalinan patokan berhenti di baris ke-${mulai.toLocaleString('id-ID')} dari ${totalSetelah.toLocaleString('id-ID')} — tekan Sync Data lagi untuk melanjutkan.`
+    `Penyalinan patokan berhenti di baris ke-${mulai.toLocaleString('id-ID')} dari ${(totalPatokan || mulai).toLocaleString('id-ID')} — tekan Sync Data lagi untuk melanjutkan.`
   );
 }
 
