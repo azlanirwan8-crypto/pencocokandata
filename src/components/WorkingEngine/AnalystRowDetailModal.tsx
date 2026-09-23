@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
-  X, MapPin, Building2, Mail, Copy, Check, ExternalLink, Sparkles, Navigation,
+  X, MapPin, Building2, Mail, Copy, Check, ExternalLink, Navigation,
   CheckCircle2, AlertTriangle, Info, ShieldCheck, Users, Route, Store, ArrowRight
 } from 'lucide-react';
 import { DialogPanel } from '../BaseModal';
