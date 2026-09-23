@@ -542,7 +542,7 @@ export default async function handler(req: any, res: any) {
         }
 
         const fMode = body?.mode === 'replace' ? 'replace' : 'upsert';
-        if (fMode === 'replace') await r.hapus('final_rows');
+        if (fMode === 'replace') await r.hapus('final_rows', { row_key: 'not.is.null' });
 
         let written = 0;
         for (let i = 0; i < rows.length; i += FINAL_INSERT_CHUNK) {
@@ -571,7 +571,7 @@ export default async function handler(req: any, res: any) {
       const matchedDone = Boolean(body?.matchedDone);
       const mode = body?.mode || 'replace';
 
-      if (mode === 'replace') await r.hapus('target_records');
+      if (mode === 'replace') await r.hapus('target_records', { id: 'gt.0' });
 
       for (let i = 0; i < rows.length; i += CHUNK) {
         const chunk = rows.slice(i, i + CHUNK).map((raw: any, idx: number) => ({
@@ -646,7 +646,7 @@ export default async function handler(req: any, res: any) {
         const oneKey = (url.searchParams.get('key') || '').trim();
         if (url.searchParams.get('all') === '1') {
           const sebelum = await r.hitung('final_rows');
-          await r.hapus('final_rows');
+          await r.hapus('final_rows', { row_key: 'not.is.null' });
           return res.status(200).json({
             ok: true,
             configured: true,
@@ -674,8 +674,8 @@ export default async function handler(req: any, res: any) {
         });
       }
 
-      await r.hapus('target_records');
-      await r.hapus('target_meta');
+      await r.hapus('target_records', { id: 'gt.0' });
+      await r.hapus('target_meta', { key: 'not.is.null' });
       await hapusAppStore(r, 'target_data');
 
       return res.status(200).json({

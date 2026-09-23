@@ -69,13 +69,11 @@ export async function loadMasterFromNeon(): Promise<{ rows: MasterRow[]; fileNam
     const res = await fetchWithRetry('/api/master', {}, 5000, 2);
     if (!res.ok) return null;
     const json = await res.json();
-    if (json.ok && json.data && Array.isArray(json.data.rows) && json.data.rows.length > 0) {
-      return {
-        rows: json.data.rows,
-        fileName: json.data.fileName || 'Master_Neon_Vercel.xlsx',
-      };
-    }
-    return null;
+    if (!json?.ok) return null;
+    // `null` = baca gagal, `{rows: []}` = cloud memang kosong — mencampurnya membuat
+    // browser menimpa cloud lewat mode replace yang sekarang sungguh-sungguh menghapus.
+    const rows = Array.isArray(json.data?.rows) ? json.data.rows : [];
+    return { rows, fileName: String(json.data?.fileName || 'Master_Neon_Vercel.xlsx') };
   } catch (err) {
     console.warn('Neon load error (fallbacking to local):', err);
     return null;

@@ -246,6 +246,11 @@ export class Rest {
     filter: Record<string, string | number | undefined> = {},
     opts: { kembalikan?: boolean } = {}
   ): Promise<T[]> {
+    // PostgREST menolak DELETE tanpa WHERE (HTTP 400) dan fungsi API hanya akan
+    // membalas 500 tanpa jejak. Lebih baik gagal di sini, dengan nama tabel.
+    if (Object.keys(filter).length === 0) {
+      throw new Error(`hapus(${tabel}) butuh filter — DELETE tanpa WHERE selalu ditolak.`);
+    }
     const { data } = await this.minta<T[]>(`/rest/v1/${tabel}`, {
       method: 'DELETE',
       query: filter,
@@ -1185,7 +1190,7 @@ export default async function handler(req: any, res: any) {
 
     // ─────────────── RESET ───────────────
     if (req.method === 'DELETE') {
-      await sb.hapus('kodepos_baseline');
+      await sb.hapus('kodepos_baseline', { id: 'gt.0' });
       return res.status(200).json({ ok: true, configured: true, message: 'Tabel baseline dikosongkan.' });
     }
 

@@ -280,12 +280,17 @@ export const App: React.FC = () => {
 
           if (neonMaster.status === 'fulfilled' && neonMaster.value && neonMaster.value.rows.length > 0) {
             setMasterRows(neonMaster.value.rows);
-          } else if (neonCheck.status === 'fulfilled' && neonCheck.value.connected) {
-            // Cloud terhubung tapi kosong (mis. proyek Supabase baru) padahal browser punya
-            // data: dorong sebagai salinan kedua, sama seperti Target/Wilayah/Final. Membuka
-            // aplikasi di browser kerja dengan sendirinya memindahkan Data Cabang.
-            // Gerbangnya `connected` — tanpa itu, kegagalan baca sebelum bootstrap terpasang
-            // akan memicu peringatan palsu di setiap muat halaman.
+          } else if (
+            neonCheck.status === 'fulfilled' &&
+            neonCheck.value.connected &&
+            neonMaster.status === 'fulfilled' &&
+            neonMaster.value
+          ) {
+            // Cloud terhubung dan bacaannya SUKSES tapi 0 baris (mis. proyek Supabase baru)
+            // padahal browser punya data: dorong sebagai salinan kedua, sama seperti
+            // Target/Wilayah/Final. `neonMaster.value` wajib ada — tanpa itu, satu bacaan
+            // yang timeout (null) akan membuat browser menimpa cloud yang sebenarnya
+            // sudah berisi data orang lain, karena jalur replace kini benar-benar menghapus.
             const lokal = await getItem<{ rows: MasterRow[]; fileName: string }>('master_data').catch(() => null);
             if (lokal && lokal.rows.length > 0) {
               const ok = await saveMasterToNeon(lokal.rows, lokal.fileName || 'Master Cabang').catch(() => false);

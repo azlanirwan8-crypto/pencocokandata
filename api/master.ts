@@ -525,8 +525,8 @@ export default async function handler(req: any, res: any) {
     }
 
     if (req.method === 'DELETE') {
-      await r.hapus('master_records');
-      await r.hapus('master_meta');
+      await r.hapus('master_records', { id: 'gt.0' });
+      await r.hapus('master_meta', { key: 'not.is.null' });
       await hapusAppStore(r, 'master_data');
       return res.status(200).json({
         ok: true,
