@@ -472,13 +472,22 @@ export interface KoordinatCakupan {
 }
 
 export async function cakupanKoordinat(): Promise<KoordinatCakupan | null> {
-  try {
-    const json = await fetchJson('/api/kodepos-baseline?view=koordinat');
-    return json?.ok ? (json as KoordinatCakupan) : null;
-  } catch (err) {
-    console.warn('Cakupan koordinat tidak terbaca:', err);
-    return null;
+  /*
+   * Terukur di produksi 2026-09-23: `koordinat_cakupan` butuh 4,1-5,7 detik dan
+   * kadang dipotong batas statement 8 detik role `anon`. Null bukan berarti "titik
+   * belum ada", jadi dibaca ulang sekali — kegagalan dua kali baru dianggap kosong
+   * (jalur di bawahnya memang masih aman: crawl hanya menimpah per kode wilayah).
+   */
+  for (let percobaan = 0; percobaan < 2; percobaan++) {
+    try {
+      const json = await fetchJson('/api/kodepos-baseline?view=koordinat');
+      return json?.ok ? (json as KoordinatCakupan) : null;
+    } catch (err) {
+      if (percobaan === 0) await new Promise((r) => setTimeout(r, 400));
+      else console.warn('Cakupan koordinat tidak terbaca:', err);
+    }
   }
+  return null;
 }
 
 /**
