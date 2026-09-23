@@ -28,11 +28,19 @@ export function kodePosUjung(query: string): string | undefined {
  * Titik kode pos yang sudah tersimpan di cloud — prioritas rata-rata titik desa per kode
  * pos (kodepos_data), sisanya cache geocoding (kodepos_geo). Inilah sumber lokasi peta
  * dashboard: sekali muat per sesi, tidak menebak ulang lewat internet.
+ *
+ * Balasan yang gagal ATAU kosong tidak boleh menular: tanpa pelemparan di bawah, satu
+ * 500 saat boot (terukur 2026-09-24 di match-sepia.vercel.app) membuat `titikKodePos`
+ * kosong sepanjang sesi — semua titik cabang jatuh ke pusat wilayah dan lapisan kode pos
+ * tampil 0 titik. Cache dihapus supaya pemanggil berikutnya mencoba lagi.
  */
 export function muatTitikKodePos(): Promise<Record<string, TitikSimpanan>> {
   if (!titikKodePosJanji) {
     titikKodePosJanji = fetch('/api/kodepos-geo?view=points')
-      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`/api/kodepos-geo membalas HTTP ${r.status}`);
+        return r.json();
+      })
       .then((json: any) => {
         const out: Record<string, TitikSimpanan> = {};
         for (const t of json?.data || []) {
@@ -44,10 +52,12 @@ export function muatTitikKodePos(): Promise<Record<string, TitikSimpanan>> {
           if (sumber !== 'google' && sumber !== 'esri' && sumber !== 'osm' && sumber !== 'desa') continue;
           out[kode] = { lat, lng, sumber };
         }
+        if (Object.keys(out).length === 0) throw new Error('/api/kodepos-geo mengirim 0 titik');
         return out;
       })
-      .catch(() => {
+      .catch((err) => {
         titikKodePosJanji = null;
+        console.warn('Titik kode pos belum terbaca, akan dicoba lagi:', err);
         return {} as Record<string, TitikSimpanan>;
       });
   }

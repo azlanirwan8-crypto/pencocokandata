@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   X, MapPin, Building2, Mail, Copy, Check, ExternalLink, Sparkles, Navigation,
-  CheckCircle2, AlertTriangle, Info, ShieldCheck, Users, Route, Store, Map as MapIcon, ArrowRight
+  CheckCircle2, AlertTriangle, Info, ShieldCheck, Users, Route, Store, ArrowRight
 } from 'lucide-react';
 import { DialogPanel } from '../BaseModal';
 import type { AnalystRow } from '../../utils/analystPipeline';

@@ -360,7 +360,16 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   useEffect(() => {
     if (!cachePreloaded) return;
     let alive = true;
-    void muatTitikKodePos().then((titik) => {
+    void (async () => {
+      // Satu balasan gagal tidak boleh menghapus titik sepanjang sesi: coba lagi
+      // beberapa kali sebelum menyerah dan menggambar peta tanpa koordinat nyata.
+      for (let percobaan = 0; percobaan < 3; percobaan++) {
+        const titik = await muatTitikKodePos();
+        if (Object.keys(titik).length > 0) return titik;
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+      return {};
+    })().then((titik) => {
       if (!alive) return;
       const seed = new Map<string, GeoLocationResult>();
       for (const t of targetRows || []) {
