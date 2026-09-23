@@ -4,14 +4,24 @@
 
 import type { MasterRow, TargetRow } from '../types';
 import { formatWilayahName } from './normalizer.ts';
+import { getUnitCategory } from './roleHelpers';
+import { kodePosLima } from './geoTitik';
 
 export interface GeoLocation {
   lat: number;
   lng: number;
   city?: string;
   province?: string;
-  source: 'google' | 'esri' | 'osm' | 'row_data' | 'wilayah_centroid' | 'default';
+  source: 'google' | 'esri' | 'osm' | 'row_data' | 'kodepos_data' | 'wilayah_centroid' | 'default';
   formattedAddress?: string;
+}
+
+/** Titik satu kode pos dari Data Kode Pos (rata-rata koordinat desa per kode pos). */
+export type TitikKodePos = Record<string, { lat: number; lng: number; sumber?: string }>;
+
+/** Sumber koordinat yang bukan kantor sungguhan: pusat wilayah / titik aman Jakarta. */
+export function sumberPerkiraan(source: GeoLocation['source']): boolean {
+  return source === 'wilayah_centroid' || source === 'default';
 }
 
 export interface PlottedBranchPin {
@@ -29,6 +39,14 @@ export interface PlottedBranchPin {
   totalTargetCount: number;
   isOnlineVerified?: boolean;
   onlineSource?: 'google' | 'esri' | 'osm';
+  /** Dari mana koordinat pin ini datang — 'kodepos_data' = koordinat Data Kode Pos. */
+  sumberTitik?: GeoLocation['source'];
+  /** Titiknya pusat wilayah, bukan kantor. Jangan diklaim sebagai lokasi nyata. */
+  perkiraan?: boolean;
+  /** Klasifikasi dari kolom Status Outlet Data Cabang. */
+  unitKat?: 'KC' | 'KCP';
+  /** Titik kode pos dari Data Kode Pos (lapisan nasional), bukan kantor. */
+  isTitikKodePos?: boolean;
   // Layer Final Data: status penempatan baris analisa (bukan cabang master)
   finalStatus?: 'OK' | 'REVIEW' | 'ANOMALI';
   finalCount?: number;
@@ -204,14 +222,27 @@ export function isAcehTargetRow(row: TargetRow | MasterRow | Record<string, unkn
 }
 
 /**
+ * KC atau KCP — dari kolom `Status Outlet` Data Cabang (terukur lengkap di 1.776 baris:
+ * 'KC', 'KCP', 'KCP d/h KK'). `tipeUnit` hasil analisa TIDAK dipakai: kolom itu berisi
+ * organisasi tujuan (induk), sehingga terbaca 'KC' untuk semua baris.
+ */
+export function kategoriUnitCabang(row: MasterRow): 'KC' | 'KCP' {
+  const status = String(row['Status Outlet'] || '').toUpperCase();
+  if (status) return status.includes('KCP') || status.includes('PEMBANTU') || /\bKK\b/.test(status) ? 'KCP' : 'KC';
+  return getUnitCategory(String(row['Nama Outlet'] || ''));
+}
+
+/**
  * Resolves coordinates for a MasterRow:
  * 1. Checks if row already has explicit Latitude & Longitude columns
- * 2. Checks dynamic real-time online cache map
- * 3. Fallback to BNI Wilayah centroid
+ * 2. Titik kode pos cabang itu di Data Kode Pos — koordinat milik operator sendiri
+ * 3. Checks dynamic real-time online cache map
+ * 4. Fallback to BNI Wilayah centroid
  */
 export function resolveBranchCoordinates(
   row: MasterRow,
-  resolvedMap?: Map<string, { lat: number; lng: number; source?: string; formattedAddress?: string }>
+  resolvedMap?: Map<string, { lat: number; lng: number; source?: string; formattedAddress?: string }>,
+  titikKodePos?: TitikKodePos
 ): GeoLocation {
   // 1. Direct explicit coordinates in row data
   const explicitLat = Number(row.Latitude ?? row.lat ?? row.LATITUDE);
@@ -227,7 +258,26 @@ export function resolveBranchCoordinates(
     };
   }
 
-  // 2. Realtime Online resolved coordinates
+  // 2. Titik kode pos cabang ini di Data Kode Pos. Data Cabang sendiri tidak punya
+  //    kolom koordinat (terukur 0 dari 500 baris), jadi ini satu-satunya koordinat
+  //    nyata yang bersumber dari berkas operator — bukan tebakan geocoder.
+  if (titikKodePos) {
+    const kode = kodePosLima(row['KODE POS']);
+    const titik = kode ? titikKodePos[kode] : undefined;
+    if (titik && Number.isFinite(titik.lat) && Number.isFinite(titik.lng)) {
+      const [cLat, cLng] = clampToIndonesia(titik.lat, titik.lng);
+      return {
+        lat: cLat,
+        lng: cLng,
+        city: row['Dati II'] || row.Kecamatan,
+        province: row.Provinsi,
+        source: 'kodepos_data',
+        formattedAddress: `Titik kode pos ${kode} (Data Kode Pos)`,
+      };
+    }
+  }
+
+  // 3. Realtime Online resolved coordinates
   if (resolvedMap) {
     const keys = [
       [row['Nama Outlet'], row.ALAMAT, row.Kecamatan, row['Dati II'], row.Provinsi].filter(Boolean).join(', ').trim(),
@@ -252,7 +302,7 @@ export function resolveBranchCoordinates(
     }
   }
 
-  // 3. Fallback: Wilayah Centroid (Temporary placeholder while geocoding is ongoing)
+  // 4. Fallback: Wilayah Centroid (Temporary placeholder while geocoding is ongoing)
   const wCode = extractWCode(String(row.Wilayah || ''));
   if (wCode && WILAYAH_CENTROIDS[wCode]) {
     const wc = WILAYAH_CENTROIDS[wCode];
@@ -281,7 +331,8 @@ export function resolveBranchCoordinates(
  */
 export function resolveTargetOriginCoordinates(
   row: TargetRow,
-  resolvedMap?: Map<string, { lat: number; lng: number; source?: string; formattedAddress?: string }>
+  resolvedMap?: Map<string, { lat: number; lng: number; source?: string; formattedAddress?: string }>,
+  titikKodePos?: TitikKodePos
 ): GeoLocation {
   // 1. Explicit coords
   const explicitLat = Number(row.Latitude ?? row.lat ?? row.LATITUDE);
@@ -297,7 +348,25 @@ export function resolveTargetOriginCoordinates(
     };
   }
 
-  // 2. Realtime Online resolved coords
+  // 2. Titik kode pos baris ini di Data Kode Pos — koordinat dari berkas operator
+  //    sendiri, bukan tebakan geocoder. Data Target juga tidak punya kolom koordinat.
+  if (titikKodePos) {
+    const kode = kodePosLima(row['KODE POS']);
+    const titik = kode ? titikKodePos[kode] : undefined;
+    if (titik && Number.isFinite(titik.lat) && Number.isFinite(titik.lng)) {
+      const [cLat, cLng] = clampToIndonesia(titik.lat, titik.lng);
+      return {
+        lat: cLat,
+        lng: cLng,
+        city: row['Dati II'] || row.Kecamatan,
+        province: row.Provinsi,
+        source: 'kodepos_data',
+        formattedAddress: `Titik kode pos ${kode} (Data Kode Pos)`,
+      };
+    }
+  }
+
+  // 3. Realtime Online resolved coords
   if (resolvedMap) {
     const keys = [
       [row.Kelurahan, row.Kecamatan, row['Dati II'], row.Provinsi, row['KODE POS']].filter(Boolean).join(', ').trim(),
@@ -321,13 +390,13 @@ export function resolveTargetOriginCoordinates(
     }
   }
 
-  // 3. Aceh detection
+  // 4. Aceh detection
   if (isAcehTargetRow(row)) {
     const [cLat, cLng] = clampToIndonesia(5.553, 95.322);
     return { lat: cLat, lng: cLng, city: 'Banda Aceh', province: 'Aceh', source: 'default' };
   }
 
-  // 4. Wilayah Centroid fallback
+  // 5. Wilayah Centroid fallback
   const wCode = extractWCode(String(row.Wilayah || ''));
   if (wCode && WILAYAH_CENTROIDS[wCode]) {
     const wc = WILAYAH_CENTROIDS[wCode];
@@ -353,7 +422,8 @@ export function clusterMasterRowsForMap(
   masterRows: MasterRow[],
   selectedWilayah: string = 'ALL',
   targetRows: TargetRow[] = [],
-  resolvedMap?: Map<string, { lat: number; lng: number; source?: string; formattedAddress?: string }>
+  resolvedMap?: Map<string, { lat: number; lng: number; source?: string; formattedAddress?: string }>,
+  titikKodePos?: TitikKodePos
 ): PlottedBranchPin[] {
   const sandiMatchMap = new Map<string, { matched: number; total: number }>();
   const kpMatchMap = new Map<string, { matched: number; total: number }>();
@@ -417,7 +487,7 @@ export function clusterMasterRowsForMap(
   groups.forEach((branches, key) => {
     if (branches.length === 0) return;
     const first = branches[0];
-    const coords = resolveBranchCoordinates(first, resolvedMap);
+    const coords = resolveBranchCoordinates(first, resolvedMap, titikKodePos);
     const kp = String(first['KODE POS'] || '').replace(/\D/g, '').trim();
 
     let matchedCount = 0;
@@ -455,6 +525,9 @@ export function clusterMasterRowsForMap(
       totalTargetCount,
       isOnlineVerified: isOnline,
       onlineSource: isOnline ? (coords.source as any) : undefined,
+      sumberTitik: coords.source,
+      perkiraan: sumberPerkiraan(coords.source),
+      unitKat: kategoriUnitCabang(first),
     });
   });
 

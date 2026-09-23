@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Menu, Archive, Database, Save, KeyRound } from 'lucide-react';
+import { Menu, Archive, Database, Save } from 'lucide-react';
 import { flushPendingWrites } from '../utils/storage';
-import { getStoredGoogleApiKey } from '../utils/onlineGeoCoder';
 import { useNotification } from './Notification/NotificationContext';
 
 interface TopbarProps {
@@ -17,15 +16,10 @@ export const Topbar: React.FC<TopbarProps> = ({
   isSidebarCollapsed,
   onToggleSidebar,
   onOpenSnapshotModal,
-  isNeonConnected,
-  lastSyncedAt,
   onOpenNeonModal,
 }) => {
   const [savedTick, setSavedTick] = useState(false);
   const { add: notify } = useNotification();
-  // Kunci Google menentukan sumber titik koordinat & lapisan peta — statusnya sering
-  // tidak terlihat padahal mengubah hasil, jadi tampil di baris atas.
-  const kunciGoogle = Boolean(getStoredGoogleApiKey());
 
   const handleSaveNow = async () => {
     const { jumlah, gagal } = await flushPendingWrites();
@@ -56,37 +50,7 @@ export const Topbar: React.FC<TopbarProps> = ({
       </div>
 
       <div className="topbar-right" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-        {/* Status koneksi cloud (Supabase Postgres) */}
-        {isNeonConnected !== undefined && (
-          <span
-            title={isNeonConnected ? `Terhubung ke Supabase Postgres${lastSyncedAt ? ` · disinkron ${lastSyncedAt}` : ''}` : 'Tidak terhubung ke cloud — data hanya tersimpan di browser ini'}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
-              fontSize: '0.72rem', fontWeight: 600, padding: '0.25rem 0.6rem', borderRadius: '9999px',
-              background: isNeonConnected ? 'rgba(10,179,156,0.1)' : 'rgba(240,101,72,0.1)',
-              color: isNeonConnected ? '#07796a' : '#c0392b',
-              border: `1px solid ${isNeonConnected ? 'rgba(10,179,156,0.35)' : 'rgba(240,101,72,0.35)'}`,
-            }}
-          >
-            <Database size={12} />
-            {isNeonConnected ? 'Terhubung' : 'Offline'}
-          </span>
-        )}
-        <span
-          title={kunciGoogle
-            ? 'Kunci Google tersimpan di browser ini — pencarian titik memakai Google lebih dulu dan peta memakai lapisan Google.'
-            : 'Belum ada kunci Google di browser ini — titik dicari lewat ESRI/OpenStreetMap dan peta memakai OpenStreetMap. Isi kunci lewat menu Data Kode Pos.'}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
-            fontSize: '0.72rem', fontWeight: 600, padding: '0.25rem 0.6rem', borderRadius: '9999px',
-            background: kunciGoogle ? 'rgba(53,119,241,0.1)' : 'rgba(134,142,150,0.12)',
-            color: kunciGoogle ? '#2b5fa8' : '#6c757d',
-            border: `1px solid ${kunciGoogle ? 'rgba(53,119,241,0.35)' : 'rgba(134,142,150,0.35)'}`,
-          }}
-        >
-          <KeyRound size={12} />
-          Google {kunciGoogle ? '✓' : '✗'}
-        </span>
+
         {onOpenNeonModal && (
           <button
             type="button"
