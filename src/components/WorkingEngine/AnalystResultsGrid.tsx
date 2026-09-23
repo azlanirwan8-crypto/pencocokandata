@@ -1340,84 +1340,113 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
         {/* ────────────────────────────────────────────────────────────────────────── */}
         {/* 4. DATA TABLES PER SUB-TAB                                                */}
         {/* ────────────────────────────────────────────────────────────────────────── */}
-        {/* Inner tab seragam untuk semua fase: siap setujui vs masih perlu kerja */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-          {([
-            {
-              key: 'BERES' as const,
-              label: `${stageTab === 1 ? '✅ Berhasil Dianalisa' : stageTab === 2 ? '✅ Outlet Tervalidasi' : stageTab === 3 ? '✅ Role Terpasang Rapi' : '✅ Siap Final'} (${hitunganInner.beres.toLocaleString('id-ID')})`,
-              color: '#0ab39c',
-            },
-            {
-              key: 'MANUAL' as const,
-              label: `${stageTab === 1 ? '⚠️ Perlu Analisa Manual' : stageTab === 2 ? '✋ Perlu Validasi Manual' : stageTab === 3 ? '⚠️ Perlu Review Role' : '✋ Ditandai Manual'} (${hitunganInner.manual.toLocaleString('id-ID')})`,
-              color: '#f0ad4e',
-            },
-          ]).map((t) => {
-            const active = innerTab === t.key;
-            return (
-              <button
-                key={t.key}
-                type="button"
-                onClick={() => {
-                  setInnerTab(t.key);
-                  setPage(1);
-                }}
-                style={{
-                  background: active ? t.color : '#ffffff',
-                  color: active ? '#ffffff' : '#495057',
-                  border: `1px solid ${active ? t.color : '#d5dde3'}`,
-                  borderRadius: '6px',
-                  padding: '0.4rem 0.9rem',
-                  fontSize: '0.8rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {t.label}
-              </button>
-            );
-          })}
+        {/* Inner tab seragam untuk semua fase: siap disetujui vs masih perlu kerja.
+            Dulu dua tombol solid berisi emoji yang saling mendorong dan barisnya
+            berpindah-pindah saat berganti tab. Sekarang strip segmented: ikon lucide,
+            angka di dalam badge, dan tombol konteks di kanan sehingga tab diam di tempat. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <div
+            role="tablist"
+            aria-label="Pilih kelompok baris"
+            style={{
+              display: 'inline-flex', gap: '2px', alignItems: 'stretch',
+              background: '#f3f6f9', border: '1px solid #e4e9ef', borderRadius: '8px', padding: '3px',
+            }}
+          >
+            {([
+              {
+                key: 'BERES' as const,
+                teks: stageTab === 1 ? 'Berhasil Dianalisa' : stageTab === 2 ? 'Outlet Tervalidasi' : stageTab === 3 ? 'Role Terpasang Rapi' : 'Siap Final',
+                n: hitunganInner.beres,
+                warna: '#0ab39c',
+                Ikon: CheckCircle2,
+              },
+              {
+                key: 'MANUAL' as const,
+                teks: stageTab === 1 ? 'Perlu Analisa Manual' : stageTab === 2 ? 'Perlu Validasi Manual' : stageTab === 3 ? 'Perlu Review Role' : 'Ditandai Manual',
+                n: hitunganInner.manual,
+                warna: '#d68b0c',
+                Ikon: AlertTriangle,
+              },
+            ]).map((t) => {
+              const aktif = innerTab === t.key;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={aktif}
+                  onClick={() => {
+                    setInnerTab(t.key);
+                    setPage(1);
+                  }}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                    background: aktif ? t.warna : 'transparent',
+                    color: aktif ? '#ffffff' : '#6c757d',
+                    border: 'none', borderRadius: '6px',
+                    padding: '0.35rem 0.75rem', fontSize: '0.78rem', fontWeight: 700,
+                    cursor: 'pointer', whiteSpace: 'nowrap', transition: 'background 120ms, color 120ms',
+                  }}
+                >
+                  <t.Ikon size={13} style={{ flexShrink: 0 }} />
+                  <span>{t.teks}</span>
+                  <span
+                    style={{
+                      minWidth: '2.4rem', textAlign: 'center', padding: '0.05rem 0.35rem', borderRadius: '999px',
+                      background: aktif ? 'rgba(255,255,255,0.22)' : '#e6ebf1',
+                      color: aktif ? '#ffffff' : '#6c757d',
+                      fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', fontSize: '0.72rem', fontWeight: 700,
+                    }}
+                  >
+                    {t.n.toLocaleString('id-ID')}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
+          {/* Aksi konteks di kanan — tab tidak bergeser saat MANUAL dipilih. */}
           {innerTab === 'MANUAL' && (
-            <>
-              <button
-                type="button"
-                className="btn btn-sm"
-                disabled={isProcessing || filteredRows.length === 0}
-                onClick={() => {
-                  const ids = filteredRows.map((r) => r.id);
-                  onBersihkanManual(ids);
-                  setInnerTab('BERES');
-                  setPage(1);
-                  showToast(`${ids.length.toLocaleString('id-ID')} baris ditandai selesai — cek di tab sebelah kiri, lalu "Setujui Fase".`, 'info');
-                }}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.3rem',
-                  background: 'rgba(10, 179, 156, 0.12)',
-                  border: '1px solid rgba(10, 179, 156, 0.35)',
-                  color: '#0ab39c',
-                  fontWeight: 700,
-                  fontSize: '0.76rem',
-                  whiteSpace: 'nowrap',
-                }}
-                title="Semua baris yang tampil di tab ini dianggap sudah benar dan pindah ke tab Berhasil Dianalisa. Fase ini belum disetujui — masih bisa direvisi."
-              >
-                <Check size={13} />
-                <span>Setujui semua ({filteredRows.length.toLocaleString('id-ID')})</span>
-              </button>
-              <span style={{ fontSize: '0.76rem', color: '#878a99' }}>
-                {stageTab === 1 && 'Kotanya tidak ada di data PTEN — pilih kota PTEN lewat "Ganti Kab/Kota PTEN", atau setujui apa adanya.'}
-                {stageTab === 2 && 'Cabang perlu diputuskan: beda kota/provinsi/pulau, koordinat mencurigakan, atau kota ini tidak ada di Data Cabang — pilih kandidat di kolom Rekomendasi.'}
-                {stageTab === 3 && 'Skor kecocokan role rendah — ganti kandidat mapping, atau setujui apa adanya.'}
-                {stageTab === 4 && 'Baris yang Anda tarik kembali dari Final Data. Setujui untuk mengirimnya lagi ke penyetujuan akhir.'}
-              </span>
-            </>
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={isProcessing || filteredRows.length === 0}
+              onClick={() => {
+                const ids = filteredRows.map((r) => r.id);
+                onBersihkanManual(ids);
+                setInnerTab('BERES');
+                setPage(1);
+                showToast(`${ids.length.toLocaleString('id-ID')} baris ditandai selesai — cek di tab sebelah kiri, lalu "Setujui Fase".`, 'info');
+              }}
+              style={{
+                marginLeft: 'auto',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+                background: 'rgba(10, 179, 156, 0.12)',
+                border: '1px solid rgba(10, 179, 156, 0.35)',
+                color: '#0ab39c',
+                fontWeight: 700,
+                fontSize: '0.76rem',
+                whiteSpace: 'nowrap',
+              }}
+              title="Semua baris yang tampil di tab ini dianggap sudah benar dan pindah ke tab Berhasil Dianalisa. Fase ini belum disetujui — masih bisa direvisi."
+            >
+              <Check size={13} />
+              <span>Setujui semua ({filteredRows.length.toLocaleString('id-ID')})</span>
+            </button>
           )}
         </div>
+
+        {innerTab === 'MANUAL' && (
+          <p style={{ margin: '0.4rem 0 0', fontSize: '0.74rem', color: '#878a99', lineHeight: 1.5 }}>
+            {stageTab === 1 && 'Kotanya tidak ada di data PTEN — pilih kota PTEN lewat "Ganti Kab/Kota PTEN", atau setujui apa adanya.'}
+            {stageTab === 2 && 'Cabang perlu diputuskan: beda kota/provinsi/pulau, koordinat mencurigakan, atau kota ini tidak ada di Data Cabang — pilih kandidat di kolom Rekomendasi.'}
+            {stageTab === 3 && 'Skor kecocokan role rendah — ganti kandidat mapping, atau setujui apa adanya.'}
+            {stageTab === 4 && 'Baris yang Anda tarik kembali dari Final Data. Setujui untuk mengirimnya lagi ke penyetujuan akhir.'}
+          </p>
+        )}
 
         {/* N3: bar aksi massal — hanya muncul saat ada baris terpilih di halaman ini */}
         {barisTerpilih.length > 0 && (
