@@ -73,7 +73,7 @@ export async function loadMasterFromNeon(): Promise<{ rows: MasterRow[]; fileNam
     // `null` = baca gagal, `{rows: []}` = cloud memang kosong — mencampurnya membuat
     // browser menimpa cloud lewat mode replace yang sekarang sungguh-sungguh menghapus.
     const rows = Array.isArray(json.data?.rows) ? json.data.rows : [];
-    return { rows, fileName: String(json.data?.fileName || 'Master_Neon_Vercel.xlsx') };
+    return { rows, fileName: String(json.data?.fileName || 'Master_Supabase.xlsx') };
   } catch (err) {
     console.warn('Neon load error (fallbacking to local):', err);
     return null;
@@ -836,7 +836,7 @@ export async function fetchKodePosExport(q: KodePosPageQuery): Promise<KodePosRo
       const res = await fetchWithRetry(
         `/api/kodepos?view=export${dasar}&mulai=${mulai}&batas=${JENDELA_EXPORT}`,
         {},
-        30000,
+        90000,
         2
       );
       if (!res.ok) return null;
