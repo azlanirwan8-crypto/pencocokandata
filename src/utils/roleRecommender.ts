@@ -1,4 +1,5 @@
-// 🎭 Mesin rekomendasi mapping role — DIEKSTRAK UTUH dari flow lama TargetDataGrid,
+// 🎭 Mesin rekomendasi mapping role — DIEKSTRAK UTUH dari grid Target lama (dihapus
+// 2026-09-23, tidak ada yang mengimpornya),
 // parameter & logika tidak diubah (3 cabang role lengkap terdekat, strict 1 pulau,
 // KC prioritas, cache 60fps).
 import type { RoleMappingRecord } from '../components/RoleMapping/RoleMappingManager';
