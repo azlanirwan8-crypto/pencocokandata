@@ -731,6 +731,11 @@ export default async function handler(req: any, res: any) {
         const byKey = new Map<string, NormRow>();
         for (const r of page.rows) {
           if (!/^\d{5}$/.test(r.kode_pos)) continue;
+          // Dump wilayah dan dump kode pos rilis pada tanggal berbeda: terukur 2026-09-23,
+          // 560 dari 83.762 kode wilayah tidak punya nama lengkap 4 levelnya. Baris tanpa
+          // nama tidak bisa dipakai memverifikasi alamat dan hanya menambah sel kosong
+          // di tabel kerja (base_import_missing menyalin apa adanya).
+          if (!r.kelurahan || !r.kecamatan || !r.kabupaten_kota || !r.provinsi) continue;
           const key = baseKey(r);
           byKey.set(key, { ...r, kode_wilayah: key });
         }
