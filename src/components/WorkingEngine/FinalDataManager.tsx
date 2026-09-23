@@ -154,6 +154,12 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
     return Array.from(s).sort((a, b) => (parseInt(a.replace(/\D/g, '')) || 0) - (parseInt(b.replace(/\D/g, '')) || 0));
   }, [rows]);
 
+  // Preferensi wilayah tersimpan bisa menunjuk nilai yang sudah tidak ada di data
+  // (mis. "W01" sementara hasil analisa tidak lagi membawa wilayah). Tanpa penjagaan ini
+  // tabel tampak KOSONG padahal isinya puluhan ribu baris.
+  const filterWilayah =
+    wilayahFilter !== 'ALL' && wilayahOptions.includes(wilayahFilter) ? wilayahFilter : 'ALL';
+
   /** Nomor urut asli: posisi baris saat masuk (upload/setujui), bukan posisi hasil sortir. */
   const nomorAsli = useMemo(() => {
     const m = new Map<string, number>();
@@ -166,7 +172,7 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
   const tersaring = useMemo(() => {
     const q = deferredSearch.trim().toLowerCase();
     return rows.filter((r) => {
-      if (wilayahFilter !== 'ALL' && r.wilayah !== wilayahFilter) return false;
+      if (filterWilayah !== 'ALL' && r.wilayah !== filterWilayah) return false;
       if (!q) return true;
       return (
         r.namaOutlet?.toLowerCase().includes(q) ||
@@ -182,7 +188,7 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
         r.kodePosKelurahan?.includes(q)
       );
     });
-  }, [rows, deferredSearch, wilayahFilter]);
+  }, [rows, deferredSearch, filterWilayah]);
 
   // Kartu metrik mengikuti apa yang SEDANG dilihat operator, bukan seluruh isi tabel.
   // Sebelumnya angka besar selalu `rows.length`, jadi saat filter wilayah W01 membuat
@@ -302,7 +308,7 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
       notify('Tidak ada baris Data Final pada saringan ini — tidak ada yang bisa diunduh.', 'warning');
       return;
     }
-    const lingkup = wilayahFilter === 'ALL' ? 'Semua_Wilayah' : formatWilayahCode(wilayahFilter).replace(/\s+/g, '_');
+    const lingkup = filterWilayah === 'ALL' ? 'Semua_Wilayah' : formatWilayahCode(filterWilayah).replace(/\s+/g, '_');
     tulisLembarExcel({
       namaLembar: 'FINAL_DATA',
       namaBerkas: `Final_Data_${lingkup}_${tanggalBerkas()}.xlsx`,
@@ -397,12 +403,12 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
             disabled={tersaring.length === 0}
             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.76rem', fontWeight: 700 }}
             title={
-              wilayahFilter === 'ALL'
+              filterWilayah === 'ALL'
                 ? `Unduh semua ${rows.length.toLocaleString('id-ID')} baris, urutan sesuai data masuk`
-                : `Unduh ${tersaring.length.toLocaleString('id-ID')} baris wilayah ${formatWilayahCode(wilayahFilter)}, urutan sesuai data masuk`
+                : `Unduh ${tersaring.length.toLocaleString('id-ID')} baris wilayah ${formatWilayahCode(filterWilayah)}, urutan sesuai data masuk`
             }
           >
-            <FileSpreadsheet size={13} /> Export Excel {wilayahFilter === 'ALL' ? '(Semua)' : `(${formatWilayahCode(wilayahFilter)})`}
+            <FileSpreadsheet size={13} /> Export Excel {filterWilayah === 'ALL' ? '(Semua)' : `(${formatWilayahCode(filterWilayah)})`}
           </button>
         </div>
       </div>
@@ -416,9 +422,9 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
           </div>
           <div className="metric-value">{metrics.total.toLocaleString('id-ID')}</div>
           <div className="metric-footer">
-            {wilayahFilter === 'ALL'
+            {filterWilayah === 'ALL'
               ? 'seluruh wilayah'
-              : `filter aktif: ${formatWilayahCode(wilayahFilter)} · ${rows.length.toLocaleString('id-ID')} baris final keseluruhan`}
+              : `filter aktif: ${formatWilayahCode(filterWilayah)} · ${rows.length.toLocaleString('id-ID')} baris final keseluruhan`}
           </div>
         </div>
         <div className="metric-card cyan">
@@ -483,7 +489,7 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
               </div>
               <select
                 className="filter-select"
-                value={wilayahFilter}
+                value={filterWilayah}
                 onChange={(e) => {
                   setWilayahFilter(e.target.value);
                   setPage(1);
