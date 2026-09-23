@@ -786,48 +786,63 @@ export default async function handler(req: any, res: any) {
     if (req.method === 'POST' && view === 'import-missing') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
       const mulai = Math.max(0, Number(body.mulai) || 0);
-      const batas = Math.min(10_000, Math.max(200, Number(body.batas) || 5_000));
+      const batas = Math.min(10_000, Math.max(200, Number(body.batas) || 10_000));
+      /*
+       * Batas baris per balasan PostgREST proyek ini 1.000 — terukur 2026-09-23:
+       * `?limit=5000` tetap membalas 1.000 baris (`Content-Range: 0-999`). Window
+       * besar jadi harus dibaca per halaman, kalau tidak tiap panggilan diam-diam
+       * cuma memindahkan 1.000 baris dan pengisian penuh butuh 84 panggilan.
+       */
+      const PER_HALAMAN = 1000;
+      const PER_STATEMENT = 2000;
       const bersih = (v: unknown) => String(v ?? '').trim();
       const kunci = (r: Record<string, unknown>) => `${bersih(r.kode_pos)}|${bersih(r.kelurahan)}`.toUpperCase();
 
-      const bacaWindow = async (dari: number) => {
-        try {
-          return await sb.baris<Record<string, unknown>>('kodepos_baseline', {
-            kolom: 'kode_pos,kelurahan,kecamatan,kabupaten_kota,provinsi',
-            urut: 'kode_wilayah.asc',
-            batas,
-            mulai: dari,
-            count: true,
-          });
-        } catch (err: any) {
-          // Offset lewat isi: PostgREST membalas 416, bukan baris kosong.
-          if (err?.status !== 416) throw err;
-          return { rows: [] as Record<string, unknown>[], total: null };
-        }
-      };
+      const halaman = Math.ceil(batas / PER_HALAMAN);
+      const hasilHalaman = await Promise.all(
+        Array.from({ length: halaman }, (_, i) =>
+          sb
+            .baris<Record<string, unknown>>('kodepos_baseline', {
+              kolom: 'kode_pos,kelurahan,kecamatan,kabupaten_kota,provinsi',
+              urut: 'kode_wilayah.asc',
+              batas: PER_HALAMAN,
+              mulai: mulai + i * PER_HALAMAN,
+              count: i === 0,
+            })
+            .catch((err: any) => {
+              // Offset lewat isi: PostgREST membalas 416, bukan baris kosong.
+              if (err?.status !== 416) throw err;
+              return { rows: [] as Record<string, unknown>[], total: null };
+            })
+        )
+      );
+      const patokan = hasilHalaman.flatMap((h) => h.rows);
+      const totalPatokan = hasilHalaman.find((h) => h.total != null)?.total ?? null;
 
-      const { rows: patokan, total: totalPatokan } = await bacaWindow(mulai);
-      const totalSetelah = await sb.hitung('kodepos_data');
-      const habis = patokan.length === 0;
-
-      if (habis) {
+      if (patokan.length === 0) {
         return res.status(200).json({
-          ok: true, configured: true, masuk: 0, totalSetelah,
+          ok: true, configured: true, masuk: 0, totalSetelah: await sb.hitung('kodepos_data'),
           selesai: true, berikutnya: null, totalPatokan: totalPatokan ?? 0,
         });
       }
 
       // Yang diperiksa hanya kode pos yang muncul di window ini, dan idx_kodepos_kode
-      // memakainya — bukan membaca ulang seluruh tabel kerja tiap tahap.
+      // memakainya — bukan membaca ulang seluruh tabel kerja tiap tahap. `semuaBaris`
+      // tetap dipakai karena satu kode pos bisa punya puluhan kelurahan kembar.
       const kodeUnik = [...new Set(patokan.map((r) => bersih(r.kode_pos)).filter((k) => /^\d{5}$/.test(k)))];
+      const periksa: string[][] = [];
+      for (let i = 0; i < kodeUnik.length; i += 500) periksa.push(kodeUnik.slice(i, i + 500));
       const sudahAda = new Set<string>();
-      for (let i = 0; i < kodeUnik.length; i += 500) {
-        const { rows } = await sb.baris<Record<string, unknown>>('kodepos_data', {
-          kolom: 'kode_pos,kelurahan',
-          filter: { kode_pos: `in.(${kodeUnik.slice(i, i + 500).join(',')})` },
-        });
-        for (const r of rows) sudahAda.add(kunci(r));
-      }
+      (
+        await Promise.all(
+          periksa.map((bagian) =>
+            sb.semuaBaris<Record<string, unknown>>('kodepos_data', {
+              kolom: 'kode_pos,kelurahan',
+              filter: { kode_pos: `in.(${bagian.join(',')})` },
+            })
+          )
+        )
+      ).forEach((rows) => rows.forEach((r) => sudahAda.add(kunci(r))));
 
       const baru = new Map<string, unknown>();
       for (const r of patokan) {
@@ -836,12 +851,15 @@ export default async function handler(req: any, res: any) {
         baru.set(k, { ...r, status: 'AKTIF' });
       }
       const kiriman = [...baru.values()];
-      // Insert dipecah per 1000 baris per statement: yang 83 ribu sekali jalanlah yang
-      // dipotong 8 detik, dan jalur ?view=fetch sudah terbukti mengirim 500 baris per
-      // statement tanpa tersandung — 1000 masih jauh di bawah ambang itu.
-      for (let i = 0; i < kiriman.length; i += 1000) {
-        await sb.simpan('kodepos_data', kiriman.slice(i, i + 1000));
-      }
+
+      /*
+       * Dipecah karena satu statement 83 ribu baris dipotong 8 detik oleh batas role
+       * `anon` — tapi pecahannya jalan PARALEL, bukan berurutan: yang berurutan itulah
+       * yang membuat pengisian penuh terasa memakan waktu ber menit-menit.
+       */
+      const potongan: unknown[][] = [];
+      for (let i = 0; i < kiriman.length; i += PER_STATEMENT) potongan.push(kiriman.slice(i, i + PER_STATEMENT));
+      await Promise.all(potongan.map((bagian) => sb.simpan('kodepos_data', bagian)));
 
       return res.status(200).json({
         ok: true,
