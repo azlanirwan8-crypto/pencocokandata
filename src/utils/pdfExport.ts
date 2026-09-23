@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { TargetRow } from '../types';
 import type { AnalystRow } from './analystPipeline';
+import { KOLOM_FINAL } from './finalColumns';
 import { formatWilayahName, tanggalBerkas } from './normalizer';
 
 interface ExportPdfOptions {
@@ -375,9 +376,34 @@ interface FinalPdfOptions {
 }
 
 /**
- * PDF per wilayah dari DATA FINAL: 13 kolom yang sama dengan tabel menu Final Data.
- * (Laporan lama `exportMatchedDataToPdf` memakai kolom alur Target dan dua kali
-  * mencetak alamat yang sama — kolom itu dihapus di sini.)
+ * Isi tabel PDF Data Final: kepala dan barisnya dibaca dari `KOLOM_FINAL`, sumber yang
+ * sama dengan tabel menu Final Data dan ekspor Excel.
+ *
+ * `body` WAJIB array-of-arrays. Dengan `head: [[...]]`, jspdf-autotable mengabaikan baris
+ * berbentuk objek: berkas tetap punya kepala kolom lengkap tapi SEMUA sel kosong — dan
+ * karena jumlah barisnya tetap dihitung, laporan 3.000 baris lahir sebagai 94 halaman
+ * tanpa isi. Bentuk objek hanya sah lewat `columns: [{dataKey}]`.
+ */
+export function tabelPdfFinal(rows: AnalystRow[]): { head: string[]; body: string[][] } {
+  return {
+    head: KOLOM_FINAL.map((k) => k.judul),
+    // Nomor urut = posisi pada laporan ini (sama seperti `noEkspor` di jalur Excel).
+    body: rows.map((r, i) => KOLOM_FINAL.map((k) => String(k.judul === 'No' ? i + 1 : k.nilai(r)))),
+  };
+}
+
+/**
+ * Label lingkup laporan. Hanya kunci wilayah (berisi angka) yang boleh diberi prefiks:
+ * 'Semua Wilayah' kalau dilewatkan `formatWilayahName` berubah menjadi
+ * "Wilayah Semua Wilayah" di kepala laporan dan di nama berkas.
+ */
+export function labelLingkup(wilayahLabel: string): string {
+  return /\d/.test(wilayahLabel) ? formatWilayahName(wilayahLabel) : String(wilayahLabel).trim() || 'Tanpa Wilayah';
+}
+
+/**
+ * PDF per wilayah dari DATA FINAL. Kolomnya dari `tabelPdfFinal`/`KOLOM_FINAL` supaya
+ * laporan tidak bisa punya kolom sendiri.
  */
 export function exportFinalRowsToPdf({
   wilayahLabel,
@@ -388,7 +414,7 @@ export function exportFinalRowsToPdf({
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    const cleanWilayahName = formatWilayahName(wilayahLabel);
+    const cleanWilayahName = labelLingkup(wilayahLabel);
     const dateStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 
     doc.setFillColor(33, 37, 41);
@@ -439,28 +465,11 @@ export function exportFinalRowsToPdf({
       doc.text(c.val, cx + 4, cardY + 11);
     });
 
-    const tableRows = rows.map((r, i) => ({
-      no: i + 1,
-      wilayah: r.wilayah || '-',
-      sandi: r.sandiCabang || '-',
-      branch: r.branchCode || '-',
-      kode: r.kodeCabang || '-',
-      outlet: r.namaOutlet || '-',
-      status: r.statusOutlet || '-',
-      alamat: r.alamat || '-',
-      kodepos: r.kodePosKelurahan || r.kodePosPten || '-',
-      kelurahan: r.kelurahan || '-',
-      kecamatan: r.kecamatan || '-',
-      dati: r.kotaPtenMax15 || r.kotaPten || '-',
-      provinsi: r.provinsi || '-',
-    }));
+    const { head: kepalaKolom, body: tableRows } = tabelPdfFinal(rows);
 
     autoTable(doc, {
       startY: cardY + cardH + 5,
-      head: [[
-        'No', 'Wilayah', 'Sandi Cabang', 'Branch Code', 'Kode Cabang', 'Nama Outlet', 'Status Outlet',
-        'ALAMAT', 'KODE POS', 'Kelurahan', 'Kecamatan', 'Dati II', 'Provinsi',
-      ]],
+      head: [kepalaKolom],
       body: tableRows,
       theme: 'grid',
       styles: { fontSize: 6.4, font: 'helvetica', cellPadding: 1.4, lineColor: [233, 235, 236], lineWidth: 0.1, textColor: [33, 37, 41] },

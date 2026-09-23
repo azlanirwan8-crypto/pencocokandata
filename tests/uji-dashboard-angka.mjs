@@ -5,7 +5,7 @@
 //   npx vite build --ssr tests/entry-uji.ts --outDir tests/out
 //   node tests/uji-dashboard-angka.mjs
 import { existsSync, rmSync } from 'node:fs';
-import { detectFinalAnomalies, formatWilayahCode, formatWilayahName, exportFinalRowsToExcel, exportFinalRowsToPdf, JUDUL_KOLOM_FINAL, kunciKelKec, kotaCocok } from './out/entry-uji.js';
+import { detectFinalAnomalies, formatWilayahCode, formatWilayahName, exportFinalRowsToExcel, exportFinalRowsToPdf, labelLingkup, tabelPdfFinal, JUDUL_KOLOM_FINAL, kunciKelKec, kotaCocok } from './out/entry-uji.js';
 
 let gagal = 0;
 const asa = (label, dapat, harus) => {
@@ -111,6 +111,32 @@ asa('DA19 prefiks KABUPATEN/KOTA dilepas saat membanding kota', kotaCocok('KABUP
 asa('DA20 nama kota terpotong 15 karakter tetap bertemu (Bula)', kotaCocok('Kabupaten Seram Bagian Timur', 'SERAM BAGIAN TI'), true);
 asa('DA21 kota beda benar tidak dianggap sama', kotaCocok('KABUPATEN TEBO', 'KOTA BANDAR LAMPUNG'), false);
 asa('DA22 kecamatan beda tidak boleh tertukar', kunciKelKec('Bula', 'Bula') === kunciKelKec('Bula', 'Bula Barat'), false);
+
+// ── 4. TUBUH LAPORAN PDF ──
+// Terukur 2026-09-24 di browser: `head: [[...]]` + `body: [objek]` membuat jspdf-autotable
+// mencetak kepala kolom saja dan mengosongkan SEMUA sel — berkas 94 halaman tanpa isi.
+// jsPDF tidak bisa dibangun di bundel Node, jadi bentuk body yang dijamin di sini;
+// berkasnya diukur terpisah lewat browser.
+const pdfBaris = (o) => Object.assign({
+  id: 'p1', no: 7, wilayah: 'W01', sandiCabang: '01100001', branchCode: '01100001', kodeCabang: '01100001',
+  namaOutlet: 'KC MEDAN', statusOutlet: 'KC', alamat: 'JL GATOT SUBROTO 15', kodePosKelurahan: '20112',
+  kodePosPten: '20111', kelurahan: 'SUKARAMAI', kecamatan: 'MEDAN BARAT', kotaPtenMax15: 'MEDAN',
+  provinsi: 'SUMATERA UTARA',
+}, o);
+const tabel = tabelPdfFinal([pdfBaris({}), pdfBaris({ id: 'p2', no: 9, namaOutlet: '', wilayah: '', kodePosKelurahan: '', kodePosPten: '' })]);
+asa('DA23 kepala PDF = 13 kolom Data Final (satu sumber dgn tabel & Excel)', tabel.head, JUDUL_KOLOM_FINAL);
+asa('DA24 body berupa array-of-arrays, bukan objek (objek = sel kosong)', tabel.body.map((b) => Array.isArray(b)), [true, true]);
+asa('DA25 lebar baris = lebar kepala', tabel.body.map((b) => b.length), [13, 13]);
+asa('DA26 isi baris sampai ke sel', tabel.body[0][5], 'KC MEDAN');
+asa('DA27 nomor urut = posisi laporan, bukan `no` baris', tabel.body.map((b) => b[0]), ['1', '2']);
+asa('DA28 sel kosong dicetak "-": wilayah, outlet, kode pos', tabel.body[1].filter((s) => s === '-').length, 3);
+asa('DA29 kode pos kelurahan menang atas kode pos PTEN', tabel.body[0][8], '20112');
+
+// Label lingkup: 'Semua Wilayah' dulu menjadi "Wilayah Semua Wilayah" di kepala + nama berkas.
+asa('DA30 kunci wilayah diberi prefiks', labelLingkup('W07'), 'Wilayah 7');
+asa('DA31 lingkup "Semua Wilayah" tidak digandakan prefiksnya', labelLingkup('Semua Wilayah'), 'Semua Wilayah');
+asa('DA32 lingkup tanpa wilayah tetap satu kata', labelLingkup('Tanpa Wilayah'), 'Tanpa Wilayah');
+asa('DA33 label kosong tidak menghasilkan nama berkas kosong', labelLingkup(''), 'Tanpa Wilayah');
 
 // bersihkan artefak uji kalau berkasnya benar-benar tertulis
 for (const f of [xlsx.filename, pdf.filename]) {
