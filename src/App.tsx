@@ -1524,6 +1524,8 @@ export const App: React.FC = () => {
             onDeleteRows={handleDeleteFinalRows}
             onResetAll={handleResetFinalData}
             onImportRows={handleImportFinalToAnalyst}
+            kodePosRows={kodePosMasterRows}
+            masterRows={masterRows}
           />
           )}
 

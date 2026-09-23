@@ -2519,6 +2519,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       <AnalystRowDetailModal
         row={detailRow}
         datiII={detailRow ? kotaKodePosDari(detailRow) : ''}
+        kodePosRows={kodePosRows}
+        masterRows={masterRows}
         onClose={() => setDetailRow(null)}
       />
 

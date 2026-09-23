@@ -24,10 +24,13 @@ import { formatWilayahCode, applyStandardSheetStyle, tulisLembarExcel } from '..
 import { WARNA_TH, KOLOM_FINAL, CONTOH_KOLOM_FINAL, JUDUL_KOLOM_FINAL, barisKeExcelFinal } from '../../utils/finalColumns';
 import { tanggalBerkas } from '../../utils/normalizer';
 import { ConfirmDialog } from './ConfirmDialog';
+import { AnalystRowDetailModal } from './AnalystRowDetailModal';
 import { DialogPanel } from '../BaseModal';
 import { useTampilanTersimpan } from '../../utils/useTampilanTersimpan';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
 import { useNotification } from '../Notification/NotificationContext';
+import type { MasterRow } from '../../types';
+import type { KodePosRow } from '../../utils/neonSync';
 
 interface FinalDataManagerProps {
   rows: AnalystRow[];
@@ -39,6 +42,10 @@ interface FinalDataManagerProps {
   /** "Reset Data": kosongkan SELURUH Final Data (lokal + cloud), tanpa menyentuh Data Analyst. */
   onResetAll: () => void;
   onImportRows?: (rows: AnalystRow[]) => { imported: number; skippedFinal: number; skippedAnalyst: number };
+  /** Modal Detail: titik kelurahan di peta diambil dari Data Kode Pos. */
+  kodePosRows?: KodePosRow[];
+  /** Modal Detail: titik cabang diambil dari Data Cabang yang tersimpan. */
+  masterRows?: MasterRow[];
 }
 
 /* Kolom, warna kepala tabel, dan pemetaan baris→Excel tinggal di satu modul:
@@ -128,7 +135,7 @@ type AksiKonfirmasi = { kind: 'returnAll' | 'return' | 'delete' | 'reset'; ids: 
 
 // Final Data: hasil analisa 3 fase yang sudah disetujui operator.
 // Baris dipindah dari Data Analyst ke sini (IndexedDB `analyst_final_data`).
-export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onReturnAll, onReturnRows, onDeleteRows, onResetAll, onImportRows }) => {
+export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onReturnAll, onReturnRows, onDeleteRows, onResetAll, onImportRows, kodePosRows, masterRows }) => {
   const { add: notify } = useNotification();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -721,68 +728,13 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
         onClose={() => setKonfirmasi(null)}
       />
 
-      {detailRow && (
-        <DialogPanel
-          onClose={() => setDetailRow(null)}
-          label="Detail baris Final Data"
-          backdropClassName=""
-          backdropStyle={{ position: 'fixed', inset: 0, zIndex: 1070, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(33,37,41, 0.65)', backdropFilter: 'blur(4px)', padding: '1rem' }}
-          className=""
-          style={{ width: '100%', maxWidth: '860px', maxHeight: '86vh', overflowY: 'auto', background: '#ffffff', borderRadius: '6px', boxShadow: '0 8px 16px rgba(0,0,0,0.15)', border: '1px solid #e9ebec' }}
-        >
-            <div style={{ padding: '1.1rem 1.4rem 0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #eef1f4' }}>
-              <div>
-                <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#212529', margin: 0 }}>
-                  Detail Baris #{nomorAsli.get(detailRow.id) ?? detailRow.no} — {detailRow.namaOutlet}
-                </h3>
-                <span style={{ fontSize: '0.74rem', color: '#878a99' }}>
-                  {detailRow.kelurahan}, {detailRow.kotaPtenMax15 || detailRow.kotaPten} · Kode Pos {detailRow.kodePosPten}
-                </span>
-              </div>
-              <button type="button" onClick={() => setDetailRow(null)} aria-label="Tutup detail" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#adb5bd', padding: '0.2rem', display: 'flex' }}>
-                <X size={18} />
-              </button>
-            </div>
-            <div style={{ padding: '0.9rem 1.4rem 1.2rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '0.55rem 1.1rem', fontSize: '0.78rem' }}>
-              {([
-                ['Urutan masuk', nomorAsli.get(detailRow.id) ?? detailRow.no],
-                ['Fase 1 — Kota/Kabupaten', detailRow.kotaPtenMax15 || detailRow.kotaPten],
-                ['Fase 1 — Kode Pos PTEN', detailRow.kodePosPten],
-                ['Fase 1 — Kode Pos Kelurahan', detailRow.kodePosKelurahan || '—'],
-                ['Fase 1 — Kelurahan', detailRow.kelurahan],
-                ['Fase 1 — Kecamatan', detailRow.kecamatan],
-                ['Fase 1 — Provinsi', detailRow.provinsi],
-                ['Fase 1 — Status PTEN', detailRow.statusPten],
-                ['Fase 1 — Penempatan', detailRow.placementStatus],
-                ['Fase 1 — Metode', detailRow.placementMethod],
-                ['Fase 2 — Wilayah', detailRow.wilayah],
-                ['Fase 2 — Sandi Cabang', detailRow.sandiCabang],
-                ['Fase 2 — Cabang', detailRow.cabang],
-                ['Fase 2 — Branch Code', detailRow.branchCode],
-                ['Fase 2 — Kode Cabang', detailRow.kodeCabang],
-                ['Fase 2 — Status Outlet', detailRow.statusOutlet],
-                ['Fase 2 — ALAMAT', detailRow.alamat],
-                ['Fase 3 — Organisasi Tujuan', detailRow.organisasiTujuan],
-                ['Fase 3 — Tipe Unit', detailRow.tipeUnit],
-                ['Fase 3 — CABSAL / CABAPV1 / CABAPV2', `${detailRow.roleCabsal} / ${detailRow.roleCabapv1} / ${detailRow.roleCabapv2}`],
-                ['Fase 3 — 3 Role Lengkap', is3Role(detailRow) ? 'LENGKAP' : 'BELUM'],
-                ['Fase 3 — Alur Wondr', detailRow.alurWondr],
-                ['Fase 3 — Skor Keyakinan', `${detailRow.confidenceScore}%`],
-                ['Status Analisa', detailRow.isFinalApproved ? 'FINAL' : detailRow.statusAnalisa],
-              ] as [string, string | number][]).map(([label, value]) => (
-                <div key={label} style={{ borderBottom: '1px dashed #eef1f4', paddingBottom: '0.3rem' }}>
-                  <div style={{ fontSize: '0.66rem', color: '#878a99', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{label}</div>
-                  <div style={{ color: '#212529', fontWeight: 600, wordBreak: 'break-word' }}>{String(value || '-')}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ padding: '0.9rem 1.4rem', borderTop: '1px solid #eef1f4', display: 'flex', justifyContent: 'flex-end' }}>
-              <button type="button" className="btn btn-outline btn-sm" onClick={() => setDetailRow(null)} style={{ padding: '0.45rem 1.1rem', fontSize: '0.8rem' }}>
-                Tutup
-              </button>
-            </div>
-        </DialogPanel>
-      )}
+      <AnalystRowDetailModal
+        row={detailRow}
+        nomor={detailRow ? nomorAsli.get(detailRow.id) ?? detailRow.no : undefined}
+        kodePosRows={kodePosRows}
+        masterRows={masterRows}
+        onClose={() => setDetailRow(null)}
+      />
 
       {importSummary && (
         <DialogPanel
