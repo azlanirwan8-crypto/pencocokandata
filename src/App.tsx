@@ -280,6 +280,22 @@ export const App: React.FC = () => {
 
           if (neonMaster.status === 'fulfilled' && neonMaster.value && neonMaster.value.rows.length > 0) {
             setMasterRows(neonMaster.value.rows);
+          } else if (neonCheck.status === 'fulfilled' && neonCheck.value.connected) {
+            // Cloud terhubung tapi kosong (mis. proyek Supabase baru) padahal browser punya
+            // data: dorong sebagai salinan kedua, sama seperti Target/Wilayah/Final. Membuka
+            // aplikasi di browser kerja dengan sendirinya memindahkan Data Cabang.
+            // Gerbangnya `connected` — tanpa itu, kegagalan baca sebelum bootstrap terpasang
+            // akan memicu peringatan palsu di setiap muat halaman.
+            const lokal = await getItem<{ rows: MasterRow[]; fileName: string }>('master_data').catch(() => null);
+            if (lokal && lokal.rows.length > 0) {
+              const ok = await saveMasterToNeon(lokal.rows, lokal.fileName || 'Master Cabang').catch(() => false);
+              notify(
+                ok
+                  ? `${lokal.rows.length.toLocaleString('id-ID')} baris Data Cabang dari browser ini sudah dikirim ke cloud.`
+                  : `${lokal.rows.length.toLocaleString('id-ID')} baris Data Cabang ada di browser ini tapi gagal dikirim ke cloud.`,
+                ok ? 'info' : 'warning'
+              );
+            }
           }
 
           if (neonTarget.status === 'fulfilled' && neonTarget.value && neonTarget.value.rows.length > 0) {

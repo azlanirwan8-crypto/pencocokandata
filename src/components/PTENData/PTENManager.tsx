@@ -90,12 +90,20 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
           onPtenCountChange?.(DEFAULT_PTEN_DATA.length);
           setItem('pten_master_data', DEFAULT_PTEN_DATA);
         }
-        // Refresh from Neon (authoritative DB) and mirror into IndexedDB
+        // Refresh from cloud (authoritative DB) and mirror into IndexedDB
         const neonRows = await loadPtenFromNeon();
         if (neonRows && Array.isArray(neonRows) && neonRows.length > 0 && isMounted) {
           setPtenList(neonRows);
           onPtenCountChange?.(neonRows.length);
           setItem('pten_master_data', neonRows);
+        } else if (saved && Array.isArray(saved) && saved.length > 500) {
+          // Cloud kosong padahal browser punya pustaka: dorong sekali supaya membuka menu
+          // ini sudah memindahkannya. Kegagalan tidak dilaporkan — sebelum bootstrap
+          // ditempel, membaca dan menulis cloud memang sama-sama gagal dan itu diharapkan.
+          const ok = await savePtenToNeon(saved).catch(() => false);
+          if (ok && isMounted) {
+            notify(`${saved.length.toLocaleString('id-ID')} baris PTEN dari browser ini sudah dikirim ke cloud.`, 'info');
+          }
         }
       } catch (err) {
         console.warn('Error loading PTEN data:', err);

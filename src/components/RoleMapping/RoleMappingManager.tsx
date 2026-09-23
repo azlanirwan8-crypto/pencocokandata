@@ -338,6 +338,13 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
           setRoleList(neonRows);
           onRoleMappingCountChange?.(neonRows.length);
           setItem('role_mapping_data', neonRows);
+        } else if (saved && Array.isArray(saved) && saved.length > 0) {
+          // Cloud kosong padahal browser punya mapping: dorong sekali. Kegagalan sengaja
+          // tidak dilaporkan — sebelum bootstrap ditempel, cloud memang belum bisa dipakai.
+          const ok = await saveRoleMappingToNeon(saved).catch(() => false);
+          if (ok && isMounted) {
+            notify(`${saved.length.toLocaleString('id-ID')} baris mapping role dari browser ini sudah dikirim ke cloud.`, 'info');
+          }
         }
       } catch (err) {
         console.warn('Error loading Role Mapping data:', err);
