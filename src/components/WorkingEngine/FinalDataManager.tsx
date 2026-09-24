@@ -70,12 +70,14 @@ function parseFinalExcelRow(raw: Record<string, any>, idx: number): AnalystRow {
   const namaOutlet = get(['Nama Outlet', 'NAMA OUTLET', 'namaOutlet', 'Outlet', 'Nama Cabang']);
   const statusOutlet = get(['Status Outlet', 'STATUS OUTLET', 'statusOutlet', 'Status']);
   const alamat = get(['ALAMAT', 'Alamat', 'alamat']);
-  const kodePosKelurahan = get(['KODE POS', 'Kode Pos', 'kodePos', 'kodepos', 'Kode Pos Kelurahan']);
+  // 'KODE POS' di berkas ekspor = kode pos PTEN (aturan Data Final); berkas lama memakai
+  // kolom itu untuk kode kelurahan, jadi keduanya tetap diisi kalau hanya satu yang ada.
+  const kodePosPten = get(['KODE POS', 'Kode Pos', 'KODE POS PTEN', 'Kode Pos PTEN', 'kodePosPten', 'kodePos']) || '';
+  const kodePosKelurahan = get(['KODE POS KELURAHAN', 'Kode Pos Kelurahan', 'kodePosKelurahan']) || kodePosPten;
   const kelurahan = get(['Kelurahan', 'KELURAHAN', 'kelurahan', 'Desa']);
   const kecamatan = get(['Kecamatan', 'KECAMATAN', 'kecamatan']);
   const dati2 = get(['Dati II', 'DATI II', 'dati2', 'Kota', 'Kabupaten', 'Kota/Dati II']);
   const provinsi = get(['Provinsi', 'PROVINSI', 'provinsi']);
-  const kodePosPten = get(['KODE POS PTEN', 'Kode Pos PTEN', 'kodePosPten']) || kodePosKelurahan;
   const organisasiTujuan = get(['ORGANISASI TUJUAN', 'Organisasi Tujuan', 'organisasiTujuan']);
   const tipeUnitRaw = get(['Tipe Unit', 'TIPE UNIT', 'tipeUnit']).toUpperCase();
   const tipeUnit: 'KC' | 'KCP' | 'OUTLET' = tipeUnitRaw === 'KC' ? 'KC' : tipeUnitRaw === 'KCP' ? 'KCP' : 'OUTLET';

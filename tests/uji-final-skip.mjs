@@ -107,8 +107,14 @@ asa('FS5 sel data pakai Calibri 10 (rapi, tidak melar)', getDataCellStyle('ALAMA
 
 // ── 6. format tabel = format berkas (N5 butir 2, 8, 9) ──
 const JUDUL_HARUS = ['No', 'Wilayah', 'Sandi Cabang', 'Branch Code', 'Kode Cabang', 'Nama Outlet', 'Status Outlet',
-  'ALAMAT', 'KODE POS', 'Kelurahan', 'Kecamatan', 'Dati II', 'Provinsi'];
-asa('FS6 13 kolom, urutan persis permintaan operator', KOLOM_FINAL.map((k) => k.judul), JUDUL_HARUS);
+  'ALAMAT', 'KODE POS', 'KODE POS KELURAHAN', 'Kelurahan', 'Kecamatan', 'Dati II', 'Provinsi'];
+asa('FS6 14 kolom, urutan persis permintaan operator', KOLOM_FINAL.map((k) => k.judul), JUDUL_HARUS);
+// Kasus nyata Lamongan 2026-09-24: baris PTEN-nya 62213, kelurahan Keting/Sekaran 62260.
+// Yang boleh masuk kolom KODE POS hanya angka PTEN.
+const nilaiKolomFinal = (judul, r) => KOLOM_FINAL.find((k) => k.judul === judul).nilai(r);
+const duaKode = { kodePosPten: '62213', kodePosKelurahan: '62260' };
+asa('FS6 KODE POS = kode pos PTEN, bukan kelurahan', nilaiKolomFinal('KODE POS', duaKode), '62213');
+asa('FS6 KODE POS KELURAHAN = kode kelurahan dari Master Kode Pos', nilaiKolomFinal('KODE POS KELURAHAN', duaKode), '62260');
 const contohEkspor = barisKeExcelFinal(bersih[2], 3);
 asa('FS6 kunci baris ekspor = judul kolom (tanpa kolom aksi)', Object.keys(contohEkspor), JUDUL_HARUS);
 asa('FS6 No ditulis ulang sesuai posisi ekspor', contohEkspor.No, 3);
@@ -120,9 +126,9 @@ asa('FS6 berkas Final Data tidak memuat kolom role/aksi', Object.keys(contohEksp
 // sumber operator, bukan token layar. Yang dijaga di sini cuma satu hal — setiap kolom
 // punya grup, dan hanya grup yang berubah, tidak ada kolom yang kehilangan warna.
 const GRUP_LAYAR = ['wilayah', 'wilayah', 'outlet', 'outlet', 'outlet', 'outlet', 'outlet', 'outlet',
-  'pos', 'geo', 'geo', 'pos', 'geo'];
+  'pos', 'pos', 'geo', 'geo', 'pos', 'geo'];
 const grupLayar = KOLOM_FINAL.map((k) => k.grup);
-asa('FS6 13 kolom layar punya grup warna, tidak ada yang kosong', grupLayar.filter(Boolean).length, 13);
+asa('FS6 14 kolom layar punya grup warna, tidak ada yang kosong', grupLayar.filter(Boolean).length, 14);
 asa('FS6 kepala tabel layar = 4 grup sesuai permintaan', grupLayar, GRUP_LAYAR);
 
 console.log(gagal === 0 ? '\nSEMUA LULUS' : `\n${gagal} TEST GAGAL`);

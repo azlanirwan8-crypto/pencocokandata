@@ -100,8 +100,8 @@ if (!pdf.success && /is not a constructor/.test(pdf.error || '')) {
   console.log(`       berkas: ${pdf.filename || pdf.error}`);
 }
 
-asa('DA16 kolom laporan = 13 kolom Data Final', JUDUL_KOLOM_FINAL.length, 13);
-asa('DA17 tidak ada kolom duplikat di laporan', new Set(JUDUL_KOLOM_FINAL).size, 13);
+asa('DA16 kolom laporan = 14 kolom Data Final', JUDUL_KOLOM_FINAL.length, 14);
+asa('DA17 tidak ada kolom duplikat di laporan', new Set(JUDUL_KOLOM_FINAL).size, 14);
 
 // Kunci cadangan titik peta (kasus nyata dari data produksi 2026-09-22):
 // kode pos PTEN 37259 tidak ada di tabel kode pos, tapi "Kemantan, Tebo Ilir, TEBO"
@@ -124,13 +124,16 @@ const pdfBaris = (o) => Object.assign({
   provinsi: 'SUMATERA UTARA',
 }, o);
 const tabel = tabelPdfFinal([pdfBaris({}), pdfBaris({ id: 'p2', no: 9, namaOutlet: '', wilayah: '', kodePosKelurahan: '', kodePosPten: '' })]);
-asa('DA23 kepala PDF = 13 kolom Data Final (satu sumber dgn tabel & Excel)', tabel.head, JUDUL_KOLOM_FINAL);
+asa('DA23 kepala PDF = 14 kolom Data Final (satu sumber dgn tabel & Excel)', tabel.head, JUDUL_KOLOM_FINAL);
 asa('DA24 body berupa array-of-arrays, bukan objek (objek = sel kosong)', tabel.body.map((b) => Array.isArray(b)), [true, true]);
-asa('DA25 lebar baris = lebar kepala', tabel.body.map((b) => b.length), [13, 13]);
+asa('DA25 lebar baris = lebar kepala', tabel.body.map((b) => b.length), [14, 14]);
 asa('DA26 isi baris sampai ke sel', tabel.body[0][5], 'KC MEDAN');
 asa('DA27 nomor urut = posisi laporan, bukan `no` baris', tabel.body.map((b) => b[0]), ['1', '2']);
-asa('DA28 sel kosong dicetak "-": wilayah, outlet, kode pos', tabel.body[1].filter((s) => s === '-').length, 3);
-asa('DA29 kode pos kelurahan menang atas kode pos PTEN', tabel.body[0][8], '20112');
+asa('DA28 sel kosong dicetak "-": wilayah, outlet, dua kolom kode pos', tabel.body[1].filter((s) => s === '-').length, 4);
+// Aturan Data Final (pemilik produk 2026-09-24): KODE POS = angka baris PTEN, kode kelurahan
+// tidak menggantikannya tapi dapat kolom sendiri.
+asa('DA29 KODE POS = kode pos PTEN, bukan kelurahan', tabel.head.indexOf('KODE POS') >= 0 && tabel.body[0][tabel.head.indexOf('KODE POS')], '20111');
+asa('DA29 kode pos kelurahan ada di kolomnya sendiri', tabel.body[0][tabel.head.indexOf('KODE POS KELURAHAN')], '20112');
 
 // Label lingkup: 'Semua Wilayah' dulu menjadi "Wilayah Semua Wilayah" di kepala + nama berkas.
 asa('DA30 kunci wilayah diberi prefiks', labelLingkup('W07'), 'Wilayah 7');

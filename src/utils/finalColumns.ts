@@ -39,7 +39,13 @@ export const KOLOM_FINAL: KolomFinal[] = [
   { judul: 'Nama Outlet', grup: 'outlet', style: { minWidth: '170px' }, nilai: (r) => r.namaOutlet || '-' },
   { judul: 'Status Outlet', grup: 'outlet', tengah: true, style: { width: '95px' }, nilai: (r) => r.statusOutlet || '-' },
   { judul: 'ALAMAT', grup: 'outlet', style: { minWidth: '220px' }, nilai: (r) => r.alamat || '-' },
-  { judul: 'KODE POS', grup: 'pos', tengah: true, mono: true, style: { width: '90px' }, nilai: (r) => r.kodePosKelurahan || r.kodePosPten || '-' },
+  // 🧾 ATURAN (pemilik produk 2026-09-24): "KODE POS" di Data Final = kode pos BARIS PTEN
+  // yang dianalisa di Fase 1, supaya angkanya bisa dicocokkan balik ke berkas PTEN.
+  // Kode pos kelurahan dari Master Kode Pos memang lebih halus (satu kota PTEN dipecah ke
+  // seluruh kelurahannya) tapi itu BUKAN angka PTEN — jadi ia dapat kolomnya sendiri di
+  // sebelah sini, tidak menggantikan yang lama.
+  { judul: 'KODE POS', grup: 'pos', tengah: true, mono: true, style: { width: '90px' }, nilai: (r) => r.kodePosPten || '-' },
+  { judul: 'KODE POS KELURAHAN', grup: 'pos', tengah: true, mono: true, style: { width: '110px' }, nilai: (r) => r.kodePosKelurahan || '-' },
   { judul: 'Kelurahan', grup: 'geo', style: { minWidth: '140px' }, nilai: (r) => r.kelurahan || '-' },
   { judul: 'Kecamatan', grup: 'geo', style: { minWidth: '140px' }, nilai: (r) => r.kecamatan || '-' },
   { judul: 'Dati II', grup: 'pos', style: { minWidth: '140px' }, nilai: (r) => r.kotaPtenMax15 || r.kotaPten || '-' },
@@ -57,7 +63,8 @@ export const CONTOH_KOLOM_FINAL: Record<string, string> = {
   'Nama Outlet': 'CONTOH NAMA OUTLET',
   'Status Outlet': 'KC',
   ALAMAT: 'JL CONTOH NO 1',
-  'KODE POS': '40111',
+  'KODE POS': '20111',
+  'KODE POS KELURAHAN': '20112',
   Kelurahan: 'CONTOH KELURAHAN',
   Kecamatan: 'CONTOH KECAMATAN',
   'Dati II': 'CONTOHKOTA',
