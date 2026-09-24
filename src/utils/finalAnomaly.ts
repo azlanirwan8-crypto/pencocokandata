@@ -22,6 +22,18 @@ export interface FinalAnomaly {
 
 const PRIORITY: AnomalyCategory[] = ['PULAU', 'PROVINSI', 'STATUS', 'PENEMPATAN', 'ROLE'];
 
+/** Label, arti dan warna satu kategori anomali — dipakai kartu Dashboard dan panel Peta. */
+export const KATEGORI_ANOMALI: Record<AnomalyCategory, { label: string; arti: string; bg: string; color: string; border: string }> = {
+  PULAU: { label: 'Beda Pulau', arti: 'Cabang yang dipasang berada di pulau berbeda dengan pulau asal data.', bg: '#fdeae5', color: '#991b1b', border: '#f87171' },
+  PROVINSI: { label: 'Beda Provinsi', arti: 'Provinsi cabang terpasang berbeda dari provinsi asal data (masih satu pulau pun tetap dilaporkan).', bg: '#ffedd5', color: '#9a3412', border: '#fb923c' },
+  STATUS: { label: 'Status Analisa', arti: 'Mesin analisa menandai baris ini ANOMALI atau PERLU REVIEW karena keyakinannya rendah.', bg: '#ede9fe', color: '#5b21b6', border: '#c4b5fd' },
+  PENEMPATAN: { label: 'Penempatan', arti: 'Pemetaan kelurahan/kecamatan ke kota belum terbukti dari blok kode pos (REVIEW) atau memakai fallback.', bg: '#dbeafe', color: '#1e40af', border: '#93c5fd' },
+  ROLE: { label: 'Role', arti: 'Cabang terpasang belum punya 3 role lengkap: Sales, Verifikator, dan Penyetuju.', bg: '#fef3c7', color: '#92400e', border: '#f7b84b' },
+};
+
+/** Urutan pentingnya kategori — dipakai untuk menyortir daftar anomali. */
+export const URUTAN_KATEGORI = PRIORITY;
+
 const isAcehText = (s: string) => /ACEH|NANGGROE|\bNAD\b/.test(String(s || '').toUpperCase());
 
 export function detectFinalAnomalies(finalRows: AnalystRow[], masterRows: MasterRow[]): FinalAnomaly[] {

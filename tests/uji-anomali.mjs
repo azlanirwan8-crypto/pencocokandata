@@ -2,7 +2,7 @@
 // pulau" dan "beda provinsi". Dijalankan:
 //   npx vite build --ssr tests/entry-uji.ts --outDir tests/out
 //   node tests/uji-anomali.mjs
-import { detectFinalAnomalies } from './out/entry-uji.js';
+import { detectFinalAnomalies, KATEGORI_ANOMALI, URUTAN_KATEGORI } from './out/entry-uji.js';
 
 let gagal = 0;
 const asa = (label, dapat, harus) => {
@@ -74,6 +74,14 @@ asa('AN6 cabang tak dikenal di Master → tanpa kategori wilayah', kategoriUntuk
 const campur = detectFinalAnomalies([baris({ provinsi: 'KALIMANTAN BARAT', kotaPten: 'PONTIANAK', kotaPtenMax15: 'PONTIANAK', kelurahan: 'BANK IN', kecamatan: 'PONTIANAK BARAT', namaOutlet: 'BANDUNG ASIA AFRIKA', kodeCabang: '03100001', is3RoleLengkap: false })], masterRows)[0];
 asa('AN7 badge tunggal memakai prioritas (PULAU bukan ROLE)', campur?.primary, 'PULAU');
 asa('AN7 semua kategorinya tetap tercatat', campur?.categories, ['PULAU', 'PROVINSI', 'ROLE']);
+
+// ── 8. kontrak kartu rincian anomali: tiap kategori wajib punya label + arti + warna ──
+asa('AN8 urutan kelas lengkap 5', URUTAN_KATEGORI, ['PULAU', 'PROVINSI', 'STATUS', 'PENEMPATAN', 'ROLE']);
+asa('AN8 tiap kelas punya label, arti dan warna', URUTAN_KATEGORI.every((c) => {
+  const k = KATEGORI_ANOMALI[c];
+  return !!k && k.label.length > 2 && k.arti.length > 20 && /^#[0-9a-f]{6}$/i.test(k.color) && /^#[0-9a-f]{6}$/i.test(k.bg);
+}), true);
+asa('AN8 kategori yang benar-benar dihasilkan mesin ada semua di kartu', campur.categories.every((c) => URUTAN_KATEGORI.includes(c)), true);
 
 console.log(gagal === 0 ? '\nSEMUA LULUS' : `\n${gagal} TEST GAGAL`);
 process.exit(gagal === 0 ? 0 : 1);

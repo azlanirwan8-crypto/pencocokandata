@@ -4,7 +4,7 @@ export { getHeaderStyle, getDataCellStyle, applyStandardSheetStyle, exportFinalR
 export { exportFinalRowsToPdf, tabelPdfFinal, labelLingkup } from '../src/utils/pdfExport';
 export { isKimBranchAceh, findKimBranch, findClosestMasterRecommendation, buildMasterProximityIndex } from '../src/utils/recommender';
 export { KOLOM_FINAL, JUDUL_KOLOM_FINAL, barisKeExcelFinal } from '../src/utils/finalColumns';
-export { detectFinalAnomalies } from '../src/utils/finalAnomaly';
+export { detectFinalAnomalies, KATEGORI_ANOMALI, URUTAN_KATEGORI } from '../src/utils/finalAnomaly';
 export { formatWilayahName, benturanIdentitas, indeksSisiSelisih, cariPadananSelisih, bedaSisiSelisih, kunciNamaSelisih } from '../src/utils/normalizer';
 
 export { kunciKelKec, kotaCocok, kodePosLima, bangunJembatanOutlet, indeksKantorCabang, bagiPinKeSelLayar } from '../src/utils/geoTitik';

@@ -5,6 +5,7 @@ import { useNotification } from './components/Notification/NotificationContext';
 import { MetricCards } from './components/Dashboard/MetricCards';
 import { RegionalAnalyticsCharts } from './components/Dashboard/RegionalAnalyticsCharts';
 import { MasterDuplicateChart } from './components/Dashboard/MasterDuplicateChart';
+import { AnomalyDetailCard } from './components/Dashboard/AnomalyDetailCard';
 import { IndonesiaBranchMap } from './components/Dashboard/IndonesiaBranchMap';
 import { DashboardMatchTable } from './components/Dashboard/DashboardMatchTable';
 import { CabangManager } from './components/MasterData/CabangManager';
@@ -482,6 +483,13 @@ export const App: React.FC = () => {
   // SATU perhitungan anomali untuk seluruh dashboard (kartu, donut, grafik, tabel).
   const finalAnomali = useMemo(() => detectFinalAnomalies(finalRows, masterRows), [finalRows, masterRows]);
   const anomaliIds = useMemo(() => new Set(finalAnomali.map((a) => a.row.id)), [finalAnomali]);
+
+  // Anomali ikut filter wilayah dashboard, supaya kartu rinciannya dan kartu TOTAL
+  // ANOMALI membaca lingkup yang sama.
+  const anomaliTersaring = useMemo(() => {
+    const target = kunciWilayah(dashboardWilayahFilter);
+    return finalAnomali.filter((a) => (kunciWilayah(a.row.wilayah) || 'Tanpa Wilayah') === (target || 'Tanpa Wilayah'));
+  }, [finalAnomali, dashboardWilayahFilter]);
 
   // Komposisi donut: irisan harus berjumlah total baris, jadi kategori dihitung
   // dari `primary` (kategori teratas tiap baris). Jumlah per kategori penuh ada di tooltip.
@@ -1415,6 +1423,9 @@ export const App: React.FC = () => {
                 komposisi={dashboardKomposisi}
                 selectedWilayah={dashboardWilayahFilter}
               />
+
+              {/* Semua baris anomali Data Final beserta alasannya, per kelas anomali */}
+              <AnomalyDetailCard anomali={anomaliTersaring} totalBarisFinal={dashboardFilteredRows.length} />
 
               {/* Visualisasi Data Master Duplikat / Multi-Cabang per Kode Pos */}
               <MasterDuplicateChart
