@@ -784,19 +784,23 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
                 <div style={{ border: '1px solid #fde68a', background: '#fffbeb', borderRadius: '6px', padding: '0.7rem 0.85rem', marginBottom: '1rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                      <strong style={{ fontSize: '0.84rem', color: '#92400e' }}>Tabrakan Kota: PTEN vs Master Kode Pos</strong>
+                      <strong style={{ fontSize: '0.84rem', color: '#92400e' }}>Tabrakan Nama Kota: PTEN vs Master Kode Pos</strong>
                       {tabrakKota && (
                         <span style={{ fontSize: '0.68rem', fontWeight: 800, background: '#fef3c7', color: '#92400e', padding: '0.12rem 0.5rem', borderRadius: '5px' }}>
-                          {tabrakKota.tanpaPten.length} kota tanpa data PTEN · {tabrakKota.kelurahanTerhenti.toLocaleString('id-ID')} kelurahan · {tabrakKota.tanpaKodePos.length} nama PTEN asing · {tabrakKota.bedaBlok.length} kota beda isi
+                          {tabrakKota.tanpaPten.length} nama kode pos tak dikenal PTEN · {tabrakKota.tanpaKodePos.length} nama PTEN tak dikenal kode pos · {tabrakKota.bedaBlok.length} kota beda isi
                         </span>
                       )}
                     </div>
                     <button type="button" className="btn btn-sm btn-outline" onClick={() => setTabrakRun((n) => n + 1)} style={{ fontSize: '0.72rem' }}>
-                      {tabrakRun === 0 ? 'Periksa tabrakan kota' : 'Periksa ulang'}
+                      {tabrakRun === 0 ? 'Periksa tabrakan nama kota' : 'Periksa ulang'}
                     </button>
                   </div>
                   <p style={{ margin: '0.35rem 0 0', fontSize: '0.72rem', color: '#a16207' }}>
-                    Fase 1 mencari kelurahan sebuah kota di Master Kode Pos lewat kunci kota. Beda spasi/ejaan saja sudah cukup membuat seluruh kota tidak pernah tersentuh analisa tanpa pesan error apa pun.
+                    Fase 1 menggabungkan kota lewat kunci nama, jadi beda spasi/ejaan saja sudah memisahkan dua kota yang sama. Kelurahan mereka tidak hilang — terukur 2026-09-24,
+                    ke-33 kota itu semuanya tetap masuk Data Final — tapi dianalisa di bawah kota PTEN lain sehingga "KODE POS PTEN" dan Dati II-nya jadi milik kota itu.
+                    {tabrakKota && tabrakKota.kelurahanAdaDiMax15 > 0 && (
+                      <> Ejaan bakunya sebenarnya sudah ada di berkas sendiri: {tabrakKota.kelurahanAdaDiMax15.toLocaleString('id-ID')} kelurahan punya pasangan di kolom MAX 15 PTEN.</>
+                    )}
                   </p>
 
                   {tabrakKota && tabrakKota.tanpaPten.length + tabrakKota.tanpaKodePos.length > 0 && (
@@ -804,7 +808,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.73rem' }}>
                         <thead>
                           <tr>
-                            {['SISI', 'KUNCI KOTA', 'NAMA PERSIS DI TABELNYA', 'TERDAMPAK', 'PASANGAN TERDEKAT DI TABEL SEBERANG'].map((t) => (
+                            {['SISI', 'KUNCI TIDAK KETEMU', 'NAMA PERSIS DI TABELNYA', 'SEBANYAK', 'EJAAN SAMA SUDAH ADA DI KOLOM MAX 15 PTEN', 'PASANGAN TERDEKAT (DUGAAN)'].map((t) => (
                               <th key={t} style={{ position: 'sticky', top: 0, background: '#f9fafb', color: '#4b5563', textAlign: 'left', padding: '0.4rem 0.6rem', whiteSpace: 'nowrap', zIndex: 1 }}>{t}</th>
                             ))}
                           </tr>
@@ -821,6 +825,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
                               <td style={{ padding: '0.38rem 0.6rem', fontWeight: 700, color: '#92400e' }}>{k.kunci}</td>
                               <td style={{ padding: '0.38rem 0.6rem' }}>{k.nama.join(' · ')}</td>
                               <td style={{ padding: '0.38rem 0.6rem', fontVariantNumeric: 'tabular-nums' }}>{k.terdampak.toLocaleString('id-ID')} {k.satuan}</td>
+                              <td style={{ padding: '0.38rem 0.6rem', fontFamily: 'var(--font-mono)', color: '#0ab39c' }}>{k.dariKolomLain?.length ? k.dariKolomLain.join(' · ') : '-'}</td>
                               <td style={{ padding: '0.38rem 0.6rem' }}>
                                 {k.padanan ? `${k.padanan.kunci} (${Math.round(k.padanan.kemiripan * 100)}%)` : '— tidak ada yang mirip —'}
                               </td>
