@@ -1,14 +1,15 @@
-// Peta — asal titik & jembatan kode pos.
+// Peta — asal titik & jembatan kode pos <-> kantor outlet.
 // Jalankan:
 //   npx vite build --ssr tests/entry-uji.ts --outDir tests/out
 //   node tests/uji-peta-titik.mjs
 //
 // Angka dasar TERUKUR dari backend produksi 2026-09-24 (match-sepia.vercel.app):
-//   /api/kodepos-geo?view=points -> 10.596 kode pos unik, 10.590 (99,94%) sumber 'desa'
+//   /api/kodepos-geo?view=points -> 10.597 kode pos unik, sumber 'desa' (rata-rata titik desa)
 //   /api/master                  -> 1.776 cabang, 0 baris punya kolom koordinat
-//   /api/target?view=final        -> 83.748 baris; 96,6% kedua kode posnya bertitik
+//   /api/target?view=final       -> 58.500 baris; 100% outletnya dikenali di Data Cabang,
+//                                   12.860 garis unik, median 13,4 km, P90 94,4 km
 import {
-  kodePosLima, bangunJembatanKodePos, bagiPinKeSelLayar, resolveBranchCoordinates, kategoriUnitCabang,
+  kodePosLima, bangunJembatanOutlet, indeksKantorCabang, bagiPinKeSelLayar, resolveBranchCoordinates, kategoriUnitCabang,
   clusterMasterRowsForMap, sumberPerkiraan,
 } from './out/entry-uji.js';
 
@@ -21,6 +22,8 @@ const asa = (label, dapat, harus) => {
 
 // Titik asli dari /api/kodepos-geo?view=points (rata-rata koordinat desa di Data Kode Pos).
 const TITIK = {
+  '23611': { lat: 4.15975980833333, lng: 96.121840525, sumber: 'desa' },      // 12 titik desa, Suak Indrapuri / Aceh Barat
+  '20242': { lat: 3.6565962, lng: 98.6819793, sumber: 'desa' },               // 2 titik desa, kantor KIM Medan
   '24313': { lat: 5.07964966470588, lng: 97.1121430235294, sumber: 'desa' }, // 17 titik desa
   '24111': { lat: 5.38265716666667, lng: 95.9532372, sumber: 'desa' },       // 3 titik desa
   '23111': { lat: 5.5707329, lng: 95.3687717, sumber: 'desa' },
@@ -87,24 +90,44 @@ asa('PT4 tiga pin nyata, satu perkiraan', pins.map((p) => !p.perkiraan), [true, 
 asa('PT4 pin nyata memakai koordinat titiknya', pins[1].lat, 5.07965);
 asa('PT4 pin perkiraan ditandai di asal titik', pins[3].sumberTitik, 'wilayah_centroid');
 
-// ── PT5: jembatan dua arah dari Data Final ──
-const finalRows = [
-  { kodePosPten: '24313', kodePosKelurahan: '24111', namaOutlet: 'KIM BANDA ACEH', statusAnalisa: 'EXACT_MATCH', placementStatus: 'VERIFIED', is3RoleLengkap: true },
-  { kodePosPten: '24313', kodePosKelurahan: '24111', namaOutlet: 'KIM BANDA ACEH', statusAnalisa: 'EXACT_MATCH', placementStatus: 'VERIFIED', is3RoleLengkap: true },
-  { kodePosPten: '24313', kodePosKelurahan: '23111', namaOutlet: 'BANDA ACEH KIM', statusAnalisa: 'ANOMALI', placementStatus: 'VERIFIED', is3RoleLengkap: true },
-  { kodePosPten: '40111', kodePosKelurahan: '40111', namaOutlet: 'BANDUNG KOTA', statusAnalisa: 'EXACT_MATCH', placementStatus: 'VERIFIED', is3RoleLengkap: true },
-  { kodePosPten: '24313', kodePosKelurahan: '88888', namaOutlet: 'TANPA TITIK', statusAnalisa: 'EXACT_MATCH', placementStatus: 'VERIFIED', is3RoleLengkap: true },
+// ── PT5: jembatan dua arah KELURAHAN <-> KANTOR OUTLET (Data Final + Data Cabang) ──
+// Fixture-nya baris nyata dari /api/target?view=final 2026-09-24:
+//   Suak Indrapuri / Johan Pahlawan / ACEH BARAT (23611) dipegang KC KAWASAN INDUSTRI
+//   MEDAN (Branch Code 60105300) yang kantornya di KP 20242, Kota Medan -> 289 km.
+// kodePosPten baris ini SAMA dengan kodePosKelurahannya (23611), jadi jembatan lama yang
+// menghubungkan keduanya tidak pernah menggambar garis apa pun untuk kelurahan ini.
+const kantorRows = [
+  cabang({ 'Status Outlet': 'KC', 'Nama Outlet': 'KAWASAN INDUSTRI MEDAN', 'Branch Code': '60105300', 'Kode Cabang': 'KIM', 'Sandi Cabang': '53', 'KODE POS': '20242' }),
+  cabang({ 'Status Outlet': 'KCP', 'Nama Outlet': 'MEULABOH', 'Branch Code': '60101234', 'Kode Cabang': 'MUL', 'Sandi Cabang': '88', 'KODE POS': '23111' }),
+  cabang({ 'Status Outlet': 'KC', 'Nama Outlet': 'BANDUNG', 'Branch Code': '60200001', 'Kode Cabang': 'BDG', 'Sandi Cabang': '07', 'KODE POS': '40111' }),
+  cabang({ 'Status Outlet': 'KCP', 'Nama Outlet': 'TANPA KODE POS', 'Branch Code': '60200002', 'Kode Cabang': 'XX', 'Sandi Cabang': '09', 'KODE POS': '' }),
 ];
-const { koneksi, status } = bangunJembatanKodePos(finalRows, TITIK);
-asa('PT5 dua arah tercatat', [koneksi.has('24313'), koneksi.has('24111'), koneksi.has('23111')], [true, true, true]);
-asa('PT5 baris kembar dilebur jadi satu garis', koneksi.get('24313').map((k) => [k.kode, k.baris]), [['24111', 2], ['23111', 1]]);
-asa('PT5 ujung garis memakai koordinat Data Kode Pos', koneksi.get('24313')[0].lat, TITIK['24111'].lat);
-asa('PT5 nama outlet pertama ikut disimpan', koneksi.get('24313')[0].outlet, 'KIM BANDA ACEH');
-asa('PT5 kode pos sama tidak jadi garis', koneksi.has('40111'), false);
-asa('PT5 pasangan tanpa koordinat dilewati', (koneksi.get('24111') || []).some((k) => k.kode === '88888'), false);
-asa('PT5 status terburuk menang di kedua ujung', [status.get('24313'), status.get('23111')], ['ANOMALI', 'ANOMALI']);
-asa('PT5 titik bersih tetap OK', status.get('24111'), 'OK');
-asa('PT5 kode pos tak bertitik tetap dihitung statusnya', status.get('88888'), 'OK');
+const kantor = indeksKantorCabang(kantorRows, TITIK);
+asa('PT5 kantor cabang dicari lewat Branch Code', kantor.get('60105300').kode, '20242');
+asa('PT5 kantor cabang dicari lewat Kode Cabang', kantor.get('MUL').kode, '23111');
+asa('PT5 kantor tanpa kode pos tidak ikut diindeks', kantor.has('XX'), false);
+
+const finalRows = [
+  { kodePosPten: '23611', kodePosKelurahan: '23611', kelurahan: 'Suak Indrapuri', branchCode: '60105300', kodeCabang: 'KIM', namaOutlet: 'KAWASAN INDUSTRI MEDAN', statusAnalisa: 'PERLU_REVIEW', placementStatus: 'VERIFIED', is3RoleLengkap: true },
+  { kodePosPten: '23611', kodePosKelurahan: '23611', kelurahan: 'Suak Bahgie', branchCode: '60105300', kodeCabang: 'KIM', namaOutlet: 'KAWASAN INDUSTRI MEDAN', statusAnalisa: 'EXACT_MATCH', placementStatus: 'VERIFIED', is3RoleLengkap: true },
+  { kodePosPten: '23611', kodePosKelurahan: '24111', kelurahan: 'Meulaboh', branchCode: '60101234', kodeCabang: 'MUL', namaOutlet: 'MEULABOH', statusAnalisa: 'ANOMALI', placementStatus: 'VERIFIED', is3RoleLengkap: true },
+  { kodePosPten: '40111', kodePosKelurahan: '40111', kelurahan: 'Dago', branchCode: '60200001', kodeCabang: 'BDG', namaOutlet: 'BANDUNG', statusAnalisa: 'EXACT_MATCH', placementStatus: 'VERIFIED', is3RoleLengkap: true },
+  { kodePosPten: '20242', kodePosKelurahan: '97111', kelurahan: 'Tak Bertitik', branchCode: '60105300', kodeCabang: 'KIM', namaOutlet: 'KAWASAN INDUSTRI MEDAN', statusAnalisa: 'EXACT_MATCH', placementStatus: 'VERIFIED', is3RoleLengkap: true },
+  { kodePosPten: '20242', kodePosKelurahan: '24111', kelurahan: 'Krueng Anoi', branchCode: '', kodeCabang: '', namaOutlet: '', statusAnalisa: 'EXACT_MATCH', placementStatus: 'VERIFIED', is3RoleLengkap: true },
+];
+const { koneksi, status, tanpaKantor } = bangunJembatanOutlet(finalRows, TITIK, kantor);
+asa('PT5 kedua ujung garis tercatat', [koneksi.has('23611'), koneksi.has('20242')], [true, true]);
+asa('PT5 titik kelurahan -> kantor outletnya', (koneksi.get('23611') || []).map((k) => [k.kode, k.baris]), [['20242', 2]]);
+asa('PT5 ujung jauh memakai koordinat Data Kode Pos kantor', [koneksi.get('23611')[0].lat, koneksi.get('23611')[0].lng], [TITIK['20242'].lat, TITIK['20242'].lng]);
+asa('PT5 ujung jauh benar-benar berjauhan (> 2 derajat bujur)', Math.abs(koneksi.get('23611')[0].lng - TITIK['23611'].lng) > 2, true);
+asa('PT5 dua ujung diberi label dua arah', [koneksi.get('23611')[0].outlet, koneksi.get('23611')[0].kel], ['KAWASAN INDUSTRI MEDAN', 'SUAK INDRAPURI']);
+asa('PT5 kantor -> kelurahan yang dipegangnya', (koneksi.get('20242') || []).map((k) => [k.kode, k.baris]), [['23611', 2]]);
+asa('PT5 kelurahan kantor itu sendiri tidak jadi garis', koneksi.has('40111'), false);
+asa('PT5 kelurahan tanpa titik kode pos dilewati', (koneksi.get('20242') || []).some((k) => k.kode === '97111'), false);
+asa('PT5 baris tanpa outlet tidak jadi garis, tetap dihitung', [tanpaKantor, (koneksi.get('24111') || []).some((k) => k.kode === '20242')], [1, false]);
+asa('PT5 outlet lain tetap dapat garisnya sendiri', (koneksi.get('24111') || []).map((k) => k.kode), ['23111']);
+asa('PT5 status terburuk menang', [status.get('24111'), status.get('23611')], ['ANOMALI', 'REVIEW']);
+asa('PT5 kode pos tak bertitik tetap dihitung statusnya', status.get('97111'), 'OK');
 
 // ── PT6: tidak ada jalur yang mengarang koordinat di luar kotak Indonesia ──
 const diLuarNegeri = cabang({ 'Status Outlet': 'KC', 'Nama Outlet': 'SINGAPURA', 'KODE POS': '24313', Wilayah: '01', Latitude: 1.35, Longitude: 103.82 });

@@ -80,45 +80,107 @@ export function bagiPinKeSelLayar<T extends { lat: number; lng: number }>(
 
 export type StatusTitik = 'OK' | 'REVIEW' | 'ANOMALI';
 
-/** Satu pasangan titik: kode pos tujuan, koordinatnya, dan berapa baris Data Final lewat. */
+/** Satu garis: kode pos di ujung seberang, koordinatnya, dan label kedua ujungnya. */
 export interface KoneksiTitik {
   kode: string;
   lat: number;
   lng: number;
   baris: number;
+  /** Nama outlet/cabang — dipakai saat yang diklik titik kelurahan. */
   outlet: string;
+  /** Nama kelurahan — dipakai saat yang diklik pin kantor cabang. */
+  kel: string;
 }
 
-/** Bentuk minimal baris Data Final yang dibutuhkan jembatan titik. */
+/** Bentuk minimal baris Data Final yang dibutuhkan jembatan garis. */
 export interface BarisJembatan {
   kodePosPten?: string | null;
   kodePosKelurahan?: string | null;
+  kelurahan?: string | null;
   namaOutlet?: string | null;
+  sandiCabang?: string | null;
+  branchCode?: string | null;
+  kodeCabang?: string | null;
   statusAnalisa?: string;
   placementStatus?: string;
   is3RoleLengkap?: boolean;
 }
 
+/** Bentuk minimal baris Data Cabang untuk mencari titik kantor cabang. */
+export interface BarisCabang {
+  'Sandi Cabang'?: string | null;
+  'Branch Code'?: string | null;
+  'Kode Cabang'?: string | null;
+  'Nama Outlet'?: string | null;
+  'KODE POS'?: string | null;
+}
+
+export interface KantorCabang {
+  kode: string;
+  lat: number;
+  lng: number;
+  outlet: string;
+}
+
+const kunciNorm = (s: unknown) => String(s ?? '').trim().toUpperCase();
+
 /**
- * Jembatan dua arah antar TITIK kode pos, dibuat dari Data Final.
+ * Kunci cabang -> titik KANTOR cabang itu sendiri.
  *
- * Satu baris Data Final menyimpan dua kode pos: `kodePosPten` (kode kota dari PTEN) dan
- * `kodePosKelurahan` (kode pos tempat outlet itu benar-benar berada). Keduanya punya
- * koordinat di Data Kode Pos, jadi garis lengkung dari titik mana pun ke pasangannya
- * selalu berakhir di koordinat nyata — bukan hasil geocoding internet.
- *
- * Terukur di cloud 2026-09-24 (51.500 dari 83.748 baris final): 96,6% kedua ujungnya
- * ada titiknya dan 92,3% kedua ujungnya BERBEDA, jadi garisnya punya panjang.
- *
- * Sekaligus dihitung status terburuk per titik supaya peta bisa mewarnai titik kode pos
- * sesuai hasil analisa.
+ * Kantor diambil dari `KODE POS` baris Data Cabang lalu koordinatnya dicari di Data
+ * Kode Pos — sumber yang sama dengan titik cabang di peta, jadi kedua ujung garis nyata.
+ * Prioritas kunci: Branch Code (paling spesifik) > Kode Cabang > Sandi > Nama Outlet.
  */
-export function bangunJembatanKodePos(
-  rows: readonly BarisJembatan[],
+export function indeksKantorCabang(
+  masterRows: readonly BarisCabang[],
   titik: Record<string, { lat: number; lng: number }>
-): { koneksi: Map<string, KoneksiTitik[]>; status: Map<string, StatusTitik> } {
+): Map<string, KantorCabang> {
+  const indeks = new Map<string, KantorCabang>();
+  for (const m of masterRows) {
+    const kode = kodePosLima(m['KODE POS']);
+    const t = kode ? titik[kode] : undefined;
+    if (!t || !Number.isFinite(t.lat) || !Number.isFinite(t.lng)) continue;
+    const kantor: KantorCabang = { kode, lat: t.lat, lng: t.lng, outlet: kunciNorm(m['Nama Outlet']) || kode };
+    for (const k of [m['Branch Code'], m['Kode Cabang'], m['Sandi Cabang'], m['Nama Outlet']]) {
+      const kunci = kunciNorm(k);
+      if (kunci && !indeks.has(kunci)) indeks.set(kunci, kantor);
+    }
+  }
+  return indeks;
+}
+
+const cariKantor = (indeks: Map<string, KantorCabang>, r: BarisJembatan): KantorCabang | undefined => {
+  for (const k of [r.branchCode, r.kodeCabang, r.sandiCabang, r.namaOutlet]) {
+    const kunci = kunciNorm(k);
+    if (kunci && indeks.has(kunci)) return indeks.get(kunci);
+  }
+  return undefined;
+};
+
+/**
+ * Jembatan dua arah: titik KELURAHAN sebuah baris Data Final <-> titik KANTOR outlet
+ * yang memegang baris itu.
+ *
+ * Kenapa bukan `kodePosPten` <-> `kodePosKelurahan` (versi awal): kedua kode itu tinggal
+ * di kabupaten yang sama, jadi garisnya pendek dan tidak menjawab pertanyaan operator.
+ * Yang ingin dilihat: "kelurahan ini ternyata dipegang cabang yang kantornya di mana".
+ * Contoh nyata dari cloud 2026-09-24 — Suak Indrapuri / Johan Pahlawan / Aceh Barat
+ * (23611) dipegang KC KAWASAN INDUSTRI MEDAN yang kantornya di 20242, Kota Medan: 289 km.
+ *
+ * Terukur atas 58.500 baris final di cloud 2026-09-24: 100% outletnya dikenali lewat Data
+ * Cabang dan kantornya punya titik (0 baris nyasar), hanya 0,5% kantornya duduk < 0,5 km dari
+ * kelurahannya. Sisanya jadi 12.860 garis unik di 7.039 titik kode pos: median 13,4 km,
+ * P90 94,4 km, terjauh 3.073 km — jadi garisnya memang punya panjang.
+ * Biayanya 51 ms sekali per ganti data (bukan per ganti lapisan).
+ */
+export function bangunJembatanOutlet(
+  rows: readonly BarisJembatan[],
+  titik: Record<string, { lat: number; lng: number }>,
+  kantor: Map<string, KantorCabang>
+): { koneksi: Map<string, KoneksiTitik[]>; status: Map<string, StatusTitik>; tanpaKantor: number } {
   const agregat = new Map<string, Map<string, KoneksiTitik>>();
   const status = new Map<string, StatusTitik>();
+  let tanpaKantor = 0;
 
   const catatStatus = (kode: string, r: BarisJembatan) => {
     const baru: StatusTitik =
@@ -129,30 +191,29 @@ export function bangunJembatanKodePos(
     if (!lama || (lama === 'OK' && baru !== 'OK') || (lama === 'REVIEW' && baru === 'ANOMALI')) status.set(kode, baru);
   };
 
-  const tambah = (dari: string, ke: string, lat: number, lng: number, r: BarisJembatan) => {
+  const tambah = (dari: string, ke: string, lat: number, lng: number, r: BarisJembatan, kantor: KantorCabang) => {
     let dalam = agregat.get(dari);
     if (!dalam) { dalam = new Map(); agregat.set(dari, dalam); }
     const ada = dalam.get(ke);
     if (ada) { ada.baris++; return; }
-    dalam.set(ke, { kode: ke, lat, lng, baris: 1, outlet: String(r.namaOutlet || '').trim() || '-' });
+    dalam.set(ke, { kode: ke, lat, lng, baris: 1, outlet: kantor.outlet, kel: kunciNorm(r.kelurahan) || '-' });
   };
 
   for (const r of rows) {
-    const a = kodePosLima(r.kodePosPten);
-    const b = kodePosLima(r.kodePosKelurahan);
-    if (a) catatStatus(a, r);
-    if (b && b !== a) catatStatus(b, r);
-    if (!a || !b || a === b) continue;
-    const ta = titik[a];
-    const tb = titik[b];
-    if (!ta || !tb) continue;
-    tambah(a, b, tb.lat, tb.lng, r);
-    tambah(b, a, ta.lat, ta.lng, r);
+    const lokasi = kodePosLima(r.kodePosKelurahan) || kodePosLima(r.kodePosPten);
+    if (lokasi) catatStatus(lokasi, r);
+    const tem = cariKantor(kantor, r);
+    if (!tem) { tanpaKantor++; continue; }
+    if (!lokasi || tem.kode === lokasi) continue;
+    const t = titik[lokasi];
+    if (!t || !Number.isFinite(t.lat) || !Number.isFinite(t.lng)) continue;
+    tambah(lokasi, tem.kode, tem.lat, tem.lng, r, tem);
+    tambah(tem.kode, lokasi, t.lat, t.lng, r, tem);
   }
 
   const koneksi = new Map<string, KoneksiTitik[]>();
   agregat.forEach((dalam, dari) => {
     koneksi.set(dari, [...dalam.values()].sort((x, y) => y.baris - x.baris));
   });
-  return { koneksi, status };
+  return { koneksi, status, tanpaKantor };
 }
