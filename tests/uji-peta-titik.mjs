@@ -8,7 +8,7 @@
 //   /api/master                  -> 1.776 cabang, 0 baris punya kolom koordinat
 //   /api/target?view=final        -> 83.748 baris; 96,6% kedua kode posnya bertitik
 import {
-  kodePosLima, bangunJembatanKodePos, resolveBranchCoordinates, kategoriUnitCabang,
+  kodePosLima, bangunJembatanKodePos, bagiPinKeSelLayar, resolveBranchCoordinates, kategoriUnitCabang,
   clusterMasterRowsForMap, sumberPerkiraan,
 } from './out/entry-uji.js';
 
@@ -109,6 +109,46 @@ asa('PT5 kode pos tak bertitik tetap dihitung statusnya', status.get('88888'), '
 // ── PT6: tidak ada jalur yang mengarang koordinat di luar kotak Indonesia ──
 const diLuarNegeri = cabang({ 'Status Outlet': 'KC', 'Nama Outlet': 'SINGAPURA', 'KODE POS': '24313', Wilayah: '01', Latitude: 1.35, Longitude: 103.82 });
 asa('PT6 koordinat di luar Indonesia dipotong ke kotak aman', resolveBranchCoordinates(diLuarNegeri, undefined, TITIK).lat > -11.5 && resolveBranchCoordinates(diLuarNegeri, undefined, TITIK).lat < 7.5, true);
+
+// ── PT7: penyaring layar — jumlah node dibatasi luas kanvas, BUKAN banyaknya data ──
+// 10.596 titik disebar pseudo-acak seluas Indonesia (bd 95-141, ls -11..+7); 1° = 20 px.
+const pinBanyak = Array.from({ length: 10596 }, (_, i) => ({
+  lat: -11 + ((i * 7919) % 1800) / 100,
+  lng: 95 + ((i * 104729) % 4600) / 100,
+}));
+const proyeksi = (p) => ({ x: (p.lng - 95) * 20, y: (p.lat + 11) * 20 });
+const KELUAR = 56;
+const diLuar = (p, k) => {
+  const q = proyeksi(p);
+  return q.x < -KELUAR || q.y < -KELUAR || q.x > k.x + KELUAR || q.y > k.y + KELUAR;
+};
+
+const kanvasKecil = { x: 400, y: 300 };
+const hasilKecil = bagiPinKeSelLayar(pinBanyak, proyeksi, kanvasKecil);
+const harusDibuang = pinBanyak.filter((p) => diLuar(p, kanvasKecil)).length;
+asa('PT7 fixture memang melebihi kanvas', harusDibuang > 3000, true);
+asa('PT7 pin di luar layar dibuang persis', hasilKecil.dibuang, harusDibuang);
+// Sel yang muat: (400+2*56)/56 kolom x (300+2*56)/56 baris = 9 x 7 + tepi.
+asa('PT7 node dibatasi kanvas (<= 9*7)', hasilKecil.sel.size <= 9 * 7, true);
+asa('PT7 tidak ada pin yang hilang diam-diam', [...hasilKecil.sel.values()].reduce((n, b) => n + b.pins.length, 0) + hasilKecil.dibuang, pinBanyak.length);
+
+const kanvasBesar = bagiPinKeSelLayar(pinBanyak, proyeksi, { x: 1000, y: 400 });
+asa('PT7 kanvas selebar data: tidak ada yang dibuang', kanvasBesar.dibuang, 0);
+asa('PT7 titik tengah sel = rata-rata anggotanya', (() => {
+  const b = [...kanvasBesar.sel.values()][3];
+  const rata = b.pins.reduce((n, p) => n + p.lat, 0) / b.pins.length;
+  return Math.abs(b.sumLat / b.pins.length - rata) < 1e-9 && b.pins.length > 1;
+})(), true);
+
+// Pin yang tepat di tepi masih ikut digambar; yang jauh dibuang.
+const tepi = bagiPinKeSelLayar(
+  [{ lat: 0, lng: 0 }, { lat: 0, lng: 0.5 }, { lat: 0, lng: 20 }],
+  (p) => ({ x: p.lng * 20, y: p.lat * 20 }),
+  { x: 10, y: 10 },
+  56
+);
+asa('PT7 tepi kanvas dihitung terlihat', tepi.sel.size, 1);
+asa('PT7 yang jauh dari kanvas dibuang', tepi.dibuang, 1);
 
 console.log(gagal === 0 ? '\nSEMUA LULUS' : `\n${gagal} GAGAL`);
 process.exit(gagal === 0 ? 0 : 1);

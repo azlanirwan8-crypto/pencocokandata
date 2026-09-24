@@ -23,7 +23,7 @@ import {
 import type { MasterRow, TargetRow } from '../../types';
 import type { AnalystRow } from '../../utils/analystPipeline';
 import type { KodePosRow } from '../../utils/neonSync';
-import { kunciKelKec, kotaCocok, kodePosLima, bangunJembatanKodePos, type KoneksiTitik, type StatusTitik } from '../../utils/geoTitik';
+import { kunciKelKec, kotaCocok, kodePosLima, bangunJembatanKodePos, bagiPinKeSelLayar, type KoneksiTitik, type StatusTitik } from '../../utils/geoTitik';
 import { detectFinalAnomalies } from '../../utils/finalAnomaly';
 import { formatWilayahName } from '../../utils/normalizer';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
@@ -1159,26 +1159,14 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     if (filteredPins.length <= 40) {
       filteredPins.forEach(addPinMarker);
     } else {
-      const cellPx = 56;
-      const layar = map.getSize();
-      const buckets = new Map<string, { pins: PlottedBranchPin[]; sumLat: number; sumLng: number }>();
-      for (const pin of filteredPins) {
-        if (selectedPin && pin.id === selectedPin.id) {
-          addPinMarker(pin);
-          continue;
-        }
-        const pt = map.latLngToContainerPoint([pin.lat, pin.lng]);
-        // Yang di luar layar dibuang SEBELUM marker dibuat. Tanpa ini, zoom kota tetap
-        // membuat marker untuk seluruh Indonesia — ribuan node DOM, dan itulah yang
-        // membuat geser/zoom terasa berat dan patah-patah.
-        if (pt.x < -cellPx || pt.y < -cellPx || pt.x > layar.x + cellPx || pt.y > layar.y + cellPx) continue;
-        const key = `${Math.floor(pt.x / cellPx)}:${Math.floor(pt.y / cellPx)}`;
-        let b = buckets.get(key);
-        if (!b) { b = { pins: [], sumLat: 0, sumLng: 0 }; buckets.set(key, b); }
-        b.pins.push(pin);
-        b.sumLat += pin.lat;
-        b.sumLng += pin.lng;
-      }
+      // Pin terpilih selalu tampil utuh; sisanya lewat penyaring layar + sel clustering.
+      const terpilih = selectedPin && filteredPins.some((p) => p.id === selectedPin.id) ? selectedPin : null;
+      if (terpilih) addPinMarker(terpilih);
+      const { sel: buckets } = bagiPinKeSelLayar(
+        terpilih ? filteredPins.filter((p) => p.id !== terpilih.id) : filteredPins,
+        (pin) => map.latLngToContainerPoint([pin.lat, pin.lng]),
+        map.getSize()
+      );
       buckets.forEach((b) => {
         if (b.pins.length === 1) {
           addPinMarker(b.pins[0]);

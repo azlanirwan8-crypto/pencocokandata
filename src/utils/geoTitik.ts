@@ -33,6 +33,51 @@ export function kodePosLima(nilai: unknown): string {
   return angka.length >= 5 ? angka.slice(-5) : '';
 }
 
+/** Isi satu sel layar: pin yang jatuh di dalamnya + jumlah lat/lng untuk titik tengah. */
+export interface SelLayar<T> {
+  kunci: string;
+  pins: T[];
+  sumLat: number;
+  sumLng: number;
+}
+
+/**
+ * Bagi pin ke sel layar `cellPx`, HANYA yang terlihat di kanvas.
+ *
+ * Inilah yang menjaga peta tetap ringan. Tanpa pembuangan pin di luar layar, clustering
+ * tetap membuat marker untuk seluruh negeri: di zoom kota 10.596 titik kode pos jadi
+ * ribuan node DOM dan geser/zoom patah-patah. Setelah disaring, jumlah node dibatasi
+ * luas kanvas / `cellPx` — bukan oleh banyaknya data.
+ *
+ * `proyek` dipisah supaya fungsi ini tetap murni dan bisa diuji tanpa leaflet.
+ */
+export function bagiPinKeSelLayar<T extends { lat: number; lng: number }>(
+  pins: readonly T[],
+  proyek: (pin: T) => { x: number; y: number },
+  layar: { x: number; y: number },
+  cellPx = 56
+): { sel: Map<string, SelLayar<T>>; dibuang: number } {
+  const sel = new Map<string, SelLayar<T>>();
+  let dibuang = 0;
+  for (const pin of pins) {
+    const pt = proyek(pin);
+    if (pt.x < -cellPx || pt.y < -cellPx || pt.x > layar.x + cellPx || pt.y > layar.y + cellPx) {
+      dibuang++;
+      continue;
+    }
+    const kunci = `${Math.floor(pt.x / cellPx)}:${Math.floor(pt.y / cellPx)}`;
+    let b = sel.get(kunci);
+    if (!b) {
+      b = { kunci, pins: [], sumLat: 0, sumLng: 0 };
+      sel.set(kunci, b);
+    }
+    b.pins.push(pin);
+    b.sumLat += pin.lat;
+    b.sumLng += pin.lng;
+  }
+  return { sel, dibuang };
+}
+
 export type StatusTitik = 'OK' | 'REVIEW' | 'ANOMALI';
 
 /** Satu pasangan titik: kode pos tujuan, koordinatnya, dan berapa baris Data Final lewat. */
