@@ -23,7 +23,8 @@ import * as XLSX from 'xlsx-js-style';
 import type { AnalystRow } from '../../utils/analystPipeline';
 import { formatWilayahCode, applyStandardSheetStyle, tulisLembarExcel } from '../../utils/excel';
 import { WARNA_TH, KOLOM_FINAL, CONTOH_KOLOM_FINAL, JUDUL_KOLOM_FINAL, barisKeExcelFinal } from '../../utils/finalColumns';
-import { tanggalBerkas } from '../../utils/normalizer';
+import { tanggalBerkas, indeksSisiSelisih, cariPadananSelisih } from '../../utils/normalizer';
+import type { SisiSelisih, PadananSelisih, SumbuSelisih } from '../../utils/normalizer';
 import { ConfirmDialog } from './ConfirmDialog';
 import { AnalystRowDetailModal } from './AnalystRowDetailModal';
 import { DialogPanel } from '../BaseModal';
@@ -257,6 +258,40 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
       adaPerbedaan: rows.length !== kodePosRows.length || extraInFinal.length > 0 || missingInFinal.length > 0,
     };
   }, [rows, kodePosRows]);
+
+  // Padanan lapangan-per-lapangan untuk rincian. Indeksnya dibangun atas seluruh
+  // Master Kode Pos + Data Final (terukur 80-350 ms per tabel), jadi jangan di jalur
+  // render: modal dibuka dulu, dihitung pada giliran berikutnya, baris isinya menyusul.
+  const BATAS_RINCIAN = 60;
+  const [rincianMulai, setRincianMulai] = useState(false);
+  const bukaRincian = () => {
+    setModalSelisih(true);
+    setTimeout(() => setRincianMulai(true), 0);
+  };
+  const tutupRincian = () => {
+    setModalSelisih(false);
+    setRincianMulai(false);
+  };
+
+  const bandingSelisih = useMemo(() => {
+    if (!modalSelisih || !rincianMulai || !selisihInfo || !kodePosRows) return null;
+    const indeksKodePos = indeksSisiSelisih(kodePosRows.map(sisiDariKodePos));
+    const indeksFinal = indeksSisiSelisih(rows.map(sisiDariFinal));
+    const ekstra = selisihInfo.extraInFinal.slice(0, BATAS_RINCIAN).map((r) => {
+      const asal = sisiDariFinal(r);
+      return { asal, padanan: cariPadananSelisih(indeksKodePos, asal) };
+    });
+    const kurang = selisihInfo.missingInFinal.slice(0, BATAS_RINCIAN).map((kp) => {
+      const asal = sisiDariKodePos(kp);
+      return { asal, padanan: cariPadananSelisih(indeksFinal, asal) };
+    });
+    return {
+      ekstra,
+      kurang,
+      sisaEkstra: Math.max(0, selisihInfo.extraInFinal.length - ekstra.length),
+      sisaKurang: Math.max(0, selisihInfo.missingInFinal.length - kurang.length),
+    };
+  }, [modalSelisih, rincianMulai, selisihInfo, rows, kodePosRows]);
 
   const terurut = useMemo(() => {
     const kolom = KOLOM_FINAL.find((k) => k.judul === sortKolom);
@@ -560,7 +595,7 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
           <button
             type="button"
             className="btn btn-sm btn-outline"
-            onClick={() => setModalSelisih(true)}
+            onClick={bukaRincian}
             style={{
               fontSize: '0.74rem',
               fontWeight: 700,
@@ -911,7 +946,7 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
       {/* 5. Modal Rincian Selisih Data Rekonsiliasi */}
       {modalSelisih && selisihInfo && (
         <DialogPanel
-          onClose={() => setModalSelisih(false)}
+          onClose={tutupRincian}
           label="Rincian Selisih Data Final vs Master Kode Pos"
           style={{ maxWidth: '920px' }}
         >
@@ -920,14 +955,24 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
               <AlertTriangle size={18} color="#d97706" />
               Rincian Perbedaan Baris Data ({selisihInfo.totalFinal.toLocaleString('id-ID')} Final vs {selisihInfo.totalKodePos.toLocaleString('id-ID')} Kode Pos)
             </h4>
-            <button type="button" className="modal-close" onClick={() => setModalSelisih(false)} aria-label="Tutup">
+            <button type="button" className="modal-close" onClick={tutupRincian} aria-label="Tutup">
               <X size={18} />
             </button>
           </div>
 
           <div className="modal-body" style={{ padding: '1rem 1.25rem', maxHeight: '72vh', overflowY: 'auto' }}>
-            {/* Bagian 1: Baris Tambahan di Final Data */}
-            {selisihInfo.extraInFinal.length > 0 && (
+            <div style={{ fontSize: '0.74rem', color: '#6b7280', marginBottom: '0.8rem' }}>
+              Setiap baris dipasang berdampingan dengan padanan terdekatnya di tabel seberang. Sel merah = lapangan yang membuat keduanya tidak ketemu. Kunci yang dibandingkan: kelurahan + kecamatan + kode pos.
+            </div>
+
+            {!bandingSelisih && (
+              <div style={{ padding: '1.1rem', textAlign: 'center', color: '#6b7280', fontSize: '0.8rem' }}>
+                Menghitung perbandingan {selisihInfo.totalFinal.toLocaleString('id-ID')} baris Final vs {selisihInfo.totalKodePos.toLocaleString('id-ID')} baris Kode Pos…
+              </div>
+            )}
+
+            {/* Bagian 1: baris Final yang tidak ketemu padanannya di Master Kode Pos */}
+            {bandingSelisih && bandingSelisih.ekstra.length > 0 && (
               <div style={{ marginBottom: '1.25rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
                   <span style={{ fontSize: '0.74rem', fontWeight: 800, background: '#fef3c7', color: '#92400e', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
@@ -935,37 +980,20 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
                   </span>
                   <strong style={{ fontSize: '0.86rem', color: '#1f2937' }}>Baris Ekstra di Final Data (Tidak Ada di Master Kode Pos / Duplikat)</strong>
                 </div>
-                <div style={{ border: '1px solid #e5e7eb', borderRadius: '6px', overflow: 'hidden' }}>
-                  <table className="custom-table" style={{ width: '100%', fontSize: '0.76rem', borderCollapse: 'collapse' }}>
-                    <thead style={{ background: '#f9fafb', color: '#4b5563' }}>
-                      <tr>
-                        <th style={{ padding: '0.45rem 0.65rem', textAlign: 'left' }}>#</th>
-                        <th style={{ padding: '0.45rem 0.65rem', textAlign: 'left' }}>KODE POS</th>
-                        <th style={{ padding: '0.45rem 0.65rem', textAlign: 'left' }}>KELURAHAN</th>
-                        <th style={{ padding: '0.45rem 0.65rem', textAlign: 'left' }}>KECAMATAN</th>
-                        <th style={{ padding: '0.45rem 0.65rem', textAlign: 'left' }}>KOTA / KAB</th>
-                        <th style={{ padding: '0.45rem 0.65rem', textAlign: 'left' }}>CABANG TERPASANG</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selisihInfo.extraInFinal.map((r, idx) => (
-                        <tr key={r.id || idx} style={{ borderTop: '1px solid #f3f4f6' }}>
-                          <td style={{ padding: '0.45rem 0.65rem' }}>{idx + 1}</td>
-                          <td style={{ padding: '0.45rem 0.65rem', fontWeight: 700, color: '#f06548', fontFamily: 'var(--font-mono)' }}>{r.kodePosKelurahan || r.kodePosPten}</td>
-                          <td style={{ padding: '0.45rem 0.65rem', fontWeight: 600 }}>{r.kelurahan}</td>
-                          <td style={{ padding: '0.45rem 0.65rem' }}>{r.kecamatan}</td>
-                          <td style={{ padding: '0.45rem 0.65rem' }}>{r.kotaPtenMax15 || r.kotaPten}</td>
-                          <td style={{ padding: '0.45rem 0.65rem', color: '#0284c7' }}>{r.namaOutlet || '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <TabelBanding
+                  items={bandingSelisih.ekstra}
+                  labelAsal="DATA FINAL"
+                  labelLawan="MASTER KODE POS"
+                  warnaAsal="#b45309"
+                  warnaLawan="#0f766e"
+                  kolomLawan="CABANG / PROVINSI"
+                  sisaBaris={bandingSelisih.sisaEkstra}
+                />
               </div>
             )}
 
-            {/* Bagian 2: Baris Master Kode Pos yang belum ada di Final */}
-            {selisihInfo.missingInFinal.length > 0 && (
+            {/* Bagian 2: baris Master Kode Pos yang belum ada di Final */}
+            {bandingSelisih && bandingSelisih.kurang.length > 0 && (
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
                   <span style={{ fontSize: '0.74rem', fontWeight: 800, background: '#fee2e2', color: '#991b1b', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
@@ -973,43 +1001,28 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
                   </span>
                   <strong style={{ fontSize: '0.86rem', color: '#1f2937' }}>Baris Master Kode Pos yang Belum Ada di Final Data</strong>
                 </div>
-                <div style={{ border: '1px solid #e5e7eb', borderRadius: '6px', overflow: 'hidden' }}>
-                  <table className="custom-table" style={{ width: '100%', fontSize: '0.76rem', borderCollapse: 'collapse' }}>
-                    <thead style={{ background: '#f9fafb', color: '#4b5563' }}>
-                      <tr>
-                        <th style={{ padding: '0.45rem 0.65rem', textAlign: 'left' }}>#</th>
-                        <th style={{ padding: '0.45rem 0.65rem', textAlign: 'left' }}>KODE POS</th>
-                        <th style={{ padding: '0.45rem 0.65rem', textAlign: 'left' }}>KELURAHAN</th>
-                        <th style={{ padding: '0.45rem 0.65rem', textAlign: 'left' }}>KECAMATAN</th>
-                        <th style={{ padding: '0.45rem 0.65rem', textAlign: 'left' }}>KABUPATEN / KOTA</th>
-                        <th style={{ padding: '0.45rem 0.65rem', textAlign: 'left' }}>PROVINSI</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selisihInfo.missingInFinal.slice(0, 100).map((kp, idx) => (
-                        <tr key={kp.id || idx} style={{ borderTop: '1px solid #f3f4f6' }}>
-                          <td style={{ padding: '0.45rem 0.65rem' }}>{idx + 1}</td>
-                          <td style={{ padding: '0.45rem 0.65rem', fontWeight: 700, color: '#0ab39c', fontFamily: 'var(--font-mono)' }}>{kp.kodePos}</td>
-                          <td style={{ padding: '0.45rem 0.65rem', fontWeight: 600 }}>{kp.kelurahan}</td>
-                          <td style={{ padding: '0.45rem 0.65rem' }}>{kp.kecamatan}</td>
-                          <td style={{ padding: '0.45rem 0.65rem' }}>{kp.kabupatenKota}</td>
-                          <td style={{ padding: '0.45rem 0.65rem' }}>{kp.provinsi}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {selisihInfo.missingInFinal.length > 100 && (
-                    <div style={{ padding: '0.5rem', textAlign: 'center', background: '#f9fafb', fontSize: '0.74rem', color: '#6b7280' }}>
-                      Menampilkan 100 dari {selisihInfo.missingInFinal.length.toLocaleString('id-ID')} baris yang belum ada.
-                    </div>
-                  )}
-                </div>
+                <TabelBanding
+                  items={bandingSelisih.kurang}
+                  labelAsal="MASTER KODE POS"
+                  labelLawan="DATA FINAL"
+                  warnaAsal="#0f766e"
+                  warnaLawan="#b45309"
+                  kolomLawan="PROVINSI / CABANG"
+                  sisaBaris={bandingSelisih.sisaKurang}
+                />
+              </div>
+            )}
+
+            {bandingSelisih && bandingSelisih.ekstra.length === 0 && bandingSelisih.kurang.length === 0 && (
+              <div style={{ padding: '0.7rem 0.85rem', background: '#f9fafb', border: '1px dashed #d1d5db', borderRadius: 6, fontSize: '0.78rem', color: '#4b5563' }}>
+                Semua baris sudah ketemu pasangannya. Selisih jumlahnya ({Math.abs(selisihInfo.selisihTotal).toLocaleString('id-ID')} baris) datang dari
+                satu kelurahan + kecamatan + kode pos yang dipakai lebih dari satu baris, bukan dari baris yang hilang.
               </div>
             )}
           </div>
 
           <div className="modal-footer" style={{ padding: '0.75rem 1.25rem', borderTop: '1px solid #eef1f4' }}>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setModalSelisih(false)}>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={tutupRincian}>
               Tutup
             </button>
           </div>
@@ -1023,3 +1036,128 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
 function is3Role(r: AnalystRow): boolean {
   return !!r.is3RoleLengkap || (r.roleCabsal === 1 && r.roleCabapv1 === 1 && r.roleCabapv2 === 1);
 }
+
+/* ───────── Rincian perbedaan baris: Final vs Master Kode Pos, lapangan per lapangan ─────────
+ * `catatan` ikut dibawa supaya baris pembanding masih menunjukkan outlet / provinsinya.
+ */
+type SisiBanding = SisiSelisih & { catatan: string };
+
+const sisiDariFinal = (r: AnalystRow): SisiBanding => ({
+  kodePos: r.kodePosKelurahan || r.kodePosPten || '',
+  kelurahan: r.kelurahan || '',
+  kecamatan: r.kecamatan || '',
+  kota: r.kotaPtenMax15 || r.kotaPten || '',
+  catatan: r.namaOutlet || '-',
+});
+
+const sisiDariKodePos = (k: KodePosRow): SisiBanding => ({
+  kodePos: k.kodePos || '',
+  kelurahan: k.kelurahan || '',
+  kecamatan: k.kecamatan || '',
+  kota: k.kabupatenKota || '',
+  catatan: k.provinsi || '-',
+});
+
+const nilaiSisi = (s: SisiSelisih, sumbu: SumbuSelisih): string =>
+  sumbu === 'kodePos' ? s.kodePos : sumbu === 'kelurahan' ? s.kelurahan : sumbu === 'kecamatan' ? s.kecamatan : s.kota;
+
+const NAMA_SUMBU: Record<SumbuSelisih, string> = {
+  kodePos: 'kode pos',
+  kelurahan: 'kelurahan',
+  kecamatan: 'kecamatan',
+  kota: 'kabupaten/kota',
+};
+
+/** Kalimat yang menjawab "beda nya di mana" — bukan cuma daftar baris. */
+function teksBeda(labelAsal: string, labelLawan: string, asal: SisiBanding, p: PadananSelisih<SisiBanding>): string {
+  if (!p.lawan) return `Tidak ada padanannya di ${labelLawan} — ${labelAsal} ini tidak dikenal di sana.`;
+  if (p.beda.length === 0) return `Keempat lapangan sama — ini duplikat kunci di ${labelAsal}, bukan beda data.`;
+  const lawan = p.lawan;
+  const bagian = p.beda.map((s) => `${NAMA_SUMBU[s]} ${nilaiSisi(asal, s) || '-'} → ${nilaiSisi(lawan, s) || '-'}`);
+  const cara = p.lewat === 'kode pos sekabupaten' ? 'perkiraan: empat digit kode pos pertama sama' : p.lewat;
+  return `Bedanya ${bagian.join('; ')} — ketemu lewat ${cara}.`;
+}
+
+const TH_BANDING: React.CSSProperties = { padding: '0.45rem 0.65rem', textAlign: 'left', whiteSpace: 'nowrap' };
+const TD_BANDING: React.CSSProperties = { padding: '0.42rem 0.65rem', whiteSpace: 'nowrap' };
+const CELL_BEDA: React.CSSProperties = { background: '#fff1f2', color: '#b91c1c', fontWeight: 800 };
+
+function chipSumber(teks: string, warna: string): React.ReactNode {
+  return (
+    <span style={{ fontSize: '0.64rem', fontWeight: 800, color: warna, background: '#f9fafb', border: `1px solid ${warna}33`, padding: '0.08rem 0.35rem', borderRadius: '4px', whiteSpace: 'nowrap' }}>
+      {teks}
+    </span>
+  );
+}
+
+/** Dua baris berdesakan (sumber asal + lawannya) plus satu baris kalimat beda. */
+const TabelBanding: React.FC<{
+  items: { asal: SisiBanding; padanan: PadananSelisih<SisiBanding> }[];
+  labelAsal: string;
+  labelLawan: string;
+  warnaAsal: string;
+  warnaLawan: string;
+  kolomLawan: string;
+  sisaBaris?: number;
+}> = ({ items, labelAsal, labelLawan, warnaAsal, warnaLawan, kolomLawan, sisaBaris = 0 }) => (
+  <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflowX: 'auto' }}>
+    <table className="custom-table" style={{ width: '100%', fontSize: '0.76rem', borderCollapse: 'collapse' }}>
+      <thead style={{ background: '#f9fafb', color: '#4b5563' }}>
+        <tr>
+          <th style={TH_BANDING}>#</th>
+          <th style={TH_BANDING}>SUMBER</th>
+          <th style={TH_BANDING}>KODE POS</th>
+          <th style={TH_BANDING}>KELURAHAN</th>
+          <th style={TH_BANDING}>KECAMATAN</th>
+          <th style={TH_BANDING}>KABUPATEN / KOTA</th>
+          <th style={TH_BANDING}>{kolomLawan}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((b, i) => {
+          const lawan = b.padanan.lawan;
+          return (
+            <React.Fragment key={`${b.asal.kodePos}-${b.asal.kelurahan}-${i}`}>
+              <tr style={{ borderTop: '1px solid #e5e7eb', background: `${warnaAsal}0d` }}>
+                <td style={TD_BANDING}>{i + 1}</td>
+                <td style={TD_BANDING}>{chipSumber(labelAsal, warnaAsal)}</td>
+                <td style={{ ...TD_BANDING, fontFamily: 'var(--font-mono)', fontWeight: 700, color: warnaAsal }}>{b.asal.kodePos || '-'}</td>
+                <td style={{ ...TD_BANDING, fontWeight: 600 }}>{b.asal.kelurahan || '-'}</td>
+                <td style={TD_BANDING}>{b.asal.kecamatan || '-'}</td>
+                <td style={TD_BANDING}>{b.asal.kota || '-'}</td>
+                <td style={TD_BANDING}>{b.asal.catatan}</td>
+              </tr>
+              <tr>
+                <td style={TD_BANDING} />
+                <td style={TD_BANDING}>{chipSumber(lawan ? labelLawan : 'TIDAK ADA', warnaLawan)}</td>
+                {lawan ? (
+                  <>
+                    <td style={{ ...TD_BANDING, fontFamily: 'var(--font-mono)', fontWeight: 700, ...(b.padanan.beda.includes('kodePos') ? CELL_BEDA : null) }}>{lawan.kodePos || '-'}</td>
+                    <td style={{ ...TD_BANDING, ...(b.padanan.beda.includes('kelurahan') ? CELL_BEDA : null) }}>{lawan.kelurahan || '-'}</td>
+                    <td style={{ ...TD_BANDING, ...(b.padanan.beda.includes('kecamatan') ? CELL_BEDA : null) }}>{lawan.kecamatan || '-'}</td>
+                    <td style={{ ...TD_BANDING, ...(b.padanan.beda.includes('kota') ? CELL_BEDA : null) }}>{lawan.kota || '-'}</td>
+                    <td style={TD_BANDING}>{lawan.catatan}</td>
+                  </>
+                ) : (
+                  <td colSpan={5} style={{ ...TD_BANDING, color: '#9a3412', fontStyle: 'italic' }}>
+                    tidak ada baris yang mirip sama sekali
+                  </td>
+                )}
+              </tr>
+              <tr style={{ background: '#fcfcfd' }}>
+                <td colSpan={7} style={{ padding: '0.3rem 0.65rem 0.5rem', fontSize: '0.72rem', color: '#4b5563' }}>
+                  {teksBeda(labelAsal, labelLawan, b.asal, b.padanan)}
+                </td>
+              </tr>
+            </React.Fragment>
+          );
+        })}
+      </tbody>
+    </table>
+    {sisaBaris > 0 && (
+      <div style={{ padding: '0.5rem', textAlign: 'center', background: '#f9fafb', fontSize: '0.74rem', color: '#6b7280' }}>
+        Menampilkan {items.length.toLocaleString('id-ID')} dari {sisaBaris.toLocaleString('id-ID')} baris.
+      </div>
+    )}
+  </div>
+);

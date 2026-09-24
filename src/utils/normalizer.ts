@@ -711,3 +711,131 @@ export function tanggalBerkas(d: Date = new Date()): string {
   const hari = String(d.getDate()).padStart(2, '0');
   return `${d.getFullYear()}-${bulan}-${hari}`;
 }
+
+/* ───────────── Rincian perbedaan baris: Data Final vs Master Kode Pos ─────────────
+ * Daftar "baris ekstra / belum ada" saja tidak menjawab apa-apa: user tetap tidak
+ * tahu BEDANYA di lapangan mana. Fungsi ini mencari padanan terdekat sebuah baris di
+ * tabel seberang dan melaporkan lapangan yang bikin keduanya tidak ketemu.
+ */
+
+/** Lapangan yang dipakai kunci rekonsiliasi. */
+export type SumbuSelisih = 'kodePos' | 'kelurahan' | 'kecamatan' | 'kota';
+
+/** Satu baris, diratakan ke empat lapangan itu, dari tabel mana pun asalnya. */
+export interface SisiSelisih {
+  kodePos: string;
+  kelurahan: string;
+  kecamatan: string;
+  kota: string;
+}
+
+export interface IndeksSisiSelisih<T extends SisiSelisih = SisiSelisih> {
+  olehNama: Map<string, T[]>;
+  olehKode: Map<string, T[]>;
+  olehKel: Map<string, T[]>;
+  /** Empat digit pertama kode pos = sekring kabupaten, untuk kasus kode pos tak dikenal. */
+  olehPrefiks: Map<string, T[]>;
+}
+
+export type LewatPadanan =
+  | 'nama sama, kode pos beda'
+  | 'kode pos sama, nama beda'
+  | 'nama kelurahan sama'
+  | 'kode pos sekabupaten'
+  | null;
+
+export interface PadananSelisih<T extends SisiSelisih = SisiSelisih> {
+  lawan: T | null;
+  /** Bagaimana lawannya ditemukan; 'kode pos sekabupaten' masih perkiraan, bukan pasangan sah. */
+  lewat: LewatPadanan;
+  /** Lapangan yang beda antara baris asal dan lawannya. */
+  beda: SumbuSelisih[];
+}
+
+export const kunciNamaSelisih = (kel: string, kec: string): string =>
+  `${stripAdminNoise(kel)}|${stripAdminNoise(kec)}`;
+
+const samaNamanya = (a: string, b: string): boolean => stripAdminNoise(a) === stripAdminNoise(b);
+
+export function bedaSisiSelisih(a: SisiSelisih, b: SisiSelisih): SumbuSelisih[] {
+  const beda: SumbuSelisih[] = [];
+  if (normalizeKodePos(a.kodePos) !== normalizeKodePos(b.kodePos)) beda.push('kodePos');
+  if (!samaNamanya(a.kelurahan, b.kelurahan)) beda.push('kelurahan');
+  if (!samaNamanya(a.kecamatan, b.kecamatan)) beda.push('kecamatan');
+  const ka = stripAdminNoise(a.kota);
+  const kb = stripAdminNoise(b.kota);
+  if (ka && kb && ka !== kb) beda.push('kota');
+  return beda;
+}
+
+export function indeksSisiSelisih<T extends SisiSelisih>(sisi: readonly T[]): IndeksSisiSelisih<T> {
+  const indeks: IndeksSisiSelisih<T> = {
+    olehNama: new Map(),
+    olehKode: new Map(),
+    olehKel: new Map(),
+    olehPrefiks: new Map(),
+  };
+  const masuk = (m: Map<string, T[]>, kunci: string, s: T) => {
+    if (!kunci || kunci === '|') return;
+    const daftar = m.get(kunci);
+    if (daftar) daftar.push(s);
+    else m.set(kunci, [s]);
+  };
+  for (const s of sisi) {
+    const kode = normalizeKodePos(s.kodePos);
+    masuk(indeks.olehNama, kunciNamaSelisih(s.kelurahan, s.kecamatan), s);
+    masuk(indeks.olehKode, kode, s);
+    masuk(indeks.olehKel, stripAdminNoise(s.kelurahan), s);
+    masuk(indeks.olehPrefiks, kode.slice(0, 4), s);
+  }
+  return indeks;
+}
+
+/** Kandidat terdekat: nama kelurahan lalu kecamatan paling mirip dengan baris asal. */
+function pilihTermirip<T extends SisiSelisih>(kandidat: T[], asal: T): T {
+  const kel = stripAdminNoise(asal.kelurahan);
+  const kec = stripAdminNoise(asal.kecamatan);
+  let terbaik = kandidat[0];
+  let skorTerbaik = -1;
+  for (const c of kandidat) {
+    const skor =
+      textSimilarityScore(stripAdminNoise(c.kelurahan), kel) +
+      textSimilarityScore(stripAdminNoise(c.kecamatan), kec);
+    if (skor > skorTerbaik) {
+      skorTerbaik = skor;
+      terbaik = c;
+    }
+  }
+  return terbaik;
+}
+
+/**
+ * Cari padanan `asal` di tabel seberang. Urutannya dari yang paling meyakinkan:
+ * nama kembar beda kode pos -> kode pos sama beda nama -> nama kelurahan sama ->
+ * perkiraan sekring kabupaten (empat digit kode pos pertama).
+ */
+export function cariPadananSelisih<T extends SisiSelisih>(
+  indeks: IndeksSisiSelisih<T>,
+  asal: T
+): PadananSelisih<T> {
+  const kode = normalizeKodePos(asal.kodePos);
+  const kosong: PadananSelisih<T> = { lawan: null, lewat: null, beda: [] };
+  if (!kode) return kosong;
+
+  const kandidat = (daftar: T[] | undefined, lewat: LewatPadanan): PadananSelisih<T> | null => {
+    if (!daftar || daftar.length === 0) return null;
+    const lawan = pilihTermirip(daftar, asal);
+    return { lawan, lewat, beda: bedaSisiSelisih(asal, lawan) };
+  };
+
+  const namaLain = (indeks.olehNama.get(kunciNamaSelisih(asal.kelurahan, asal.kecamatan)) || [])
+    .filter((c) => normalizeKodePos(c.kodePos) !== kode);
+
+  return (
+    (namaLain.length ? kandidat(namaLain, 'nama sama, kode pos beda') : null) ??
+    kandidat(indeks.olehKode.get(kode), 'kode pos sama, nama beda') ??
+    kandidat(indeks.olehKel.get(stripAdminNoise(asal.kelurahan)), 'nama kelurahan sama') ??
+    kandidat(indeks.olehPrefiks.get(kode.slice(0, 4)), 'kode pos sekabupaten') ??
+    kosong
+  );
+}
