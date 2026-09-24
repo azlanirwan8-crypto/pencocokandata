@@ -10,4 +10,5 @@ export { formatWilayahName, benturanIdentitas, indeksSisiSelisih, cariPadananSel
 
 export { kunciKelKec, kotaCocok, kodePosLima, bangunJembatanOutlet, indeksKantorCabang, bagiPinKeSelLayar } from '../src/utils/geoTitik';
 export { tabrakKotaPtenKodePos } from '../src/utils/tabrakKotaPten';
+export { BATAS_DAFTAR_NILAI, KOSONG, barisLolosFilter, cariDalamNilai, daftarNilaiUnik, jumlahFilterAktif, sortirBaris, terapkanKeadaan } from '../src/utils/filterSort';
 export { resolveBranchCoordinates, kategoriUnitCabang, clusterMasterRowsForMap, sumberPerkiraan } from '../src/utils/geoCoder';

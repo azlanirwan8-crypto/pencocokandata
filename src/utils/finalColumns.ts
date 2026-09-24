@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { AnalystRow } from './analystPipeline';
+import type { DefinisiKolomFilter } from './filterSort';
 
 /**
  * SATU sumber kebenaran untuk 13 kolom Data Final: dipakai tabel menu Final Data,
@@ -53,6 +54,20 @@ export const KOLOM_FINAL: KolomFinal[] = [
 ];
 
 export const JUDUL_KOLOM_FINAL = KOLOM_FINAL.map((k) => k.judul);
+
+/** Kolom Data Final yang nilainya diperlakukan angka, bukan teks. */
+const KOLOM_ANGKA_FINAL = new Set(['No', 'KODE POS', 'KODE POS KELURAHAN']);
+
+/**
+ * Definisi sort/filter kepala tabel — diturunkan dari KOLOM_FINAL supaya tidak pernah
+ * ada kolom yang tertinggal saat kolom ditambah. Penanda sel kosong ('-') diubah jadi
+ * nilai kosong sungguhan agar tidak muncul sebagai pilihan yang bisa dicentang.
+ */
+export const KOLOM_FILTER_FINAL: DefinisiKolomFilter<AnalystRow>[] = KOLOM_FINAL.map((k) => ({
+  kunci: k.judul,
+  jenis: KOLOM_ANGKA_FINAL.has(k.judul) ? 'angka' : 'teks',
+  nilai: (r: AnalystRow) => kosongSel(k.nilai(r)),
+}));
 
 /** Baris contoh pada "Template Excel" menu Final Data — contoh isi, bukan data. */
 export const CONTOH_KOLOM_FINAL: Record<string, string> = {

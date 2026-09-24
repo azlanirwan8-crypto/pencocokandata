@@ -15,20 +15,19 @@ import {
   Upload,
   Download,
   CheckCircle2,
-  ArrowUp,
-  ArrowDown,
-  ChevronsUpDown,
 } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import type { AnalystRow } from '../../utils/analystPipeline';
 import { formatWilayahCode, applyStandardSheetStyle, tulisLembarExcel } from '../../utils/excel';
-import { WARNA_TH, KOLOM_FINAL, CONTOH_KOLOM_FINAL, JUDUL_KOLOM_FINAL, barisKeExcelFinal } from '../../utils/finalColumns';
+import { WARNA_TH, KOLOM_FINAL, CONTOH_KOLOM_FINAL, JUDUL_KOLOM_FINAL, KOLOM_FILTER_FINAL, barisKeExcelFinal } from '../../utils/finalColumns';
 import { tanggalBerkas, indeksSisiSelisih, cariPadananSelisih } from '../../utils/normalizer';
 import type { SisiSelisih, PadananSelisih, SumbuSelisih } from '../../utils/normalizer';
 import { ConfirmDialog } from './ConfirmDialog';
 import { AnalystRowDetailModal } from './AnalystRowDetailModal';
 import { DialogPanel } from '../BaseModal';
 import { useTampilanTersimpan } from '../../utils/useTampilanTersimpan';
+import { useFilterSort } from '../../utils/useFilterSort';
+import { ThFilter } from '../ThFilter';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
 import { useNotification } from '../Notification/NotificationContext';
 import type { MasterRow } from '../../types';
@@ -149,8 +148,6 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
   const [wilayahFilter, setWilayahFilter] = useTampilanTersimpan('tampilan.final.wilayah', 'ALL');
   const [page, setPage] = useTampilanTersimpan('tampilan.final.page', 1);
   const [pageSize, setPageSize] = useTampilanTersimpan<number | 'ALL'>('tampilan.final.pageSize', 25);
-  const [sortKolom, setSortKolom] = useTampilanTersimpan<string>('tampilan.final.sort', '');
-  const [sortNaik, setSortNaik] = useTampilanTersimpan<boolean>('tampilan.final.sortDir', true);
   // Aksi yang butuh konfirmasi (menggantikan window.confirm native).
   const [konfirmasi, setKonfirmasi] = useState<AksiKonfirmasi | null>(null);
   const [terpilih, setTerpilih] = useState<Set<string>>(() => new Set());
@@ -178,9 +175,10 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
     return m;
   }, [rows]);
 
-  // Urutan tampil = urutan masuk. Ekspor memakai daftar ini (TANPA sort) supaya
+  // Urutan tampil = urutan masuk. Ekspor memakai daftar ini (TANPA sort layar) supaya
   // nomor 1..n di berkas sama dengan urutan saat data diunggah/dimasukkan.
-  const tersaring = useMemo(() => {
+  // Ini tahap pencarian + wilayah saja; saringan kepala tabel ditambahkan di bawah.
+  const tersaringCari = useMemo(() => {
     const q = deferredSearch.trim().toLowerCase();
     return rows.filter((r) => {
       if (filterWilayah !== 'ALL' && r.wilayah !== filterWilayah) return false;
@@ -200,6 +198,13 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
       );
     });
   }, [rows, deferredSearch, filterWilayah]);
+
+  // Saringan kepala tabel (sort + daftar nilai ala Excel). `tersaring` = hasil saringan
+  // dalam urutan masuk → dipakai kartu, ekspor, dan penghitung halaman; `baris` = hasil
+  // saringan + sortir → dipakai tabel.
+  const fs = useFilterSort('final', KOLOM_FILTER_FINAL, tersaringCari);
+  const { baris: terurut, urut, saring, gantiUrut, setNilaiKolom, jumlahAktif } = fs;
+  const tersaring = fs.tersaring;
 
   const metrics = useMemo(() => ({
     total: tersaring.length,
@@ -295,19 +300,6 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
     };
   }, [modalSelisih, rincianMulai, selisihInfo, rows, kodePosRows]);
 
-  const terurut = useMemo(() => {
-    const kolom = KOLOM_FINAL.find((k) => k.judul === sortKolom);
-    if (!kolom) return tersaring;
-    const ambil = kolom.judul === 'No' ? (r: AnalystRow) => nomorAsli.get(r.id) ?? 0 : kolom.nilai;
-    const tanda = sortNaik ? 1 : -1;
-    return [...tersaring].sort((a, b) => {
-      const x = ambil(a);
-      const y = ambil(b);
-      if (typeof x === 'number' && typeof y === 'number') return (x - y) * tanda;
-      return String(x).localeCompare(String(y), 'id') * tanda;
-    });
-  }, [tersaring, sortKolom, sortNaik, nomorAsli]);
-
   const totalHal = Math.max(1, pageSize === 'ALL' ? 1 : Math.ceil(terurut.length / pageSize));
   const hal = Math.min(page, totalHal);
   const paginated = pageSize === 'ALL' ? terurut : terurut.slice((hal - 1) * pageSize, hal * pageSize);
@@ -338,12 +330,8 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
     });
   };
 
-  const gantiSort = (judul: string) => {
-    if (sortKolom === judul) setSortNaik(!sortNaik);
-    else {
-      setSortKolom(judul);
-      setSortNaik(true);
-    }
+  const urutkanKolom = (judul: string) => {
+    gantiUrut(judul);
     setPage(1);
   };
 
@@ -722,31 +710,23 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
                   <th style={{ width: '34px', minWidth: '34px', textAlign: 'center', position: 'sticky', left: 0, background: '#f3f6f9', zIndex: 13, borderRight: '1px solid #e9ebec' }} title="Pilih semua baris pada halaman ini">
                     <input type="checkbox" checked={semuaHalamanTerpilih} onChange={gantiPilihanSemua} aria-label="Pilih semua baris pada halaman ini" style={{ cursor: 'pointer' }} />
                   </th>
-                  {KOLOM_FINAL.map((k) => {
-                    const aktif = sortKolom === k.judul;
-                    const Ikon = aktif ? (sortNaik ? ArrowUp : ArrowDown) : ChevronsUpDown;
-                    return (
-                      <th
-                        key={k.judul}
-                        onClick={() => gantiSort(k.judul)}
-                        title={`Klik untuk urutkan ${k.judul} ${aktif ? (sortNaik ? '(naik — klik untuk turun)' : '(turun — klik untuk naik)') : '(belum diurutkan)'}`}
-                        style={{
-                          ...k.style,
-                          background: WARNA_TH[k.grup],
-                          color: '#ffffff',
-                          textAlign: k.tengah ? 'center' : 'left',
-                          cursor: 'pointer',
-                          userSelect: 'none',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', justifyContent: k.tengah ? 'center' : 'flex-start' }}>
-                          {k.judul === 'No' ? '#' : k.judul}
-                          <Ikon size={11} style={{ opacity: aktif ? 1 : 0.55, flexShrink: 0 }} />
-                        </span>
-                      </th>
-                    );
-                  })}
+                  {KOLOM_FINAL.map((k, i) => (
+                    <ThFilter
+                      key={k.judul}
+                      label={k.judul === 'No' ? '#' : k.judul}
+                      definisi={KOLOM_FILTER_FINAL[i]}
+                      sumber={tersaringCari}
+                      urutKolom={urut.kolom}
+                      urutNaik={urut.naik}
+                      onUrut={() => urutkanKolom(k.judul)}
+                      terpilih={saring[k.judul] || []}
+                      onTerapkan={(n) => { setNilaiKolom(k.judul, n); setPage(1); }}
+                      latar={WARNA_TH[k.grup]}
+                      tengah={k.tengah}
+                      bolehFilter={k.judul !== 'No'}
+                      gayaSel={k.style}
+                    />
+                  ))}
                   <th style={{ width: '210px', textAlign: 'center', background: '#f3f6f9', color: '#495057', position: 'sticky', right: 0, zIndex: 12, borderLeft: '1px solid #e9ebec' }}>Aksi</th>
                 </tr>
               </thead>
@@ -831,8 +811,9 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.7rem', gap: '0.6rem', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '0.74rem', color: '#878a99' }}>
                 {pageSize === 'ALL'
-                  ? `Menampilkan seluruh ${tersaring.length.toLocaleString('id-ID')} baris (urutan asli data masuk${sortKolom ? ` · sedang diurutkan: ${sortKolom}` : ''})`
+                  ? `Menampilkan seluruh ${tersaring.length.toLocaleString('id-ID')} baris (urutan asli data masuk${urut.kolom ? ` · sedang diurutkan: ${urut.kolom}` : ''})`
                   : `Menampilkan ${(hal - 1) * pageSize + 1}–${Math.min(hal * pageSize, tersaring.length)} dari ${tersaring.length.toLocaleString('id-ID')} baris`}
+                {jumlahAktif > 0 && ` · ${jumlahAktif} kolom difilter`}
               </span>
               {pageSize !== 'ALL' && totalHal > 1 && (
                 <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
@@ -841,9 +822,14 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
                   <button type="button" className="btn btn-outline btn-sm" disabled={hal >= totalHal} onClick={() => setPage(hal + 1)}>Next →</button>
                 </div>
               )}
-              {sortKolom && (
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setSortKolom(''); setPage(1); }} style={{ fontSize: '0.74rem' }} title="Kembalikan urutan asli (urutan data masuk)">
+              {urut.kolom && (
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => { fs.resetUrut(); setPage(1); }} style={{ fontSize: '0.74rem' }} title="Kembalikan urutan asli (urutan data masuk)">
                   <Undo2 size={12} /> Urutan asli
+                </button>
+              )}
+              {jumlahAktif > 0 && (
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => { fs.bersihkanSemua(); setPage(1); }} style={{ fontSize: '0.74rem' }} title="Hapus semua saringan kolom">
+                  <Undo2 size={12} /> Bersihkan saringan ({jumlahAktif})
                 </button>
               )}
             </div>
