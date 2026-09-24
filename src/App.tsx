@@ -484,12 +484,14 @@ export const App: React.FC = () => {
   const finalAnomali = useMemo(() => detectFinalAnomalies(finalRows, masterRows), [finalRows, masterRows]);
   const anomaliIds = useMemo(() => new Set(finalAnomali.map((a) => a.row.id)), [finalAnomali]);
 
-  // Anomali ikut filter wilayah dashboard, supaya kartu rinciannya dan kartu TOTAL
-  // ANOMALI membaca lingkup yang sama.
+  // Anomali ikut lingkup yang SAME dengan baris yang sedang dilihat. Sengaja disaring
+  // lewat id `dashboardFilteredRows`, bukan lewat kunci wilayah lagi: filter 'ALL' punya
+  // jalur sendiri di atas dan menyalin perbandingan kuncinya ke sini membuat kartu ini
+  // melaporkan 0 anomali padahal TOTAL ANOMALI 53.384.
   const anomaliTersaring = useMemo(() => {
-    const target = kunciWilayah(dashboardWilayahFilter);
-    return finalAnomali.filter((a) => (kunciWilayah(a.row.wilayah) || 'Tanpa Wilayah') === (target || 'Tanpa Wilayah'));
-  }, [finalAnomali, dashboardWilayahFilter]);
+    const terlihat = new Set(dashboardFilteredRows.map((r) => r.id));
+    return finalAnomali.filter((a) => terlihat.has(a.row.id));
+  }, [finalAnomali, dashboardFilteredRows]);
 
   // Komposisi donut: irisan harus berjumlah total baris, jadi kategori dihitung
   // dari `primary` (kategori teratas tiap baris). Jumlah per kategori penuh ada di tooltip.
