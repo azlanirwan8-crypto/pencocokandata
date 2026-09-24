@@ -2,7 +2,7 @@
 // pulau" dan "beda provinsi". Dijalankan:
 //   npx vite build --ssr tests/entry-uji.ts --outDir tests/out
 //   node tests/uji-anomali.mjs
-import { detectFinalAnomalies, KATEGORI_ANOMALI, URUTAN_KATEGORI } from './out/entry-uji.js';
+import { detectFinalAnomalies, KATEGORI_ANOMALI, URUTAN_KATEGORI, getIslandFromProvinsi } from './out/entry-uji.js';
 
 let gagal = 0;
 const asa = (label, dapat, harus) => {
@@ -22,6 +22,7 @@ const masterRows = [
   master({ 'Nama Outlet': 'SEMARANG MAYANG', 'Kode Cabang': '03200001', 'Branch Code': '03200001', Provinsi: 'JAWA TENGAH', 'Dati II': 'SEMARANG', Kelurahan: 'SUMUR MAGUANG', Kecamatan: 'SEMARANG' }),
   master({ 'Nama Outlet': 'PONTIANAK YUDHA', 'Kode Cabang': '07700001', 'Branch Code': '07700001', Provinsi: 'KALIMANTAN BARAT', 'Dati II': 'PONTIANAK', Kelurahan: 'BANK IN', Kecamatan: 'PONTIANAK BARAT' }),
   master({ 'Nama Outlet': 'KIM BANDA ACEH', 'Kode Cabang': '01100001', 'Branch Code': '01100001', Provinsi: 'ACEH', 'Dati II': 'BANDA ACEH', Kelurahan: 'KAMPANG BARU', Kecamatan: 'BANDA ACEH' }),
+  master({ 'Nama Outlet': 'SERBELAWAN', 'Kode Cabang': '60109360', 'Branch Code': '60109360', Provinsi: 'SUMATERA UTARA', 'Dati II': 'SIMALUNGUN', Kelurahan: 'SERBELAWAN', Kecamatan: 'SERBELAWAN' }),
 ];
 
 const baris = (o) => ({
@@ -82,6 +83,30 @@ asa('AN8 tiap kelas punya label, arti dan warna', URUTAN_KATEGORI.every((c) => {
   return !!k && k.label.length > 2 && k.arti.length > 20 && /^#[0-9a-f]{6}$/i.test(k.color) && /^#[0-9a-f]{6}$/i.test(k.bg);
 }), true);
 asa('AN8 kategori yang benar-benar dihasilkan mesin ada semua di kartu', campur.categories.every((c) => URUTAN_KATEGORI.includes(c)), true);
+
+// ── 9. NAMA kelurahan boleh mengandung nama pulau: PROVINSI yang menentukan ──
+// Baris nyata yang dilaporkan operator 2026-09-24. "Jawa Maraja" itu kecamatan di
+// Kab. Simalungun, Sumatera Utara (kode pos PTEN 21153 / kelurahan 21184) dan cabang
+// SERBELAWAN ada di kabupaten yang sama. Aturan lama menguji "provinsi + kota +
+// kelurahan" dalam satu string dengan pola Jawa di depan, jadi baris ini dituduh
+// "Penempatan beda pulau: asal Jawa → cabang Sumatera".
+const jawaMaraja = baris({
+  provinsi: 'SUMATERA UTARA', kotaPten: 'SIMALUNGUN', kotaPtenMax15: 'SIMALUNGUN',
+  kelurahan: 'Jawa Maraja', kecamatan: 'Jawa Maraja Bah Jambi',
+  kodePosPten: '21153', kodePosKelurahan: '21184',
+  namaOutlet: 'SERBELAWAN', kodeCabang: '60109360', branchCode: '60109360',
+});
+asa('AN9 kelurahan bernama "Jawa" di Sumatera Utara bukan beda pulau', kategoriUntuk(jawaMaraja), []);
+asa('AN9 label pulaunya Sumatera', getIslandFromProvinsi('SUMATERA UTARA', 'SIMALUNGUN', 'Jawa Maraja Jawa Maraja Bah Jambi'), 'Sumatera');
+asa('AN9 "Padang Jawa" (Aceh Barat) ikut Sumatera', getIslandFromProvinsi('ACEH', 'ACEH BARAT', 'Padang Jawa Woyla'), 'Sumatera');
+asa('AN9 "Bandar Jawa" (Lampung) ikut Sumatera', getIslandFromProvinsi('LAMPUNG', 'LAMONGAN BARAT', 'Bandar Jawa Lamongan Barat'), 'Sumatera');
+asa('AN9 "Banjar" di Kalimantan Selatan tidak lagi jadi Sumatera', getIslandFromProvinsi('KALIMANTAN SELATAN', 'BANJAR', 'Banjar Baru Penguiran'), 'Kalimantan');
+asa('AN9 nama kota di alamat cabang tetap terbaca saat provinsi kosong', getIslandFromProvinsi('', '', 'JL SURABAYA GUBENG'), 'Jawa');
+asa('AN9 beda pulau yang sungguhan masih tertangkap', kategoriUntuk(baris({
+  provinsi: 'SUMATERA UTARA', kotaPten: 'SIMALUNGUN', kotaPtenMax15: 'SIMALUNGUN',
+  kelurahan: 'Jawa Maraja', kecamatan: 'Jawa Maraja Bah Jambi',
+  namaOutlet: 'PONTIANAK YUDHA', kodeCabang: '07700001',
+})).includes('PULAU'), true);
 
 console.log(gagal === 0 ? '\nSEMUA LULUS' : `\n${gagal} TEST GAGAL`);
 process.exit(gagal === 0 ? 0 : 1);
