@@ -8,4 +8,5 @@ export { detectFinalAnomalies, KATEGORI_ANOMALI, URUTAN_KATEGORI } from '../src/
 export { formatWilayahName, benturanIdentitas, indeksSisiSelisih, cariPadananSelisih, bedaSisiSelisih, kunciNamaSelisih } from '../src/utils/normalizer';
 
 export { kunciKelKec, kotaCocok, kodePosLima, bangunJembatanOutlet, indeksKantorCabang, bagiPinKeSelLayar } from '../src/utils/geoTitik';
+export { tabrakKotaPtenKodePos } from '../src/utils/tabrakKotaPten';
 export { resolveBranchCoordinates, kategoriUnitCabang, clusterMasterRowsForMap, sumberPerkiraan } from '../src/utils/geoCoder';

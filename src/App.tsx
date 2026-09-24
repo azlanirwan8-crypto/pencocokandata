@@ -1550,6 +1550,7 @@ export const App: React.FC = () => {
             <PTENManager
               targetRows={targetRows}
               masterRows={masterRows}
+              kodePosRows={kodePosMasterRows}
               onPtenCountChange={(count) => setPtenCount(count)}
             />
           )}

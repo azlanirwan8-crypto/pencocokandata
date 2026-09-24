@@ -25,6 +25,8 @@ import { tanggalBerkas } from '../../utils/normalizer';
 import type { TargetRow, MasterRow } from '../../types';
 import { getItem, setItem } from '../../utils/storage';
 import { loadPtenFromNeon, savePtenToNeon } from '../../utils/neonSync';
+import type { KodePosRow } from '../../utils/neonSync';
+import { tabrakKotaPtenKodePos } from '../../utils/tabrakKotaPten';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
 
 import { DEFAULT_PTEN_DATA } from './defaultPtenData';
@@ -34,6 +36,8 @@ import { DialogPanel } from '../BaseModal';
 interface PTENManagerProps {
   targetRows?: TargetRow[];
   masterRows?: MasterRow[];
+  /** Master Kode Pos — dipakai memeriksa tabrakan nama kota dengan berkas PTEN. */
+  kodePosRows?: KodePosRow[];
   onPtenCountChange?: (count: number) => void;
 }
 
@@ -47,6 +51,7 @@ export interface PTENRecord {
 
 export const PTENManager: React.FC<PTENManagerProps> = ({
   targetRows = [],
+  kodePosRows = [],
   onPtenCountChange,
 }) => {
   const { add: notify } = useNotification();
@@ -54,6 +59,12 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
   const [searchTerm, setSearchTerm] = useState<string>('');
   const deferredSearch = useDeferredValue(searchTerm);
   const [selectedKota, setSelectedKota] = useState<string>('ALL');
+  const [tabrakRun, setTabrakRun] = useState(0);
+  const [tabrakBatas, setTabrakBatas] = useState(50);
+  const tabrakKota = useMemo(
+    () => (tabrakRun > 0 && kodePosRows.length > 0 ? tabrakKotaPtenKodePos(ptenList, kodePosRows) : null),
+    [tabrakRun, ptenList, kodePosRows]
+  );
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -767,6 +778,102 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
         </div>
       ) : (
         <div className="glass-card" style={{ padding: '1.15rem 1.35rem' }}>
+              {/* Tabrakan nama kota PTEN vs Master Kode Pos — dihitung hanya saat diminta
+                  (terukur 710 ms atas 8.936 baris PTEN + 83.747 kelurahan, jangan di mount) */}
+              {kodePosRows.length > 0 && (
+                <div style={{ border: '1px solid #fde68a', background: '#fffbeb', borderRadius: '6px', padding: '0.7rem 0.85rem', marginBottom: '1rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <strong style={{ fontSize: '0.84rem', color: '#92400e' }}>Tabrakan Kota: PTEN vs Master Kode Pos</strong>
+                      {tabrakKota && (
+                        <span style={{ fontSize: '0.68rem', fontWeight: 800, background: '#fef3c7', color: '#92400e', padding: '0.12rem 0.5rem', borderRadius: '5px' }}>
+                          {tabrakKota.tanpaPten.length} kota tanpa data PTEN · {tabrakKota.kelurahanTerhenti.toLocaleString('id-ID')} kelurahan · {tabrakKota.tanpaKodePos.length} nama PTEN asing · {tabrakKota.bedaBlok.length} kota beda isi
+                        </span>
+                      )}
+                    </div>
+                    <button type="button" className="btn btn-sm btn-outline" onClick={() => setTabrakRun((n) => n + 1)} style={{ fontSize: '0.72rem' }}>
+                      {tabrakRun === 0 ? 'Periksa tabrakan kota' : 'Periksa ulang'}
+                    </button>
+                  </div>
+                  <p style={{ margin: '0.35rem 0 0', fontSize: '0.72rem', color: '#a16207' }}>
+                    Fase 1 mencari kelurahan sebuah kota di Master Kode Pos lewat kunci kota. Beda spasi/ejaan saja sudah cukup membuat seluruh kota tidak pernah tersentuh analisa tanpa pesan error apa pun.
+                  </p>
+
+                  {tabrakKota && tabrakKota.tanpaPten.length + tabrakKota.tanpaKodePos.length > 0 && (
+                    <div style={{ marginTop: '0.6rem', border: '1px solid #f3e8c0', borderRadius: '6px', overflow: 'auto', maxHeight: '260px', background: '#ffffff' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.73rem' }}>
+                        <thead>
+                          <tr>
+                            {['SISI', 'KUNCI KOTA', 'NAMA PERSIS DI TABELNYA', 'TERDAMPAK', 'PASANGAN TERDEKAT DI TABEL SEBERANG'].map((t) => (
+                              <th key={t} style={{ position: 'sticky', top: 0, background: '#f9fafb', color: '#4b5563', textAlign: 'left', padding: '0.4rem 0.6rem', whiteSpace: 'nowrap', zIndex: 1 }}>{t}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[
+                            ...tabrakKota.tanpaPten.map((k) => ({ ...k, sisi: 'Master Kode Pos', satuan: 'kelurahan', warna: '#0ab39c' })),
+                            ...tabrakKota.tanpaKodePos.map((k) => ({ ...k, sisi: 'PTEN', satuan: 'baris', warna: '#f06548' })),
+                          ].slice(0, tabrakBatas).map((k, i) => (
+                            <tr key={`${k.sisi}-${k.kunci}-${i}`} style={{ borderTop: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>
+                              <td style={{ padding: '0.38rem 0.6rem' }}>
+                                <span style={{ fontSize: '0.64rem', fontWeight: 800, color: k.warna, border: `1px solid ${k.warna}55`, borderRadius: 4, padding: '0.05rem 0.3rem' }}>{k.sisi}</span>
+                              </td>
+                              <td style={{ padding: '0.38rem 0.6rem', fontWeight: 700, color: '#92400e' }}>{k.kunci}</td>
+                              <td style={{ padding: '0.38rem 0.6rem' }}>{k.nama.join(' · ')}</td>
+                              <td style={{ padding: '0.38rem 0.6rem', fontVariantNumeric: 'tabular-nums' }}>{k.terdampak.toLocaleString('id-ID')} {k.satuan}</td>
+                              <td style={{ padding: '0.38rem 0.6rem' }}>
+                                {k.padanan ? `${k.padanan.kunci} (${Math.round(k.padanan.kemiripan * 100)}%)` : '— tidak ada yang mirip —'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {tabrakKota && tabrakKota.bedaBlok.length > 0 && (
+                    <div style={{ marginTop: '0.6rem', border: '1px solid #f3e8c0', borderRadius: '6px', overflow: 'auto', maxHeight: '260px', background: '#ffffff' }}>
+                      <div style={{ padding: '0.4rem 0.6rem', background: '#f9fafb', fontSize: '0.7rem', color: '#4b5563', position: 'sticky', top: 0 }}>
+                        Kota yang sama, isinya beda — termasuk ejaan ganda seperti SURAKARTA / SOLO. Klik baris untuk mencari kotanya di daftar PTEN.
+                      </div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.73rem' }}>
+                        <thead>
+                          <tr>
+                            {['KOTA / KAB', 'NAMA DI PTEN', 'NAMA DI KODE POS', 'BLOK CUMA DI PTEN', 'BLOK CUMA DI KODE POS'].map((t) => (
+                              <th key={t} style={{ background: '#f9fafb', color: '#4b5563', textAlign: 'left', padding: '0.35rem 0.6rem', whiteSpace: 'nowrap' }}>{t}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {tabrakKota.bedaBlok.slice(0, tabrakBatas).map((k) => (
+                            <tr
+                              key={k.kunci}
+                              onClick={() => setSearchTerm(k.namaPten[0] || k.kunci)}
+                              title="Cari kota ini di daftar PTEN"
+                              style={{ borderTop: '1px solid #f3f4f6', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                            >
+                              <td style={{ padding: '0.38rem 0.6rem', fontWeight: 700, color: '#92400e' }}>{k.kunci}</td>
+                              <td style={{ padding: '0.38rem 0.6rem' }}>{k.namaPten.join(' · ') || '-'}</td>
+                              <td style={{ padding: '0.38rem 0.6rem' }}>{k.namaKodePos.join(' · ') || '-'}</td>
+                              <td style={{ padding: '0.38rem 0.6rem', fontFamily: 'var(--font-mono)', color: '#f06548' }}>{k.hanyaDiPten.join(' ') || '-'}</td>
+                              <td style={{ padding: '0.38rem 0.6rem', fontFamily: 'var(--font-mono)', color: '#0ab39c' }}>{k.hanyaDiKodePos.join(' ') || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {tabrakKota && (tabrakKota.tanpaPten.length + tabrakKota.tanpaKodePos.length > tabrakBatas || tabrakKota.bedaBlok.length > tabrakBatas) && (
+                    <div style={{ marginTop: '0.45rem', textAlign: 'center' }}>
+                      <button type="button" className="btn btn-sm btn-outline" onClick={() => setTabrakBatas((n) => n + 50)} style={{ fontSize: '0.72rem' }}>
+                        Tampilkan 50 baris berikutnya
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Filter Toolbar without top counter */}
               <div className="filter-toolbar" style={{ marginBottom: '1rem' }}>
                 <div className="filter-group" style={{ flex: 1, minWidth: '260px' }}>
