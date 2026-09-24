@@ -367,7 +367,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
       while (!geoStopRef.current) {
         const hasil = await runKodePosGeoBatch({
           mode: 'isi',
-          jumlah: 40,
+          jumlah: 80,
           provinsi: selectedProvinsi !== 'ALL' ? selectedProvinsi : null,
           apiKey: getStoredGoogleApiKey(),
           ulang,

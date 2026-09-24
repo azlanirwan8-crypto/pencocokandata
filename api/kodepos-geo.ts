@@ -385,13 +385,13 @@ export async function hapusAppStore(r: Rest, key: string): Promise<void> {
  */
 export const maxDuration = 60;
 
-const BATCH_DEFAULT = 40;
-const BATCH_MAX = 80;
-const CONCURRENCY = 6;
+const BATCH_DEFAULT = 80;
+const BATCH_MAX = 120;
+const CONCURRENCY = 10;
 const REQUEST_TIMEOUT = 9000;
 /** Hasil ditulis bertahap tiap sekian baris: kalau fungsi kehabisan waktu, yang
  *  sudah selesai dicari tidak hilang. */
-const SIMPAN_EVERY = 10;
+const SIMPAN_EVERY = 20;
 
 // Kotak pembatas Indonesia. Titik di luar ini pasti salah baca dari penyedia mana
 // pun dan tidak boleh pernah masuk database.
