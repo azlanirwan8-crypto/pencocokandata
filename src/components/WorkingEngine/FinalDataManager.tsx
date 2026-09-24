@@ -11,6 +11,7 @@ import {
   Building2,
   ShieldCheck,
   AlertTriangle,
+  Info,
   Upload,
   Download,
   CheckCircle2,
@@ -197,9 +198,6 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
     });
   }, [rows, deferredSearch, filterWilayah]);
 
-  // Kartu metrik mengikuti apa yang SEDANG dilihat operator, bukan seluruh isi tabel.
-  // Sebelumnya angka besar selalu `rows.length`, jadi saat filter wilayah W01 membuat
-  // tabel kosong, kartu tetap tertulis "75.694" — terlihat seperti data tidak terhapus.
   const metrics = useMemo(() => ({
     total: tersaring.length,
     kc: tersaring.filter((r) => r.tipeUnit === 'KC').length,
@@ -207,6 +205,58 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
     roleLengkap: tersaring.filter((r) => is3Role(r)).length,
     wilayah: new Set(tersaring.map((r) => r.wilayah).filter(Boolean)).size,
   }), [tersaring]);
+
+  const [modalSelisih, setModalSelisih] = useState<boolean>(false);
+
+  // Rekonsiliasi Perbedaan Baris antara Data Final vs Data Kode Pos
+  const selisihInfo = useMemo(() => {
+    if (!kodePosRows || kodePosRows.length === 0 || rows.length === 0) return null;
+
+    // Normalisasi kunci kelurahan + kecamatan + kodepos
+    const buatKunci = (kel?: string, kec?: string, kp?: string) =>
+      `${String(kel || '').trim().toUpperCase()}|${String(kec || '').trim().toUpperCase()}|${String(kp || '').replace(/\D/g, '')}`;
+
+    const setFinal = new Set<string>();
+    const mapFinal = new Map<string, AnalystRow>();
+    rows.forEach((r) => {
+      const k = buatKunci(r.kelurahan, r.kecamatan, r.kodePosKelurahan || r.kodePosPten);
+      setFinal.add(k);
+      mapFinal.set(k, r);
+    });
+
+    const setMaster = new Set<string>();
+    const mapMaster = new Map<string, KodePosRow>();
+    kodePosRows.forEach((kp) => {
+      const k = buatKunci(kp.kelurahan, kp.kecamatan, kp.kodePos);
+      setMaster.add(k);
+      mapMaster.set(k, kp);
+    });
+
+    // 1. Baris di Final Data yang tidak ada / berlebih dibanding Data Kode Pos (misal duplikat/impor ekstra)
+    const extraInFinal: AnalystRow[] = [];
+    rows.forEach((r) => {
+      const k = buatKunci(r.kelurahan, r.kecamatan, r.kodePosKelurahan || r.kodePosPten);
+      if (!setMaster.has(k)) extraInFinal.push(r);
+    });
+
+    // 2. Baris di Master Kode Pos yang belum ada di Final Data
+    const missingInFinal: KodePosRow[] = [];
+    kodePosRows.forEach((kp) => {
+      const k = buatKunci(kp.kelurahan, kp.kecamatan, kp.kodePos);
+      if (!setFinal.has(k)) missingInFinal.push(kp);
+    });
+
+    const selisihTotal = rows.length - kodePosRows.length;
+
+    return {
+      totalFinal: rows.length,
+      totalKodePos: kodePosRows.length,
+      selisihTotal,
+      extraInFinal,
+      missingInFinal,
+      adaPerbedaan: rows.length !== kodePosRows.length || extraInFinal.length > 0 || missingInFinal.length > 0,
+    };
+  }, [rows, kodePosRows]);
 
   const terurut = useMemo(() => {
     const kolom = KOLOM_FINAL.find((k) => k.judul === sortKolom);
@@ -459,6 +509,74 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
           <div className="metric-footer">sales + 2 verifikator terisi</div>
         </div>
       </div>
+
+      {/* 2.b. Banner Notifikasi Selisih Rekonsiliasi Final Data vs Data KodePos */}
+      {selisihInfo && selisihInfo.adaPerbedaan && (
+        <div
+          style={{
+            margin: '0.85rem 0 1rem',
+            padding: '0.75rem 1rem',
+            background: selisihInfo.selisihTotal !== 0 ? '#fff8ec' : '#f0fdf4',
+            border: `1px solid ${selisihInfo.selisihTotal !== 0 ? '#fde047' : '#bbf7d0'}`,
+            borderRadius: '6px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '0.8rem',
+            flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <div
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                background: selisihInfo.selisihTotal !== 0 ? '#fef08a' : '#dcfce7',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              {selisihInfo.selisihTotal !== 0 ? (
+                <AlertTriangle size={17} color="#b45309" />
+              ) : (
+                <Info size={17} color="#15803d" />
+              )}
+            </div>
+            <div>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: selisihInfo.selisihTotal !== 0 ? '#92400e' : '#166534' }}>
+                {selisihInfo.selisihTotal !== 0
+                  ? `Ditemukan Selisih ${Math.abs(selisihInfo.selisihTotal).toLocaleString('id-ID')} Baris Data: Final Data (${selisihInfo.totalFinal.toLocaleString('id-ID')}) vs Master Kode Pos (${selisihInfo.totalKodePos.toLocaleString('id-ID')})`
+                  : `Jumlah Total Sama (${selisihInfo.totalFinal.toLocaleString('id-ID')}), namun terdapat perbedaan rincian kelurahan / kode pos`}
+              </div>
+              <div style={{ fontSize: '0.74rem', color: '#6b7280', marginTop: '0.1rem' }}>
+                {selisihInfo.extraInFinal.length > 0 ? `• ${selisihInfo.extraInFinal.length.toLocaleString('id-ID')} baris tambahan/ekstra di Final Data. ` : ''}
+                {selisihInfo.missingInFinal.length > 0 ? `• ${selisihInfo.missingInFinal.length.toLocaleString('id-ID')} baris kelurahan Master Kode Pos belum masuk Final Data.` : ''}
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline"
+            onClick={() => setModalSelisih(true)}
+            style={{
+              fontSize: '0.74rem',
+              fontWeight: 700,
+              color: selisihInfo.selisihTotal !== 0 ? '#b45309' : '#15803d',
+              borderColor: selisihInfo.selisihTotal !== 0 ? '#fde047' : '#86efac',
+              background: '#ffffff',
+              padding: '0.35rem 0.75rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+            }}
+          >
+            <Eye size={13} /> Lihat Rincian Data Beda ({selisihInfo.extraInFinal.length + selisihInfo.missingInFinal.length})
+          </button>
+        </div>
+      )}
 
       {/* 3. Kartu tabel */}
       {rows.length === 0 ? (
@@ -785,6 +903,114 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
           <div style={{ padding: '0.8rem 1.4rem', borderTop: '1px solid #eef1f4', display: 'flex', justifyContent: 'flex-end' }}>
             <button type="button" className="btn btn-primary btn-sm" onClick={() => setImportSummary(null)} style={{ padding: '0.45rem 1.2rem', fontSize: '0.8rem', fontWeight: 600 }}>
               Mengerti
+            </button>
+          </div>
+        </DialogPanel>
+      )}
+
+      {/* 5. Modal Rincian Selisih Data Rekonsiliasi */}
+      {modalSelisih && selisihInfo && (
+        <DialogPanel
+          onClose={() => setModalSelisih(false)}
+          label="Rincian Selisih Data Final vs Master Kode Pos"
+          style={{ maxWidth: '920px' }}
+        >
+          <div className="modal-header" style={{ padding: '0.85rem 1.25rem', borderBottom: '1px solid #eef1f4' }}>
+            <h4 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '1rem', fontWeight: 700, color: '#1f2937' }}>
+              <AlertTriangle size={18} color="#d97706" />
+              Rincian Perbedaan Baris Data ({selisihInfo.totalFinal.toLocaleString('id-ID')} Final vs {selisihInfo.totalKodePos.toLocaleString('id-ID')} Kode Pos)
+            </h4>
+            <button type="button" className="modal-close" onClick={() => setModalSelisih(false)} aria-label="Tutup">
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="modal-body" style={{ padding: '1rem 1.25rem', maxHeight: '72vh', overflowY: 'auto' }}>
+            {/* Bagian 1: Baris Tambahan di Final Data */}
+            {selisihInfo.extraInFinal.length > 0 && (
+              <div style={{ marginBottom: '1.25rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
+                  <span style={{ fontSize: '0.74rem', fontWeight: 800, background: '#fef3c7', color: '#92400e', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
+                    {selisihInfo.extraInFinal.length} BARIS
+                  </span>
+                  <strong style={{ fontSize: '0.86rem', color: '#1f2937' }}>Baris Ekstra di Final Data (Tidak Ada di Master Kode Pos / Duplikat)</strong>
+                </div>
+                <div style={{ border: '1px solid #e5e7eb', borderRadius: '6px', overflow: 'hidden' }}>
+                  <table className="custom-table" style={{ width: '100%', fontSize: '0.76rem', borderCollapse: 'collapse' }}>
+                    <thead style={{ background: '#f9fafb', color: '#4b5563' }}>
+                      <tr>
+                        <th style={{ padding: '0.45rem 0.65rem', textAlign: 'left' }}>#</th>
+                        <th style={{ padding: '0.45rem 0.65rem', textAlign: 'left' }}>KODE POS</th>
+                        <th style={{ padding: '0.45rem 0.65rem', textAlign: 'left' }}>KELURAHAN</th>
+                        <th style={{ padding: '0.45rem 0.65rem', textAlign: 'left' }}>KECAMATAN</th>
+                        <th style={{ padding: '0.45rem 0.65rem', textAlign: 'left' }}>KOTA / KAB</th>
+                        <th style={{ padding: '0.45rem 0.65rem', textAlign: 'left' }}>CABANG TERPASANG</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selisihInfo.extraInFinal.map((r, idx) => (
+                        <tr key={r.id || idx} style={{ borderTop: '1px solid #f3f4f6' }}>
+                          <td style={{ padding: '0.45rem 0.65rem' }}>{idx + 1}</td>
+                          <td style={{ padding: '0.45rem 0.65rem', fontWeight: 700, color: '#f06548', fontFamily: 'var(--font-mono)' }}>{r.kodePosKelurahan || r.kodePosPten}</td>
+                          <td style={{ padding: '0.45rem 0.65rem', fontWeight: 600 }}>{r.kelurahan}</td>
+                          <td style={{ padding: '0.45rem 0.65rem' }}>{r.kecamatan}</td>
+                          <td style={{ padding: '0.45rem 0.65rem' }}>{r.kotaPtenMax15 || r.kotaPten}</td>
+                          <td style={{ padding: '0.45rem 0.65rem', color: '#0284c7' }}>{r.namaOutlet || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Bagian 2: Baris Master Kode Pos yang belum ada di Final */}
+            {selisihInfo.missingInFinal.length > 0 && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
+                  <span style={{ fontSize: '0.74rem', fontWeight: 800, background: '#fee2e2', color: '#991b1b', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
+                    {selisihInfo.missingInFinal.length} BARIS
+                  </span>
+                  <strong style={{ fontSize: '0.86rem', color: '#1f2937' }}>Baris Master Kode Pos yang Belum Ada di Final Data</strong>
+                </div>
+                <div style={{ border: '1px solid #e5e7eb', borderRadius: '6px', overflow: 'hidden' }}>
+                  <table className="custom-table" style={{ width: '100%', fontSize: '0.76rem', borderCollapse: 'collapse' }}>
+                    <thead style={{ background: '#f9fafb', color: '#4b5563' }}>
+                      <tr>
+                        <th style={{ padding: '0.45rem 0.65rem', textAlign: 'left' }}>#</th>
+                        <th style={{ padding: '0.45rem 0.65rem', textAlign: 'left' }}>KODE POS</th>
+                        <th style={{ padding: '0.45rem 0.65rem', textAlign: 'left' }}>KELURAHAN</th>
+                        <th style={{ padding: '0.45rem 0.65rem', textAlign: 'left' }}>KECAMATAN</th>
+                        <th style={{ padding: '0.45rem 0.65rem', textAlign: 'left' }}>KABUPATEN / KOTA</th>
+                        <th style={{ padding: '0.45rem 0.65rem', textAlign: 'left' }}>PROVINSI</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selisihInfo.missingInFinal.slice(0, 100).map((kp, idx) => (
+                        <tr key={kp.id || idx} style={{ borderTop: '1px solid #f3f4f6' }}>
+                          <td style={{ padding: '0.45rem 0.65rem' }}>{idx + 1}</td>
+                          <td style={{ padding: '0.45rem 0.65rem', fontWeight: 700, color: '#0ab39c', fontFamily: 'var(--font-mono)' }}>{kp.kodePos}</td>
+                          <td style={{ padding: '0.45rem 0.65rem', fontWeight: 600 }}>{kp.kelurahan}</td>
+                          <td style={{ padding: '0.45rem 0.65rem' }}>{kp.kecamatan}</td>
+                          <td style={{ padding: '0.45rem 0.65rem' }}>{kp.kabupatenKota}</td>
+                          <td style={{ padding: '0.45rem 0.65rem' }}>{kp.provinsi}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {selisihInfo.missingInFinal.length > 100 && (
+                    <div style={{ padding: '0.5rem', textAlign: 'center', background: '#f9fafb', fontSize: '0.74rem', color: '#6b7280' }}>
+                      Menampilkan 100 dari {selisihInfo.missingInFinal.length.toLocaleString('id-ID')} baris yang belum ada.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="modal-footer" style={{ padding: '0.75rem 1.25rem', borderTop: '1px solid #eef1f4' }}>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setModalSelisih(false)}>
+              Tutup
             </button>
           </div>
         </DialogPanel>
