@@ -44,14 +44,14 @@ import {
   buildMasterQuery,
   buildTargetQuery,
   batchGeocodeUniqueQueries,
-  getStoredGoogleApiKey,
+
   muatTitikKodePos,
   kodePosUjung,
   type GeoLocationResult,
   type BatchProgress,
 } from '../../utils/onlineGeoCoder';
 import { get, keys } from 'idb-keyval';
-import { GoogleApiKeyModal } from '../GoogleApiKeyModal';
+
 import { cleanDati, cleanProvinsi } from '../../utils/normalizer';
 import { getUnitCategory } from '../../utils/roleHelpers';
 import { useNotification } from '../Notification/NotificationContext';
@@ -64,6 +64,12 @@ type PinKind = 'KODEPOS' | 'KC' | 'KCP' | 'MULTI';
 
 const PIN_GLYPH: Record<PinKind, string> = { KODEPOS: '📮', KC: '🏦', KCP: '🏬', MULTI: '🏢' };
 const PIN_LABEL: Record<PinKind, string> = { KODEPOS: 'Kode Pos', KC: 'KC (Cabang)', KCP: 'KCP (Outlet)', MULTI: 'Multi-Outlet' };
+
+// Satu warna untuk SEMUA pin bulat (KC, KCP, Multi, Kodepos) dan semua garis lengkung;
+// titik yang dipilih baru jadi biru. Jenis titik dibaca dari bentuk/ikon, bukan dari warna.
+const WARNA_PIN = '#405189';
+const WARNA_PIN_TERPILIH = '#299cdb';
+const WARNA_GARIS = '#299cdb';
 
 function makePinIcon(kind: PinKind, color: string, selected: boolean): L.DivIcon {
   const s = selected ? 34 : 26; // diameter kepala pin
@@ -162,10 +168,9 @@ export interface AnomalyItem {
 }
 
 
-// Lapisan dasar awal: Google hanya bila kunci API operator tersedia (tanpa kunci,
-// tile Google rawan rate-limit/CORS), selain itu OSM.
+// Lapisan dasar awal: OSM
 function tileBawaan(): TileProvider {
-  return getStoredGoogleApiKey() ? 'google' : 'osm';
+  return 'osm';
 }
 
 // Clean, lightweight tile layer factory supporting Google Maps, Satellite, Esri, and OSM
@@ -245,7 +250,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     if (displayScope !== 'ISOLASI') setLapisanSebelumIsolasi(displayScope);
     setDisplayScope('ISOLASI');
   };
-  // Tile Google butuh API key; tanpa kunci, lapisan dasar OSM yang aman dipanggil.
+  // Tile OSM sebagai bawaan yang aman.
   const [tileProvider, setTileProvider] = useState<TileProvider>(tileBawaan);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -266,9 +271,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 // @ts-ignore: suppress unused setter warning
   const [showAllMatchMarkers, setShowAllMatchMarkers] = useState(false);
 
-  // Realtime Google Maps / Online Geocoding State
-  const [googleApiKey, setGoogleApiKey] = useState(() => getStoredGoogleApiKey());
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  // Realtime Online Geocoding State
   const [resolvedCoords, setResolvedCoords] = useState<Map<string, GeoLocationResult>>(new Map());
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [geocodingProgress, setGeocodingProgress] = useState<BatchProgress | null>(null);
@@ -459,8 +462,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 percent: Math.round(((completedBeforeChunk + prog.completed) / uniqueQueries.length) * 100),
               });
             }
-          },
-          googleApiKey
+          }
         );
 
         if (!isMounted) return;
@@ -486,7 +488,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [cachePreloaded, titikKodePosSiap, titikKodePos, masterRows, targetRows, googleApiKey]);
+  }, [cachePreloaded, titikKodePosSiap, titikKodePos, masterRows, targetRows]);
 
   // List of exact Wilayah for map filtering
   const mapWilayahList = useMemo(() => {
@@ -570,15 +572,17 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   // ── JEMBATAN DATA FINAL: indeks dua arah antar titik kode pos (lihat geoTitik) ──
   // Hanya dibangun saat lapisan Kodepos dibuka: sekali jalan atas seluruh baris final.
   const jembatanFinal = useMemo(
-    () => (displayScope === 'KODEPOS' && finalRows.length > 0
-      ? bangunJembatanKodePos(finalRows, titikKodePos)
+    // Sekali per muat data — BUKAN per ganti lapisan. Dipakai garis lengkung dua arah:
+    // titik kodepos -> KC/KCP dan KC/KCP -> kodeposnya, jadi tidak boleh menunggu
+    // lapisan Kodepos dibuka baru dihitung.
+    () => (finalRows.length > 0 ? bangunJembatanKodePos(finalRows, titikKodePos)
       : { koneksi: new Map<string, KoneksiTitik[]>(), status: new Map<string, StatusTitik>() }),
-    [displayScope, finalRows, titikKodePos]
+    [finalRows, titikKodePos]
   );
 
   // ── LAYER KODE POS NASIONAL: semua titik dari Data Kode Pos, bukan hanya yang punya cabang ──
-  // Dibangun sekali per muat data (bukan per ganti lapisan) supaya lompat dari panel anomali
-  // ke sebuah titik bisa langsung memilih pin-nya.
+  // Status per titik TIDAK disimpan di objek pin-nya: kalau ikut, setiap kali indeks
+  // jembatan berubah harus ada 10.596 objek baru. Diambil lewat lookup saat render.
   const kodePosPins = useMemo<PlottedBranchPin[]>(() => {
     const namaPerKode = new Map<string, { kota: string; provinsi: string }>();
     for (const r of kodePosRows) {
@@ -605,12 +609,10 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         totalTargetCount: 0,
         sumberTitik: 'kodepos_data',
         isTitikKodePos: true,
-        finalStatus: jembatanFinal.status.get(kode),
-        finalCount: (jembatanFinal.koneksi.get(kode) || []).reduce((n, k) => n + k.baris, 0) || undefined,
       });
     }
     return pins;
-  }, [titikKodePos, kodePosRows, jembatanFinal]);
+  }, [titikKodePos, kodePosRows]);
 
   // Baris Data Final yang TIDAK muncul di peta: tidak dapat titik dari tabel kode pos,
   // baik lewat kode posnya maupun lewat nama kelurahan+kecamatan+kota.
@@ -642,9 +644,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   }, [allPins, kodePosPins, displayScope, selectedPin, isMultiOutletPin]);
 
   // Satu sumber untuk label dropdown dan panelnya — tidak bisa lagi beda angka.
-  const WARNA_LAYER: Record<DisplayScope, string> = {
-    KC: '#6559cc', KCP: '#0ab39c', MULTI: '#f06548', KODEPOS: '#38bdf8', ISOLASI: '#f7b84b',
-  };
+  // Warnanya sengaja SERAGAM: jenis titik dibaca dari ikon/label, bukan dari warna.
   const opsiLayer: { value: DisplayScope; label: string; n: number; satuan: string; teks: string; desc: string }[] = [
     { value: 'KC', label: 'KC', n: hitunganLayer.kc, satuan: 'KC', teks: `KC (${hitunganLayer.kc.toLocaleString('id-ID')})`, desc: 'Kantor Cabang — dari kolom Status Outlet Data Cabang' },
     { value: 'KCP', label: 'KCP', n: hitunganLayer.kcp, satuan: 'KCP', teks: `KCP (${hitunganLayer.kcp.toLocaleString('id-ID')})`, desc: 'Kantor Cabang Pembantu, termasuk KCP d/h KK' },
@@ -1040,28 +1040,29 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       const hasMatch = pin.matchedCount > 0;
       const isSelected = selectedPin?.id === pin.id;
 
-      // Jenis titik → ikon; status → warna.
-      const kind: PinKind = pin.isTitikKodePos || pin.finalStatus
+      // Titik lapisan kode pos mengambil status & jumlah barisnya dari indeks jembatan
+      // saat render — disimpan di objek pin berarti 10.596 pin harus dibuat ulang tiap
+      // indeks berubah, dan itu yang membuat pindah lapisan terasa berat.
+      const kodeTitik = pin.isTitikKodePos ? kodePosLima(pin.kodePos) : '';
+      const koneksiTitik = kodeTitik ? jembatanFinal.koneksi.get(kodeTitik) : undefined;
+      const tampil: PlottedBranchPin = pin.isTitikKodePos
+        ? {
+            ...pin,
+            finalStatus: jembatanFinal.status.get(kodeTitik),
+            finalCount: koneksiTitik?.reduce((n, k) => n + k.baris, 0) || undefined,
+          }
+        : pin;
+
+      // Bentuk = jenis titik. Warna TIDAK lagi dipakai membedakan jenis atau status:
+      // satu warna untuk semua, titik terpilih biru.
+      const kind: PinKind = tampil.isTitikKodePos || tampil.finalStatus
         ? 'KODEPOS'
         : isMulti
         ? 'MULTI'
-        : getUnitCategory(pin.primaryOutletName) === 'KC'
+        : getUnitCategory(tampil.primaryOutletName) === 'KC'
         ? 'KC'
         : 'KCP';
-
-      // Color coding (isi ikon; bentuk sudah menunjukkan jenis):
-      // - Selected: Golden Amber · Multi-outlet: Coral · Matched: Teal · Standby: Steel Blue
-      // - Final Data: teal=OK, amber=review, coral=anomali
-      let fillColor = '#818cf8';
-      if (pin.finalStatus) {
-        fillColor = pin.finalStatus === 'ANOMALI' ? '#f06548' : pin.finalStatus === 'REVIEW' ? '#f0ad4e' : '#0ab39c';
-      } else if (isSelected) {
-        fillColor = '#f7b84b';
-      } else if (isMulti) {
-        fillColor = '#f06548';
-      } else if (hasMatch) {
-        fillColor = '#0ab39c';
-      }
+      const fillColor = isSelected ? WARNA_PIN_TERPILIH : WARNA_PIN;
 
       const overlapKey = `${pin.lat.toFixed(5)}:${pin.lng.toFixed(5)}`;
       const overlappingIndex = overlapCounts.get(overlapKey) || 0;
@@ -1078,10 +1079,15 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       });
 
       // Instant lightweight hover tooltip
-      const finalBadge = pin.finalStatus
-        ? `<div style="font-weight:700;font-size:11px;margin-top:3px;color:${pin.finalStatus === 'ANOMALI' ? '#f06548' : pin.finalStatus === 'REVIEW' ? '#d68b0c' : '#0ab39c'};">
-            ${pin.finalStatus === 'ANOMALI' ? '⛔ Anomali' : pin.finalStatus === 'REVIEW' ? '⚠️ Perlu Review' : '✓ Final · Terverifikasi'} · ${pin.finalCount?.toLocaleString('id-ID') ?? pin.branchCount.toLocaleString('id-ID')} baris
+      const finalBadge = tampil.finalStatus
+        ? `<div style="font-weight:700;font-size:11px;margin-top:3px;color:${tampil.finalStatus === 'ANOMALI' ? '#f06548' : tampil.finalStatus === 'REVIEW' ? '#d68b0c' : '#0ab39c'};">
+            ${tampil.finalStatus === 'ANOMALI' ? '⛔ Anomali' : tampil.finalStatus === 'REVIEW' ? '⚠️ Perlu Review' : '✓ Final · Terverifikasi'} · ${tampil.finalCount?.toLocaleString('id-ID') ?? tampil.branchCount.toLocaleString('id-ID')} baris
           </div>`
+        : pin.isTitikKodePos
+        ? `<div style="color:#878a99;font-size:10.5px;margin-top:2px;">Belum terhubung ke Data Final</div>`
+        : '';
+      const garisBadge = koneksiTitik?.length
+        ? `<div style="color:#299cdb;font-weight:700;font-size:10.5px;margin-top:2px;">${koneksiTitik.length.toLocaleString('id-ID')} pasangan — klik untuk garis lengkung</div>`
         : '';
       // Jujur soal asal titik: kode pos = koordinat berkas operator; pusat wilayah = bukan kantor.
       const asalTitik = pin.perkiraan
@@ -1095,17 +1101,18 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
             <span>${PIN_GLYPH[kind]} ${PIN_LABEL[kind]}</span>
           </div>
           <div style="color:#212529;font-size:11px;margin-top:1px;">
-            <span>${pin.primaryOutletName}</span>
+            <span>${tampil.primaryOutletName}</span>
           </div>
           <div style="color:#6c757d;font-size:10.5px;margin-top:2px;">
-            ${pin.dati2} &bull; <strong style="color:#405189;">📮 ${pin.kodePos}</strong>
+            ${tampil.dati2} &bull; <strong style="color:#405189;">📮 ${tampil.kodePos}</strong>
           </div>
           ${finalBadge}
+          ${garisBadge}
           ${asalTitik}
-          ${!pin.finalStatus && hasMatch ? `<div style="color:#0ab39c;font-weight:700;font-size:11px;margin-top:3px;display:flex;align-items:center;gap:4px;">
-            <span>✓</span> <strong>${pin.matchedCount.toLocaleString('id-ID')} Data Matched (Klik untuk Garis Lengkung)</strong>
+          ${!tampil.finalStatus && hasMatch ? `<div style="color:#0ab39c;font-weight:700;font-size:11px;margin-top:3px;display:flex;align-items:center;gap:4px;">
+            <span>✓</span> <strong>${tampil.matchedCount.toLocaleString('id-ID')} Data Matched (Klik untuk Garis Lengkung)</strong>
           </div>` : ''}
-          ${!pin.finalStatus && isMulti ? `<div style="color:#f06548;font-weight:700;font-size:10.5px;margin-top:2px;">⚠️ ${pin.branchCount} Cabang di Titik ini</div>` : ''}
+          ${!tampil.finalStatus && isMulti ? `<div style="color:#f06548;font-weight:700;font-size:10.5px;margin-top:2px;">⚠️ ${tampil.branchCount} Cabang di Titik ini</div>` : ''}
         </div>
       `;
 
@@ -1153,6 +1160,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       filteredPins.forEach(addPinMarker);
     } else {
       const cellPx = 56;
+      const layar = map.getSize();
       const buckets = new Map<string, { pins: PlottedBranchPin[]; sumLat: number; sumLng: number }>();
       for (const pin of filteredPins) {
         if (selectedPin && pin.id === selectedPin.id) {
@@ -1160,6 +1168,10 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           continue;
         }
         const pt = map.latLngToContainerPoint([pin.lat, pin.lng]);
+        // Yang di luar layar dibuang SEBELUM marker dibuat. Tanpa ini, zoom kota tetap
+        // membuat marker untuk seluruh Indonesia — ribuan node DOM, dan itulah yang
+        // membuat geser/zoom terasa berat dan patah-patah.
+        if (pt.x < -cellPx || pt.y < -cellPx || pt.x > layar.x + cellPx || pt.y > layar.y + cellPx) continue;
         const key = `${Math.floor(pt.x / cellPx)}:${Math.floor(pt.y / cellPx)}`;
         let b = buckets.get(key);
         if (!b) { b = { pins: [], sumLat: 0, sumLng: 0 }; buckets.set(key, b); }
@@ -1242,7 +1254,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         }
       }
     }
-    }, [filteredPins, selectedPin, showAllMatchMarkers, resolvedCoords, selectedAnomalyRow, titikUntukBaris, mapInteractionTick]);
+    }, [filteredPins, selectedPin, showAllMatchMarkers, resolvedCoords, selectedAnomalyRow, titikUntukBaris, jembatanFinal, mapInteractionTick]);
 
   // Canvas hit-testing can miss a marker while thousands of points are being redrawn.
   // A pixel-distance fallback keeps the map clickable even when a marker event is missed.
@@ -1428,19 +1440,22 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     }
   }, [selectedPin, showCurvedArcs, selectedMatchedRows, displayScope, trackingMode, resolvedCoords, cameraLocked]);
 
-  // 9b. Satu titik kode pos diklik → garis lengkung ke titik KC/KCP pasangannya.
-  //     Pasangannya datang dari Data Final: baris yang sama menyimpan kode pos PTEN dan
-  //     kode pos kelurahan outlet, dan keduanya punya koordinat di Data Kode Pos.
+  // 9b. Titik terpilih → garis lengkung ke pasangan kode posnya, dua arah:
+  //     - titik lapisan Kodepos diklik → garis ke titik KC/KCP tempat outletnya berada;
+  //     - pin KC/KCP diklik → garis ke titik kode pos PTEN yang terpasang padanya.
+  //     Pasangannya datang dari Data Final: satu baris menyimpan kode pos PTEN DAN kode
+  //     pos kelurahan outlet, dan keduanya punya koordinat nyata di Data Kode Pos.
   useEffect(() => {
     const map = mapInstanceRef.current;
     const arcsLayer = arcsLayerRef.current;
     if (!map || !arcsLayer) return;
     const pin = selectedPin;
-    if (!pin?.isTitikKodePos || !showCurvedArcs) return;
+    if (!pin || !showCurvedArcs) return;
 
     const daftar = jembatanFinal.koneksi.get(kodePosLima(pin.kodePos)) || [];
     if (daftar.length === 0) return;
 
+    const namaTujuan = pin.isTitikKodePos ? 'Titik KC/KCP' : 'Titik kode pos PTEN';
     const dari = clampToIndonesia(pin.lat, pin.lng);
     const BATAS_GARIS = 30;
     const titik: [number, number][] = [dari];
@@ -1450,15 +1465,15 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       const garis = L.polyline(createCurvedArcPoints(dari, ke, i % 2 === 0 ? 0.1 : -0.08, 22), {
         pane: 'arcsPane',
         renderer: svgRendererRef.current || undefined,
-        color: '#0ab39c',
+        color: WARNA_GARIS,
         weight: Math.min(2 + Math.log10(k.baris + 1), 4),
         opacity: 0.82,
         interactive: false,
         className: 'bni-flow-arc',
       });
       garis.bindTooltip(
-        `<div style="font-size:11px;font-weight:600;color:#0f766e;">
-          KP ${k.kode} · ${km.toLocaleString('id-ID', { maximumFractionDigits: 1 })} km<br/>
+        `<div style="font-size:11px;font-weight:600;color:#1b6fa8;">
+          KP ${pin.kodePos} ➔ KP ${k.kode} · ${km.toLocaleString('id-ID', { maximumFractionDigits: 1 })} km<br/>
           <span style="font-size:10px;color:#878a99;">${k.baris.toLocaleString('id-ID')} baris Data Final · ${k.outlet}</span>
         </div>`,
         { sticky: true }
@@ -1468,13 +1483,13 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       const ujung = L.circleMarker(ke, {
         pane: 'arcsPane',
         radius: Math.min(5 + Math.log10(k.baris + 1) * 2, 10),
-        fillColor: '#38bdf8',
+        fillColor: WARNA_PIN_TERPILIH,
         color: '#ffffff',
         weight: 1.8,
         fillOpacity: 0.95,
       });
       ujung.bindTooltip(
-        `<strong style="color:#299cdb;">Titik KC/KCP · KP ${k.kode}</strong><br/>` +
+        `<strong style="color:#299cdb;">${namaTujuan} · KP ${k.kode}</strong><br/>` +
         `${k.baris.toLocaleString('id-ID')} baris · ${k.outlet}<br/>` +
         `<span style="color:#878a99;font-size:10px;">${km.toLocaleString('id-ID', { maximumFractionDigits: 1 })} km dari KP ${pin.kodePos}</span>`,
         { direction: 'top', className: 'bni-map-fast-tooltip' }
@@ -1849,7 +1864,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           >
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <Filter size={12} color="#878a99" />
-              <span style={{ width: 9, height: 9, borderRadius: '50%', background: WARNA_LAYER[displayScope], display: 'inline-block', flexShrink: 0 }} />
+              <span style={{ width: 9, height: 9, borderRadius: '50%', background: WARNA_PIN, display: 'inline-block', flexShrink: 0 }} />
               <span>{aktifLayer ? aktifLayer.teks : 'Titik Terpilih'}</span>
             </span>
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0, transition: 'transform 0.15s', transform: showFilterDropdown ? 'rotate(180deg)' : 'rotate(0deg)' }}>
@@ -1881,7 +1896,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
               {/* Empat lapisan data — satu sumber angka dengan label tombol */}
               {opsiLayer.map((opt) => {
                 const isActive = displayScope === opt.value;
-                const dot = WARNA_LAYER[opt.value];
+                const dot = WARNA_PIN;
                 return (
                   <button
                     key={opt.value}
@@ -2492,54 +2507,52 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 </button>
               </div>
 
-              {/* Panel satu titik kode pos: daftar pasangan KC/KCP dari Data Final */}
-              {selectedPin.isTitikKodePos && (
-                <div
-                  style={{
-                    background: 'rgba(56, 189, 248, 0.07)',
-                    border: '1px solid rgba(56, 189, 248, 0.3)',
-                    borderRadius: '6px',
-                    padding: '0.55rem 0.75rem',
-                    marginBottom: '0.75rem',
-                  }}
-                >
-                  {(() => {
-                    const daftar = jembatanFinal.koneksi.get(kodePosLima(selectedPin.kodePos)) || [];
-                    const totalBaris = daftar.reduce((n, k) => n + k.baris, 0);
-                    const dari: [number, number] = [selectedPin.lat, selectedPin.lng];
-                    return (
-                      <>
-                        <div style={{ fontSize: '0.74rem', fontWeight: 700, color: '#2472a8' }}>
-                          {daftar.length.toLocaleString('id-ID')} pasangan KC/KCP · {totalBaris.toLocaleString('id-ID')} baris Data Final
-                        </div>
-                        <div style={{ fontSize: '0.66rem', color: '#878a99', marginBottom: daftar.length ? '0.35rem' : 0 }}>
-                          {daftar.length
-                            ? 'Garis lengkung di peta menghubungkan titik ini dengan titik outletnya.'
-                            : 'Titik ini belum terhubung ke baris Data Final mana pun.'}
-                        </div>
-                        {daftar.slice(0, 8).map((k) => (
-                          <div
-                            key={k.kode}
-                            style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem', fontSize: '0.68rem', color: '#495057', marginTop: '0.15rem' }}
-                          >
-                            <span style={{ fontFamily: 'var(--font-mono)', color: '#405189', fontWeight: 700 }}>{k.kode}</span>
-                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k.outlet}</span>
-                            <span style={{ fontVariantNumeric: 'tabular-nums', color: '#878a99' }}>
-                              {k.baris.toLocaleString('id-ID')} baris ·{' '}
-                              {calculateDistanceKm(dari[0], dari[1], k.lat, k.lng).toLocaleString('id-ID', { maximumFractionDigits: 1 })} km
-                            </span>
-                          </div>
-                        ))}
-                        {daftar.length > 8 && (
-                          <div style={{ fontSize: '0.66rem', color: '#878a99', marginTop: '0.2rem' }}>
-                            +{(daftar.length - 8).toLocaleString('id-ID')} pasangan lain
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-              )}
+              {/* Daftar pasangan kode pos dari Data Final — dua arah: titik kodepos <-> KC/KCP */}
+              {(() => {
+                const daftar = jembatanFinal.koneksi.get(kodePosLima(selectedPin.kodePos)) || [];
+                if (daftar.length === 0 && !selectedPin.isTitikKodePos) return null;
+                const totalBaris = daftar.reduce((n, k) => n + k.baris, 0);
+                const dari: [number, number] = [selectedPin.lat, selectedPin.lng];
+                const judul = selectedPin.isTitikKodePos ? 'pasangan KC/KCP' : 'pasangan kode pos PTEN';
+                return (
+                  <div
+                    style={{
+                      background: 'rgba(41, 156, 219, 0.07)',
+                      border: '1px solid rgba(41, 156, 219, 0.28)',
+                      borderRadius: '6px',
+                      padding: '0.55rem 0.75rem',
+                      marginBottom: '0.75rem',
+                    }}
+                  >
+                    <div style={{ fontSize: '0.74rem', fontWeight: 700, color: '#2472a8' }}>
+                      {daftar.length.toLocaleString('id-ID')} {judul} · {totalBaris.toLocaleString('id-ID')} baris Data Final
+                    </div>
+                    <div style={{ fontSize: '0.66rem', color: '#878a99', marginBottom: daftar.length ? '0.35rem' : 0 }}>
+                      {daftar.length
+                        ? 'Garis lengkung di peta menghubungkan titik ini dengan titik pasangannya.'
+                        : 'Titik ini belum terhubung ke baris Data Final mana pun.'}
+                    </div>
+                    {daftar.slice(0, 8).map((k) => (
+                      <div
+                        key={k.kode}
+                        style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem', fontSize: '0.68rem', color: '#495057', marginTop: '0.15rem' }}
+                      >
+                        <span style={{ fontFamily: 'var(--font-mono)', color: '#405189', fontWeight: 700 }}>{k.kode}</span>
+                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k.outlet}</span>
+                        <span style={{ fontVariantNumeric: 'tabular-nums', color: '#878a99' }}>
+                          {k.baris.toLocaleString('id-ID')} baris ·{' '}
+                          {calculateDistanceKm(dari[0], dari[1], k.lat, k.lng).toLocaleString('id-ID', { maximumFractionDigits: 1 })} km
+                        </span>
+                      </div>
+                    ))}
+                    {daftar.length > 8 && (
+                      <div style={{ fontSize: '0.66rem', color: '#878a99', marginTop: '0.2rem' }}>
+                        +{(daftar.length - 8).toLocaleString('id-ID')} pasangan lain
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Matched Data Collaboration Highlight Box (INTERACTIVE CLICKABLE) */}
               {!selectedPin.isTitikKodePos && (
@@ -3200,7 +3213,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           <div>
             <div style={{ fontWeight: 600 }}>
               Mencari titik {geocodingProgress.completed} dari {geocodingProgress.total}
-              {googleApiKey ? '' : ' (tanpa kunci Google)'}
+
             </div>
             {geocodingProgress.activeItem && (
               <div style={{ fontSize: '0.68rem', color: '#adb5bd', maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -3211,12 +3224,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         </div>
       )}
 
-      {showApiKeyModal && (
-        <GoogleApiKeyModal
-          onClose={() => setShowApiKeyModal(false)}
-          onSaved={(kunci) => setGoogleApiKey(kunci)}
-        />
-      )}
+
     </div>
   );
 };

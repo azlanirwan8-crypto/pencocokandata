@@ -1521,7 +1521,7 @@ body {
 
 .bni-map-pin--selected {
   border-width: 3px;
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.3), 0 5px 12px rgba(15, 23, 42, 0.35);
+  box-shadow: 0 0 0 3px rgba(41, 156, 219, 0.32), 0 5px 12px rgba(15, 23, 42, 0.35);
   animation: bniPinDrop 0.26s ease-out;
 }
 
@@ -1561,7 +1561,8 @@ body {
 .bni-flow-arc {
   stroke-dasharray: 6, 8 !important;
   animation: flowDash 1.2s linear infinite !important;
-  filter: drop-shadow(0 2px 4px rgba(10, 179, 156, 0.4));
+  /* TANPA filter: drop-shadow() — SVG yang dianimasikan + filter dipaksa digambar ulang
+     penuh tiap frame, dan itulah yang membuat peta dengan puluhan garis terasa patah. */
 }
 
 /* Titik asal perkiraan (pusat wilayah) — garis putus halus, tanpa animasi aliran */

@@ -43,7 +43,7 @@ import {
   type KodePosStats,
   type KodePosGeoStats,
 } from '../../utils/neonSync';
-import { getStoredGoogleApiKey } from '../../utils/onlineGeoCoder';
+
 import { KodePosSyncModal } from './KodePosSyncModal';
 import { useGeoTooltip } from '../GeoTooltip';
 import { DialogPanel } from '../BaseModal';
@@ -300,8 +300,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     void refreshGeo();
   }, [refreshGeo, reloadKey]);
 
-  /** Kunci Google hanya bisa datang dari localStorage (dialog di peta) atau Vercel env. */
-  const kunciGoogle = Boolean(getStoredGoogleApiKey()) || Boolean(geoStats?.googleSiap);
+
   const { tipProps, tooltipNode } = useGeoTooltip();
 
   // Satu-satunya aksi titik koordinat: kerjakan antrean baru, kalau tidak ada
@@ -369,7 +368,6 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
           mode: 'isi',
           jumlah: 80,
           provinsi: selectedProvinsi !== 'ALL' ? selectedProvinsi : null,
-          apiKey: getStoredGoogleApiKey(),
           ulang,
         });
         if (!hasil) {
@@ -936,8 +934,8 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                     style={gayaTautanGeo}
                     {...tipProps(
                       geoUlang
-                        ? `Cari ulang ${geoKodePosDicari.toLocaleString('id-ID')} kode pos yang pernah dicoba tetapi belum ketemu, lewat ${kunciGoogle ? 'Google, lalu ' : ''}ESRI/OpenStreetMap. Yang sudah ditandai tak bersumber (${geoTakBersumber.toLocaleString('id-ID')}) tidak diulang — tidak ada penyedia peta yang punya titiknya.`
-                        : `Cari titik untuk ${geoAntrean.toLocaleString('id-ID')} kode pos yang belum pernah dicari lewat ${kunciGoogle ? 'Google, lalu ' : ''}ESRI/OpenStreetMap. Hasilnya dipakai baris yang tidak punya titik desa sendiri.`
+                        ? `Cari ulang ${geoKodePosDicari.toLocaleString('id-ID')} kode pos yang pernah dicoba tetapi belum ketemu, lewat ESRI/OpenStreetMap. Yang sudah ditandai tak bersumber (${geoTakBersumber.toLocaleString('id-ID')}) tidak diulang — tidak ada penyedia peta yang punya titiknya.`
+                        : `Cari titik untuk ${geoAntrean.toLocaleString('id-ID')} kode pos yang belum pernah dicari lewat ESRI/OpenStreetMap. Hasilnya dipakai baris yang tidak punya titik desa sendiri.`
                     )}
                   >
                     {geoUlang

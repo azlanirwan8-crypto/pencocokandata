@@ -10,7 +10,6 @@ export interface GeoLocationResult {
   source: 'google' | 'esri' | 'osm' | 'locationiq' | 'cache' | 'desa';
 }
 
-const STORAGE_KEY_GOOGLE_API = 'tools_matcher_google_maps_api_key';
 const IDB_PREFIX = 'geo_cache_';
 
 // In-Memory ephemeral session cache (RAM only, 0 bytes in code/harddisk)
@@ -64,23 +63,7 @@ export function muatTitikKodePos(): Promise<Record<string, TitikSimpanan>> {
   return titikKodePosJanji;
 }
 
-export function getStoredGoogleApiKey(): string {
-  if (typeof window === 'undefined') return '';
-  return (
-    localStorage.getItem(STORAGE_KEY_GOOGLE_API) ||
-    (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY ||
-    ''
-  );
-}
 
-export function setStoredGoogleApiKey(key: string): void {
-  if (typeof window === 'undefined') return;
-  if (key.trim()) {
-    localStorage.setItem(STORAGE_KEY_GOOGLE_API, key.trim());
-  } else {
-    localStorage.removeItem(STORAGE_KEY_GOOGLE_API);
-  }
-}
 
 /**
  * Builds an optimal search query for a Master Branch row.
@@ -126,8 +109,7 @@ export function buildTargetQuery(row: TargetRow): string {
  * lalu proxy backend /api/geocode dan penyedia publik.
  */
 export async function geocodeRealtime(
-  query: string,
-  apiKey?: string
+  query: string
 ): Promise<GeoLocationResult | null> {
   const clean = query.trim();
   if (!clean) return null;
@@ -168,12 +150,9 @@ export async function geocodeRealtime(
     // ignore idb error
   }
 
-  const activeKey = apiKey || getStoredGoogleApiKey();
-
   // 1. Try local or Vercel serverless /api/geocode endpoint
   try {
     const params = new URLSearchParams({ query: clean });
-    if (activeKey) params.append('apiKey', activeKey);
 
     const res = await fetch(`/api/geocode?${params.toString()}`);
     if (res.ok) {
@@ -282,8 +261,7 @@ export interface BatchProgress {
  */
 export async function batchGeocodeUniqueQueries(
   queries: string[],
-  onProgress?: (p: BatchProgress) => void,
-  apiKey?: string
+  onProgress?: (p: BatchProgress) => void
 ): Promise<Map<string, GeoLocationResult>> {
   const uniqueQueries = Array.from(new Set(queries.map((q) => q.trim()).filter(Boolean)));
   const results = new Map<string, GeoLocationResult>();
@@ -299,7 +277,7 @@ export async function batchGeocodeUniqueQueries(
     await Promise.all(
       chunk.map(async (query) => {
         try {
-          const loc = await geocodeRealtime(query, apiKey);
+          const loc = await geocodeRealtime(query);
           if (loc) {
             results.set(query, loc);
           }
