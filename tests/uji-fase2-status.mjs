@@ -105,5 +105,38 @@ asa('M7.6 manual jauh di bawah total', manual < hasil3.length * 0.5, true);
 // M5 — bukti sinyal Fase 2 ikut tercatat dan masuk panel
 asa('M5 ada bukti sinyal Fase 2 di baris kota sama', (braga?.sinyalF2Bit || 0) > 0 || /BANDUNG/.test(braga?.namaOutlet || ''), true);
 
+// ── M8: blok PTEN dipilih PER KELURAHAN + Dati II = nama mayoritas sekota ──
+// Kasus nyata operator 2026-09-24, baris "Jajar" di Data Final. PTEN memuat blok
+// 57141–57157 atas nama "SURAKARTA (SOLO)" (max15 SOLO) dan satu baris 57124 atas nama
+// "SURAKARTA" (max15 SURAKARTA). Dulu Fase 1 memakai SATU baris PTEN untuk seluruh kota,
+// jadi se-Kota Surakarta — termasuk Jajar yang bloknya 57144 — membawa 57124.
+const masterSolo = [cabang({ 'Sandi Cabang': '027', 'Branch Code': '02700001', 'Kode Cabang': '02700001', Sandi: '027', Cabang: 'SURAKARTA', 'Nama Outlet': 'ADI SUCIPTO D/H BANDARA ADI SUMARMO', 'Status Outlet': 'KCP', ALAMAT: 'JL ADI SUCIPTO NO 133 SURAKARTA', 'KODE POS': '57124', Kelurahan: 'SUDIRASON', Kecamatan: 'PASAR KLIRON', 'Dati II': 'SURAKARTA', Provinsi: 'JAWA TENGAH' })];
+const ptenSolo = [
+  { kodePosPten: '57124', kotaPten: 'SURAKARTA', kotaPtenMax15: 'SURAKARTA', status: 'AKTIF' },
+  { kodePosPten: '57141', kotaPten: 'SURAKARTA (SOLO)', kotaPtenMax15: 'SOLO', status: 'AKTIF' },
+  { kodePosPten: '57144', kotaPten: 'SURAKARTA (SOLO)', kotaPtenMax15: 'SOLO', status: 'AKTIF' },
+  { kodePosPten: '57117', kotaPten: 'KARANGANYAR', kotaPtenMax15: 'KARANGANYAR', status: 'AKTIF' },
+];
+const kpSolo = [
+  kodePos('57144', 'Jajar', 'Laweyan', 'Kota Surakarta', 'Jawa Tengah', -7.5617, 110.8126),
+  kodePos('57141', 'Penumping', 'Laweyan', 'Kota Surakarta', 'Jawa Tengah', -7.5656, 110.8241),
+  kodePos('57117', 'Semanggi', 'Pasar Kliwon', 'Kota Surakarta', 'Jawa Tengah', -7.5645, 110.8344),
+];
+const hasilSolo = utama((await executeAnalystPipeline(masterSolo, ptenSolo, kpSolo, [], [], undefined, false, undefined, undefined, 2)).rows);
+const soloRow = (kel) => hasilSolo.find((r) => r.kelurahan === kel);
+asa('M8 Jajar membawa blok PTEN-nya sendiri, bukan blok kotanya', [soloRow('Jajar')?.kodePosPten, soloRow('Jajar')?.kodePosKelurahan], ['57144', '57144']);
+asa('M8 Penumping membawa bloknya sendiri', soloRow('Penumping')?.kodePosPten, '57141');
+const barisSolo = hasilSolo.filter((r) => ['Jajar', 'Penumping', 'Semanggi'].includes(r.kelurahan));
+asa('M8 Dati II ketiga kelurahan = nama PTEN terbanyak (SOLO, bukan SURAKARTA)', [...new Set(barisSolo.map((r) => r.kotaPtenMax15))], ['SOLO']);
+// KARANGANYAR di fixture ini cuma punya satu blok (57117) yang sebenarnya milik
+// Surakarta. Dulu jalur prefix blok menyeret seluruh kelurahan Surakarta ke item
+// KARANGANYAR, lalu item SURAKARTA memprosesnya lagi → tiap kelurahan dua baris.
+asa('M8 satu kelurahan tidak boleh masuk dua kali', new Set(hasilSolo.map((r) => r.kelurahan)).size, hasilSolo.length);
+// Semanggi 57117: bloknya memang ada di PTEN, tapi PTEN menuliskannya atas nama
+// KARANGANYAR. Bloknya dipakai (nomornya sama), nama kotanya TIDAK ikut dibawa.
+asa('M8 blok tetap dipakai walau PTEN mencatatnya atas nama kota lain', soloRow('Semanggi')?.kodePosPten, '57117');
+asa('M8 tapi Dati II-nya tidak ikut berubah jadi KARANGANYAR', soloRow('Semanggi')?.kotaPtenMax15, 'SOLO');
+asa('M8 barisnya tetap kota Surakarta', soloRow('Semanggi')?.kelurahan, 'Semanggi');
+
 console.log(gagal === 0 ? '\nSEMUA LULUS' : `\n${gagal} TEST GAGAL`);
 process.exit(gagal === 0 ? 0 : 1);

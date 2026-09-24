@@ -503,7 +503,11 @@ const CITY_ALIAS_MAP: Record<string, string> = {
   SOLO: 'SURAKARTA',
 };
 export function cityMatchKey(raw: string): string {
-  const norm = expertNormalize(raw)
+  // Catatan alias dalam kurung dibuang lebih dulu: kolom "KOTA/KABUPATEN" PTEN menulis
+  // "SURAKARTA (SOLO)", "BOLAANG MONGONDOW (BOLMONG)", "DEIYAI (DELIYAI)" — kotanya tetap
+  // sama, tapi dulu catatan itu ikut masuk kunci sehingga pecah jadi kota baru.
+  const tanpaCatatan = String(raw || '').replace(/\([^)]*\)/g, ' ');
+  const norm = expertNormalize(tanpaCatatan)
     .split(' ')
     .map((w) => CITY_ABBREV_MAP[w] || w)
     .join(' ');
@@ -1218,6 +1222,34 @@ export async function executeAnalystPipeline(
     ptenCityMap.get(k)!.push(p);
   });
 
+  // PTEN adalah tabel BLOK kode pos (1 baris = 1 blok), bukan tabel kelurahan. Jadi blok
+  // sebuah kelurahan bisa dicari langsung: bila PTEN menyebut blok itu, itulah baris PTEN
+  // -nya — bukti yang lebih kuat daripada mencocokkan nama kota. Dulu satu baris PTEN
+  // dipakai untuk semua kelurahan sekota, sehingga se-Kota Surakarta (54 kelurahan, blok
+  // 57141–57157) membawa 57124, blok satu baris PTEN yang kebetulan bernama "SURAKARTA"
+  // tanpa catatan "(SOLO)".
+  const ptenBlokMap = new Map<string, PTENRecord>();
+  ptenList.forEach((p) => {
+    const kode = String(p.kodePosPten || '').trim();
+    if (kode.length >= 5 && !ptenBlokMap.has(kode)) ptenBlokMap.set(kode, p);
+  });
+
+  // Nama "KOTA/KABUPATEN MAX 15 DIGIT" per grup kota = hasil TERBANYAK di grup itu, bukan
+  // hasil baris pertama. Berkas PTEN punya baris menyimpang: 38 blok Surakarta bernama
+  // "SURAKARTA (SOLO)" (max15 SOLO) tapi satu baris 57124 bernama "SURAKARTA" (max15
+  // SURAKARTA). Baris pertama yang menang = Dati II sekota ikut si menyimpang.
+  const ptenMax15Mayoritas = new Map<string, string>();
+  ptenCityMap.forEach((recs, kunciKota) => {
+    const hitung = new Map<string, number>();
+    recs.forEach((p) => {
+      const n = String(p.kotaPtenMax15 || '').trim().toUpperCase();
+      if (n) hitung.set(n, (hitung.get(n) || 0) + 1);
+    });
+    if (!hitung.size) return;
+    const terbaik = [...hitung.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0];
+    ptenMax15Mayoritas.set(kunciKota, terbaik[0]);
+  });
+
   const kodePosByCity = new Map<string, KodePosRow[]>();
   kodePosList.forEach((kp) => {
     const c = cityMatchKey(kp.kabupatenKota);
@@ -1335,7 +1367,8 @@ export async function executeAnalystPipeline(
   // ─────────────────────────────────────────────────────────────────────────────
   // ══ FASE 1: PTEN & KODE POS — Expand per Kelurahan/Kecamatan ══
   // Setiap baris Master Cabang → N baris (1 per kelurahan yang ada di Kota PTEN)
-  // Semua baris dari 1 kota pakai kodePosPten yang SAMA dari PTEN
+  // KodePosPten per baris = blok PTEN milik kelurahan itu sendiri (lihat ptenBlokMap);
+  // kota yang bloknya tidak disebut PTEN tetap memakai blok kotanya.
   // ─────────────────────────────────────────────────────────────────────────────
   if (onProgress) onProgress(1, 5, 0, total, 'Fase 1: Menyiapkan index PTEN & Kode Pos...');
 
@@ -1598,7 +1631,12 @@ export async function executeAnalystPipeline(
       for (const lvl of levels) {
         const blockOwners = lvl.map.get(lvl.pre) || [];
         if (blockOwners.length === 0) continue;
-        const ckList = blockOwners.filter((ck) => !claimedMasterCityKeys.has(ck));
+        // Kota yang sudah punya pasangan nama di PTEN tidak boleh direbut lewat blok:
+        // item-nya sendiri yang akan memprosesnya. Tanpa saringan ini, "KARANGANYAR" (nama
+        // yang tidak dikenal master) menyerap seluruh kelurahan "SURAKARTA" hanya karena
+        // blok 5711 cuma dimiliki satu kota, lalu item SURAKARTA memprosesnya lagi →
+        // tiap kelurahan masuk Data Final DUA kali dengan Dati II berbeda.
+        const ckList = blockOwners.filter((ck) => !claimedMasterCityKeys.has(ck) && !cityNameClaimed.has(ck));
         // semua pemilik blok sudah diambil kota PTEN lain → jangan berebut, review
         if (ckList.length === 0) {
           return { rows: [], status: 'REVIEW', method: `Blok ${lvl.name} (${lvl.pre}) sudah diklaim kota lain` };
@@ -1768,9 +1806,11 @@ export async function executeAnalystPipeline(
     const finalKotaPten = matchedPtenRecord?.kotaPten || (cityRaw ? cityRaw.toUpperCase() : '');
     const finalKodePosPten = matchedPtenRecord?.kodePosPten || kpRaw || '';
     // 🧾 CATATAN KERAS: nama kota utk Fase 2 dst = kolom PTEN "KOTA/KABUPATEN MAX 15
-    // DIGIT" (kotaPtenMax15). Bila file PTEN tidak punya kolom itu → potong keras 15
-    // karakter, karena itulah definisi kolom tersebut.
+    // DIGIT" (kotaPtenMax15). Yang dipakai nama mayoritas BARIS PTEN sekota, bukan nama
+    // baris pertama (lihat ptenMax15Mayoritas). Bila file PTEN tidak punya kolom itu →
+    // potong keras 15 karakter, karena itulah definisi kolom tersebut.
     const finalKotaPtenMax15 =
+      (matchedPtenRecord ? ptenMax15Mayoritas.get(cityMatchKey(matchedPtenRecord.kotaPten)) : '') ||
       (matchedPtenRecord?.kotaPtenMax15 || '').trim() ||
       (finalKotaPten.length > 15 ? finalKotaPten.slice(0, 15) : finalKotaPten);
 
@@ -2182,6 +2222,15 @@ export async function executeAnalystPipeline(
       const provinsi = kpEntry.provinsi || meta.matchedProvinsi;
       const kodePosBaris = String(kpEntry.kodePos || '').trim();
 
+      // ── Blok PTEN milik kelurahan ini (bukti kode pos, bukan nama kota) ──
+      // Kalau PTEN benar-benar memuat blok kelurahan ini, blok itulah yang dipakai;
+      // kalau tidak, baris tetap membawa blok kotanya seperti sebelumnya — dan kolom
+      // "KODE POS" vs "KODE POS KELURAHAN" yang BEDA itulah penanda bahwa PTEN tidak
+      // mengenal blok kelurahan ini.
+      const ptenBlokIni = ptenBlokMap.get(kodePosBaris) || null;
+      const blokBaris = ptenBlokIni?.kodePosPten || meta.finalKodePosPten;
+      const statusPtenBaris = ptenBlokIni ? ('SAME' as const) : meta.statusPten;
+
       // Mesin kandidat per kelurahan (C2a) → paket field Fase 2 apa adanya dari
       // baris master terpilih, lalu Fase 3 dihitung ulang untuk outlet itu.
       const r1 = fase2Jalan ? rank1Fase2(meta, kelurahan, kecamatan, kodePosBaris, provinsi) : null;
@@ -2245,11 +2294,11 @@ export async function executeAnalystPipeline(
         : fase3Jalan ? 'ANOMALI' : 'MENUNGGU';
 
       // Analisis inkremental: lewati kelurahan yang SUDAH final (jangan diulang dari awal)
-      if (excludeFinalKeys && excludeFinalKeys.has(makeFinalKey(meta.finalKodePosPten, kelurahan, kecamatan, meta.finalKotaPten))) {
+      if (excludeFinalKeys && excludeFinalKeys.has(makeFinalKey(blokBaris, kelurahan, kecamatan, meta.finalKotaPten))) {
         // G3: catat baris yang dilewati agar laporan cakupan bisa melaporkan jumlahnya.
         skippedFinalCount++;
         if (skippedFinalSampleList.length < 20) {
-          skippedFinalSampleList.push({ kelurahan, kodePos: meta.finalKodePosPten, kota: meta.finalKotaPten });
+          skippedFinalSampleList.push({ kelurahan, kodePos: blokBaris, kota: meta.finalKotaPten });
         }
         continue;
       }
@@ -2259,12 +2308,12 @@ export async function executeAnalystPipeline(
         no: globalRowNo++,
         // Fase 1
         kotaPten: meta.finalKotaPten,
-        kodePosPten: meta.finalKodePosPten, // SAMA untuk semua kelurahan dalam 1 kota PTEN
+        kodePosPten: blokBaris, // blok PTEN milik kelurahan ini; fallback: blok kotanya
         kodePosKelurahan: kodePosBaris, // kode pos kelurahan ini sendiri
         kelurahan,
         kecamatan,
         provinsi,
-        statusPten: meta.statusPten,
+        statusPten: statusPtenBaris,
         placementStatus: meta.placementStatus,
         placementMethod: snNote || meta.placementMethod,
         groupKota: meta.finalKotaPten,
