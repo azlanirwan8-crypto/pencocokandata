@@ -1,7 +1,8 @@
-import React, { useDeferredValue, useMemo, useState } from 'react';
+import React, { useDeferredValue, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Search } from 'lucide-react';
 import { KATEGORI_ANOMALI, URUTAN_KATEGORI } from '../../utils/finalAnomaly';
 import type { AnomalyCategory, FinalAnomaly } from '../../utils/finalAnomaly';
+import { useVirtualWindow } from '../../utils/useVirtualWindow';
 
 interface AnomalyDetailCardProps {
   /** Anomali hasil detectFinalAnomalies, sudah dipotong filter wilayah dashboard. */
@@ -11,8 +12,6 @@ interface AnomalyDetailCardProps {
 }
 
 type Saring = 'SEMUA' | AnomalyCategory;
-
-const HALAMAN = 200;
 
 const TH: React.CSSProperties = {
   padding: '0.42rem 0.6rem', textAlign: 'left', whiteSpace: 'nowrap', position: 'sticky', top: 0,
@@ -40,8 +39,8 @@ function badge(kategori: AnomalyCategory, kecil = false) {
 export const AnomalyDetailCard: React.FC<AnomalyDetailCardProps> = ({ anomali, totalBarisFinal }) => {
   const [saring, setSaring] = useState<Saring>('SEMUA');
   const [cari, setCari] = useState('');
-  const [batas, setBatas] = useState(HALAMAN);
   const tundaCari = useDeferredValue(cari);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const jumlah = useMemo(() => {
     const per: Record<Saring, number> = { SEMUA: anomali.length, PULAU: 0, PROVINSI: 0, STATUS: 0, PENEMPATAN: 0, ROLE: 0 };
@@ -82,10 +81,15 @@ export const AnomalyDetailCard: React.FC<AnomalyDetailCardProps> = ({ anomali, t
     return out;
   }, [berurutan, saring, tundaCari]);
 
+  // Semua baris bisa digulir, tapi hanya yang terlihat yang masuk DOM — daftarnya bisa
+  // puluhan ribu baris (terukur 82.834 anomali pada cloud 2026-09-24).
+  const win = useVirtualWindow({ containerRef: scrollRef, itemCount: tersaring.length, fallbackRowHeight: 34 });
+  const tampil = win.active ? tersaring.slice(win.start, win.end) : tersaring;
+  const mulaiNomor = win.active ? win.start : 0;
+
   if (totalBarisFinal === 0) return null;
 
-  const persen = totalBarisFinal > 0 ? (anomali.length / totalBarisFinal) * 100 : 0;
-  const tampil = tersaring.slice(0, batas);
+  const persen = (anomali.length / totalBarisFinal) * 100;
 
   return (
     <div
@@ -123,7 +127,7 @@ export const AnomalyDetailCard: React.FC<AnomalyDetailCardProps> = ({ anomali, t
             <input
               type="search"
               value={cari}
-              onChange={(e) => { setCari(e.target.value); setBatas(HALAMAN); }}
+              onChange={(e) => setCari(e.target.value)}
               placeholder="Cari outlet, kode pos, kelurahan…"
               aria-label="Cari baris anomali"
               style={{ fontSize: '0.75rem', padding: '0.32rem 0.6rem 0.32rem 1.6rem', border: '1px solid #e9ebec', borderRadius: 5, background: '#f9fafb', width: 220, outline: 'none' }}
@@ -142,7 +146,7 @@ export const AnomalyDetailCard: React.FC<AnomalyDetailCardProps> = ({ anomali, t
               key={k}
               type="button"
               title={arti}
-              onClick={() => { setSaring(k); setBatas(HALAMAN); }}
+              onClick={() => setSaring(k)}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: '0.35rem', border: 'none', cursor: 'pointer',
                 background: aktif ? '#ffffff' : 'transparent', boxShadow: aktif ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
@@ -166,10 +170,11 @@ export const AnomalyDetailCard: React.FC<AnomalyDetailCardProps> = ({ anomali, t
             : `Tidak ada dari ${anomali.length.toLocaleString('id-ID')} baris anomali yang cocok dengan filter ini.`}
         </div>
       ) : (
-        <div style={{ border: '1px solid #e9ebec', borderRadius: 6, overflowX: 'auto', maxHeight: '460px', overflowY: 'auto' }}>
+        <div ref={scrollRef} style={{ border: '1px solid #e9ebec', borderRadius: 6, overflow: 'auto', maxHeight: '460px' }}>
           <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.75rem' }}>
             <thead>
               <tr>
+                <th style={{ ...TH, width: 52 }}>#</th>
                 <th style={TH}>KELAS</th>
                 <th style={TH}>WILAYAH</th>
                 <th style={TH}>KODE POS</th>
@@ -181,18 +186,18 @@ export const AnomalyDetailCard: React.FC<AnomalyDetailCardProps> = ({ anomali, t
               </tr>
             </thead>
             <tbody>
-              {tampil.map((a) => {
+              {win.active && win.padTop > 0 && <tr aria-hidden="true" style={{ height: `${win.padTop}px` }} />}
+              {tampil.map((a, i) => {
                 const r = a.row;
                 const kode = r.kodePosKelurahan || r.kodePosPten || '-';
                 return (
                   <tr key={r.id} style={{ borderTop: '1px solid #f3f6f9' }}>
-                    <td style={{ ...TD, whiteSpace: 'nowrap' }}>
-                      <div style={{ display: 'flex', gap: '0.2rem', flexWrap: 'wrap' }}>{badge(a.primary)}</div>
-                      {a.categories.length > 1 && (
-                        <div style={{ display: 'flex', gap: '0.15rem', flexWrap: 'wrap', marginTop: '0.15rem' }}>
-                          {a.categories.filter((c) => c !== a.primary).map((c) => <span key={c}>{badge(c, true)}</span>)}
-                        </div>
-                      )}
+                    <td style={{ ...TD, fontVariantNumeric: 'tabular-nums', color: '#9ca3af' }}>{(mulaiNomor + i + 1).toLocaleString('id-ID')}</td>
+                    <td style={TD}>
+                      <span style={{ display: 'inline-flex', gap: '0.2rem', alignItems: 'center' }}>
+                        {badge(a.primary)}
+                        {a.categories.filter((c) => c !== a.primary).map((c) => <React.Fragment key={c}>{badge(c, true)}</React.Fragment>)}
+                      </span>
                     </td>
                     <td style={TD}>{r.wilayah || '-'}</td>
                     <td style={{ ...TD, fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#405189' }}>
@@ -208,23 +213,21 @@ export const AnomalyDetailCard: React.FC<AnomalyDetailCardProps> = ({ anomali, t
                       <span style={{ color: '#9ca3af' }}> ({r.tipeUnit || r.statusOutlet || '-'}{r.branchCode ? ` · ${r.branchCode}` : ''})</span>
                     </td>
                     <td style={TD}>{r.statusAnalisa || '-'}</td>
-                    <td style={{ ...TD, whiteSpace: 'normal', minWidth: 260, maxWidth: 420, color: '#6b7280' }}>{a.reasons.join(' · ')}</td>
+                    <td style={{ ...TD, color: '#6b7280' }}>{a.reasons.join(' · ')}</td>
                   </tr>
                 );
               })}
+              {win.active && win.padBottom > 0 && <tr aria-hidden="true" style={{ height: `${win.padBottom}px` }} />}
             </tbody>
           </table>
         </div>
       )}
 
-      {tersaring.length > tampil.length && (
+      {tersaring.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.6rem', marginTop: '0.6rem' }}>
           <span style={{ fontSize: '0.72rem', color: '#878a99' }}>
-            Menampilkan {tampil.length.toLocaleString('id-ID')} dari {tersaring.length.toLocaleString('id-ID')} baris
+            {tersaring.length.toLocaleString('id-ID')} baris pada saringan ini — gulir tabel untuk melihat semuanya
           </span>
-          <button type="button" className="btn btn-sm btn-outline" onClick={() => setBatas((n) => n + HALAMAN)} style={{ fontSize: '0.73rem' }}>
-            Tampilkan {Math.min(HALAMAN, tersaring.length - tampil.length).toLocaleString('id-ID')} lagi
-          </button>
         </div>
       )}
     </div>
