@@ -263,6 +263,8 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   const [cameraLocked, setCameraLocked] = useState(false);
   const [showMatchedModal, setShowMatchedModal] = useState(false);
   const [modalSearchTerm, setModalSearchTerm] = useState('');
+  const [showPasanganModal, setShowPasanganModal] = useState(false);
+  const [pasanganCari, setPasanganCari] = useState('');
   const [trackingMode, setTrackingMode] = useState<'none' | 'aceh_kim'>('none');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [showAnomalyPanel, setShowAnomalyPanel] = useState(false);
@@ -617,6 +619,33 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
   // Pencarian kode pos harus sampai ke titik kode posnya, bukan hanya ke cabang.
   const pinPerKode = useMemo(() => new Map(kodePosPins.map((p) => [p.kodePos, p])), [kodePosPins]);
+
+  // Pasangan garis titik terpilih — satu sumber untuk panel drawer dan modal rinciannya.
+  const pasanganTerpilih = useMemo<KoneksiTitik[]>(
+    () => (selectedPin ? jembatanFinal.koneksi.get(kodePosLima(selectedPin.kodePos)) || [] : []),
+    [selectedPin, jembatanFinal]
+  );
+
+  const pasanganTersaring = useMemo(() => {
+    const q = pasanganCari.trim().toLowerCase();
+    if (!q) return pasanganTerpilih;
+    return pasanganTerpilih.filter((k) => `${k.kode} ${k.kel} ${k.outlet}`.toLowerCase().includes(q));
+  }, [pasanganTerpilih, pasanganCari]);
+
+  const pasanganScrollRef = useRef<HTMLDivElement | null>(null);
+  const pasanganWin = useVirtualWindow({ containerRef: pasanganScrollRef, itemCount: pasanganTersaring.length });
+  const tampilPasangan = pasanganWin.active ? pasanganTersaring.slice(pasanganWin.start, pasanganWin.end) : pasanganTersaring;
+  const offsetPasangan = pasanganWin.active ? pasanganWin.start : 0;
+
+  // Baris pasangan diklik: pindah ke titik itu, garisnya ikut tertarik dari sisi sana.
+  const pilihPasangan = (k: KoneksiTitik) => {
+    const pin = pinPerKode.get(k.kode);
+    setShowPasanganModal(false);
+    if (!pin) return;
+    setDisplayScope('KODEPOS');
+    setSelectedPin(pin);
+    mapInstanceRef.current?.flyTo([pin.lat, pin.lng], 12, { duration: 0.8 });
+  };
 
   // Baris Data Final yang TIDAK muncul di peta: tidak dapat titik dari tabel kode pos,
   // baik lewat kode posnya maupun lewat nama kelurahan+kecamatan+kota.
@@ -2533,7 +2562,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
               {/* Daftar pasangan kode pos dari Data Final — dua arah: titik kodepos <-> KC/KCP */}
               {(() => {
-                const daftar = jembatanFinal.koneksi.get(kodePosLima(selectedPin.kodePos)) || [];
+                const daftar = pasanganTerpilih;
                 if (daftar.length === 0 && !selectedPin.isTitikKodePos) return null;
                 const totalBaris = daftar.reduce((n, k) => n + k.baris, 0);
                 const dari: [number, number] = [selectedPin.lat, selectedPin.lng];
@@ -2541,12 +2570,24 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 const labelUjung = (k: KoneksiTitik) => (selectedPin.isTitikKodePos ? k.outlet : k.kel);
                 return (
                   <div
+                    role={daftar.length ? 'button' : undefined}
+                    tabIndex={daftar.length ? 0 : undefined}
+                    onClick={() => { if (daftar.length) { setPasanganCari(''); setShowPasanganModal(true); } }}
+                    onKeyDown={(e) => {
+                      if (daftar.length && (e.key === 'Enter' || e.key === ' ')) {
+                        e.preventDefault();
+                        setPasanganCari('');
+                        setShowPasanganModal(true);
+                      }
+                    }}
+                    title={daftar.length ? 'Klik untuk membuka daftar lengkap pasangan titik ini' : ''}
                     style={{
                       background: 'rgba(41, 156, 219, 0.07)',
                       border: '1px solid rgba(41, 156, 219, 0.28)',
                       borderRadius: '6px',
                       padding: '0.55rem 0.75rem',
                       marginBottom: '0.75rem',
+                      cursor: daftar.length ? 'pointer' : 'default',
                     }}
                   >
                     <div style={{ fontSize: '0.74rem', fontWeight: 700, color: '#2472a8' }}>
@@ -2575,6 +2616,11 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                     {daftar.length > 8 && (
                       <div style={{ fontSize: '0.66rem', color: '#878a99', marginTop: '0.2rem' }}>
                         +{(daftar.length - 8).toLocaleString('id-ID')} titik lain
+                      </div>
+                    )}
+                    {daftar.length > 0 && (
+                      <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#2472a8', marginTop: '0.4rem' }}>
+                        Lihat semua {daftar.length.toLocaleString('id-ID')} titik →
                       </div>
                     )}
                   </div>
@@ -2903,6 +2949,118 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           </div>
         )}
       </div>
+
+      {/* MODAL DAFTAR LENGKAP PASANGAN GARIS (panel drawer cuma menampilkan 8 teratas) */}
+      {showPasanganModal && selectedPin && pasanganTerpilih.length > 0 && (() => {
+        const dari: [number, number] = [selectedPin.lat, selectedPin.lng];
+        const dariSisi = selectedPin.isTitikKodePos;
+        const judulKolom = dariSisi ? 'OUTLET PEMEGANG' : 'KELURAHAN / KECAMATAN';
+        const labelUjung = (k: KoneksiTitik) => (dariSisi ? k.outlet : k.kel);
+        const totalBaris = pasanganTerpilih.reduce((n, k) => n + k.baris, 0);
+        const WARNA_STATUS: Record<string, string> = { OK: '#0ab39c', REVIEW: '#d68b0c', ANOMALI: '#f06548' };
+        const TEKS_STATUS: Record<string, string> = { OK: 'Terverifikasi', REVIEW: 'Perlu review', ANOMALI: 'Anomali' };
+        return (
+          <DialogPanel
+            onClose={() => setShowPasanganModal(false)}
+            backdropClassName=""
+            backdropStyle={{
+              position: 'fixed', inset: 0, background: 'rgba(33, 37, 41, 0.55)', backdropFilter: 'blur(4px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem',
+            }}
+            className=""
+            style={{
+              background: '#ffffff', borderRadius: '6px', maxWidth: '820px', width: '100%', maxHeight: '85vh',
+              display: 'flex', flexDirection: 'column', boxShadow: '0 8px 16px rgba(0, 0, 0, 0.15)', border: '1px solid #e9ebec',
+            }}
+          >
+            <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid #eef1f4', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fafbfc', borderRadius: '6px 6px 0 0' }}>
+              <div>
+                <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: '#212529' }}>
+                  {pasanganTerpilih.length.toLocaleString('id-ID')} {dariSisi ? 'outlet memegang titik ini' : 'kelurahan dipegang cabang ini'}
+                </h4>
+                <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.75rem', color: '#878a99' }}>
+                  {selectedPin.primaryOutletName} · KP <strong>{selectedPin.kodePos}</strong> · {totalBaris.toLocaleString('id-ID')} baris Data Final · klik satu baris untuk membuka titik itu di peta
+                </p>
+              </div>
+              <button type="button" onClick={() => setShowPasanganModal(false)} aria-label="Tutup" style={{ background: 'none', border: 'none', color: '#878a99', cursor: 'pointer' }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ padding: '0.75rem 1.25rem', borderBottom: '1px solid #eef1f4' }}>
+              <div className="search-input-wrapper" style={{ width: '280px' }}>
+                <Search size={13} className="search-icon-pos" />
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder="Cari kode pos atau nama titik…"
+                  value={pasanganCari}
+                  onChange={(e) => setPasanganCari(e.target.value)}
+                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem 0.35rem 1.85rem' }}
+                />
+              </div>
+            </div>
+
+            <div ref={pasanganScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '0.5rem 1.25rem', maxHeight: '460px' }}>
+              <table className="modern-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.73rem' }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: '44px', textAlign: 'center', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>No</th>
+                    <th style={{ width: '84px', textAlign: 'left', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>KODE POS</th>
+                    <th style={{ minWidth: '180px', textAlign: 'left', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>{judulKolom}</th>
+                    <th style={{ width: '84px', textAlign: 'right', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>BARIS</th>
+                    <th style={{ width: '84px', textAlign: 'right', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>JARAK</th>
+                    <th style={{ width: '116px', textAlign: 'left', background: '#f8f9fa', position: 'sticky', top: 0, zIndex: 2 }}>STATUS TITIK</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pasanganWin.active && pasanganWin.padTop > 0 && <tr aria-hidden="true" style={{ height: `${pasanganWin.padTop}px` }} />}
+                  {tampilPasangan.map((k, i) => {
+                    const status = jembatanFinal.status.get(k.kode);
+                    const km = calculateDistanceKm(dari[0], dari[1], k.lat, k.lng);
+                    return (
+                      <tr
+                        key={k.kode}
+                        onClick={() => pilihPasangan(k)}
+                        title="Buka titik ini di peta"
+                        style={{ borderTop: '1px solid #f1f3f5', cursor: 'pointer' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(41, 156, 219, 0.06)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                      >
+                        <td style={{ textAlign: 'center', color: '#878a99', fontVariantNumeric: 'tabular-nums' }}>{offsetPasangan + i + 1}</td>
+                        <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#405189' }}>{k.kode}</td>
+                        <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{labelUjung(k)}</td>
+                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{k.baris.toLocaleString('id-ID')}</td>
+                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#878a99' }}>{km.toLocaleString('id-ID', { maximumFractionDigits: 1 })} km</td>
+                        <td>
+                          <span style={{ fontSize: '0.66rem', fontWeight: 700, color: status ? WARNA_STATUS[status] : '#878a99' }}>
+                            {status ? TEKS_STATUS[status] : 'Tanpa status'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {pasanganWin.active && pasanganWin.padBottom > 0 && <tr aria-hidden="true" style={{ height: `${pasanganWin.padBottom}px` }} />}
+                  {pasanganTersaring.length === 0 && (
+                    <tr>
+                      <td colSpan={6} style={{ padding: '1rem', textAlign: 'center', color: '#878a99' }}>
+                        Tidak ada dari {pasanganTerpilih.length.toLocaleString('id-ID')} titik yang cocok dengan "{pasanganCari}".
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ padding: '0.75rem 1.25rem', borderTop: '1px solid #eef1f4', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', background: '#fafbfc' }}>
+              <span style={{ fontSize: '0.72rem', color: '#878a99' }}>
+                {pasanganTersaring.length.toLocaleString('id-ID')} dari {pasanganTerpilih.length.toLocaleString('id-ID')} titik
+              </span>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowPasanganModal(false)}>Tutup</button>
+            </div>
+          </DialogPanel>
+        );
+      })()}
 
       {/* MODAL RINCIAN DATA MATCHED UNTUK CABANG INI ("DATA INI SAYA BISA LIHAT DI MANA YA") */}
       {showMatchedModal && selectedPin && (
