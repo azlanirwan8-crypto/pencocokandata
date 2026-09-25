@@ -716,6 +716,8 @@ export const FinalDataManager: React.FC<FinalDataManagerProps> = ({ rows, onRetu
                       label={k.judul === 'No' ? '#' : k.judul}
                       definisi={KOLOM_FILTER_FINAL[i]}
                       sumber={tersaringCari}
+                      semuaDefinisi={KOLOM_FILTER_FINAL}
+                      saringSemua={saring}
                       urutKolom={urut.kolom}
                       urutNaik={urut.naik}
                       onUrut={() => urutkanKolom(k.judul)}

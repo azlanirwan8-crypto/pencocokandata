@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowDown, ArrowUp, ChevronsUpDown, Filter } from 'lucide-react';
-import { BATAS_DAFTAR_NILAI, cariDalamNilai, daftarNilaiUnik, type DefinisiKolomFilter } from '../utils/filterSort';
+import { BATAS_DAFTAR_NILAI, cariDalamNilai, daftarNilaiUnik, dasarDaftarNilai, type DefinisiKolomFilter, type KeadaanSaring } from '../utils/filterSort';
 
 /**
  * Sel header dengan sort asc/desc + popover filter ala Excel (cari nilai + checkbox).
@@ -15,8 +15,11 @@ import { BATAS_DAFTAR_NILAI, cariDalamNilai, daftarNilaiUnik, type DefinisiKolom
 interface ThFilterProps<T> {
   label: string;
   definisi: DefinisiKolomFilter<T>;
-  /** Semua baris tabel (sebelum sort/filter header) — sumber daftar nilai unik. */
+  /** Semua baris tabel (sebelum sort/filter header) — dasar daftar nilai unik. */
   sumber: readonly T[];
+  /** Seluruh definisi kolom + saringan aktif: dipakai membuat daftarnya berjenjang. */
+  semuaDefinisi: readonly DefinisiKolomFilter<T>[];
+  saringSemua: KeadaanSaring;
   urutKolom?: string;
   urutNaik?: boolean;
   onUrut?: () => void;
@@ -36,7 +39,7 @@ interface ThFilterProps<T> {
 }
 
 export function ThFilter<T>({
-  label, definisi, sumber, urutKolom, urutNaik, onUrut, terpilih, onTerapkan,
+  label, definisi, sumber, semuaDefinisi, saringSemua, urutKolom, urutNaik, onUrut, terpilih, onTerapkan,
   latar, warna, tengah, gayaSel, rowSpan, colSpan, title, bolehFilter = true,
 }: ThFilterProps<T>) {
   // Kepala tabel berwarna gelap (palet grup kolom) butuh teks putih; yang tidak punya
@@ -52,7 +55,13 @@ export function ThFilter<T>({
   const aktifUrut = !!onUrut && urutKolom === definisi.kunci;
   const IkonUrut = aktifUrut ? (urutNaik ? ArrowUp : ArrowDown) : ChevronsUpDown;
 
-  const daftar = useMemo(() => (buka ? daftarNilaiUnik(sumber, definisi) : null), [buka, sumber, definisi]);
+  // Berjenjang: kolom lain yang sedang disaring memotong dasar daftar, saringan kolom
+  // ini sendiri tidak (kalau ikut, pilihan lain di kolom ini hilang begitu satu nilai
+  // dipilih dan popopver tidak bisa dipakai mengubah pilihan lagi).
+  const daftar = useMemo(
+    () => (buka ? daftarNilaiUnik(dasarDaftarNilai(sumber, semuaDefinisi, saringSemua, definisi.kunci), definisi) : null),
+    [buka, sumber, semuaDefinisi, saringSemua, definisi]
+  );
   const tampil = useMemo(() => (daftar ? cariDalamNilai(daftar.semua, cari) : []), [daftar, cari]);
 
   const tutup = useCallback(() => setBuka(false), []);

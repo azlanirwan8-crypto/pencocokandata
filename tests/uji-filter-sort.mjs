@@ -3,8 +3,8 @@
 //   npx vite build --ssr tests/entry-uji.ts --outDir tests/out
 //   node tests/uji-filter-sort.mjs
 import {
-  BATAS_DAFTAR_NILAI, KOSONG, barisLolosFilter, cariDalamNilai, daftarNilaiUnik,
-  buatDefinisiKolomGrid, jumlahFilterAktif, sortirBaris, terapkanKeadaan,
+  BATAS_DAFTAR_NILAI, KOSONG, barisLolosFilter, cariDalamNilai, daftarNilaiUnik, dasarDaftarNilai,
+  buatDefinisiKolomGrid, jumlahFilterAktif, saringBaris, sortirBaris, terapkanKeadaan,
 } from './out/entry-uji.js';
 
 let gagal = 0;
@@ -92,6 +92,34 @@ const ambil = (k) => defGrid.find((d) => d.kunci === k).nilai(contohBaris);
 asa('FS8 Dati II memakai nama MAX 15 seperti selnya', [ambil('datiII'), ambil('kotaPtenMax15')], ['SOLO', 'SOLO']);
 asa('FS8 KOTA PTEN menyimpan nama persis PTEN', ambil('kotaPten'), 'SURAKARTA');
 asa('FS8 validasi fase dibaca dari label, bukan mentahan', typeof ambil('statusPten'), 'string');
+
+// ── FS9: daftar nilai BERTINGKAT — kolom lain memotong, saringan sendiri tidak ──
+const DEF_CAB = { kunci: 'Cabang', nilai: (r) => r.cabang };
+const DEF_PROV = { kunci: 'Provinsi', nilai: (r) => r.prov };
+const DEF_KEC = { kunci: 'Kecamatan', nilai: (r) => r.kec };
+const DEF3 = [DEF_CAB, DEF_PROV, DEF_KEC];
+const b9 = [
+  { id: 1, cabang: 'BIAK', prov: 'PAPUA', kec: 'SAMOFA' },
+  { id: 2, cabang: 'WAMENA', prov: 'PAPUA', kec: 'MILIMOKO' },
+  { id: 3, cabang: 'BIAK', prov: 'PAPUA', kec: 'AIMBOKU' },
+  { id: 4, cabang: 'JAYAPURA', prov: 'PAPUA', kec: 'HERAM' },
+  { id: 5, cabang: 'MEDAN', prov: 'SUMUT', kec: 'PERCUT' },
+  { id: 6, cabang: 'BINJAI', prov: 'SUMUT', kec: 'CANGKU' },
+];
+const daftarDari = (saring, kolom) => daftarNilaiUnik(dasarDaftarNilai(b9, DEF3, saring, kolom.kunci), kolom).semua;
+
+asa('FS9 tanpa saringan = daftar penuh', daftarDari({}, DEF_KEC), ['AIMBOKU', 'CANGKU', 'HERAM', 'MILIMOKO', 'PERCUT', 'SAMOFA']);
+// Saringan Provinsi SUMUT hanya menyisakan 2 baris → daftarnya ikut mengecil.
+asa('FS9 kolom lain memotong daftar', daftarDari({ Provinsi: ['SUMUT'] }, DEF_KEC), ['CANGKU', 'PERCUT']);
+asa('FS9 dua kolom lain memotong bersama', daftarDari({ Provinsi: ['SUMUT'], Cabang: ['BINJAI'] }, DEF_KEC), ['CANGKU']);
+// Saringan diri sendiri dikecualikan: kalau tidak, begitu 'PERCUT' dipilih opsi lain
+// hilang dari daftar dan popover tidak bisa dipakai mengubah pilihan lagi.
+asa('FS9 saringan sendiri TIDAK memotong daftarnya', daftarDari({ Kecamatan: ['PERCUT'] }, DEF_KEC), ['AIMBOKU', 'CANGKU', 'HERAM', 'MILIMOKO', 'PERCUT', 'SAMOFA']);
+// Arah sebaliknya juga jalan: Cabang ikut mengikuti Provinsi, bukan daftar mentah.
+asa('FS9 dua arah: daftar cabang mengikuti provinsi', daftarDari({ Provinsi: ['SUMUT'] }, DEF_CAB), ['BINJAI', 'MEDAN']);
+// Yang disaring tetap AND penuh — berjenjang hanya soal ISI DAFTAR, bukan baris.
+asa('FS9 baris tetap hasil AND semua kolom aktif', saringBaris(b9, DEF3, { Provinsi: ['SUMUT'], Kecamatan: ['PERCUT'] }).map((r) => r.id), [5]);
+asa('FS9 nilai dari provinsi lain tidak ikut masuk daftar', daftarDari({ Provinsi: ['PAPUA'] }, DEF_CAB), ['BIAK', 'JAYAPURA', 'WAMENA']);
 
 console.log(gagal === 0 ? '\nSEMUA LULUS' : `\n${gagal} ASERSI GAGAL`);
 process.exit(gagal === 0 ? 0 : 1);

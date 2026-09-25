@@ -584,7 +584,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     setPage(1);
   };
 
-  /** Kepala tabel: teks kolom = tombol sortir (▲/▼), corong = popover daftar nilai ala Excel. */
+  /** Kepala tabel: teks kolom = tombol sortir (ikon panah), corong = popover daftar nilai ala Excel. */
   const thSort = (
     kolom: KolomGrid,
     label: string,
@@ -595,6 +595,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       label={label}
       definisi={definisiUntuk[kolom]}
       sumber={barisDasar}
+      semuaDefinisi={definisiKolom}
+      saringSemua={fs.saring}
       urutKolom={fs.urut.kolom}
       urutNaik={fs.urut.naik}
       onUrut={() => urutkanKolom(kolom)}

@@ -138,6 +138,23 @@ export function saringBaris<T>(rows: readonly T[], definisi: readonly DefinisiKo
   return rows.filter((r) => pasangan.every(({ k, s }) => barisLolosFilter(r, k, s)));
 }
 
+/**
+ * Populasi tempat sebuah kolom membangun DAFTAR NILAINYA.
+ *
+ * Ini yang membuat saringannya berjenjang seperti Excel: daftar nilai kolom B hanya
+ * berisi nilai yang masih hidup setelah kolom lain disaring, tapi saringan B atas
+ * dirinya sendiri dikecualikan — kalau tidak, begitu B dipilih satu nilai, opsi
+ * lain di kolom itu hilang dan popovernya tidak bisa dipakai untuk mengubah pilihan.
+ */
+export function dasarDaftarNilai<T>(
+  rows: readonly T[],
+  definisi: readonly DefinisiKolomFilter<T>[],
+  saring: KeadaanSaring,
+  kunciSendiri: string
+): T[] {
+  return saringBaris(rows, definisi.filter((d) => d.kunci !== kunciSendiri), saring);
+}
+
 /** Terapkan keadaan sort + filter ke sekumpulan baris. */
 export function terapkanKeadaan<T>(
   rows: readonly T[],

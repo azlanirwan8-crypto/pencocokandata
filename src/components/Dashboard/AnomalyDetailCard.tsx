@@ -74,12 +74,6 @@ export const AnomalyDetailCard: React.FC<AnomalyDetailCardProps> = ({ anomali, t
   const tundaCari = useDeferredValue(cari);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const jumlah = useMemo(() => {
-    const per: Record<Saring, number> = { SEMUA: anomali.length, PULAU: 0, PROVINSI: 0, STATUS: 0, PENEMPATAN: 0, ROLE: 0 };
-    for (const a of anomali) for (const c of a.categories) per[c] += 1;
-    return per;
-  }, [anomali]);
-
   // Diurutkan SEKALI per ganti data (kelas tersortir dulu, baru wilayah, baru kode pos) —
   // penyaring dan pencarian tinggal menyapu daftar yang sudah urut. localeCompare di sini
   // terbukti mahal: atas 82 ribu baris ia memakan detik, bukan milidetik.
@@ -98,25 +92,44 @@ export const AnomalyDetailCard: React.FC<AnomalyDetailCardProps> = ({ anomali, t
     });
   }, [anomali]);
 
-  const tersaringCari = useMemo(() => {
+  // Pencarian saja. Strip kelas dan saringan kepala tabel dipasang DI ATAS dasar ini,
+  // masing-masing dengan aturan "yang lain memotong, diri sendiri tidak" — sama seperti
+  // daftar nilai di popover, supaya angka strip tidak jadi nol begitu satu kelas dipilih.
+  const dasarCari = useMemo(() => {
     const q = tundaCari.trim().toLowerCase();
+    if (!q) return berurutan;
     const out: FinalAnomaly[] = [];
     for (const a of berurutan) {
-      if (saring !== 'SEMUA' && !a.categories.includes(saring)) continue;
-      if (q) {
-        const r = a.row;
-        const teks = `${r.wilayah} ${r.namaOutlet} ${r.kodeCabang} ${r.branchCode} ${r.sandiCabang} ${r.kelurahan} ${r.kecamatan} ${r.kotaPtenMax15 || r.kotaPten} ${r.provinsi} ${r.kodePosKelurahan || r.kodePosPten} ${r.statusAnalisa} ${a.reasons.join(' ')}`.toLowerCase();
-        if (!teks.includes(q)) continue;
-      }
-      out.push(a);
+      const r = a.row;
+      const teks = `${r.wilayah} ${r.namaOutlet} ${r.kodeCabang} ${r.branchCode} ${r.sandiCabang} ${r.kelurahan} ${r.kecamatan} ${r.kotaPtenMax15 || r.kotaPten} ${r.provinsi} ${r.kodePosKelurahan || r.kodePosPten} ${r.statusAnalisa} ${a.reasons.join(' ')}`.toLowerCase();
+      if (teks.includes(q)) out.push(a);
     }
     return out;
-  }, [berurutan, saring, tundaCari]);
+  }, [berurutan, tundaCari]);
 
-  // Saringan header dipakai BERSAMAAN dengan strip kelas + pencarian di atasnya (Dan),
-  // dan urutan default tetap `berurutan` selama operator belum klik kepala kolom.
-  const fs = useFilterSort('anomali', KOLOM_ANOMALI, tersaringCari);
-  const tersaring = fs.baris;
+  const fs = useFilterSort('anomali', KOLOM_ANOMALI, dasarCari);
+
+  /** Jumlah per kelas pada baris yang masih hidup — strip sendiri belum dipakai menyaring. */
+  const jumlah = useMemo(() => {
+    const per: Record<Saring, number> = { SEMUA: fs.tersaring.length, PULAU: 0, PROVINSI: 0, STATUS: 0, PENEMPATAN: 0, ROLE: 0 };
+    for (const a of fs.tersaring) for (const c of a.categories) per[c] += 1;
+    return per;
+  }, [fs.tersaring]);
+
+  // Sumber daftar nilai popover: sudah lewat pencarian DAN strip, belum lewat saringan
+  // kolom — ThFilter memotong sisanya sendiri sambil mengecualikan kolomnya.
+  // Kedua turunan ini WAJIB stabil: identitas yang berubah tiap render membuat popover
+  // yang sedang terbuka membangun ulang daftarnya (terukur 385 ms) setiap ketikan.
+  const sumberPopover = useMemo(
+    () => (saring === 'SEMUA' ? dasarCari : dasarCari.filter((a) => a.categories.includes(saring))),
+    [dasarCari, saring]
+  );
+
+  // Menyaring setelah menyortir menjaga urutan yang sedang dipakai operator.
+  const tersaring = useMemo(
+    () => (saring === 'SEMUA' ? fs.baris : fs.baris.filter((a) => a.categories.includes(saring))),
+    [fs.baris, saring]
+  );
 
   // Semua baris bisa digulir, tapi hanya yang terlihat yang masuk DOM — daftarnya bisa
   // puluhan ribu baris (terukur 82.834 anomali pada cloud 2026-09-24).
@@ -218,7 +231,9 @@ export const AnomalyDetailCard: React.FC<AnomalyDetailCardProps> = ({ anomali, t
                       key={kolom.kunci}
                       label={kolom.kunci}
                       definisi={kolom}
-                      sumber={tersaringCari}
+                      sumber={sumberPopover}
+                      semuaDefinisi={KOLOM_ANOMALI}
+                      saringSemua={fs.saring}
                       urutKolom={fs.urut.kolom}
                       urutNaik={fs.urut.naik}
                       onUrut={statis ? undefined : () => fs.gantiUrut(kolom.kunci)}
