@@ -1509,7 +1509,7 @@ export const App: React.FC = () => {
                   wilayahSettings={wilayahSettings}
                   coverage={analystCoverage}
                   ptenList={ptenList}
-                  kodePosRows={kodePosListRef.current || []}
+                  kodePosRows={kodePosListRef.current || kodePosMasterRows}
                   cityOverrides={cityOverrides}
                   onApproveCityOverride={handleApproveCityOverride}
                   onRemoveCityOverride={handleRemoveCityOverride}

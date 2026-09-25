@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect, useDeferredValue } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useDeferredValue, useCallback } from 'react';
 import {
   CheckCircle2,
   RotateCcw,
@@ -19,8 +19,8 @@ import {
   Sparkles,
   AlertTriangle,
   ExternalLink,
-  Shield,
   Store,
+  Undo2,
 } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import type { AnalystRow, AnalystCoverage } from '../../utils/analystPipeline';
@@ -41,9 +41,12 @@ import { CityOverrideModal } from './CityOverrideModal';
 import { ConfirmDialog } from './ConfirmDialog';
 import { formatWilayahName, cleanKelurahan, cleanKecamatan, tanggalBerkas } from '../../utils/normalizer';
 import { formatWilayahCode, applyStandardSheetStyle } from '../../utils/excel';
-import { barisKeExcelAnalyst, JUDUL_KOLOM_ANALYST } from '../../utils/finalColumns';
+import { barisKeExcelAnalyst, buatDefinisiKolomGrid, JUDUL_KOLOM_ANALYST, type KolomGrid } from '../../utils/finalColumns';
 import { exportAnalystExecutivePdf } from '../../utils/pdfExport';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
+import { ThFilter } from '../ThFilter';
+import { useFilterSort } from '../../utils/useFilterSort';
+import type { DefinisiKolomFilter } from '../../utils/filterSort';
 import { useNotification } from '../Notification/NotificationContext';
 
 /** Satu sel "validasi fase N" di tab Data Final: badge hasil + alasannya satu baris. */
@@ -71,38 +74,6 @@ const SelValidasi: React.FC<{
     </td>
   );
 };
-
-/** Kolom tabel yang bisa diurutkan lewat klik header. */
-type SortKolom =
-  | 'no' | 'kelurahan' | 'kecamatan' | 'provinsi' | 'kotaPten' | 'statusPten'
-  | 'kodePosPten' | 'kodePosKelurahan' | 'namaOutlet' | 'wilayah' | 'organisasiTujuan';
-
-const PENGAMBIL_SORT: Record<SortKolom, (r: AnalystRow) => string | number> = {
-  no: (r) => r.no,
-  kelurahan: (r) => r.kelurahan || '',
-  kecamatan: (r) => r.kecamatan || '',
-  provinsi: (r) => r.provinsi || '',
-  kotaPten: (r) => r.kotaPten || r.groupKota || '',
-  statusPten: (r) => `${r.statusPten || ''}|${r.placementMethod || ''}`,
-  kodePosPten: (r) => r.kodePosPten || '',
-  kodePosKelurahan: (r) => r.kodePosKelurahan || '',
-  namaOutlet: (r) => r.namaOutlet || '',
-  wilayah: (r) => r.wilayah || '',
-  organisasiTujuan: (r) => r.organisasiTujuan || '',
-};
-
-/** Sort selalu mengembalikan salinan — `rows` adalah state yang tidak boleh diubah. */
-function terapkanSort(rows: AnalystRow[], kolom: SortKolom | null, arah: 'asc' | 'desc'): AnalystRow[] {
-  if (!kolom) return rows;
-  const ambil = PENGAMBIL_SORT[kolom];
-  const tanda = arah === 'asc' ? 1 : -1;
-  return [...rows].sort((a, b) => {
-    const x = ambil(a);
-    const y = ambil(b);
-    if (typeof x === 'number' && typeof y === 'number') return (x - y) * tanda || a.no - b.no;
-    return String(x).localeCompare(String(y), 'id') * tanda || a.no - b.no;
-  });
-}
 
 interface AnalystResultsGridProps {
   rows: AnalystRow[];
@@ -175,9 +146,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   // Inner tab pada tiap fase: hasil mesin yang siap disetujui vs yang masih butuh
   // kerja operator. Satu state untuk semua fase — hanya labelnya yang berbeda.
   const [innerTab, setInnerTab] = useTampilanTersimpan<'BERES' | 'MANUAL'>('tampilan.analyst.innerTab', 'BERES');
-  // Urutan kolom — dikerjakan lokal karena seluruh baris fase ini sudah ada di memori.
-  const [sortKolom, setSortKolom] = useTampilanTersimpan<SortKolom | null>('tampilan.analyst.sortKolom', null);
-  const [sortDir, setSortDir] = useTampilanTersimpan<'asc' | 'desc'>('tampilan.analyst.sortDir', 'asc');
+  // Urutan & saringan kepala tabel ditangani `useFilterSort` di bawah (sort + daftar
+  // nilai ala Excel); state-nya ikut tersimpan seperti tampilan lain.
   // Pilihan kandidat aktif per baris (rank 1-3) + modal detail kandidat
   const [fase2Choice, setFase2Choice] = useState<Record<string, number>>({});
   const [fase2Detail, setFase2Detail] = useState<{
@@ -242,10 +212,12 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     });
     return m;
   }, [kodePosRows]);
-  const kotaKodePosDari = (r: AnalystRow) =>
-    namaKotaKodePos.get(`${r.kodePosKelurahan}|${cleanKelurahan(r.kelurahan || '')}`) ||
-    namaKotaKodePos.get(`${r.kodePosPten}|${cleanKelurahan(r.kelurahan || '')}`) ||
-    '';
+  // useCallback, bukan fungsi baru tiap render: definisi kolom filter menyimpannya,
+  // dan identitas yang berubah-ubah akan membuat 83 ribu baris disaring ulang.
+  const kotaKodePosDari = useCallback((r: AnalystRow) => {
+    const kel = cleanKelurahan(r.kelurahan || '');
+    return namaKotaKodePos.get(`${r.kodePosKelurahan}|${kel}`) || namaKotaKodePos.get(`${r.kodePosPten}|${kel}`) || '';
+  }, [namaKotaKodePos]);
 
   const cityRowSummary = useMemo(() => {
     const m = new Map<string, { name: string; kodePos: string; provinsi: string; count: number }>();
@@ -558,12 +530,14 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     return { manual: b.manual.length, beres: b.beres.length };
   }, [stageBuckets, stageTab]);
 
-  // Filtered rows (Hanya memproses subset stage yang aktif — 10x-20x lebih cepat)
-  const filteredRows = useMemo(() => {
+  // Filtered rows (Hanya memproses subset stage yang aktif — 10x-20x lebih cepat).
+  // Sengaja TANPA sortir: urutan kepala tabel dikerjakan `useFilterSort` di bawah
+  // supaya hasil saringan (urutan masuk) bisa dipakai bersama dengan hasil tampil.
+  const barisDasar = useMemo(() => {
     const q = deferredSearch.trim().toLowerCase();
     const sourceRows = innerTab === 'MANUAL' ? stageBuckets[stageTab].manual : stageBuckets[stageTab].beres;
 
-    const hasil = sourceRows.filter((r) => {
+    return sourceRows.filter((r) => {
       if (r.kategori !== 'TIDAK_ANALISA' && selectedWilayah !== 'ALL' && r.wilayah !== selectedWilayah) return false;
       if (statusFilter === 'ANOMALI' && r.statusAnalisa !== 'ANOMALI' && r.statusAnalisa !== 'PERLU_REVIEW') return false;
       if (statusFilter === 'EXACT_MATCH' && r.statusAnalisa !== 'EXACT_MATCH') return false;
@@ -590,43 +564,48 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       }
       return true;
     });
-    return terapkanSort(hasil, sortKolom, sortDir);
-  }, [stageBuckets, stageTab, innerTab, selectedWilayah, statusFilter, deferredSearch, sortKolom, sortDir]);
+  }, [stageBuckets, stageTab, innerTab, selectedWilayah, statusFilter, deferredSearch]);
 
-  const toggleSort = (kolom: SortKolom) => {
-    if (sortKolom === kolom) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    else {
-      setSortKolom(kolom);
-      setSortDir('asc');
-    }
+  const definisiKolom = useMemo(() => buatDefinisiKolomGrid(kotaKodePosDari), [kotaKodePosDari]);
+  const definisiUntuk = useMemo(
+    () => Object.fromEntries(definisiKolom.map((d) => [d.kunci, d])) as Record<KolomGrid, DefinisiKolomFilter<AnalystRow>>,
+    [definisiKolom]
+  );
+  const fs = useFilterSort('analyst', definisiKolom, barisDasar);
+  const filteredRows = fs.baris;
+
+  /** Klik nama kolom: balik arah / ganti kolom, lalu mulai lagi dari halaman 1. */
+  const urutkanKolom = (kolom: KolomGrid) => {
+    fs.gantiUrut(kolom);
+    setPage(1);
+  };
+  const pasangSaringan = (kolom: KolomGrid, nilai: string[]) => {
+    fs.setNilaiKolom(kolom, nilai);
     setPage(1);
   };
 
-  /** Header yang bisa diklik: ⇅ belum dipilih, ▲/▼ sedang mengurutkan kolom ini. */
+  /** Kepala tabel: teks kolom = tombol sortir (▲/▼), corong = popover daftar nilai ala Excel. */
   const thSort = (
-    kolom: SortKolom,
+    kolom: KolomGrid,
     label: string,
     gaya?: React.CSSProperties,
-    attrs?: { rowSpan?: number; colSpan?: number }
-  ) => {
-    const aktif = sortKolom === kolom;
-    return (
-      <th
-        {...attrs}
-        style={{ ...gaya, cursor: 'pointer', userSelect: 'none' }}
-        onClick={() => toggleSort(kolom)}
-        aria-sort={aktif ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
-        title={`Urutkan berdasar ${label}`}
-      >
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.28rem' }}>
-          {label}
-          <span style={{ fontSize: '0.66rem', color: aktif ? '#405189' : '#adb5bd' }}>
-            {aktif ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
-          </span>
-        </span>
-      </th>
-    );
-  };
+    attrs?: { rowSpan?: number; colSpan?: number; title?: string }
+  ) => (
+    <ThFilter
+      label={label}
+      definisi={definisiUntuk[kolom]}
+      sumber={barisDasar}
+      urutKolom={fs.urut.kolom}
+      urutNaik={fs.urut.naik}
+      onUrut={() => urutkanKolom(kolom)}
+      terpilih={fs.saring[kolom] ?? []}
+      onTerapkan={(nilai) => pasangSaringan(kolom, nilai)}
+      gayaSel={{ ...gaya, cursor: 'pointer' }}
+      rowSpan={attrs?.rowSpan}
+      colSpan={attrs?.colSpan}
+      title={attrs?.title}
+    />
+  );
 
   // Pagination calculation
   const totalPages = pageSize === 'ALL' ? 1 : Math.max(1, Math.ceil(filteredRows.length / pageSize));
@@ -817,7 +796,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
 
   useEffect(() => {
     tableScrollRef.current?.scrollTo({ top: 0 });
-  }, [page, pageSize, selectedWilayah, statusFilter, viewTab, innerTab, sortKolom, sortDir, deferredSearch]);
+  }, [page, pageSize, selectedWilayah, statusFilter, viewTab, innerTab, fs.urut.kolom, fs.urut.naik, fs.saring, deferredSearch]);
 
   // Export Multi-Sheet per Wilayah (W01 - W17). Kolom diambil dari JUDUL_KOLOM_ANALYST
   // supaya lembar per wilayah dan lembar SEMUA_DATA tidak bisa punya kolom berbeda.
@@ -1249,9 +1228,22 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
             })}
           </div>
 
-          <div style={{ fontSize: '0.78rem', color: '#878a99' }}>
-            Menampilkan <strong style={{ color: '#212529' }}>{filteredRows.length.toLocaleString('id-ID')}</strong> dari{' '}
-            {rows.length.toLocaleString('id-ID')} baris
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+            <div style={{ fontSize: '0.78rem', color: '#878a99' }}>
+              Menampilkan <strong style={{ color: '#212529' }}>{filteredRows.length.toLocaleString('id-ID')}</strong> dari{' '}
+              {rows.length.toLocaleString('id-ID')} baris
+              {fs.jumlahAktif > 0 && ` · ${fs.jumlahAktif} kolom difilter`}
+            </div>
+            {fs.urut.kolom && (
+              <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: '0.73rem' }} onClick={() => { fs.resetUrut(); setPage(1); }} title="Kembalikan urutan seperti saat data masuk">
+                <Undo2 size={12} /> Urutan asli
+              </button>
+            )}
+            {fs.jumlahAktif > 0 && (
+              <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: '0.73rem' }} onClick={() => { fs.bersihkanSemua(); setPage(1); }} title="Hapus semua saringan kolom kepala tabel">
+                <Undo2 size={12} /> Bersihkan saringan ({fs.jumlahAktif})
+              </button>
+            )}
           </div>
         </div>
 
@@ -1509,22 +1501,22 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                   </th>
                   {thSort('no', 'No', { width: '40px', textAlign: 'center', position: 'sticky', left: 34, background: '#f3f6f9', zIndex: 12, borderRight: '1px solid #e9ebec' })}
                   {thSort('wilayah', 'Wilayah', { width: '90px', textAlign: 'center' })}
-                  <th style={{ width: '110px', textAlign: 'center' }}>Sandi Cabang</th>
-                  <th style={{ width: '95px', textAlign: 'center' }}>Branch Code</th>
-                  <th style={{ width: '95px', textAlign: 'center' }}>Kode Cabang</th>
+                  {thSort('sandiCabang', 'Sandi Cabang', { width: '110px', textAlign: 'center' })}
+                  {thSort('branchCode', 'Branch Code', { width: '95px', textAlign: 'center' })}
+                  {thSort('kodeCabang', 'Kode Cabang', { width: '95px', textAlign: 'center' })}
                   {thSort('namaOutlet', 'Nama Outlet', { minWidth: '170px' })}
-                  <th style={{ width: '95px', textAlign: 'center' }}>Status Outlet</th>
-                  <th style={{ minWidth: '200px' }}>ALAMAT</th>
-                  <th style={{ width: '90px', textAlign: 'center' }} title="Kode pos kelurahan ini pada Data KodePos">KODE POS</th>
+                  {thSort('statusOutlet', 'Status Outlet', { width: '95px', textAlign: 'center' })}
+                  {thSort('alamat', 'ALAMAT', { minWidth: '200px' })}
+                  {thSort('kodePosKelurahan', 'KODE POS', { width: '90px', textAlign: 'center' }, { title: 'Kode pos kelurahan ini pada Data KodePos' })}
                   {thSort('kelurahan', 'Kelurahan', { minWidth: '140px' })}
                   {thSort('kecamatan', 'Kecamatan', { minWidth: '140px' })}
-                  <th style={{ minWidth: '140px' }} title="Sama seperti kolom KOTA PTEN (nama MAX 15 digit) — urutan ini mengikuti ekspor Excel. Berubah oranye bila kota menurut Data KodePos berbeda.">Dati II</th>
+                  {thSort('datiII', 'Dati II', { minWidth: '140px' }, { title: 'Sama seperti kolom KOTA PTEN (nama MAX 15 digit) — urutan ini mengikuti ekspor Excel. Berubah oranye bila kota menurut Data KodePos berbeda.' })}
                   {thSort('provinsi', 'Provinsi', { minWidth: '130px' })}
-                  {thSort('kotaPten', 'KOTA PTEN', { minWidth: '140px', borderLeft: '2px solid #b7ebe4' })}
+                  {thSort('kotaPtenMax15', 'KOTA PTEN', { minWidth: '140px', borderLeft: '2px solid #b7ebe4' })}
                   {thSort('kodePosPten', 'KODE POS PTEN', { width: '115px', textAlign: 'center' })}
-                  <th style={{ width: '165px', textAlign: 'center', background: '#eef7ff', color: '#3577f1' }} title="Hasil analisa Fase 1 (PTEN & Kode Pos) untuk baris ini">Validasi Fase 1</th>
-                  <th style={{ width: '175px', textAlign: 'center', background: '#fff9f0', color: '#d68b0c' }} title="Hasil analisa Fase 2 (Wilayah & Master Cabang) untuk baris ini">Validasi Fase 2</th>
-                  <th style={{ width: '175px', textAlign: 'center', background: '#f0fdf8', color: '#0ab39c' }} title="Hasil analisa Fase 3 (Mapping Role & Wondr) untuk baris ini">Validasi Fase 3</th>
+                  {thSort('statusPten', 'Validasi Fase 1', { width: '165px', textAlign: 'center', background: '#eef7ff', color: '#3577f1' }, { title: 'Hasil analisa Fase 1 (PTEN & Kode Pos) untuk baris ini' })}
+                  {thSort('validasi2', 'Validasi Fase 2', { width: '175px', textAlign: 'center', background: '#fff9f0', color: '#d68b0c' }, { title: 'Hasil analisa Fase 2 (Wilayah & Master Cabang) untuk baris ini' })}
+                  {thSort('validasi3', 'Validasi Fase 3', { width: '175px', textAlign: 'center', background: '#f0fdf8', color: '#0ab39c' }, { title: 'Hasil analisa Fase 3 (Mapping Role & Wondr) untuk baris ini' })}
                   <th style={{ width: '95px', textAlign: 'center' }}>Aksi Review</th>
                 </tr>
               )}
@@ -1549,7 +1541,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                   </tr>
                   <tr>
                     {thSort('kelurahan', 'Kelurahan', { minWidth: '140px', borderLeft: '2px solid #e3eff7' })}
-                    <th style={{ minWidth: '150px' }} title="Nama kota/kabupaten persis seperti tertulis di Data KodePos — hanya pembanding tampilan, tidak ikut disimpan di baris hasil">Kota/Kab (dari KodePos)</th>
+                    {thSort('kotaKodePos', 'Kota/Kab (dari KodePos)', { minWidth: '150px' }, { title: 'Nama kota/kabupaten persis seperti tertulis di Data KodePos — hanya pembanding tampilan, tidak ikut disimpan di baris hasil' })}
                     {thSort('kecamatan', 'Kecamatan', { minWidth: '140px' })}
                     {thSort('provinsi', 'Provinsi', { minWidth: '130px' })}
                     {thSort('kodePosKelurahan', 'Kode Pos', { width: '90px', textAlign: 'center' })}
@@ -1587,16 +1579,16 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                     Kandidat Rekomendasi Master
                   </th>
                   {thSort('wilayah', 'Kanwil', { width: '85px', textAlign: 'center' })}
-                  <th style={{ width: '90px', textAlign: 'center' }}>Sandi Cabang</th>
-                  <th style={{ width: '95px', textAlign: 'center' }}>Branch Code</th>
-                  <th style={{ width: '85px', textAlign: 'center' }}>Kode Cabang</th>
+                  {thSort('sandiCabang', 'Sandi Cabang', { width: '90px', textAlign: 'center' })}
+                  {thSort('branchCode', 'Branch Code', { width: '95px', textAlign: 'center' })}
+                  {thSort('kodeCabang', 'Kode Cabang', { width: '85px', textAlign: 'center' })}
                   {/* Nama Outlet & Alamat Cabang sengaja TIDAK ditampilkan di sini: keduanya
                       milik cabang hasil rekomendasi, bukan data baris ini. Yang dibutuhkan
                       operator untuk memutuskan adalah identitas wilayah barisnya. */}
                   {thSort('kelurahan', 'Kelurahan', { minWidth: '140px' })}
                   {thSort('kecamatan', 'Kecamatan', { minWidth: '140px' })}
-                  <th style={{ minWidth: '150px' }} title="Wajib dari kolom PTEN &quot;KOTA/KABUPATEN MAX 15 DIGIT&quot;">Kota / Kab (MAX 15 Digit)</th>
-                  <th style={{ width: '95px', textAlign: 'center' }} title="Kode pos dari data PTEN (hasil tabrakan Fase 1)">Kode Pos</th>
+                  {thSort('kotaPtenMax15', 'Kota / Kab (MAX 15 Digit)', { minWidth: '150px' }, { title: 'Wajib dari kolom PTEN "KOTA/KABUPATEN MAX 15 DIGIT"' })}
+                  {thSort('kodePosPten', 'Kode Pos', { width: '95px', textAlign: 'center' }, { title: 'Kode pos dari data PTEN (hasil tabrakan Fase 1)' })}
                   <th style={{ width: '95px', textAlign: 'center' }}>Aksi Review</th>
                 </tr>
               )}
@@ -1609,34 +1601,27 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                   <th style={{ width: '34px', minWidth: '34px', textAlign: 'center', position: 'sticky', left: 0, background: '#f3f6f9', zIndex: 13, borderRight: '1px solid #e9ebec' }} title="Pilih semua baris pada halaman ini">
                     <input type="checkbox" checked={semuaHalamanTerpilih} onChange={gantiPilihanSemua} aria-label="Pilih semua baris pada halaman ini" style={{ cursor: 'pointer' }} />
                   </th>
-                  <th
-                    style={{
-                      width: '420px',
-                      minWidth: '420px',
-                      maxWidth: '420px',
-                      textAlign: 'left',
-                      background: '#f0fdf8',
-                      color: '#0ab39c',
-                      position: 'sticky',
-                      left: '34px',
-                      zIndex: 12,
-                      boxShadow: '3px 0 6px -2px rgba(0,0,0,0.06)',
-                      borderRight: '2px solid rgba(10,179,156, 0.35)',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                      <Shield size={13} color="#0ab39c" />
-                      <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>Rekomendasi Mapping Role</span>
-                    </div>
-                  </th>
+                  {thSort('validasi3', 'Rekomendasi Mapping Role', {
+                    width: '420px',
+                    minWidth: '420px',
+                    maxWidth: '420px',
+                    textAlign: 'left',
+                    background: '#f0fdf8',
+                    color: '#0ab39c',
+                    position: 'sticky',
+                    left: '34px',
+                    zIndex: 12,
+                    boxShadow: '3px 0 6px -2px rgba(0,0,0,0.06)',
+                    borderRight: '2px solid rgba(10,179,156, 0.35)',
+                  }, { title: 'Hasil analisa Fase 3 untuk baris ini' })}
                   <th style={{ width: '400px', minWidth: '400px', maxWidth: '400px', textAlign: 'left', background: '#fff9f0', color: '#d68b0c', borderRight: '2px solid #f7b84b' }} title="Cabang Master yang terpilih di Fase 2 — acuan rekomendasi role di kolom kiri">
                     Data Master Outlet
                   </th>
-                  <th style={{ width: '95px', textAlign: 'center' }} title="Kode pos dari data PTEN (hasil tabrakan Fase 1)">Kode Pos</th>
-                  <th style={{ minWidth: '140px' }}>Kelurahan</th>
-                  <th style={{ minWidth: '140px' }}>Kecamatan</th>
-                  <th style={{ minWidth: '150px' }} title="Wajib dari kolom PTEN &quot;KOTA/KABUPATEN MAX 15 DIGIT&quot;">Kota / Kab (MAX 15 Digit)</th>
-                  <th style={{ minWidth: '130px' }}>Provinsi</th>
+                  {thSort('kodePosPten', 'Kode Pos', { width: '95px', textAlign: 'center' }, { title: 'Kode pos dari data PTEN (hasil tabrakan Fase 1)' })}
+                  {thSort('kelurahan', 'Kelurahan', { minWidth: '140px' })}
+                  {thSort('kecamatan', 'Kecamatan', { minWidth: '140px' })}
+                  {thSort('kotaPtenMax15', 'Kota / Kab (MAX 15 Digit)', { minWidth: '150px' }, { title: 'Wajib dari kolom PTEN "KOTA/KABUPATEN MAX 15 DIGIT"' })}
+                  {thSort('provinsi', 'Provinsi', { minWidth: '130px' })}
                   <th style={{ width: '110px', textAlign: 'center', verticalAlign: 'middle' }}>Aksi Review</th>
                 </tr>
               )}
@@ -1653,7 +1638,9 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
               ) : filteredRows.length === 0 ? (
                 <tr>
                   <td colSpan={25} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
-                    Tidak ada baris analisa yang cocok dengan filter pencarian "{searchTerm}".
+                    {fs.jumlahAktif > 0
+                      ? `Tidak ada baris yang cocok dengan ${fs.jumlahAktif} saringan kolom di kepala tabel${searchTerm ? ` dan pencarian "${searchTerm}"` : ''}.`
+                      : `Tidak ada baris analisa yang cocok dengan filter pencarian "${searchTerm}".`}
                   </td>
                 </tr>
               ) : (

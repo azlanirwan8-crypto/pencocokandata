@@ -27,14 +27,21 @@ interface ThFilterProps<T> {
   warna?: string;
   tengah?: boolean;
   gayaSel?: React.CSSProperties;
+  /** Kepala tabel gabungan (header 2 baris pada Grid Analis). */
+  rowSpan?: number;
+  colSpan?: number;
+  title?: string;
   /** Kolom yang nilainya tidak pernah dipakai operator tidak perlu dibekali popover. */
   bolehFilter?: boolean;
 }
 
 export function ThFilter<T>({
   label, definisi, sumber, urutKolom, urutNaik, onUrut, terpilih, onTerapkan,
-  latar, warna = '#ffffff', tengah, gayaSel, bolehFilter = true,
+  latar, warna, tengah, gayaSel, rowSpan, colSpan, title, bolehFilter = true,
 }: ThFilterProps<T>) {
+  // Kepala tabel berwarna gelap (palet grup kolom) butuh teks putih; yang tidak punya
+  // latar sendiri harus mewarisi warna tabel, bukan dipaksa putih lalu jadi tak terbaca.
+  const warnaTeks = warna ?? (latar ? '#ffffff' : 'inherit');
   const [buka, setBuka] = useState(false);
   const [cari, setCari] = useState('');
   const [draf, setDraf] = useState<Set<string>>(() => new Set(terpilih));
@@ -93,8 +100,12 @@ export function ThFilter<T>({
   return (
     <th
       ref={selRef}
+      rowSpan={rowSpan}
+      colSpan={colSpan}
+      title={title}
+      aria-sort={onUrut ? (aktifUrut ? (urutNaik ? 'ascending' : 'descending') : 'none') : undefined}
       style={{
-        background: latar, color: warna, whiteSpace: 'nowrap',
+        background: latar, color: warnaTeks, whiteSpace: 'nowrap',
         textAlign: tengah ? 'center' : 'left', ...gayaSel,
       }}
     >

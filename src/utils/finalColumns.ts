@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { AnalystRow } from './analystPipeline';
-import type { DefinisiKolomFilter } from './filterSort';
+import { penjelasanFase1, penjelasanFase2, penjelasanFase3 } from './analystPipeline';
+import type { DefinisiKolomFilter, JenisKolom } from './filterSort';
 
 /**
  * SATU sumber kebenaran untuk 13 kolom Data Final: dipakai tabel menu Final Data,
@@ -68,6 +69,62 @@ export const KOLOM_FILTER_FINAL: DefinisiKolomFilter<AnalystRow>[] = KOLOM_FINAL
   jenis: KOLOM_ANGKA_FINAL.has(k.judul) ? 'angka' : 'teks',
   nilai: (r: AnalystRow) => kosongSel(k.nilai(r)),
 }));
+
+/**
+ * Kolom Grid Analis (menu Data Analyst) yang bisa diurut DAN disaring dari kepala
+ * tabel. Kunci = identitas state tersimpan, jadi dua kolom dengan teks header sama
+ * (mis. "Kode Pos" di tab Fase 1 dan "KODE POS PTEN" di tab Data Final) boleh memakai
+ * kunci yang sama selama keduanya tidak pernah tampil berdampingan.
+ *
+ * Nilai yang dibaca popover SELALU isi baris itu sendiri, bukan pratinjau kandidat
+ * Fase 2 yang ikut ditampilkan di sel pratinjau. Pratinjau itu hanya dihitung untuk
+ * baris yang sedang tampil di layar — kalau ikut dibaca, daftar nilainya berubah tiap
+ * pindah halaman. Baris yang belum diputuskan cabangnya karena itu muncul sebagai
+ * "(kosong)", yang justru penyaring paling berguna di tab Fase 2 dan 3.
+ */
+export type KolomGrid =
+  | 'no' | 'kelurahan' | 'kecamatan' | 'kotaKodePos' | 'kodePosKelurahan' | 'provinsi'
+  | 'wilayah' | 'sandiCabang' | 'branchCode' | 'kodeCabang' | 'namaOutlet' | 'statusOutlet'
+  | 'alamat' | 'datiII' | 'kotaPten' | 'kotaPtenMax15' | 'kodePosPten' | 'statusPten'
+  | 'validasi2' | 'validasi3';
+
+/**
+ * Di-key ulang sebagai Record: TypeScript ikut menuntut setiap `KolomGrid` punya
+ * pengambil nilai, jadi kolom yang lupa diisi gagal saat build, bukan saat operator
+ * membuka popover kepala tabel.
+ */
+const PENGAMBIL_KOLOM_GRID: Record<KolomGrid, { ambil: (r: AnalystRow) => unknown; jenis?: JenisKolom }> = {
+  no: { ambil: (r) => r.no, jenis: 'angka' },
+  kelurahan: { ambil: (r) => r.kelurahan },
+  kecamatan: { ambil: (r) => r.kecamatan },
+  // Pengganti; nilai sebenarnya selalu disuntik lewat buatDefinisiKolomGrid().
+  kotaKodePos: { ambil: () => '' },
+  kodePosKelurahan: { ambil: (r) => r.kodePosKelurahan, jenis: 'angka' },
+  provinsi: { ambil: (r) => r.provinsi },
+  wilayah: { ambil: (r) => r.wilayah },
+  sandiCabang: { ambil: (r) => r.sandiCabang },
+  branchCode: { ambil: (r) => r.branchCode },
+  kodeCabang: { ambil: (r) => r.kodeCabang, jenis: 'angka' },
+  namaOutlet: { ambil: (r) => r.namaOutlet },
+  statusOutlet: { ambil: (r) => r.statusOutlet },
+  alamat: { ambil: (r) => r.alamat },
+  datiII: { ambil: (r) => r.kotaPtenMax15 || r.kotaPten },
+  kotaPten: { ambil: (r) => r.kotaPten || r.groupKota },
+  kotaPtenMax15: { ambil: (r) => r.kotaPtenMax15 || r.kotaPten },
+  kodePosPten: { ambil: (r) => r.kodePosPten, jenis: 'angka' },
+  statusPten: { ambil: (r) => penjelasanFase1(r).label },
+  validasi2: { ambil: (r) => penjelasanFase2(r).label },
+  validasi3: { ambil: (r) => penjelasanFase3(r).label },
+};
+
+/** Kolom 'kotaKodePos' butuh Master Kode Pos, jadi definisinya dibuat di tempat pemanggil. */
+export function buatDefinisiKolomGrid(kotaKodePos: (r: AnalystRow) => string): DefinisiKolomFilter<AnalystRow>[] {
+  return (Object.keys(PENGAMBIL_KOLOM_GRID) as KolomGrid[]).map((kunci) => ({
+    kunci,
+    jenis: PENGAMBIL_KOLOM_GRID[kunci].jenis,
+    nilai: kunci === 'kotaKodePos' ? kotaKodePos : PENGAMBIL_KOLOM_GRID[kunci].ambil,
+  }));
+}
 
 /** Baris contoh pada "Template Excel" menu Final Data — contoh isi, bukan data. */
 export const CONTOH_KOLOM_FINAL: Record<string, string> = {

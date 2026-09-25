@@ -4,7 +4,7 @@
 //   node tests/uji-filter-sort.mjs
 import {
   BATAS_DAFTAR_NILAI, KOSONG, barisLolosFilter, cariDalamNilai, daftarNilaiUnik,
-  jumlahFilterAktif, sortirBaris, terapkanKeadaan,
+  buatDefinisiKolomGrid, jumlahFilterAktif, sortirBaris, terapkanKeadaan,
 } from './out/entry-uji.js';
 
 let gagal = 0;
@@ -75,6 +75,23 @@ const tSort = performance.now() - s0;
 console.log(`FS7 83.747 baris: daftar nilai ${tUnik.toFixed(0)} ms (${db.totalUnik} unik) · sortir ${tSort.toFixed(0)} ms`);
 asa('FS7 membangun daftar nilai di bawah 1 detik', tUnik < 1000, true);
 asa('FS7 sortir 83.747 baris di bawah 1 detik', tSort < 1000, true);
+
+// ── FS8: definisi kolom Grid Analis lengkap & kuncinya tidak dobel ──
+// Dua <ThFilter> berkunci sama dalam SATU baris header akan berbagi state sort/filter
+// secara diam-diam — asersi ini yang menahan agar itu tidak lolos build.
+const defGrid = buatDefinisiKolomGrid(() => 'KOTA DARI KODEPOS');
+const kunciGrid = defGrid.map((d) => d.kunci);
+asa('FS8 tidak ada kunci kolom grid yang dobel', kunciGrid.length, new Set(kunciGrid).size);
+asa('FS8 semua definisi punya pengambil nilai', defGrid.every((d) => typeof d.nilai === 'function'), true);
+asa('FS8 hanya kotaKodePos yang memakai resolver suntikan', kunciGrid.filter((k) => defGrid.find((d) => d.kunci === k).nilai({}) === 'KOTA DARI KODEPOS'), ['kotaKodePos']);
+// Dati II & KOTA PTEN menampilkan teks yang sama tapi HARUS kunci terpisah: keduanya
+// tampil berdampingan di tab Data Final.
+asa('FS8 Dati II dan KOTA PTEN tetap dua kunci berbeda', ['datiII', 'kotaPtenMax15'].every((k) => kunciGrid.includes(k)), true);
+const contohBaris = { no: 7, kelurahan: 'Jajar', kecamatan: 'Laweyan', kotaPten: 'SURAKARTA', kotaPtenMax15: 'SOLO', kodePosPten: '57124', kodePosKelurahan: '57144' };
+const ambil = (k) => defGrid.find((d) => d.kunci === k).nilai(contohBaris);
+asa('FS8 Dati II memakai nama MAX 15 seperti selnya', [ambil('datiII'), ambil('kotaPtenMax15')], ['SOLO', 'SOLO']);
+asa('FS8 KOTA PTEN menyimpan nama persis PTEN', ambil('kotaPten'), 'SURAKARTA');
+asa('FS8 validasi fase dibaca dari label, bukan mentahan', typeof ambil('statusPten'), 'string');
 
 console.log(gagal === 0 ? '\nSEMUA LULUS' : `\n${gagal} ASERSI GAGAL`);
 process.exit(gagal === 0 ? 0 : 1);

@@ -1,8 +1,11 @@
 import React, { useDeferredValue, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Search } from 'lucide-react';
+import { AlertTriangle, Search, Undo2 } from 'lucide-react';
 import { KATEGORI_ANOMALI, URUTAN_KATEGORI } from '../../utils/finalAnomaly';
 import type { AnomalyCategory, FinalAnomaly } from '../../utils/finalAnomaly';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
+import { ThFilter } from '../ThFilter';
+import { useFilterSort } from '../../utils/useFilterSort';
+import type { DefinisiKolomFilter } from '../../utils/filterSort';
 
 interface AnomalyDetailCardProps {
   /** Anomali hasil detectFinalAnomalies, sudah dipotong filter wilayah dashboard. */
@@ -19,6 +22,35 @@ const TH: React.CSSProperties = {
   borderBottom: '1px solid #e9ebec', zIndex: 1,
 };
 const TD: React.CSSProperties = { padding: '0.4rem 0.6rem', whiteSpace: 'nowrap', fontSize: '0.75rem', verticalAlign: 'top', color: '#374151' };
+
+/**
+ * Nilai filter per kolom = apa yang dibaca operator di sel tersebut, tanpa penanda
+ * kosong '-': baris yang kosong masuk ke "(kosong)" seperti "(Blanks)" di Excel.
+ * Kolom gabungan (kelurahan/kecamatan, asal data, cabang) disaring sebagai satu nilai
+ * utuh supaya pilihan di popover bisa dipercaya per-baris — jumlah nilainya tetap
+ * ratusan, bukan per-baris, karena cabang dan kelurahan memang berulang.
+ */
+const gab = (bagian: (string | undefined | null)[], pemisah = ' / ') =>
+  bagian.map((s) => String(s ?? '').trim()).filter(Boolean).join(pemisah);
+
+const KOLOM_ANOMALI: DefinisiKolomFilter<FinalAnomaly>[] = [
+  { kunci: '#', nilai: () => '' },
+  { kunci: 'KELAS', nilai: (a) => KATEGORI_ANOMALI[a.primary].label },
+  { kunci: 'WILAYAH', nilai: (a) => a.row.wilayah },
+  { kunci: 'KODE POS', jenis: 'angka', nilai: (a) => a.row.kodePosKelurahan || a.row.kodePosPten },
+  { kunci: 'KELURAHAN / KECAMATAN', nilai: (a) => gab([a.row.kelurahan, a.row.kecamatan]) },
+  { kunci: 'ASAL DATA', nilai: (a) => gab([a.row.kotaPtenMax15 || a.row.kotaPten, a.row.provinsi], ' · ') },
+  {
+    kunci: 'CABANG TERPASANG',
+    nilai: (a) => {
+      const r = a.row;
+      const kurung = gab([r.tipeUnit || r.statusOutlet, r.branchCode], ' · ');
+      return gab([r.namaOutlet, kurung && `(${kurung})`], ' ');
+    },
+  },
+  { kunci: 'STATUS ANALISA', nilai: (a) => a.row.statusAnalisa },
+  { kunci: 'ALASAN ANOMALI', nilai: (a) => gab(a.reasons, ' · ') },
+];
 
 function badge(kategori: AnomalyCategory, kecil = false) {
   const k = KATEGORI_ANOMALI[kategori];
@@ -66,7 +98,7 @@ export const AnomalyDetailCard: React.FC<AnomalyDetailCardProps> = ({ anomali, t
     });
   }, [anomali]);
 
-  const tersaring = useMemo(() => {
+  const tersaringCari = useMemo(() => {
     const q = tundaCari.trim().toLowerCase();
     const out: FinalAnomaly[] = [];
     for (const a of berurutan) {
@@ -80,6 +112,11 @@ export const AnomalyDetailCard: React.FC<AnomalyDetailCardProps> = ({ anomali, t
     }
     return out;
   }, [berurutan, saring, tundaCari]);
+
+  // Saringan header dipakai BERSAMAAN dengan strip kelas + pencarian di atasnya (Dan),
+  // dan urutan default tetap `berurutan` selama operator belum klik kepala kolom.
+  const fs = useFilterSort('anomali', KOLOM_ANOMALI, tersaringCari);
+  const tersaring = fs.baris;
 
   // Semua baris bisa digulir, tapi hanya yang terlihat yang masuk DOM — daftarnya bisa
   // puluhan ribu baris (terukur 82.834 anomali pada cloud 2026-09-24).
@@ -174,15 +211,25 @@ export const AnomalyDetailCard: React.FC<AnomalyDetailCardProps> = ({ anomali, t
           <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.75rem' }}>
             <thead>
               <tr>
-                <th style={{ ...TH, width: 52 }}>#</th>
-                <th style={TH}>KELAS</th>
-                <th style={TH}>WILAYAH</th>
-                <th style={TH}>KODE POS</th>
-                <th style={TH}>KELURAHAN / KECAMATAN</th>
-                <th style={TH}>ASAL DATA</th>
-                <th style={TH}>CABANG TERPASANG</th>
-                <th style={TH}>STATUS ANALISA</th>
-                <th style={TH}>ALASAN ANOMALI</th>
+                {KOLOM_ANOMALI.map((kolom) => {
+                  const statis = kolom.kunci === '#';
+                  return (
+                    <ThFilter
+                      key={kolom.kunci}
+                      label={kolom.kunci}
+                      definisi={kolom}
+                      sumber={tersaringCari}
+                      urutKolom={fs.urut.kolom}
+                      urutNaik={fs.urut.naik}
+                      onUrut={statis ? undefined : () => fs.gantiUrut(kolom.kunci)}
+                      terpilih={fs.saring[kolom.kunci] ?? []}
+                      onTerapkan={(nilai) => fs.setNilaiKolom(kolom.kunci, nilai)}
+                      gayaSel={statis ? { ...TH, width: 52, textAlign: 'center' } : TH}
+                      tengah={statis}
+                      bolehFilter={!statis}
+                    />
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
@@ -223,10 +270,23 @@ export const AnomalyDetailCard: React.FC<AnomalyDetailCardProps> = ({ anomali, t
         </div>
       )}
 
-      {tersaring.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.6rem', marginTop: '0.6rem' }}>
+      {(tersaring.length > 0 || fs.jumlahAktif > 0) && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.6rem', marginTop: '0.6rem', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '0.72rem', color: '#878a99' }}>
             {tersaring.length.toLocaleString('id-ID')} baris pada saringan ini — gulir tabel untuk melihat semuanya
+            {fs.jumlahAktif > 0 && ` · ${fs.jumlahAktif} kolom difilter`}
+          </span>
+          <span style={{ display: 'flex', gap: '0.4rem' }}>
+            {fs.urut.kolom && (
+              <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: '0.72rem' }} onClick={fs.resetUrut} title="Kembalikan urutan bawaan (kelas → wilayah → kode pos)">
+                <Undo2 size={12} /> Urutan asli
+              </button>
+            )}
+            {fs.jumlahAktif > 0 && (
+              <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: '0.72rem' }} onClick={fs.bersihkanSemua} title="Hapus semua saringan kolom">
+                <Undo2 size={12} /> Bersihkan saringan ({fs.jumlahAktif})
+              </button>
+            )}
           </span>
         </div>
       )}

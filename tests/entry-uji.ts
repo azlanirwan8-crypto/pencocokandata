@@ -3,12 +3,12 @@ export { findTopRoleMatchesByLocation } from '../src/utils/roleRecommender';
 export { getHeaderStyle, getDataCellStyle, applyStandardSheetStyle, exportFinalRowsToExcel, formatWilayahCode } from '../src/utils/excel';
 export { exportFinalRowsToPdf, tabelPdfFinal, labelLingkup } from '../src/utils/pdfExport';
 export { isKimBranchAceh, findKimBranch, findClosestMasterRecommendation, buildMasterProximityIndex } from '../src/utils/recommender';
-export { KOLOM_FINAL, JUDUL_KOLOM_FINAL, barisKeExcelFinal } from '../src/utils/finalColumns';
+export { KOLOM_FINAL, JUDUL_KOLOM_FINAL, barisKeExcelFinal, buatDefinisiKolomGrid } from '../src/utils/finalColumns';
 export { detectFinalAnomalies, KATEGORI_ANOMALI, URUTAN_KATEGORI } from '../src/utils/finalAnomaly';
 export { getIslandFromProvinsi } from '../src/utils/roleMatcher';
 export { formatWilayahName, benturanIdentitas, indeksSisiSelisih, cariPadananSelisih, bedaSisiSelisih, kunciNamaSelisih } from '../src/utils/normalizer';
 
 export { kunciKelKec, kotaCocok, kodePosLima, bangunJembatanOutlet, indeksKantorCabang, bagiPinKeSelLayar } from '../src/utils/geoTitik';
 export { tabrakKotaPtenKodePos } from '../src/utils/tabrakKotaPten';
-export { BATAS_DAFTAR_NILAI, KOSONG, barisLolosFilter, cariDalamNilai, daftarNilaiUnik, jumlahFilterAktif, sortirBaris, terapkanKeadaan } from '../src/utils/filterSort';
+export { BATAS_DAFTAR_NILAI, KOSONG, barisLolosFilter, cariDalamNilai, daftarNilaiUnik, jumlahFilterAktif, saringBaris, sortirBaris, terapkanKeadaan } from '../src/utils/filterSort';
 export { resolveBranchCoordinates, kategoriUnitCabang, clusterMasterRowsForMap, sumberPerkiraan } from '../src/utils/geoCoder';
