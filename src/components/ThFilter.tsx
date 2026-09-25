@@ -41,7 +41,7 @@ export function ThFilter<T>({
 }: ThFilterProps<T>) {
   // Kepala tabel berwarna gelap (palet grup kolom) butuh teks putih; yang tidak punya
   // latar sendiri harus mewarisi warna tabel, bukan dipaksa putih lalu jadi tak terbaca.
-  const warnaTeks = warna ?? (latar ? '#ffffff' : 'inherit');
+  const warnaTeks = warna ?? (latar ? 'var(--text-inverse)' : 'inherit');
   const [buka, setBuka] = useState(false);
   const [cari, setCari] = useState('');
   const [draf, setDraf] = useState<Set<string>>(() => new Set(terpilih));
@@ -109,32 +109,25 @@ export function ThFilter<T>({
         textAlign: tengah ? 'center' : 'left', ...gayaSel,
       }}
     >
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', justifyContent: tengah ? 'center' : 'flex-start' }}>
+      <span className={tengah ? 'th-isi th-isi-tengah' : 'th-isi'}>
         <button
           type="button"
+          className={aktifUrut ? 'th-urut th-urut-aktif' : 'th-urut'}
           onClick={onUrut}
           disabled={!onUrut}
           title={onUrut ? `Urutkan ${label} ${aktifUrut ? (urutNaik ? '— klik untuk turun' : '— klik untuk naik') : '(belum diurutkan)'}` : label}
-          style={{
-            all: 'unset', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', cursor: onUrut ? 'pointer' : 'default',
-            userSelect: 'none', font: 'inherit', color: 'inherit',
-          }}
         >
           {label}
-          {onUrut && <IkonUrut size={11} style={{ opacity: aktifUrut ? 1 : 0.55, flexShrink: 0 }} />}
+          {onUrut && <IkonUrut size={11} />}
         </button>
         {bolehFilter && (
           <button
             type="button"
+            className={terpilih.length ? 'th-korek th-korek-aktif' : 'th-korek'}
             onClick={bukaPopover}
             aria-haspopup="dialog"
             aria-expanded={buka}
             title={`Filter ${label}${terpilih.length ? ` — ${terpilih.length} nilai dipilih` : ''}`}
-            style={{
-              all: 'unset', cursor: 'pointer', display: 'inline-flex', padding: '1px 2px', borderRadius: 3, font: 'inherit',
-              background: terpilih.length ? 'rgba(255,255,255,.85)' : 'transparent',
-              color: terpilih.length ? '#1f2937' : 'inherit',
-            }}
           >
             <Filter size={11} />
           </button>
@@ -144,13 +137,10 @@ export function ThFilter<T>({
       {buka && posisi && createPortal(
         <div
           ref={popoverRef}
+          className="th-popup"
           role="dialog"
           aria-label={`Filter ${label}`}
-          style={{
-            position: 'fixed', top: posisi.top, left: posisi.left, zIndex: 1200, width: 268,
-            background: '#fff', color: '#1f2937', border: '1px solid #d7dce3', borderRadius: 8,
-            boxShadow: '0 10px 28px rgba(15,23,42,.18)', fontSize: '0.74rem', padding: '0.5rem',
-          }}
+          style={{ top: posisi.top, left: posisi.left }}
         >
           <input
             className="search-input"
@@ -158,44 +148,42 @@ export function ThFilter<T>({
             value={cari}
             onChange={(e) => setCari(e.target.value)}
             placeholder={`Cari nilai ${label}…`}
-            style={{ width: '100%', marginBottom: '0.4rem', fontSize: '0.73rem' }}
           />
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.15rem 0.1rem', borderBottom: '1px solid #eef1f4', marginBottom: '0.2rem' }}>
+          <label className="th-popup-baris th-popup-pilar th-popup-baris-kuat">
             <input
               type="checkbox"
               checked={tampil.length > 0 && tampil.every((n) => draf.has(n))}
               onChange={(e) => pilihSemuaTampil(e.target.checked)}
-              style={{ cursor: 'pointer' }}
             />
-            <span style={{ fontWeight: 700 }}>(Pilih Semua)</span>
+            <span>(Pilih Semua)</span>
           </label>
-          <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+          <div className="th-popup-daftar">
             {tampil.length === 0 && (
-              <div style={{ padding: '0.4rem 0.15rem', color: '#878a99' }}>
+              <div className="th-popup-kosong">
                 {daftar && daftar.totalUnik === 0 ? 'Kolom ini kosong di semua baris.' : 'Tidak ada nilai yang cocok dengan pencarian.'}
               </div>
             )}
             {tampil.map((n) => (
-              <label key={n} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.1rem 0.15rem', whiteSpace: 'nowrap' }}>
-                <input type="checkbox" checked={draf.has(n)} onChange={(e) => centang(n, e.target.checked)} style={{ cursor: 'pointer' }} />
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{n}</span>
+              <label key={n} className="th-popup-baris" title={n}>
+                <input type="checkbox" checked={draf.has(n)} onChange={(e) => centang(n, e.target.checked)} />
+                <span>{n}</span>
               </label>
             ))}
           </div>
           {daftar && (
-            <div style={{ padding: '0.3rem 0.15rem 0.15rem', color: '#878a99', fontSize: '0.68rem' }}>
+            <div className="th-popup-catatan">
               {daftar.totalUnik > BATAS_DAFTAR_NILAI && !cari.trim()
                 ? `${daftar.totalUnik.toLocaleString('id-ID')} nilai unik — hanya ${BATAS_DAFTAR_NILAI} pertama ditampilkan, ketik untuk mencari sisanya.`
                 : `${tampil.length} dari ${daftar.totalUnik.toLocaleString('id-ID')} nilai unik.`}
             </div>
           )}
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.4rem', marginTop: '0.35rem' }}>
-            <button type="button" className="btn btn-sm btn-outline" style={{ fontSize: '0.68rem' }} onClick={() => { onTerapkan([]); tutup(); }}>
+          <div className="th-popup-aksi">
+            <button type="button" className="btn btn-sm btn-outline" onClick={() => { onTerapkan([]); tutup(); }}>
               Bersihkan
             </button>
-            <span style={{ display: 'flex', gap: '0.4rem' }}>
-              <button type="button" className="btn btn-sm btn-outline" style={{ fontSize: '0.68rem' }} onClick={tutup}>Batalkan</button>
-              <button type="button" className="btn btn-sm" style={{ fontSize: '0.68rem' }} onClick={() => { onTerapkan([...draf]); tutup(); }}>
+            <span className="th-popup-aksi-kanan">
+              <button type="button" className="btn btn-sm btn-outline" onClick={tutup}>Batalkan</button>
+              <button type="button" className="btn btn-sm btn-primary" onClick={() => { onTerapkan([...draf]); tutup(); }}>
                 Terapkan{draf.size ? ` (${draf.size})` : ''}
               </button>
             </span>

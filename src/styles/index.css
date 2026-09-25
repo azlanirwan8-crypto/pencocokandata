@@ -888,6 +888,172 @@ body {
   background-color: rgba(240, 101, 72, 0.03);
 }
 
+/* ==========================================================================
+   KEPALA TABEL: SORT + FILTER ALA EXCEL (components/ThFilter.tsx)
+   Semua tabel memakai blok ini; komponen hanya menempelkan kelas, tidak
+   membawa warna sendiri.
+   ========================================================================== */
+
+.th-isi {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.th-isi-tengah {
+  justify-content: center;
+}
+
+/* Teks kolom = tombol sortir. `all: unset` lalu susun ulang supaya tidak
+   mewarisi gaya .btn, dan tetap terbaca sebagai label header. */
+.th-urut {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+  user-select: none;
+}
+
+.th-urut:disabled {
+  cursor: default;
+}
+
+.th-urut svg {
+  flex-shrink: 0;
+  opacity: 0.4;
+}
+
+.th-urut-aktif svg {
+  opacity: 1;
+  color: var(--accent-blue);
+}
+
+/* Corong filter. Saat kolom aktif, corong jadi tanda navy Velzon — sama seperti
+   header berfilter di Excel, tanpa perlu teks tambahan. */
+.th-korek {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  color: inherit;
+}
+
+.th-korek:hover {
+  background: var(--accent-blue-subtle);
+  color: var(--accent-blue);
+}
+
+.th-korek-aktif {
+  background: var(--accent-blue);
+  color: #ffffff;
+}
+
+.th-korek-aktif:hover {
+  background: var(--accent-blue-hover);
+  color: #ffffff;
+}
+
+/* Popup. Kelas + posisi tetap inline karena top/left dihitung dari kotak sel. */
+.th-popup {
+  position: fixed;
+  z-index: 1200;
+  width: 268px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 0.5rem;
+  font-size: 0.74rem;
+  color: var(--text-primary);
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+/* Bentuk kotak tetap mengikuti .search-input, tetapi kelas itu di bawah sini
+   menyempit-lebarkan input lewat `width` (210px → 250px saat fokus) dan memberi
+   padding kiri 1,85rem untuk ikon yang tidak ada di popup ini. Dua kelas sekaligus
+   menaikkan spesifisitas, jadi aturannya menang meski datang lebih dulu. */
+.th-popup .search-input {
+  width: 100%;
+  padding-left: 0.65rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.73rem;
+}
+
+.th-popup .search-input:focus {
+  width: 100%;
+}
+
+.th-popup-pilar {
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 0.2rem;
+}
+
+.th-popup-daftar {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.th-popup-baris {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.1rem 0.15rem;
+  white-space: nowrap;
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+}
+
+.th-popup-baris:hover {
+  background: var(--bg-hover-row);
+}
+
+.th-popup-baris-kuat {
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.th-popup-baris > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.th-popup input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: var(--accent-blue);
+  flex-shrink: 0;
+}
+
+.th-popup-kosong {
+  padding: 0.4rem 0.15rem;
+  color: var(--text-secondary);
+}
+
+.th-popup-catatan {
+  padding: 0.3rem 0.15rem 0.15rem;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+}
+
+.th-popup-aksi {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+.th-popup-aksi-kanan {
+  display: flex;
+  gap: 0.4rem;
+}
+
 .code-cell {
   font-family: var(--font-mono);
   font-weight: 600;
@@ -1094,6 +1260,24 @@ body {
   background-color: #f3f3f9;
   color: #212529;
   border-color: #ced4da;
+}
+
+/* Aksi ringan di samping angka/toolbar — dulu kelas ini dipakai empat komponen
+   tanpa pernah didefinisikan, jadi tombolnya hanya menampilkan dasar .btn. */
+.btn-ghost {
+  background-color: transparent;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background-color: var(--accent-blue-subtle);
+  color: var(--accent-blue);
+}
+
+.btn-ghost:disabled {
+  color: var(--text-muted);
+  opacity: 0.6;
 }
 
 .btn-sm {
