@@ -2563,7 +2563,10 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
               {/* Daftar pasangan kode pos dari Data Final — dua arah: titik kodepos <-> KC/KCP */}
               {(() => {
                 const daftar = pasanganTerpilih;
-                if (daftar.length === 0 && !selectedPin.isTitikKodePos) return null;
+                // Tanpa pasangan, catatan ini satu-satunya yang menjelaskan kenapa tidak ada
+                // garis. Dulu ia disembunyikan untuk pin KC/KCP, jadi mengklik cabang yang
+                // belum memegang kelurahan tampak seperti fitur garisnya rusak.
+                if (daftar.length === 0 && !titikKodePosSiap) return null;
                 const totalBaris = daftar.reduce((n, k) => n + k.baris, 0);
                 const dari: [number, number] = [selectedPin.lat, selectedPin.lng];
                 const judul = selectedPin.isTitikKodePos ? 'outlet memegang titik ini' : 'kelurahan dipegang cabang ini';
