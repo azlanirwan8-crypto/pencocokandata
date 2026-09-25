@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useDeferredValue } from 'react';
 import { ShieldAlert, Search, Building2, ChevronRight, X, Layers, Info } from 'lucide-react';
 import type { MasterHealth, MasterRow } from '../../types';
-import { formatWilayahName } from '../../utils/normalizer';
+import { formatWilayahName, kapital } from '../../utils/normalizer';
 
 const TABLE_PAGE = 100;
 const NESTED_BRANCH_CAP = 8;
@@ -295,8 +295,8 @@ export const MasterDuplicateChart: React.FC<MasterDuplicateChartProps> = ({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', maxHeight: '430px', overflowY: 'auto', paddingRight: '0.35rem' }}>
             {chartItems.map((item, idx) => {
               const percentage = Math.round((item.count / maxCount) * 100);
-              const datiName = item.matchingMasterRows?.[0]?.['Dati II'] || '';
-              const provName = item.matchingMasterRows?.[0]?.Provinsi || '';
+              const datiName = kapital(item.matchingMasterRows?.[0]?.['Dati II']);
+              const provName = kapital(item.matchingMasterRows?.[0]?.Provinsi);
               const wilName = item.matchingMasterRows?.[0]?.Wilayah || '';
 
               return (
@@ -331,7 +331,7 @@ export const MasterDuplicateChart: React.FC<MasterDuplicateChartProps> = ({
                         {item.kodePos}
                       </span>
                       <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#212529' }}>
-                        Kec. {item.kecamatan || '-'}
+                        Kec. {kapital(item.kecamatan) || '-'}
                       </span>
                       {datiName && (
                         <span style={{ fontSize: '0.72rem', color: '#6c757d' }}>
@@ -412,7 +412,7 @@ export const MasterDuplicateChart: React.FC<MasterDuplicateChartProps> = ({
                             alignItems: 'center',
                             gap: '0.2rem',
                           }}
-                          title={`Alamat: ${r.ALAMAT || '-'}\nKelurahan: ${r.Kelurahan || '-'}`}
+                          title={`Alamat: ${r.ALAMAT || '-'}\nKelurahan: ${kapital(r.Kelurahan) || '-'}`}
                         >
                           <Building2 size={10} color="#405189" />
                           <strong style={{ fontWeight: 600 }}>{outletLabel}</strong>
@@ -466,7 +466,7 @@ export const MasterDuplicateChart: React.FC<MasterDuplicateChartProps> = ({
             </thead>
             <tbody>
               {tableItems.map((item, idx) => {
-                const datiName = item.matchingMasterRows?.[0]?.['Dati II'] || '-';
+                const datiName = kapital(item.matchingMasterRows?.[0]?.['Dati II']) || '-';
                 const wilName = item.matchingMasterRows?.[0]?.Wilayah || '-';
                 const branchRows = item.matchingMasterRows || [];
 
@@ -476,7 +476,7 @@ export const MasterDuplicateChart: React.FC<MasterDuplicateChartProps> = ({
                     <td className="code-cell" style={{ fontWeight: 700, color: '#405189' }}>
                       {item.kodePos}
                     </td>
-                    <td style={{ fontWeight: 600, color: '#212529' }}>{item.kecamatan || '-'}</td>
+                    <td style={{ fontWeight: 600, color: '#212529' }}>{kapital(item.kecamatan) || '-'}</td>
                     <td style={{ color: '#495057' }}>{datiName}</td>
                     <td>
                       <span

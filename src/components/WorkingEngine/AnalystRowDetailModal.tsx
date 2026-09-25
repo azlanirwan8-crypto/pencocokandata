@@ -10,6 +10,7 @@ import type { MasterRow } from '../../types';
 import type { KodePosRow } from '../../utils/neonSync';
 import { mapsUrlFor } from '../../utils/neonSync';
 import { resolveBranchCoordinates } from '../../utils/geoCoder';
+import { kapital } from '../../utils/normalizer';
 import { kunciKelKec, kotaCocok } from '../../utils/geoTitik';
 
 interface Props {
@@ -166,7 +167,7 @@ export const AnalystRowDetailModal: React.FC<Props> = ({ row, nomor, datiII, kod
       <div className="modal-header" style={{ padding: '0.85rem 1.25rem', borderBottom: '1px solid #eef1f4' }}>
         <h4 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '1rem', fontWeight: 700, color: '#1f2937' }}>
           <MapPin size={18} color="#405189" />
-          Detail Analisa Baris #{no} — {r.namaOutlet || r.kelurahan}
+          Detail Analisa Baris #{no} — {r.namaOutlet || kapital(r.kelurahan)}
         </h4>
         <button type="button" className="modal-close" onClick={onClose} aria-label="Tutup">
           <X size={18} />
@@ -184,9 +185,9 @@ export const AnalystRowDetailModal: React.FC<Props> = ({ row, nomor, datiII, kod
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <div>
                   <div style={{ ...LABEL, color: '#64748b' }}>Kelurahan / Lokasi Target</div>
-                  <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', marginTop: '0.15rem' }}>{r.kelurahan || '-'}</div>
+                  <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', marginTop: '0.15rem' }}>{kapital(r.kelurahan) || '-'}</div>
                   <div style={{ fontSize: '0.78rem', color: '#475569', marginTop: '0.1rem' }}>
-                    {[r.kecamatan, datiII || r.kotaPtenMax15 || r.kotaPten, r.provinsi].filter(Boolean).join(' · ') || '-'}
+                    {[r.kecamatan, datiII || r.kotaPtenMax15 || r.kotaPten, r.provinsi].map((s) => kapital(s)).filter(Boolean).join(' · ') || '-'}
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#ffffff', padding: '0.35rem 0.65rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
@@ -217,10 +218,10 @@ export const AnalystRowDetailModal: React.FC<Props> = ({ row, nomor, datiII, kod
                 <KolomBlok judul="1. Data KodePos (Wilayah)" ikon={Mail} warnaHeader="#3577f1" anak={
                   <>
                     <KartuItem label="Kode Pos Wilayah" mono highlight nilai={r.kodePosKelurahan || kodePosTampil} />
-                    <KartuItem label="Kelurahan / Desa" nilai={r.kelurahan} />
-                    <KartuItem label="Kecamatan" nilai={r.kecamatan} />
-                    <KartuItem label="Kota/Kab (KodePos)" nilai={datiII || r.groupKota || '-'} />
-                    <KartuItem label="Provinsi" nilai={r.provinsi} />
+                    <KartuItem label="Kelurahan / Desa" nilai={kapital(r.kelurahan)} />
+                    <KartuItem label="Kecamatan" nilai={kapital(r.kecamatan)} />
+                    <KartuItem label="Kota/Kab (KodePos)" nilai={kapital(datiII || r.groupKota)} />
+                    <KartuItem label="Provinsi" nilai={kapital(r.provinsi)} />
                   </>
                 } />
               }
@@ -228,10 +229,10 @@ export const AnalystRowDetailModal: React.FC<Props> = ({ row, nomor, datiII, kod
                 <KolomBlok judul="2. Data PTEN (Target Match)" ikon={ShieldCheck} warnaHeader="#0ab39c" anak={
                   <>
                     <KartuItem label="Kode Pos PTEN" mono nilai={r.kodePosPten} />
-                    <KartuItem label="Kota PTEN" highlight nilai={r.kotaPten} />
-                    <KartuItem label="Kota PTEN (Maks 15)" mono highlight nilai={r.kotaPtenMax15} />
+                    <KartuItem label="Kota PTEN" highlight nilai={kapital(r.kotaPten)} />
+                    <KartuItem label="Kota PTEN (Maks 15)" mono highlight nilai={kapital(r.kotaPtenMax15)} />
                     <KartuItem label="Status PTEN" nilai={r.statusPten} />
-                    <KartuItem label="Grup Kota" nilai={r.groupKota} />
+                    <KartuItem label="Grup Kota" nilai={kapital(r.groupKota)} />
                   </>
                 } />
               }
@@ -253,10 +254,10 @@ export const AnalystRowDetailModal: React.FC<Props> = ({ row, nomor, datiII, kod
               blok1={
                 <KolomBlok judul="1. Hasil Kota PTEN (Fase 1)" ikon={Building2} warnaHeader="#d68b0c" anak={
                   <>
-                    <KartuItem label="Kota PTEN Terpilih" highlight nilai={r.kotaPtenMax15 || r.kotaPten} />
-                    <KartuItem label="Kelurahan / Desa" nilai={r.kelurahan} />
-                    <KartuItem label="Kecamatan" nilai={r.kecamatan} />
-                    <KartuItem label="Provinsi" nilai={r.provinsi} />
+                    <KartuItem label="Kota PTEN Terpilih" highlight nilai={kapital(r.kotaPtenMax15 || r.kotaPten)} />
+                    <KartuItem label="Kelurahan / Desa" nilai={kapital(r.kelurahan)} />
+                    <KartuItem label="Kecamatan" nilai={kapital(r.kecamatan)} />
+                    <KartuItem label="Provinsi" nilai={kapital(r.provinsi)} />
                     <KartuItem label="Kode Pos" mono nilai={kodePosTampil} />
                   </>
                 } />
@@ -338,7 +339,7 @@ export const AnalystRowDetailModal: React.FC<Props> = ({ row, nomor, datiII, kod
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', minWidth: 0 }}>
             {titik ? (
               <iframe
-                title={`Peta ${titik.untuk === 'cabang' ? r.namaOutlet : r.kelurahan}`}
+                title={`Peta ${titik.untuk === 'cabang' ? r.namaOutlet : kapital(r.kelurahan)}`}
                 src={`https://maps.google.com/maps?q=${titik.lat},${titik.lng}&z=14&hl=id&output=embed`}
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"

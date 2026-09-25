@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { tulisLembarExcel } from '../../utils/excel';
-import { tanggalBerkas } from '../../utils/normalizer';
+import { tanggalBerkas, kapital } from '../../utils/normalizer';
 import type { TargetRow, MasterRow } from '../../types';
 import { getItem, setItem } from '../../utils/storage';
 import { loadPtenFromNeon, savePtenToNeon } from '../../utils/neonSync';
@@ -971,9 +971,9 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
                                 {item.kodePosPten}
                               </span>
                             </td>
-                            <td style={{ fontWeight: 600, color: '#212529' }}>{item.kotaPten}</td>
+                            <td style={{ fontWeight: 600, color: '#212529' }}>{kapital(item.kotaPten)}</td>
                             <td style={{ color: '#495057', fontFamily: 'var(--font-mono)', fontSize: '0.74rem' }}>
-                              {item.kotaPtenMax15 || item.kotaPten}
+                              {kapital(item.kotaPtenMax15 || item.kotaPten)}
                             </td>
                             <td style={{ textAlign: 'center' }}>
                               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
@@ -1248,7 +1248,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
               <p style={{ fontSize: '0.8rem', color: '#878a99', margin: 0 }}>
                 Apakah Anda yakin ingin menghapus referensi PTEN kode pos{' '}
                 <strong>{ptenList[deleteTargetIndex]?.kodePosPten}</strong> (
-                {ptenList[deleteTargetIndex]?.kotaPten})?
+                {kapital(ptenList[deleteTargetIndex]?.kotaPten)})?
               </p>
             </div>
             <div className="modal-footer" style={{ justifyContent: 'center' }}>

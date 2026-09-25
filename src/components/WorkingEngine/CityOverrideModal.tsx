@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { X, CheckCircle2, MapPin, Navigation, Search } from 'lucide-react';
 import { mapsUrlFor, type KodePosRow } from '../../utils/neonSync';
 import { muatTitikKodePos } from '../../utils/onlineGeoCoder';
+import { kapital } from '../../utils/normalizer';
 import { DialogPanel } from '../BaseModal';
 
 interface CityOverrideModalProps {
@@ -104,7 +105,7 @@ export const CityOverrideModal: React.FC<CityOverrideModalProps> = ({
         <div style={{ padding: '0.9rem 1.1rem 0', fontSize: '0.82rem', color: '#495057', lineHeight: 1.6 }}>
           <div>
             <strong>{masterRows.length.toLocaleString('id-ID')} baris</strong> kota{' '}
-            <strong style={{ color: '#212529' }}>{masterCity}</strong> akan dipetakan ke kota PTEN{' '}
+            <strong style={{ color: '#212529' }}>{kapital(masterCity)}</strong> akan dipetakan ke kota PTEN{' '}
             <strong style={{ color: '#0ab39c' }}>{ptenKota}</strong> ({ptenKodePos.join(', ') || 'tanpa kode pos'}).
           </div>
         </div>
@@ -165,10 +166,10 @@ export const CityOverrideModal: React.FC<CityOverrideModalProps> = ({
                 const t = titik[String(r.kodePos || '').trim()];
                 return (
                   <tr key={`${r.kodePos}-${r.kelurahan}-${(halAman - 1) * HALAMAN_SIZE + i}`} style={{ background: i % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
-                    <td>{r.kelurahan}</td>
-                    <td>{r.kecamatan}</td>
+                    <td>{kapital(r.kelurahan)}</td>
+                    <td>{kapital(r.kecamatan)}</td>
                     <td style={{ textAlign: 'center', fontWeight: 600, color: '#0ab39c' }}>{r.kodePos}</td>
-                    <td>{r.provinsi}</td>
+                    <td>{kapital(r.provinsi)}</td>
                     <td style={{ textAlign: 'center' }}>
                       {t ? (
                         <button

@@ -11,6 +11,7 @@ import {
 } from '../../utils/kodePosSync';
 import { saveKodePosToNeon, mapsUrlFor, geoLabel, type KodePosRow } from '../../utils/neonSync';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
+import { kapital } from '../../utils/normalizer';
 import { useGeoTooltip } from '../GeoTooltip';
 import { DialogPanel } from '../BaseModal';
 import { ConfirmDialog } from '../WorkingEngine/ConfirmDialog';
@@ -389,10 +390,10 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                                 <input type="checkbox" checked={selected.has(key)} onChange={() => toggleOne(key)} aria-label={`Pilih kode pos ${r.kodePos}`} />
                               </td>
                               <td className="code-cell sticky-col" style={{ textAlign: 'center', fontWeight: 700, color: '#0ab39c' }}>{r.kodePos}</td>
-                              <td style={{ fontWeight: 600, color: '#212529' }}>{r.kelurahan}</td>
-                              <td>{r.kecamatan}</td>
-                              <td>{r.kabupatenKota}</td>
-                              <td>{r.provinsi}</td>
+                              <td style={{ fontWeight: 600, color: '#212529' }}>{kapital(r.kelurahan)}</td>
+                              <td>{kapital(r.kecamatan)}</td>
+                              <td>{kapital(r.kabupatenKota)}</td>
+                              <td>{kapital(r.provinsi)}</td>
                               <td
                                 {...tipProps(geoLabel(r))}
                                 style={{

@@ -3,7 +3,7 @@ export { findTopRoleMatchesByLocation } from '../src/utils/roleRecommender';
 export { getHeaderStyle, getDataCellStyle, applyStandardSheetStyle, exportFinalRowsToExcel, formatWilayahCode } from '../src/utils/excel';
 export { exportFinalRowsToPdf, tabelPdfFinal, labelLingkup } from '../src/utils/pdfExport';
 export { isKimBranchAceh, findKimBranch, findClosestMasterRecommendation, buildMasterProximityIndex } from '../src/utils/recommender';
-export { KOLOM_FINAL, JUDUL_KOLOM_FINAL, barisKeExcelFinal, buatDefinisiKolomGrid, KOLOM_FILTER_FINAL } from '../src/utils/finalColumns';
+export { KOLOM_FINAL, JUDUL_KOLOM_FINAL, barisKeExcelFinal, buatDefinisiKolomGrid, KOLOM_FILTER_FINAL, barisKeExcelAnalyst } from '../src/utils/finalColumns';
 export { detectFinalAnomalies, KATEGORI_ANOMALI, URUTAN_KATEGORI } from '../src/utils/finalAnomaly';
 export { getIslandFromProvinsi } from '../src/utils/roleMatcher';
 export { formatWilayahName, benturanIdentitas, indeksSisiSelisih, cariPadananSelisih, bedaSisiSelisih, kunciNamaSelisih } from '../src/utils/normalizer';

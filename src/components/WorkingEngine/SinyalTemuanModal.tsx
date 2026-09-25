@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { X, Search } from 'lucide-react';
 import { DialogPanel } from '../BaseModal';
+import { kapital } from '../../utils/normalizer';
 import { SINYAL_PENCOCOKAN, bitUntuk, bitTemuanBaris, hitungBit, type AnalystRow } from '../../utils/analystPipeline';
 
 interface Props {
@@ -179,9 +180,9 @@ export const SinyalTemuanModal: React.FC<Props> = ({ no, rows, onClose }) => {
                     return (
                       <tr key={r.id}>
                         <td>{r.no}</td>
-                        <td style={SEL_POTONG} title={r.kotaPten}>{r.kotaPten}</td>
+                        <td style={SEL_POTONG} title={kapital(r.kotaPten)}>{kapital(r.kotaPten) || '-'}</td>
                         <td style={{ whiteSpace: 'nowrap' }}>{r.kodePosPten}</td>
-                        <td style={SEL_POTONG} title={r.kelurahan}>{r.kelurahan}</td>
+                        <td style={SEL_POTONG} title={kapital(r.kelurahan)}>{kapital(r.kelurahan) || '-'}</td>
                         <td style={SEL_POTONG} title={r.namaOutlet}>{r.namaOutlet || '-'}</td>
                         <td style={{ ...SEL_POTONG, maxWidth: '360px' }} title={alasan.join(' · ') || undefined}>
                           {alasan.length > 0 ? alasan.join(' · ') : '-'}

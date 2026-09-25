@@ -17,7 +17,7 @@ import {
 import type { TargetRow, MasterRow, WilayahSetting } from '../../types';
 import type { CandidateOption } from '../../utils/recommender';
 import { calculateRealDistance, buildGoogleMapsDirectionsUrl } from '../../utils/geoDistance';
-import { extractWilayahFromBranchCode } from '../../utils/normalizer';
+import { extractWilayahFromBranchCode, kapital } from '../../utils/normalizer';
 import { DialogPanel } from '../BaseModal';
 
 // Helper ekstraksi nomor telepon / No HP KC/KCP
@@ -167,6 +167,8 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
   const pos3Match = !!(targetPos.length >= 3 && masterPos.length >= 3 && targetPos.slice(0, 3) === masterPos.slice(0, 3));
 
   // Penjelasan Narasi Ramah & Mudah Dipahami Orang Umum
+  // Nama wilayah yang dikutip di dalam kalimat memakai bentuk kapital (masterKel,
+  // targetDati, ...) — sama seperti yang dibaca operator di baris tabel di bawahnya.
   const isAceh = targetProv.includes('ACEH') || clean(r.ALAMAT).includes('ACEH');
   const isKim = clean(m.Cabang).includes('KIM') || clean(m['Nama Outlet']).includes('KIM');
 
@@ -179,22 +181,22 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
       'Berdasarkan kebijakan operasional perusahaan, seluruh data target di Provinsi Aceh dilayani langsung oleh Cabang KIM.';
   } else if (kelMatch && kecMatch && datiMatch) {
     explanationTitle = 'Kecocokan Sangat Tinggi (Satu Kelurahan & Kecamatan)';
-    explanationDescription = `Cabang master ini berada di kelurahan (${m.Kelurahan || r.Kelurahan}) dan kecamatan (${m.Kecamatan || r.Kecamatan}) yang sama persis dengan data target. Ini adalah titik pelayanan terdekat paling ideal.`;
+    explanationDescription = `Cabang master ini berada di kelurahan (${masterKel || targetKel}) dan kecamatan (${masterKec || targetKec}) yang sama persis dengan data target. Ini adalah titik pelayanan terdekat paling ideal.`;
   } else if (kelMatch && (datiMatch || kecMatch)) {
     explanationTitle = 'Kecocokan Sangat Tinggi (Satu Kelurahan)';
-    explanationDescription = `Cabang master ini berada di kelurahan (${m.Kelurahan || r.Kelurahan}) yang sama persis dengan data target, ${m['Dati II'] || r['Dati II']}. Ini adalah titik pelayanan terdekat paling ideal.`;
+    explanationDescription = `Cabang master ini berada di kelurahan (${masterKel || targetKel}) yang sama persis dengan data target, ${masterDati || targetDati}. Ini adalah titik pelayanan terdekat paling ideal.`;
   } else if (kelMatch) {
     explanationTitle = 'Kecocokan Sangat Tinggi (Satu Kelurahan)';
-    explanationDescription = `Cabang master ini berada di kelurahan (${m.Kelurahan || r.Kelurahan}) yang sama persis dengan data target.`;
+    explanationDescription = `Cabang master ini berada di kelurahan (${masterKel || targetKel}) yang sama persis dengan data target.`;
   } else if (kecMatch && datiMatch) {
     explanationTitle = 'Kecocokan Tinggi (Satu Kecamatan)';
-    explanationDescription = `Cabang master ini berada di kecamatan yang sama (${m.Kecamatan || r.Kecamatan}), Kota/Kab. ${m['Dati II'] || r['Dati II']}. Karena belum ada cabang di kelurahan yang persis sama, sistem memilih cabang terdekat di tingkat kecamatan.`;
+    explanationDescription = `Cabang master ini berada di kecamatan yang sama (${masterKec || targetKec}), Kota/Kab. ${masterDati || targetDati}. Karena belum ada cabang di kelurahan yang persis sama, sistem memilih cabang terdekat di tingkat kecamatan.`;
   } else if (datiMatch) {
     explanationTitle = 'Satu Kota / Kabupaten (Radius Terdekat)';
-    explanationDescription = `Cabang master ini berada di Kota/Kabupaten yang sama (${m['Dati II'] || r['Dati II']}). Sistem merekomendasikannya sebagai cabang terdekat di wilayah administratif tersebut berdasarkan kedekatan zona kode pos.`;
+    explanationDescription = `Cabang master ini berada di Kota/Kabupaten yang sama (${masterDati || targetDati}). Sistem merekomendasikannya sebagai cabang terdekat di wilayah administratif tersebut berdasarkan kedekatan zona kode pos.`;
   } else if (provMatch) {
     explanationTitle = 'Alternatif Terdekat Satu Provinsi';
-    explanationDescription = `Pada data master tidak ditemukan cabang yang beralamat di ${r['Dati II'] || 'Kota/Kabupaten target'}. Oleh karena itu, sistem secara otomatis mencarikan cabang alternatif terdekat yang masih berada dalam satu naungan Provinsi ${r.Provinsi || m.Provinsi} (${m['Dati II'] || m.Cabang || 'Master'}).`;
+    explanationDescription = `Pada data master tidak ditemukan cabang yang beralamat di ${targetDati || 'Kota/Kabupaten target'}. Oleh karena itu, sistem secara otomatis mencarikan cabang alternatif terdekat yang masih berada dalam satu naungan Provinsi ${targetProv || masterProv} (${masterDati || m.Cabang || 'Master'}).`;
   } else {
     explanationTitle = 'Alternatif Jangkauan Regional Terdekat';
     explanationDescription = `Sistem mencarikan cabang terdekat yang tersedia berdasarkan kesesuaian zona pos terluar dan radius regional data master.`;
@@ -922,21 +924,21 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
                     <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Kecamatan</div>
                     <div style={{ width: '12px', color: '#ced4da' }}>:</div>
-                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{r.Kecamatan || '-'}</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{kapital(r.Kecamatan) || '-'}</div>
                   </div>
 
                   {/* Kelurahan */}
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
                     <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Kelurahan</div>
                     <div style={{ width: '12px', color: '#ced4da' }}>:</div>
-                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{r.Kelurahan || '-'}</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{kapital(r.Kelurahan) || '-'}</div>
                   </div>
 
                   {/* Dati II (Kota) */}
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
                     <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Dati II (Kota)</div>
                     <div style={{ width: '12px', color: '#ced4da' }}>:</div>
-                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{r['Dati II'] || '-'}</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{kapital(r['Dati II']) || '-'}</div>
                   </div>
 
                   {/* Kode Dati II jika ada */}
@@ -952,7 +954,7 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
                     <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Provinsi</div>
                     <div style={{ width: '12px', color: '#ced4da' }}>:</div>
-                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{r.Provinsi || '-'}</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{kapital(r.Provinsi) || '-'}</div>
                   </div>
 
                   {/* Alamat Target */}
@@ -1113,21 +1115,21 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
                     <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Kecamatan</div>
                     <div style={{ width: '12px', color: '#ced4da' }}>:</div>
-                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{m.Kecamatan || '-'}</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{kapital(m.Kecamatan) || '-'}</div>
                   </div>
 
                   {/* Kelurahan */}
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
                     <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Kelurahan</div>
                     <div style={{ width: '12px', color: '#ced4da' }}>:</div>
-                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{m.Kelurahan || '-'}</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{kapital(m.Kelurahan) || '-'}</div>
                   </div>
 
                   {/* Dati II (Kota) */}
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
                     <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Dati II (Kota)</div>
                     <div style={{ width: '12px', color: '#ced4da' }}>:</div>
-                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{m['Dati II'] || '-'}</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{kapital(m['Dati II']) || '-'}</div>
                   </div>
 
                   {/* Kode Dati II jika ada */}
@@ -1143,7 +1145,7 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                   <div style={{ display: 'flex', alignItems: 'center', padding: '0.38rem 0.75rem', borderBottom: '1px solid #f8f9fa', fontSize: '0.75rem', minHeight: '30px' }}>
                     <div style={{ width: '105px', minWidth: '105px', color: '#878a99', fontWeight: 600 }}>Provinsi</div>
                     <div style={{ width: '12px', color: '#ced4da' }}>:</div>
-                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{m.Provinsi || '-'}</div>
+                    <div style={{ flex: 1, color: '#212529', fontWeight: 600 }}>{kapital(m.Provinsi) || '-'}</div>
                   </div>
 
                   {/* Dynamic extra fields if uploaded master contains custom columns */}

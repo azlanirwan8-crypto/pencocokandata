@@ -25,7 +25,7 @@ import type { ActiveTab } from './components/Sidebar';
 
 import type { MasterRow, TargetRow, WilayahStat, WilayahSetting } from './types';
 import { buildMasterIndex, analyzeMasterHealth } from './utils/matcher';
-import { formatWilayahName } from './utils/normalizer';
+import { formatWilayahName, kapital } from './utils/normalizer';
 import { formatWilayahCode } from './utils/excel';
 import type { RoleMappingRecord } from './components/RoleMapping/RoleMappingManager';
 import { DEFAULT_ROLE_MAPPING_DATA } from './components/RoleMapping/RoleMappingManager';
@@ -566,7 +566,7 @@ export const App: React.FC = () => {
         if (!kp) continue;
         const e = byKode.get(kp);
         if (e) e.count++;
-        else byKode.set(kp, { count: 1, kota: r.kotaPtenMax15 || r.kotaPten || r.groupKota || '-' });
+        else byKode.set(kp, { count: 1, kota: kapital(r.kotaPtenMax15 || r.kotaPten || r.groupKota) || '-' });
       }
     }
     let top = { kodePos: '-', count: 0, kota: '-' };
@@ -824,7 +824,7 @@ export const App: React.FC = () => {
     const next = { ...cityOverrides, [cityMatchKey(masterCity)]: ptenKota };
     setCityOverrides(next);
     await setItem('analyst_city_overrides', next);
-    notify(`Peta kota "${masterCity}" → PTEN ${ptenKota} disimpan — analisa dijalankan ulang dengan aturan baru.`, 'info');
+    notify(`Peta kota "${kapital(masterCity)}" → PTEN ${ptenKota} disimpan — analisa dijalankan ulang dengan aturan baru.`, 'info');
     await handleStartAnalystPipeline(false, next);
   };
 

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { ShieldAlert, CheckCircle2, MapPin, Search, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import type { MasterHealth, MasterRow } from '../../types';
+import { kapital } from '../../utils/normalizer';
 
 interface MasterHealthCardProps {
   health: MasterHealth;
@@ -184,10 +185,10 @@ export const MasterHealthCard: React.FC<MasterHealthCardProps> = ({ health }) =>
                       <td>
                         <span className="badge badge-match">{row['Status Outlet'] || 'Aktif'}</span>
                       </td>
-                      <td>{row.Kelurahan || '-'}</td>
-                      <td>{row.Kecamatan || '-'}</td>
-                      <td>{row['Dati II'] || '-'}</td>
-                      <td>{row.Provinsi || '-'}</td>
+                      <td>{kapital(row.Kelurahan) || '-'}</td>
+                      <td>{kapital(row.Kecamatan) || '-'}</td>
+                      <td>{kapital(row['Dati II']) || '-'}</td>
+                      <td>{kapital(row.Provinsi) || '-'}</td>
                       <td title={row.ALAMAT}>
                         {row.ALAMAT || '-'}
                       </td>

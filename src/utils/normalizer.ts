@@ -34,6 +34,18 @@ export function normalizeKodePos(val: unknown): string {
 }
 
 /**
+ * Nama wilayah (kelurahan, kecamatan, kota/kabupaten, provinsi) ditampilkan kapital
+ * penuh — aturan pemilik produk 2026-09-25. INI LAPISAN TAMPILAN SAJA: isi cloud,
+ * `makeFinalKey()` dan isian form tidak ikut berubah, jadi casing asli data masih
+ * bisa dibaca balik. Nilai kosong tetap string kosong supaya pola `kapital(x) || '-'`
+ * tidak berubah jadi strip '-'.
+ */
+export function kapital(val: unknown): string {
+  if (val === null || val === undefined) return '';
+  return String(val).toUpperCase();
+}
+
+/**
  * Clean and standardize general text for comparison
  * Removes brackets, quotes, punctuation, and extra whitespace
  *

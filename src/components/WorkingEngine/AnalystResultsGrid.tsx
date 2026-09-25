@@ -39,7 +39,7 @@ import { AnalystRowDetailModal } from './AnalystRowDetailModal';
 import { PtenCityPicker } from './PtenCityPicker';
 import { CityOverrideModal } from './CityOverrideModal';
 import { ConfirmDialog } from './ConfirmDialog';
-import { formatWilayahName, cleanKelurahan, cleanKecamatan, tanggalBerkas } from '../../utils/normalizer';
+import { formatWilayahName, cleanKelurahan, cleanKecamatan, tanggalBerkas, kapital } from '../../utils/normalizer';
 import { formatWilayahCode, applyStandardSheetStyle } from '../../utils/excel';
 import { barisKeExcelAnalyst, buatDefinisiKolomGrid, JUDUL_KOLOM_ANALYST, type KolomGrid } from '../../utils/finalColumns';
 import { exportAnalystExecutivePdf } from '../../utils/pdfExport';
@@ -204,11 +204,13 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
 
   // Nama kota ASLI dari Data KodePos, dipakai HANYA untuk tampilan kolom pembanding di
   // tab Fase 1 (baris hasil analisa tidak menyimpannya). Kunci: kode pos + kelurahan.
+  // Nilainya sudah dikapital di sini supaya sel tabel DAN daftar popover kepala tabel
+  // membaca angka yang sama — Data KodePos aslinya campur huruf ("Kabupaten Aceh Selatan").
   const namaKotaKodePos = useMemo(() => {
     const m = new Map<string, string>();
     kodePosRows.forEach((r) => {
       const kel = cleanKelurahan(r.kelurahan || '');
-      if (!m.has(`${r.kodePos}|${kel}`)) m.set(`${r.kodePos}|${kel}`, r.kabupatenKota || '');
+      if (!m.has(`${r.kodePos}|${kel}`)) m.set(`${r.kodePos}|${kel}`, kapital(r.kabupatenKota || ''));
     });
     return m;
   }, [kodePosRows]);
@@ -340,7 +342,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     // Klik "Revisi" tanpa kota usulan tidak boleh jadi tombol mati: operator perlu tahu
     // kenapa dialog tidak muncul dan apa yang harus diisi lebih dulu.
     if (!ptenKota) {
-      notify(`Kota "${masterCity}" belum punya usulan kota PTEN — pilih kota PTEN lebih dulu di baris ini, lalu buka Revisi.`, 'warning');
+      notify(`Kota "${kapital(masterCity)}" belum punya usulan kota PTEN — pilih kota PTEN lebih dulu di baris ini, lalu buka Revisi.`, 'warning');
       return;
     }
     if (!onApproveCityOverride) return;
@@ -725,7 +727,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     );
     setOverrideModal({ masterCity, masterRows: masterRowsForCity(masterCity), ptenKota, ptenKodePos });
     if (kotaTerpilih.length > 1) {
-      showToast(`Modal terbuka untuk ${masterCity} (${barisKotaIni.length} baris). ${kotaTerpilih.length - 1} kota lain di pilihan ini perlu diganti satu per satu.`, 'info');
+      showToast(`Modal terbuka untuk ${kapital(masterCity)} (${barisKotaIni.length} baris). ${kotaTerpilih.length - 1} kota lain di pilihan ini perlu diganti satu per satu.`, 'info');
     }
   };
 
@@ -888,11 +890,11 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
               .map((c) => (
                 <div
                   key={c.kabupaten}
-                  title={`${c.kota} + ${c.kabupaten}`}
+                  title={`${kapital(c.kota)} + ${kapital(c.kabupaten)}`}
                   style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem', fontSize: '0.76rem', color: '#6b5836', minWidth: 0 }}
                 >
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {c.kabupaten.replace(/^(KABUPATEN|KAB)\s+/i, '')}
+                    {kapital(c.kabupaten.replace(/^(KABUPATEN|KAB)\s+/i, ''))}
                   </span>
                   <span style={{ flex: 1, borderBottom: '1px dotted #e4cfa4', transform: 'translateY(-3px)' }} />
                   <strong style={{ fontFamily: 'var(--font-mono)', color: '#8a5a00', fontVariantNumeric: 'tabular-nums' }}>
@@ -916,7 +918,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
           <p style={{ fontSize: '0.76rem', color: '#15803d', margin: '0 0 0.2rem', lineHeight: 1.7 }}>
             {coverage!.skippedFinalSamples?.slice(0, 15).map((s, idx) => (
               <span key={idx} style={{ display: 'inline-block', marginRight: '0.85rem', whiteSpace: 'nowrap' }}>
-                {s.kelurahan} ({s.kodePos} - {s.kota})
+                {kapital(s.kelurahan)} ({s.kodePos} - {kapital(s.kota)})
               </span>
             ))}
             {(coverage!.skippedFinalSamples?.length || 0) > 15 && <span>...dan lainnya</span>}
@@ -959,9 +961,9 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                   const draft = overrideDrafts[ck] || '';
                   return (
                     <tr key={c.city}>
-                      <td style={{ fontWeight: 600 }}>{c.city}</td>
+                      <td style={{ fontWeight: 600 }}>{kapital(c.city)}</td>
                       <td style={{ textAlign: 'center' }}>{c.sampleKodePos}</td>
-                      <td>{c.provinsi}</td>
+                      <td>{kapital(c.provinsi)}</td>
                       <td style={{ textAlign: 'right', fontWeight: 700 }}>{c.rows.toLocaleString('id-ID')}</td>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -1006,11 +1008,11 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                   return (
                     <tr key={`ov-${key}`} style={{ background: '#f0faf7' }}>
                       <td style={{ fontWeight: 600 }}>
-                        {masterName}
+                        {kapital(masterName)}
                         <span style={{ marginLeft: '0.4rem', fontSize: '0.66rem', fontWeight: 700, color: '#0ab39c' }}>TERSIPAH</span>
                       </td>
                       <td style={{ textAlign: 'center' }}>{ringkas?.kodePos || ''}</td>
-                      <td>{ringkas?.provinsi || ''}</td>
+                      <td>{kapital(ringkas?.provinsi)}</td>
                       <td style={{ textAlign: 'right', fontWeight: 700 }}>{(ringkas?.count || 0).toLocaleString('id-ID')}</td>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -1466,7 +1468,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                 className="btn btn-outline btn-sm"
                 onClick={gantiKotaTerpilih}
                 title={kotaTerpilih.length > 1
-                  ? `Pilihan mencakup ${kotaTerpilih.length} kota. Modal terbuka untuk kota pertama (${kotaTerpilih[0]}) — berlaku untuk seluruh kelurahan kota itu, bukan per baris.`
+                  ? `Pilihan mencakup ${kotaTerpilih.length} kota. Modal terbuka untuk kota pertama (${kapital(kotaTerpilih[0])}) — berlaku untuk seluruh kelurahan kota itu, bukan per baris.`
                   : 'Tetapkan kota/kabupaten PTEN untuk kota asal baris terpilih (berlaku untuk seluruh kelurahan kota itu)'}
               >
                 <MapPin size={12} /> Ganti Kab/Kota PTEN{kotaTerpilih.length > 1 ? ` (${kotaTerpilih.length} kota)` : ''}
@@ -1693,13 +1695,13 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                           <td style={{ textAlign: 'center' }}>{r.statusOutlet || p2?.statusOutlet || '-'}</td>
                           <td title={r.alamat || p2?.alamat || ''}>{r.alamat || p2?.alamat || '-'}</td>
                           <td className="code-cell" style={{ textAlign: 'center', color: '#0ab39c', fontWeight: 700 }}>{r.kodePosKelurahan || r.kodePosPten || '-'}</td>
-                          <td style={{ fontWeight: 700 }}>{r.kelurahan}</td>
-                          <td>{r.kecamatan}</td>
-                          <td style={{ color: kotaKodePosDari(r) && kotaKodePosDari(r) !== (r.kotaPtenMax15 || r.kotaPten) ? '#d68b0c' : '#495057' }} title={`Nilai sama dengan kolom KOTA PTEN (aturan ekspor). Menurut Data KodePos kota ini: ${kotaKodePosDari(r) || 'tidak ada'}`}>
-                            {r.kotaPtenMax15 || r.kotaPten || '—'}
+                          <td style={{ fontWeight: 700 }}>{kapital(r.kelurahan)}</td>
+                          <td>{kapital(r.kecamatan)}</td>
+                          <td style={{ color: kotaKodePosDari(r) && kotaKodePosDari(r) !== (r.kotaPtenMax15 || r.kotaPten) ? '#d68b0c' : '#495057' }} title={`Nilai sama dengan kolom KOTA PTEN (aturan ekspor). Menurut Data KodePos kota ini: ${kapital(kotaKodePosDari(r)) || 'tidak ada'}`}>
+                            {kapital(r.kotaPtenMax15 || r.kotaPten) || '—'}
                           </td>
-                          <td>{r.provinsi}</td>
-                          <td style={{ fontWeight: 700, borderLeft: '2px solid #b7ebe4' }} title={`Nama persis di PTEN: ${r.kotaPten || '-'}`}>{r.kotaPtenMax15 || r.kotaPten || '—'}</td>
+                          <td>{kapital(r.provinsi)}</td>
+                          <td style={{ fontWeight: 700, borderLeft: '2px solid #b7ebe4' }} title={`Nama persis di PTEN: ${kapital(r.kotaPten) || '-'}`}>{kapital(r.kotaPtenMax15 || r.kotaPten) || '—'}</td>
                           <td className="code-cell" style={{ textAlign: 'center', color: '#0ab39c', fontWeight: 700 }}>
                             {/* Baris belum terpetakan warisi kode pos kelurahan, bukan dari PTEN */}
                             {r.kategori === 'TIDAK_ANALISA' ? '—' : r.kodePosPten || '—'}
@@ -1714,15 +1716,15 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                       {viewTab === 'fase1' && (
                         <>
                           <td style={{ textAlign: 'center', color: '#878a99' }}>{r.kelurahanSeq ?? displayIdx}</td>
-                          <td style={{ fontWeight: 700, color: '#212529', borderLeft: '2px solid #e3eff7' }}>{r.kelurahan}</td>
-                          <td style={{ color: kotaKodePosDari(r) && kotaKodePosDari(r) !== r.kotaPten ? '#d68b0c' : '#495057' }} title="Dari Data KodePos (tampilan saja)">{kotaKodePosDari(r) || '—'}</td>
-                          <td>{r.kecamatan}</td>
-                          <td>{r.provinsi}</td>
+                          <td style={{ fontWeight: 700, color: '#212529', borderLeft: '2px solid #e3eff7' }}>{kapital(r.kelurahan)}</td>
+                          <td style={{ color: kotaKodePosDari(r) && kotaKodePosDari(r) !== r.kotaPten ? '#d68b0c' : '#495057' }} title="Dari Data KodePos (tampilan saja)">{kapital(kotaKodePosDari(r)) || '—'}</td>
+                          <td>{kapital(r.kecamatan)}</td>
+                          <td>{kapital(r.provinsi)}</td>
                           <td className="code-cell" style={{ textAlign: 'center', color: '#299cdb', fontWeight: 700 }}>
                             {r.kodePosKelurahan || '—'}
                           </td>
                           <td style={{ fontWeight: 700, color: r.kotaPten ? '#212529' : '#f0ad4e', borderLeft: '2px solid #b7ebe4' }}>
-                            {r.kotaPten || `${r.groupKota} (belum terpetakan ke PTEN)`}
+                            {kapital(r.kotaPten) || `${kapital(r.groupKota)} (belum terpetakan ke PTEN)`}
                           </td>
                           <td className="code-cell" style={{ textAlign: 'center', color: '#0ab39c', fontWeight: 700 }}>
                             {/* Baris belum terpetakan warisi kode pos kelurahan, bukan dari PTEN */}
@@ -1995,13 +1997,13 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                       </span>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.69rem', color: '#495057', background: '#f9fbfd', padding: '0.18rem 0.45rem', borderRadius: '4px', border: '1px solid #e9ebec', flexWrap: 'wrap' }}>
-                                      <span>Kel: <strong style={{ color: isKelMatched ? '#0ab39c' : '#212529' }}>{m.Kelurahan || '-'}</strong></span>
+                                      <span>Kel: <strong style={{ color: isKelMatched ? '#0ab39c' : '#212529' }}>{kapital(m.Kelurahan) || '-'}</strong></span>
                                       {isKelMatched && <span style={{ fontSize: '0.6rem', padding: '0.02rem 0.25rem', borderRadius: '3px', background: 'rgba(10,179,156,0.12)', color: '#0ab39c', fontWeight: 700 }} title="Kelurahan sama persis">✓ Kelurahan Sama</span>}
                                       <span style={{ color: '#ced4da' }}>•</span>
-                                      <span>Kec: <strong style={{ color: isKecMatched ? '#3577f1' : '#212529' }}>{m.Kecamatan || '-'}</strong></span>
+                                      <span>Kec: <strong style={{ color: isKecMatched ? '#3577f1' : '#212529' }}>{kapital(m.Kecamatan) || '-'}</strong></span>
                                       {isKecMatched && <span style={{ fontSize: '0.6rem', padding: '0.02rem 0.25rem', borderRadius: '3px', background: 'rgba(53,119,241,0.1)', color: '#3577f1', fontWeight: 700 }} title="Kecamatan sama persis">✓ Kecamatan Sama</span>}
                                       <span style={{ color: '#ced4da' }}>•</span>
-                                      <span>{m['Dati II'] || '-'}</span>
+                                      <span>{kapital(m['Dati II']) || '-'}</span>
                                     </div>
                                     <div style={{ fontSize: '0.68rem', color: '#6c757d', marginTop: '0.25rem' }}>{activeCand.reason}</div>
                                   </div>
@@ -2015,9 +2017,9 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                           <td className="code-cell" style={{ textAlign: 'center' }}>{r.sandiCabang || p2?.sandiCabang || '-'}</td>
                           <td className="code-cell" style={{ textAlign: 'center' }}>{r.branchCode || p2?.branchCode || '-'}</td>
                           <td className="code-cell" style={{ textAlign: 'center' }}>{r.kodeCabang || p2?.kodeCabang || '-'}</td>
-                          <td style={{ fontWeight: 700 }}>{r.kelurahan}</td>
-                          <td>{r.kecamatan}</td>
-                          <td style={{ fontWeight: 600 }} title="Kolom PTEN KOTA/KABUPATEN MAX 15 DIGIT">{r.kotaPtenMax15 || r.kotaPten}</td>
+                          <td style={{ fontWeight: 700 }}>{kapital(r.kelurahan)}</td>
+                          <td>{kapital(r.kecamatan)}</td>
+                          <td style={{ fontWeight: 600 }} title="Kolom PTEN KOTA/KABUPATEN MAX 15 DIGIT">{kapital(r.kotaPtenMax15 || r.kotaPten)}</td>
                           <td className="code-cell" style={{ textAlign: 'center', fontWeight: 700 }} title={r.kodePosKelurahan && r.kodePosKelurahan !== r.kodePosPten ? `Kode pos kelurahan ini sendiri: ${r.kodePosKelurahan}` : undefined}>{r.kodePosPten || r.kodePosKelurahan || '-'}</td>
                         </>
                       )}
@@ -2197,13 +2199,13 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                     </span>
                                   </div>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.69rem', color: '#495057', background: '#f9fbfd', padding: '0.18rem 0.45rem', borderRadius: '4px', border: '1px solid #e9ebec', flexWrap: 'nowrap', ...ell }}>
-                                    <span>Kel: <strong style={{ color: isKelMatched ? '#0ab39c' : '#212529' }}>{m.Kelurahan || '-'}</strong></span>
+                                    <span>Kel: <strong style={{ color: isKelMatched ? '#0ab39c' : '#212529' }}>{kapital(m.Kelurahan) || '-'}</strong></span>
                                     {isKelMatched && <span style={{ fontSize: '0.6rem', padding: '0.02rem 0.25rem', borderRadius: '3px', background: 'rgba(10,179,156,0.12)', color: '#0ab39c', fontWeight: 700 }} title="Kelurahan sama persis">✓ Sama</span>}
                                     <span style={{ color: '#ced4da' }}>•</span>
-                                    <span>Kec: <strong style={{ color: isKecMatched ? '#3577f1' : '#212529' }}>{m.Kecamatan || '-'}</strong></span>
+                                    <span>Kec: <strong style={{ color: isKecMatched ? '#3577f1' : '#212529' }}>{kapital(m.Kecamatan) || '-'}</strong></span>
                                     {isKecMatched && <span style={{ fontSize: '0.6rem', padding: '0.02rem 0.25rem', borderRadius: '3px', background: 'rgba(53,119,241,0.1)', color: '#3577f1', fontWeight: 700 }} title="Kecamatan sama persis">✓ Sama</span>}
                                     <span style={{ color: '#ced4da' }}>•</span>
-                                    <span>{m['Dati II'] || '-'}</span>
+                                    <span>{kapital(m['Dati II']) || '-'}</span>
                                   </div>
                                   <div style={{ fontSize: '0.68rem', color: '#6c757d', marginTop: '0.25rem', ...ell }} title={m.ALAMAT || ''}>
                                     Alamat: {m.ALAMAT || '-'}
@@ -2215,10 +2217,10 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                           <td className="code-cell" style={{ textAlign: 'center', fontWeight: 700 }} title={r.kodePosKelurahan && r.kodePosKelurahan !== r.kodePosPten ? `Kode pos kelurahan ini sendiri: ${r.kodePosKelurahan}` : undefined}>
                             {r.kodePosPten || r.kodePosKelurahan || '-'}
                           </td>
-                          <td style={{ fontWeight: 700 }}>{r.kelurahan}</td>
-                          <td>{r.kecamatan}</td>
-                          <td style={{ fontWeight: 600 }} title={r.kotaPten}>{r.kotaPtenMax15 || r.kotaPten}</td>
-                          <td>{r.provinsi}</td>
+                          <td style={{ fontWeight: 700 }}>{kapital(r.kelurahan)}</td>
+                          <td>{kapital(r.kecamatan)}</td>
+                          <td style={{ fontWeight: 600 }} title={kapital(r.kotaPten)}>{kapital(r.kotaPtenMax15 || r.kotaPten)}</td>
+                          <td>{kapital(r.provinsi)}</td>
                         </>
                       )}
 
@@ -2432,7 +2434,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
             delete next[cityMatchKey(masterCity)];
             return next;
           });
-          showToast(`${masterRows.length.toLocaleString('id-ID')} baris ${masterCity} dipetakan ke ${ptenKota} — menganalisa ulang…`);
+          showToast(`${masterRows.length.toLocaleString('id-ID')} baris ${kapital(masterCity)} dipetakan ke ${ptenKota} — menganalisa ulang…`);
           onApproveCityOverride(masterCity, ptenKota);
         }}
       />
@@ -2452,7 +2454,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
         icon={<AlertTriangle size={20} />}
         accent="#f7b84b"
         title="Revisi Baris?"
-        message={confirmManualRow ? `Baris #${confirmManualRow.no} (${confirmManualRow.namaOutlet || confirmManualRow.kelurahan}) akan dikembalikan ke tab “Perlu Analisa Manual” pada fase yang sama.` : ''}
+        message={confirmManualRow ? `Baris #${confirmManualRow.no} (${confirmManualRow.namaOutlet || kapital(confirmManualRow.kelurahan)}) akan dikembalikan ke tab “Perlu Analisa Manual” pada fase yang sama.` : ''}
         confirmLabel="Ya, Revisi"
         onConfirm={() => {
           if (!confirmManualRow) return;

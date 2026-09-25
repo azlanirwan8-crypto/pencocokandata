@@ -3,6 +3,7 @@ import { AlertTriangle, Search, Undo2 } from 'lucide-react';
 import { KATEGORI_ANOMALI, URUTAN_KATEGORI } from '../../utils/finalAnomaly';
 import type { AnomalyCategory, FinalAnomaly } from '../../utils/finalAnomaly';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
+import { kapital } from '../../utils/normalizer';
 import { ThFilter } from '../ThFilter';
 import { useFilterSort } from '../../utils/useFilterSort';
 import type { DefinisiKolomFilter } from '../../utils/filterSort';
@@ -38,8 +39,8 @@ const KOLOM_ANOMALI: DefinisiKolomFilter<FinalAnomaly>[] = [
   { kunci: 'KELAS', nilai: (a) => KATEGORI_ANOMALI[a.primary].label },
   { kunci: 'WILAYAH', nilai: (a) => a.row.wilayah },
   { kunci: 'KODE POS', jenis: 'angka', nilai: (a) => a.row.kodePosKelurahan || a.row.kodePosPten },
-  { kunci: 'KELURAHAN / KECAMATAN', nilai: (a) => gab([a.row.kelurahan, a.row.kecamatan]) },
-  { kunci: 'ASAL DATA', nilai: (a) => gab([a.row.kotaPtenMax15 || a.row.kotaPten, a.row.provinsi], ' · ') },
+  { kunci: 'KELURAHAN / KECAMATAN', nilai: (a) => gab([kapital(a.row.kelurahan), kapital(a.row.kecamatan)]) },
+  { kunci: 'ASAL DATA', nilai: (a) => gab([kapital(a.row.kotaPtenMax15 || a.row.kotaPten), kapital(a.row.provinsi)], ' · ') },
   {
     kunci: 'CABANG TERPASANG',
     nilai: (a) => {
@@ -268,8 +269,8 @@ export const AnomalyDetailCard: React.FC<AnomalyDetailCardProps> = ({ anomali, t
                         <span style={{ color: '#9ca3af', fontWeight: 500 }} title={`Kode pos kota dari PTEN: ${r.kodePosPten}`}> ·{r.kodePosPten}</span>
                       )}
                     </td>
-                    <td style={{ ...TD, fontWeight: 600, color: '#212529' }}>{r.kelurahan || '-'} / {r.kecamatan || '-'}</td>
-                    <td style={TD}>{r.kotaPtenMax15 || r.kotaPten || '-'} · {r.provinsi || '-'}</td>
+                    <td style={{ ...TD, fontWeight: 600, color: '#212529' }}>{kapital(r.kelurahan) || '-'} / {kapital(r.kecamatan) || '-'}</td>
+                    <td style={TD}>{kapital(r.kotaPtenMax15 || r.kotaPten) || '-'} · {kapital(r.provinsi) || '-'}</td>
                     <td style={TD}>
                       <span style={{ fontWeight: 600, color: '#0284c7' }}>{r.namaOutlet || '-'}</span>
                       <span style={{ color: '#9ca3af' }}> ({r.tipeUnit || r.statusOutlet || '-'}{r.branchCode ? ` · ${r.branchCode}` : ''})</span>

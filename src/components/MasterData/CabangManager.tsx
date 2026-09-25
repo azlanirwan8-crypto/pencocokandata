@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import type { MasterRow, MasterHealth, WilayahSetting } from '../../types';
 import { parseExcelFile, validateMasterHeaders, downloadMasterTemplate, tulisLembarExcel } from '../../utils/excel';
-import { tanggalBerkas } from '../../utils/normalizer';
+import { tanggalBerkas, kapital } from '../../utils/normalizer';
 import { MasterHealthCard } from './MasterHealthCard';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
 import { DialogPanel } from '../BaseModal';
@@ -800,10 +800,10 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
                           {r['KODE POS']}
                         </td>
                         <td>
-                          <div style={{ color: '#212529' }}>{r.Kelurahan || '-'}</div>
-                          <div style={{ fontSize: '0.7rem', color: '#878a99' }}>{r.Kecamatan || ''}</div>
+                          <div style={{ color: '#212529' }}>{kapital(r.Kelurahan) || '-'}</div>
+                          <div style={{ fontSize: '0.7rem', color: '#878a99' }}>{kapital(r.Kecamatan)}</div>
                         </td>
-                        <td style={{ color: '#495057' }}>{r['Dati II'] || '-'}</td>
+                        <td style={{ color: '#495057' }}>{kapital(r['Dati II']) || '-'}</td>
                         <td title={r.ALAMAT}>
                           {r.ALAMAT || '-'}
                         </td>

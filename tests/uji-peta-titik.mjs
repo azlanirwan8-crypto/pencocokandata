@@ -90,6 +90,15 @@ asa('PT4 tiga pin nyata, satu perkiraan', pins.map((p) => !p.perkiraan), [true, 
 asa('PT4 pin nyata memakai koordinat titiknya', pins[1].lat, 5.07965);
 asa('PT4 pin perkiraan ditandai di asal titik', pins[3].sumberTitik, 'wilayah_centroid');
 
+// Label pin ditulis kapital penuh (aturan nama wilayah 2026-09-25) meski Data Cabang
+// menulisnya campur huruf — yang dibaca operator di tooltip peta harus satu aturan
+// dengan sel tabel Data Final.
+const pinCampur = clusterMasterRowsForMap(
+  [cabang({ 'Status Outlet': 'KC', 'Nama Outlet': 'BANDUNG CIBADAK', 'KODE POS': '40111', Wilayah: '04', 'Dati II': 'Kabupaten Bandung', Kecamatan: 'Cibadak', Provinsi: 'Jawa Barat' })],
+  'ALL', [], undefined, TITIK
+);
+asa('PT4 label pin kapital meski sumbernya campur huruf', pinCampur[0].dati2, 'KABUPATEN BANDUNG');
+
 // ── PT5: jembatan dua arah KELURAHAN <-> KANTOR OUTLET (Data Final + Data Cabang) ──
 // Fixture-nya baris nyata dari /api/target?view=final 2026-09-24:
 //   Suak Indrapuri / Johan Pahlawan / ACEH BARAT (23611) dipegang KC KAWASAN INDUSTRI

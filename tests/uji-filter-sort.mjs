@@ -5,6 +5,7 @@
 import {
   BATAS_DAFTAR_NILAI, KOSONG, barisLolosFilter, cariDalamNilai, daftarNilaiUnik, dasarDaftarNilai,
   buatDefinisiKolomGrid, jumlahFilterAktif, saringBaris, sortirBaris, terapkanKeadaan,
+  KOLOM_FINAL, barisKeExcelFinal, KOLOM_FILTER_FINAL, barisKeExcelAnalyst,
 } from './out/entry-uji.js';
 
 let gagal = 0;
@@ -120,6 +121,38 @@ asa('FS9 dua arah: daftar cabang mengikuti provinsi', daftarDari({ Provinsi: ['S
 // Yang disaring tetap AND penuh — berjenjang hanya soal ISI DAFTAR, bukan baris.
 asa('FS9 baris tetap hasil AND semua kolom aktif', saringBaris(b9, DEF3, { Provinsi: ['SUMUT'], Kecamatan: ['PERCUT'] }).map((r) => r.id), [5]);
 asa('FS9 nilai dari provinsi lain tidak ikut masuk daftar', daftarDari({ Provinsi: ['PAPUA'] }, DEF_CAB), ['BIAK', 'JAYAPURA', 'WAMENA']);
+
+// ── FS10: nama wilayah tampil CAPITAL — satu sumber untuk sel tabel, Excel, PDF & popover ──
+// Baris nyata dari Data Final (permintaan pemilik produk 2026-09-25):
+//   23611 | Suak Indrapuri | Johan Pahlawan | ACEH BARAT | Aceh
+const b10 = {
+  no: 1, wilayah: '011', namaOutlet: 'KC KAWASAN INDUSTRI MEDAN', statusOutlet: 'KC',
+  alamat: 'JL CONTOH 1', kodePosPten: '23611', kodePosKelurahan: '23611',
+  kelurahan: 'Suak Indrapuri', kecamatan: 'Johan Pahlawan',
+  kotaPten: 'Kabupaten Aceh Barat', kotaPtenMax15: 'ACEH BARAT', provinsi: 'Aceh',
+};
+const sel = (judul, baris = b10) => KOLOM_FINAL.find((k) => k.judul === judul).nilai(baris);
+const def10 = (kunci) => KOLOM_FILTER_FINAL.find((k) => k.kunci === kunci);
+
+asa('FS10 kelurahan capital di sel tabel', sel('Kelurahan'), 'SUAK INDRAPURI');
+asa('FS10 kecamatan capital di sel tabel', sel('Kecamatan'), 'JOHAN PAHLAWAN');
+asa('FS10 Dati II capital di sel tabel', sel('Dati II'), 'ACEH BARAT');
+asa('FS10 provinsi capital di sel tabel', sel('Provinsi'), 'ACEH');
+asa('FS10 kolom angka tidak ikut jadi teks', typeof sel('No'), 'number');
+// Berkas ekspor tidak boleh menyimpang dari yang dibaca operator di layar.
+const x10 = barisKeExcelFinal(b10, 1);
+asa('FS10 Excel Data Final ikut capital', [x10.Kelurahan, x10.Kecamatan, x10['Dati II'], x10.Provinsi], ['SUAK INDRAPURI', 'JOHAN PAHLAWAN', 'ACEH BARAT', 'ACEH']);
+const a10 = barisKeExcelAnalyst(b10, 1);
+asa('FS10 Excel Data Analyst ikut capital', [a10.Kelurahan, a10.Kecamatan, a10['KOTA PTEN'], a10.Provinsi], ['SUAK INDRAPURI', 'JOHAN PAHLAWAN', 'ACEH BARAT', 'ACEH']);
+// Popover kepala tabel membaca angka yang sama dengan selnya.
+asa('FS10 nilai popover = isi sel', def10('Kelurahan').nilai(b10), sel('Kelurahan'));
+// Pilihan lama yang tersimpan dengan huruf campur (sebelum aturan ini) tetap cocok,
+// karena pencocokan filter memakai kunci huruf-besar — bukan string sama persis.
+asa('FS10 saringan capital menemukan barisnya', saringBaris([b10], [def10('Kelurahan')], { Kelurahan: ['SUAK INDRAPURI'] }).length, 1);
+asa('FS10 saringan lama (campur huruf) tetap cocok', saringBaris([b10], [def10('Kelurahan')], { Kelurahan: ['Suak Indrapuri'] }).length, 1);
+const b10kosong = { ...b10, kelurahan: '', provinsi: '' };
+asa('FS10 sel kosong tetap penanda strip', sel('Kelurahan', b10kosong), '-');
+asa('FS10 kosong di popover jadi (kosong), bukan "-"', daftarNilaiUnik([b10kosong], def10('Provinsi')).semua, [KOSONG]);
 
 console.log(gagal === 0 ? '\nSEMUA LULUS' : `\n${gagal} ASERSI GAGAL`);
 process.exit(gagal === 0 ? 0 : 1);

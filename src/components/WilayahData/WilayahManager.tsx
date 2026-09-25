@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { tulisLembarExcel } from '../../utils/excel';
-import { tanggalBerkas } from '../../utils/normalizer';
+import { tanggalBerkas, kapital } from '../../utils/normalizer';
 import type { WilayahSetting } from '../../types';
 import { DEFAULT_WILAYAH_DATA, normalizeWilayahItem } from '../../utils/defaultWilayah';
 import { loadWilayahFromNeon, saveWilayahToNeon, checkNeonStatus } from '../../utils/neonSync';
@@ -913,12 +913,12 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
 
                       {/* Kelurahan / Kecamatan */}
                       <td>
-                        <div style={{ color: '#212529', fontWeight: 500 }}>{item.kelurahan || '-'}</div>
-                        <div style={{ fontSize: '0.7rem', color: '#878a99' }}>{item.kecamatan}</div>
+                        <div style={{ color: '#212529', fontWeight: 500 }}>{kapital(item.kelurahan) || '-'}</div>
+                        <div style={{ fontSize: '0.7rem', color: '#878a99' }}>{kapital(item.kecamatan)}</div>
                       </td>
 
                       {/* Dati II */}
-                      <td style={{ color: '#495057' }}>{item.dati2 || '-'}</td>
+                      <td style={{ color: '#495057' }}>{kapital(item.dati2) || '-'}</td>
 
                       {/* Provinsi */}
                       <td>
@@ -931,7 +931,7 @@ export const WilayahManager: React.FC<WilayahManagerProps> = ({
                             color: '#495057',
                           }}
                         >
-                          {item.provinsi || '-'}
+                          {kapital(item.provinsi) || '-'}
                         </span>
                       </td>
 

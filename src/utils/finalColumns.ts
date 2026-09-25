@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import type { AnalystRow } from './analystPipeline';
 import { penjelasanFase1, penjelasanFase2, penjelasanFase3 } from './analystPipeline';
 import type { DefinisiKolomFilter, JenisKolom } from './filterSort';
+import { kapital } from './normalizer';
 
 /**
  * SATU sumber kebenaran untuk 13 kolom Data Final: dipakai tabel menu Final Data,
@@ -48,10 +49,10 @@ export const KOLOM_FINAL: KolomFinal[] = [
   // sebelah sini, tidak menggantikan yang lama.
   { judul: 'KODE POS', grup: 'pos', tengah: true, mono: true, style: { width: '90px' }, nilai: (r) => r.kodePosPten || '-' },
   { judul: 'KODE POS KELURAHAN', grup: 'pos', tengah: true, mono: true, style: { width: '110px' }, nilai: (r) => r.kodePosKelurahan || '-' },
-  { judul: 'Kelurahan', grup: 'geo', style: { minWidth: '140px' }, nilai: (r) => r.kelurahan || '-' },
-  { judul: 'Kecamatan', grup: 'geo', style: { minWidth: '140px' }, nilai: (r) => r.kecamatan || '-' },
-  { judul: 'Dati II', grup: 'pos', style: { minWidth: '140px' }, nilai: (r) => r.kotaPtenMax15 || r.kotaPten || '-' },
-  { judul: 'Provinsi', grup: 'geo', style: { minWidth: '130px' }, nilai: (r) => r.provinsi || '-' },
+  { judul: 'Kelurahan', grup: 'geo', style: { minWidth: '140px' }, nilai: (r) => kapital(r.kelurahan) || '-' },
+  { judul: 'Kecamatan', grup: 'geo', style: { minWidth: '140px' }, nilai: (r) => kapital(r.kecamatan) || '-' },
+  { judul: 'Dati II', grup: 'pos', style: { minWidth: '140px' }, nilai: (r) => kapital(r.kotaPtenMax15 || r.kotaPten) || '-' },
+  { judul: 'Provinsi', grup: 'geo', style: { minWidth: '130px' }, nilai: (r) => kapital(r.provinsi) || '-' },
 ];
 
 export const JUDUL_KOLOM_FINAL = KOLOM_FINAL.map((k) => k.judul);
@@ -95,12 +96,12 @@ export type KolomGrid =
  */
 const PENGAMBIL_KOLOM_GRID: Record<KolomGrid, { ambil: (r: AnalystRow) => unknown; jenis?: JenisKolom }> = {
   no: { ambil: (r) => r.no, jenis: 'angka' },
-  kelurahan: { ambil: (r) => r.kelurahan },
-  kecamatan: { ambil: (r) => r.kecamatan },
+  kelurahan: { ambil: (r) => kapital(r.kelurahan) },
+  kecamatan: { ambil: (r) => kapital(r.kecamatan) },
   // Pengganti; nilai sebenarnya selalu disuntik lewat buatDefinisiKolomGrid().
   kotaKodePos: { ambil: () => '' },
   kodePosKelurahan: { ambil: (r) => r.kodePosKelurahan, jenis: 'angka' },
-  provinsi: { ambil: (r) => r.provinsi },
+  provinsi: { ambil: (r) => kapital(r.provinsi) },
   wilayah: { ambil: (r) => r.wilayah },
   sandiCabang: { ambil: (r) => r.sandiCabang },
   branchCode: { ambil: (r) => r.branchCode },
@@ -108,9 +109,9 @@ const PENGAMBIL_KOLOM_GRID: Record<KolomGrid, { ambil: (r: AnalystRow) => unknow
   namaOutlet: { ambil: (r) => r.namaOutlet },
   statusOutlet: { ambil: (r) => r.statusOutlet },
   alamat: { ambil: (r) => r.alamat },
-  datiII: { ambil: (r) => r.kotaPtenMax15 || r.kotaPten },
-  kotaPten: { ambil: (r) => r.kotaPten || r.groupKota },
-  kotaPtenMax15: { ambil: (r) => r.kotaPtenMax15 || r.kotaPten },
+  datiII: { ambil: (r) => kapital(r.kotaPtenMax15 || r.kotaPten) },
+  kotaPten: { ambil: (r) => kapital(r.kotaPten || r.groupKota) },
+  kotaPtenMax15: { ambil: (r) => kapital(r.kotaPtenMax15 || r.kotaPten) },
   kodePosPten: { ambil: (r) => r.kodePosPten, jenis: 'angka' },
   statusPten: { ambil: (r) => penjelasanFase1(r).label },
   validasi2: { ambil: (r) => penjelasanFase2(r).label },
@@ -174,11 +175,11 @@ export const KOLOM_ANALYST: KolomFinal[] = [
   { judul: 'Status Outlet', grup: 'outlet', tengah: true, nilai: (r) => r.statusOutlet || KOSONG_TAMPIL },
   { judul: 'ALAMAT', grup: 'outlet', nilai: (r) => r.alamat || KOSONG_TAMPIL },
   { judul: 'KODE POS', grup: 'pos', tengah: true, mono: true, nilai: (r) => r.kodePosKelurahan || r.kodePosPten || KOSONG_TAMPIL },
-  { judul: 'Kelurahan', grup: 'geo', nilai: (r) => r.kelurahan || KOSONG_TAMPIL },
-  { judul: 'Kecamatan', grup: 'geo', nilai: (r) => r.kecamatan || KOSONG_TAMPIL },
-  { judul: 'Dati II', grup: 'pos', nilai: (r) => r.kotaPtenMax15 || r.kotaPten || KOSONG_TAMPIL },
-  { judul: 'Provinsi', grup: 'geo', nilai: (r) => r.provinsi || KOSONG_TAMPIL },
-  { judul: 'KOTA PTEN', grup: 'pos', nilai: (r) => r.kotaPtenMax15 || r.kotaPten || KOSONG_TAMPIL },
+  { judul: 'Kelurahan', grup: 'geo', nilai: (r) => kapital(r.kelurahan) || KOSONG_TAMPIL },
+  { judul: 'Kecamatan', grup: 'geo', nilai: (r) => kapital(r.kecamatan) || KOSONG_TAMPIL },
+  { judul: 'Dati II', grup: 'pos', nilai: (r) => kapital(r.kotaPtenMax15 || r.kotaPten) || KOSONG_TAMPIL },
+  { judul: 'Provinsi', grup: 'geo', nilai: (r) => kapital(r.provinsi) || KOSONG_TAMPIL },
+  { judul: 'KOTA PTEN', grup: 'pos', nilai: (r) => kapital(r.kotaPtenMax15 || r.kotaPten) || KOSONG_TAMPIL },
   { judul: 'KODE POS PTEN', grup: 'pos', tengah: true, mono: true, nilai: (r) => r.kodePosPten || KOSONG_TAMPIL },
   // `CEK KODE POS + PTEN` membandingkan tingkat KOTA, bukan kode pos kelurahan di atas
   { judul: 'CEK KODE POS + PTEN', grup: 'pos', tengah: true, nilai: (r) => r.statusPten || KOSONG_TAMPIL },

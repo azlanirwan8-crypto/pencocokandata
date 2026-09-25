@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowDown, ArrowUp, ChevronsUpDown, Filter } from 'lucide-react';
-import { BATAS_DAFTAR_NILAI, cariDalamNilai, daftarNilaiUnik, dasarDaftarNilai, type DefinisiKolomFilter, type KeadaanSaring } from '../utils/filterSort';
+import { BATAS_DAFTAR_NILAI, cariDalamNilai, daftarNilaiUnik, dasarDaftarNilai, kanonikNilai, type DefinisiKolomFilter, type KeadaanSaring } from '../utils/filterSort';
 
 /**
  * Sel header dengan sort asc/desc + popover filter ala Excel (cari nilai + checkbox).
@@ -90,18 +90,28 @@ export function ThFilter<T>({
     setBuka(true);
   };
 
+  // Draft dibandingkan lewat kunci kanonik, bukan teksnya: pilihan yang tersimpan sebelum
+  // sebuah kolom ikut ditampilkan kapital tetap tercentang di daftar yang sekarang kapital.
+  const tercentang = useMemo(() => {
+    const s = new Set<string>();
+    for (const v of draf) s.add(kanonikNilai(definisi, v));
+    return s;
+  }, [draf, definisi]);
+
   const centang = (nilai: string, on: boolean) => {
+    const kunci = kanonikNilai(definisi, nilai);
     setDraf((s) => {
-      const next = new Set(s);
-      if (on) next.add(nilai); else next.delete(nilai);
+      const next = new Set([...s].filter((v) => kanonikNilai(definisi, v) !== kunci));
+      if (on) next.add(nilai);
       return next;
     });
   };
 
   const pilihSemuaTampil = (on: boolean) => {
     setDraf((s) => {
-      const next = new Set(s);
-      tampil.forEach((n) => (on ? next.add(n) : next.delete(n)));
+      const kunciTampil = new Set(tampil.map((n) => kanonikNilai(definisi, n)));
+      const next = new Set([...s].filter((v) => !kunciTampil.has(kanonikNilai(definisi, v))));
+      if (on) tampil.forEach((n) => next.add(n));
       return next;
     });
   };
@@ -161,7 +171,7 @@ export function ThFilter<T>({
           <label className="th-popup-baris th-popup-pilar th-popup-baris-kuat">
             <input
               type="checkbox"
-              checked={tampil.length > 0 && tampil.every((n) => draf.has(n))}
+              checked={tampil.length > 0 && tampil.every((n) => tercentang.has(kanonikNilai(definisi, n)))}
               onChange={(e) => pilihSemuaTampil(e.target.checked)}
             />
             <span>(Pilih Semua)</span>
@@ -174,7 +184,7 @@ export function ThFilter<T>({
             )}
             {tampil.map((n) => (
               <label key={n} className="th-popup-baris" title={n}>
-                <input type="checkbox" checked={draf.has(n)} onChange={(e) => centang(n, e.target.checked)} />
+                <input type="checkbox" checked={tercentang.has(kanonikNilai(definisi, n))} onChange={(e) => centang(n, e.target.checked)} />
                 <span>{n}</span>
               </label>
             ))}

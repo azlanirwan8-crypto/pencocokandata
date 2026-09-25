@@ -52,7 +52,7 @@ import {
 } from '../../utils/onlineGeoCoder';
 import { get, keys } from 'idb-keyval';
 
-import { cleanDati, cleanProvinsi } from '../../utils/normalizer';
+import { cleanDati, cleanProvinsi, kapital } from '../../utils/normalizer';
 import { getUnitCategory } from '../../utils/roleHelpers';
 import { useNotification } from '../Notification/NotificationContext';
 import { DialogPanel } from '../BaseModal';
@@ -591,7 +591,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     for (const r of kodePosRows) {
       const k = String(r.kodePos || '').trim();
       if (!k || namaPerKode.has(k)) continue;
-      namaPerKode.set(k, { kota: String(r.kabupatenKota || r.kecamatan || '').trim() || '-', provinsi: cleanProvinsi(r.provinsi) || '-' });
+      namaPerKode.set(k, { kota: kapital(String(r.kabupatenKota || r.kecamatan || '').trim()) || '-', provinsi: kapital(cleanProvinsi(r.provinsi)) || '-' });
     }
     const pins: PlottedBranchPin[] = [];
     for (const [kode, t] of Object.entries(titikKodePos)) {
@@ -1282,7 +1282,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           fillOpacity: 0.95,
         });
         anomalyMarker.bindTooltip(
-          `<strong style="color:#c2410c;">⚠️ Anomali Final · ${selectedAnomalyRow.namaOutlet || '-'}</strong><br/>${selectedAnomalyRow.kotaPtenMax15 || selectedAnomalyRow.kotaPten || '-'}<br/>KP ${selectedAnomalyRow.kodePosPten || '-'}`,
+          `<strong style="color:#c2410c;">⚠️ Anomali Final · ${selectedAnomalyRow.namaOutlet || '-'}</strong><br/>${kapital(selectedAnomalyRow.kotaPtenMax15 || selectedAnomalyRow.kotaPten) || '-'}<br/>KP ${selectedAnomalyRow.kodePosPten || '-'}`,
           { direction: 'top', className: 'bni-map-fast-tooltip' }
         );
         markersLayer.addLayer(anomalyMarker);
@@ -1464,7 +1464,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           <strong style="color:#299cdb;">📍 ${group.label}</strong>
           <div style="color:#495057;margin-top:2px;">${count.toLocaleString('id-ID')} data dari Excel upload</div>
           <div style="color:#878a99;font-size:10px;">Sumber koordinat: ${group.source}</div>
-          <div style="color:#878a99;font-size:10px;margin-top:3px;">📮 ${firstRow['KODE POS'] || '-'} · ${firstRow.Kecamatan || ''}</div>
+          <div style="color:#878a99;font-size:10px;margin-top:3px;">📮 ${firstRow['KODE POS'] || '-'} · ${kapital(firstRow.Kecamatan)}</div>
           <div style="color:#495057;font-size:10px;margin-top:3px;max-height:96px;overflow:auto;">
             ${group.rows.slice(0, 12).map((row) => `No. ${row.No || '-'} · ${row['Nama Outlet'] || '-'} · ${row.ALAMAT || '-'} · KP ${row['KODE POS'] || '-'}`).join('<br/>')}
             ${group.rows.length > 12 ? `<br/>+${group.rows.length - 12} record lainnya` : ''}
@@ -2286,7 +2286,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                       {anomalyBadge.text}
                     </span>
                     <span>
-                      <strong style={{ color: '#405189' }}>{row.namaOutlet || '-'}</strong> · <span style={{ color: '#f06548', fontWeight: 600 }}>{row.kotaPtenMax15 || row.kotaPten || '-'} ({row.provinsi || '-'})</span> · 📮 {row.kodePosPten || '-'}
+                      <strong style={{ color: '#405189' }}>{row.namaOutlet || '-'}</strong> · <span style={{ color: '#f06548', fontWeight: 600 }}>{kapital(row.kotaPtenMax15 || row.kotaPten) || '-'} ({kapital(row.provinsi) || '-'})</span> · 📮 {row.kodePosPten || '-'}
                     </span>
                     <span style={{ width: '100%', fontSize: '0.68rem', color: '#9a3412' }}>{reasons.join(' · ')}</span>
                     {!hasCoord && (
@@ -2570,7 +2570,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 const totalBaris = daftar.reduce((n, k) => n + k.baris, 0);
                 const dari: [number, number] = [selectedPin.lat, selectedPin.lng];
                 const judul = selectedPin.isTitikKodePos ? 'outlet memegang titik ini' : 'kelurahan dipegang cabang ini';
-                const labelUjung = (k: KoneksiTitik) => (selectedPin.isTitikKodePos ? k.outlet : k.kel);
+                const labelUjung = (k: KoneksiTitik) => kapital(selectedPin.isTitikKodePos ? k.outlet : k.kel);
                 return (
                   <div
                     role={daftar.length ? 'button' : undefined}
@@ -2832,15 +2832,15 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.45rem', fontSize: '0.71rem' }}>
                   <div>
                     <span style={{ color: '#878a99', display: 'block' }}>Kecamatan:</span>
-                    <strong style={{ color: '#212529' }}>{currentBranch.Kecamatan || '-'}</strong>
+                    <strong style={{ color: '#212529' }}>{kapital(currentBranch.Kecamatan) || '-'}</strong>
                   </div>
                   <div>
                     <span style={{ color: '#878a99', display: 'block' }}>Kota / Dati II:</span>
-                    <strong style={{ color: '#212529' }}>{currentBranch['Dati II'] || selectedPin.dati2}</strong>
+                    <strong style={{ color: '#212529' }}>{kapital(currentBranch['Dati II'] || selectedPin.dati2) || '-'}</strong>
                   </div>
                   <div>
                     <span style={{ color: '#878a99', display: 'block' }}>Provinsi:</span>
-                    <strong style={{ color: '#212529' }}>{currentBranch.Provinsi || '-'}</strong>
+                    <strong style={{ color: '#212529' }}>{kapital(currentBranch.Provinsi) || '-'}</strong>
                   </div>
                   <div>
                     <span style={{ color: '#878a99', display: 'block' }}>Telepon:</span>
@@ -2958,7 +2958,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         const dari: [number, number] = [selectedPin.lat, selectedPin.lng];
         const dariSisi = selectedPin.isTitikKodePos;
         const judulKolom = dariSisi ? 'OUTLET PEMEGANG' : 'KELURAHAN / KECAMATAN';
-        const labelUjung = (k: KoneksiTitik) => (dariSisi ? k.outlet : k.kel);
+        const labelUjung = (k: KoneksiTitik) => kapital(dariSisi ? k.outlet : k.kel);
         const totalBaris = pasanganTerpilih.reduce((n, k) => n + k.baris, 0);
         const WARNA_STATUS: Record<string, string> = { OK: '#0ab39c', REVIEW: '#d68b0c', ANOMALI: '#f06548' };
         const TEKS_STATUS: Record<string, string> = { OK: 'Terverifikasi', REVIEW: 'Perlu review', ANOMALI: 'Anomali' };
@@ -3262,10 +3262,10 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                           <td style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#405189' }}>
                             {row['KODE POS'] || '-'}
                           </td>
-                          <td style={{ color: '#495057' }}>{row.Kelurahan || '-'}</td>
-                          <td style={{ color: '#495057' }}>{row.Kecamatan || '-'}</td>
-                          <td style={{ color: '#495057' }}>{row['Dati II'] || '-'}</td>
-                          <td style={{ color: '#495057' }}>{row.Provinsi || '-'}</td>
+                          <td style={{ color: '#495057' }}>{kapital(row.Kelurahan) || '-'}</td>
+                          <td style={{ color: '#495057' }}>{kapital(row.Kecamatan) || '-'}</td>
+                          <td style={{ color: '#495057' }}>{kapital(row['Dati II']) || '-'}</td>
+                          <td style={{ color: '#495057' }}>{kapital(row.Provinsi) || '-'}</td>
                           <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                             {isPtenMatch ? (
                               <span

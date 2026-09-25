@@ -134,8 +134,27 @@ export type KeadaanSaring = Record<string, string[]>;
 export function saringBaris<T>(rows: readonly T[], definisi: readonly DefinisiKolomFilter<T>[], saring: KeadaanSaring): T[] {
   const aktif = definisi.filter((k) => saring[k.kunci] && saring[k.kunci].length > 0);
   if (aktif.length === 0) return [...rows];
-  const pasangan = aktif.map((k) => ({ k, s: new Set(saring[k.kunci]) }));
+  const pasangan = aktif.map((k) => ({ k, s: kanonisasiSaringan(k, saring[k.kunci]) }));
   return rows.filter((r) => pasangan.every(({ k, s }) => barisLolosFilter(r, k, s)));
+}
+
+/**
+ * Kunci banding satu NILAI PILIHAN. Sama aturannya dengan penyatuan nilai di popover
+ * (`daftarNilaiUnik`): "biak" dan "BIAK" satu pilihan, bukan dua.
+ */
+export const kanonikNilai = (kolom: { jenis?: JenisKolom }, v: string): string =>
+  kolom.jenis === 'angka' ? teksSel(v) : kunciTeks(v) || KOSONG;
+
+/**
+ * Pilihan yang tersimpan dinormalkan sama seperti `daftarNilaiUnik` menyatukan nilainya:
+ * "biak" dan "BIAK" satu pilihan, bukan dua. Tanpa ini, saringan yang tersimpan sebelum
+ * sebuah kolom ikut ditampilkan kapital (lihat `kapital()`) mendadak mengembalikan
+ * nol baris — padahal datanya masih ada.
+ */
+function kanonisasiSaringan<T>(kolom: DefinisiKolomFilter<T>, nilai: readonly string[]): Set<string> {
+  const s = new Set<string>();
+  for (const v of nilai) s.add(kanonikNilai(kolom, v));
+  return s;
 }
 
 /**

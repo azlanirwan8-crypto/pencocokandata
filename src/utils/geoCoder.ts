@@ -3,7 +3,7 @@
 // No massive hardcoded coordinate dictionaries in source code.
 
 import type { MasterRow, TargetRow } from '../types';
-import { formatWilayahName } from './normalizer.ts';
+import { formatWilayahName, kapital } from './normalizer.ts';
 import { getUnitCategory } from './roleHelpers';
 import { kodePosLima } from './geoTitik';
 
@@ -515,12 +515,12 @@ export function clusterMasterRowsForMap(
       lat: coords.lat,
       lng: coords.lng,
       kodePos: String(first['KODE POS'] || '-'),
-      dati2: String(first['Dati II'] || coords.city || '-'),
+      dati2: kapital(first['Dati II'] || coords.city) || '-',
       wilayah: String(first.Wilayah || '-'),
       branches,
       branchCount: branches.length,
       primaryOutletName: first['Nama Outlet'] || 'Outlet BNI',
-      alamatDisplay: coords.formattedAddress || first.ALAMAT || `${first.Kecamatan || ''}, ${first['Dati II'] || ''}`,
+      alamatDisplay: coords.formattedAddress || first.ALAMAT || `${kapital(first.Kecamatan)}, ${kapital(first['Dati II'])}`,
       matchedCount,
       totalTargetCount,
       isOnlineVerified: isOnline,
@@ -551,8 +551,8 @@ export function groupTargetOriginsForMap(
   for (const row of rows) {
     const origin = resolveTargetOriginCoordinates(row, resolvedMap);
     const [lat, lng] = clampToIndonesia(origin.lat, origin.lng);
-    const dati = String(row['Dati II'] || origin.city || '').trim();
-    const kec = String(row.Kecamatan || '').trim();
+    const dati = kapital(String(row['Dati II'] || origin.city || '').trim());
+    const kec = kapital(String(row.Kecamatan || '').trim());
     const kp3 = String(row['KODE POS'] || '').replace(/\D/g, '').slice(0, 3);
     const key = `${dati.toUpperCase()}|${kec.toUpperCase()}|${kp3}|${lat.toFixed(3)}|${lng.toFixed(3)}`;
 

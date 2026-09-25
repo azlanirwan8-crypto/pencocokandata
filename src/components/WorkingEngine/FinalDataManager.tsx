@@ -20,7 +20,7 @@ import * as XLSX from 'xlsx-js-style';
 import type { AnalystRow } from '../../utils/analystPipeline';
 import { formatWilayahCode, applyStandardSheetStyle, tulisLembarExcel } from '../../utils/excel';
 import { WARNA_TH, KOLOM_FINAL, CONTOH_KOLOM_FINAL, JUDUL_KOLOM_FINAL, KOLOM_FILTER_FINAL, barisKeExcelFinal } from '../../utils/finalColumns';
-import { tanggalBerkas, indeksSisiSelisih, cariPadananSelisih } from '../../utils/normalizer';
+import { tanggalBerkas, indeksSisiSelisih, cariPadananSelisih, kapital } from '../../utils/normalizer';
 import type { SisiSelisih, PadananSelisih, SumbuSelisih } from '../../utils/normalizer';
 import { ConfirmDialog } from './ConfirmDialog';
 import { AnalystRowDetailModal } from './AnalystRowDetailModal';
@@ -1112,9 +1112,9 @@ const TabelBanding: React.FC<{
                 <td style={TD_BANDING}>{i + 1}</td>
                 <td style={TD_BANDING}>{chipSumber(labelAsal, warnaAsal)}</td>
                 <td style={{ ...TD_BANDING, fontFamily: 'var(--font-mono)', fontWeight: 700, color: warnaAsal }}>{b.asal.kodePos || '-'}</td>
-                <td style={{ ...TD_BANDING, fontWeight: 600 }}>{b.asal.kelurahan || '-'}</td>
-                <td style={TD_BANDING}>{b.asal.kecamatan || '-'}</td>
-                <td style={TD_BANDING}>{b.asal.kota || '-'}</td>
+                <td style={{ ...TD_BANDING, fontWeight: 600 }}>{kapital(b.asal.kelurahan) || '-'}</td>
+                <td style={TD_BANDING}>{kapital(b.asal.kecamatan) || '-'}</td>
+                <td style={TD_BANDING}>{kapital(b.asal.kota) || '-'}</td>
                 <td style={TD_BANDING}>{b.asal.catatan}</td>
               </tr>
               <tr>
@@ -1123,9 +1123,9 @@ const TabelBanding: React.FC<{
                 {lawan ? (
                   <>
                     <td style={{ ...TD_BANDING, fontFamily: 'var(--font-mono)', fontWeight: 700, ...(b.padanan.beda.includes('kodePos') ? CELL_BEDA : null) }}>{lawan.kodePos || '-'}</td>
-                    <td style={{ ...TD_BANDING, ...(b.padanan.beda.includes('kelurahan') ? CELL_BEDA : null) }}>{lawan.kelurahan || '-'}</td>
-                    <td style={{ ...TD_BANDING, ...(b.padanan.beda.includes('kecamatan') ? CELL_BEDA : null) }}>{lawan.kecamatan || '-'}</td>
-                    <td style={{ ...TD_BANDING, ...(b.padanan.beda.includes('kota') ? CELL_BEDA : null) }}>{lawan.kota || '-'}</td>
+                    <td style={{ ...TD_BANDING, ...(b.padanan.beda.includes('kelurahan') ? CELL_BEDA : null) }}>{kapital(lawan.kelurahan) || '-'}</td>
+                    <td style={{ ...TD_BANDING, ...(b.padanan.beda.includes('kecamatan') ? CELL_BEDA : null) }}>{kapital(lawan.kecamatan) || '-'}</td>
+                    <td style={{ ...TD_BANDING, ...(b.padanan.beda.includes('kota') ? CELL_BEDA : null) }}>{kapital(lawan.kota) || '-'}</td>
                     <td style={TD_BANDING}>{lawan.catatan}</td>
                   </>
                 ) : (

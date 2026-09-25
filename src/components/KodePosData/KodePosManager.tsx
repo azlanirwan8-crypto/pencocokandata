@@ -25,7 +25,7 @@ import {
   Navigation,
 } from 'lucide-react';
 import { tulisLembarExcel } from '../../utils/excel';
-import { tanggalBerkas } from '../../utils/normalizer';
+import { tanggalBerkas, kapital } from '../../utils/normalizer';
 import {
   clearKodePosFromNeon,
   fetchKodePosPage,
@@ -554,10 +554,10 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     const baris = exportRows.map((r, idx) => ({
       'NO': idx + 1,
       'KODE POS': r.kodePos,
-      'KELURAHAN / DESA': r.kelurahan,
-      'KECAMATAN': r.kecamatan,
-      'KABUPATEN / KOTA': r.kabupatenKota,
-      'PROVINSI': r.provinsi,
+      'KELURAHAN / DESA': kapital(r.kelurahan),
+      'KECAMATAN': kapital(r.kecamatan),
+      'KABUPATEN / KOTA': kapital(r.kabupatenKota),
+      'PROVINSI': kapital(r.provinsi),
       'STATUS': r.status || 'AKTIF',
       'LATITUDE': r.latitude ?? '',
       'LONGITUDE': r.longitude ?? '',
@@ -1003,7 +1003,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               <option value="ALL">Semua Provinsi ({provinsiOptions.length})</option>
               {provinsiOptions.map((p) => (
                 <option key={p} value={p}>
-                  {p}
+                  {kapital(p)}
                 </option>
               ))}
             </select>
@@ -1017,7 +1017,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               <option value="ALL">Semua Kota/Kab ({kotaOptions.length})</option>
               {kotaOptions.map((k) => (
                 <option key={k} value={k}>
-                  {k}
+                  {kapital(k)}
                 </option>
               ))}
             </select>
@@ -1170,17 +1170,17 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
 
                       {/* Kelurahan */}
                       <td style={{ fontWeight: 600, color: '#212529' }}>
-                        {item.kelurahan || '-'}
+                        {kapital(item.kelurahan) || '-'}
                       </td>
 
                       {/* Kecamatan */}
                       <td style={{ color: '#495057' }}>
-                        {item.kecamatan || '-'}
+                        {kapital(item.kecamatan) || '-'}
                       </td>
 
                       {/* Kota / Kabupaten */}
                       <td style={{ color: '#495057' }}>
-                        {item.kabupatenKota || '-'}
+                        {kapital(item.kabupatenKota) || '-'}
                       </td>
 
                       {/* Provinsi */}
@@ -1195,7 +1195,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                             fontWeight: 500,
                           }}
                         >
-                          {item.provinsi || '-'}
+                          {kapital(item.provinsi) || '-'}
                         </span>
                       </td>
 
@@ -1615,19 +1615,19 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                       LOKASI
                     </span>
                     <div style={{ fontSize: '1rem', fontWeight: 700, color: '#212529', marginTop: '0.15rem' }}>
-                      {detailItem.kelurahan || '-'}
+                      {kapital(detailItem.kelurahan) || '-'}
                     </div>
                     <div style={{ fontSize: '0.8rem', color: '#5b5f6e', marginTop: '0.1rem' }}>
-                      {[detailItem.kabupatenKota, detailItem.provinsi].filter(Boolean).join(', ') || '-'}
+                      {[detailItem.kabupatenKota, detailItem.provinsi].map((s) => kapital(s)).filter(Boolean).join(', ') || '-'}
                     </div>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
                     {[
-                      { label: 'PROVINSI', icon: MapPin, value: detailItem.provinsi },
-                      { label: 'KOTA / KABUPATEN', icon: Building2, value: detailItem.kabupatenKota },
-                      { label: 'KECAMATAN', icon: Sparkles, value: detailItem.kecamatan },
-                      { label: 'KELURAHAN / DESA', icon: CheckCircle2, value: detailItem.kelurahan },
+                      { label: 'PROVINSI', icon: MapPin, value: kapital(detailItem.provinsi) },
+                      { label: 'KOTA / KABUPATEN', icon: Building2, value: kapital(detailItem.kabupatenKota) },
+                      { label: 'KECAMATAN', icon: Sparkles, value: kapital(detailItem.kecamatan) },
+                      { label: 'KELURAHAN / DESA', icon: CheckCircle2, value: kapital(detailItem.kelurahan) },
                     ].map((kartu) => (
                       <div
                         key={kartu.label}
@@ -1665,7 +1665,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', minWidth: 0 }}>
                   {detailItem.latitude != null && detailItem.longitude != null ? (
                     <iframe
-                      title={`Peta lokasi ${detailItem.kelurahan || detailItem.kodePos}`}
+                      title={`Peta lokasi ${kapital(detailItem.kelurahan) || detailItem.kodePos}`}
                       src={`https://maps.google.com/maps?q=${detailItem.latitude},${detailItem.longitude}&z=15&hl=id&output=embed`}
                       loading="lazy"
                       referrerPolicy="no-referrer-when-downgrade"
@@ -1845,7 +1845,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               </div>
               <p style={{ fontSize: '0.82rem', color: '#878a99', margin: 0, lineHeight: 1.5 }}>
                 Data Kode Pos <strong>{deleteTarget.kodePos}</strong> (
-                {deleteTarget.kelurahan}) akan dihapus dari daftar referensi.
+                {kapital(deleteTarget.kelurahan)}) akan dihapus dari daftar referensi.
               </p>
             </div>
 
