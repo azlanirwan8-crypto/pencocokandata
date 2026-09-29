@@ -7,7 +7,7 @@ import { calculateRealDistance } from './geoDistance';
 import type { PTENRecord } from '../components/PTENData/PTENManager';
 import type { RoleMappingRecord } from '../components/RoleMapping/RoleMappingManager';
 import { getUnitCategory, getWondrRecommendation } from './roleHelpers';
-import { extractWilayahFromBranchCode, hasDirectionalConflict, UNIT_NOISE_SET } from './normalizer';
+import { cleanProvinsi, extractWilayahFromBranchCode, hasDirectionalConflict, UNIT_NOISE_SET } from './normalizer';
 import type { KodePosRow } from './neonSync';
 
 export interface AnalystRow {
@@ -1258,6 +1258,50 @@ export async function executeAnalystPipeline(
     kodePosByCity.get(c)!.push(kp);
   });
 
+  // ── PENJAGA PROVINSI untuk pencocokan NAMA kota (pindai cloud 2026-09-29) ──
+  // Nama saja tidak cukup. Atas 479 nama kota PTEN × 172 nama kota Data Kode Pos,
+  // enam pasangan BEDA provinsi lolos ambang mesin: SOLO/SOLOK 0,96 ·
+  // KEP MERANTI/KEP MENTAWAI 0,95 · LIMA PULUH/LIMA PULUH KOTO 0,93 ·
+  // BANGKA/BANGKALAN 0,93 · BANYUASIN/BANYUMAS 0,93 · KEP SERIBU/KEP ARU 0,93.
+  // Aturan huruf tidak bisa memisahkannya dari salah ketik yang justru harus lolos
+  // (MANOKWAR→MANOKWARI dan PADANGSIDIMPUAN→PADANG SIDEMPUAN berbentuk sama persis:
+  // awalan + ekor), jadi yang dipakai bukti wilayah — usulan pemilik produk:
+  // "beda provinsi dan beda pulau, kenapa tidak di cek dulu".
+  const provinsiByKodePos5 = new Map<string, string>();
+  const provinsiByCityKey = new Map<string, string>();
+  kodePosList.forEach((kp) => {
+    const p = cleanProvinsi(kp.provinsi);
+    if (!p) return;
+    const code = String(kp.kodePos || '').trim();
+    if (code.length >= 5 && !provinsiByKodePos5.has(code)) provinsiByKodePos5.set(code, p);
+    const ck = cityMatchKey(kp.kabupatenKota);
+    if (ck && !provinsiByCityKey.has(ck)) provinsiByCityKey.set(ck, p);
+  });
+  // Tabel PTEN tidak punya kolom provinsi, jadi nama kotanya diprovincikan lewat
+  // kode posnya sendiri. Nama yang kode posnya dipegang >1 provinsi (BANJAR Jawa
+  // Barat vs BANJAR Kalimantan Selatan) TIDAK diberi penjaga: lebih baik pasangan
+  // samar lolos tanpa bukti daripada menolak pasangan yang benar.
+  const provPten = new Map<string, Map<string, number>>();
+  ptenList.forEach((p) => {
+    const k = cityMatchKey(p.kotaPten);
+    const prov = provinsiByKodePos5.get(String(p.kodePosPten || '').trim());
+    if (!k || !prov) return;
+    const m = provPten.get(k) || new Map<string, number>();
+    m.set(prov, (m.get(prov) || 0) + 1);
+    provPten.set(k, m);
+  });
+  provPten.forEach((m, k) => {
+    if (provinsiByCityKey.has(k)) return;
+    const urut = [...m.entries()].sort((a, b) => b[1] - a[1]);
+    if (urut.length === 1 || urut[0][1] > (urut[1]?.[1] || 0) * 2) provinsiByCityKey.set(k, urut[0][0]);
+  });
+  /** Veto pasangan nama kota: hanya berbunyi bila provinsi kedua sisi diketahui dan beda. */
+  const provinsiBertentangan = (kunciA: string, kunciB: string): boolean => {
+    const a = provinsiByCityKey.get(kunciA);
+    const b = provinsiByCityKey.get(kunciB);
+    return !!a && !!b && a !== b;
+  };
+
   // 🪞 "KOTA BOGOR" dan "KABUPATEN BOGOR" sengaja jadi satu grup oleh `cityMatchKey`
   // (kode pos & PTEN memang satu kota). Penggabungan itu benar untuk pencocokan tapi
   // tidak boleh diam-diam: grup yang menampung kedua jenis daerah dicatat lalu
@@ -1295,7 +1339,7 @@ export async function executeAnalystPipeline(
       // Penjaga arah: "HALMAHERA UTARA" bukan pasangan "HALMAHERA TIMUR" walau skornya
       // 0,93 — huruf depannya sama persis, tapi ini dua kabupaten berbeda dan baris
       // kotanya bisa dibajak sehingga seluruh kelurahan aslinya hilang dari PTEN.
-      if (hasDirectionalConflict(cityKey, mKey)) continue;
+      if (hasDirectionalConflict(cityKey, mKey) || provinsiBertentangan(cityKey, mKey)) continue;
       const { score } = calculateCityMatchScore(cityKey, mKey);
       if (score > bestScore && score >= 0.88) {
         bestScore = score;
@@ -1643,6 +1687,7 @@ export async function executeAnalystPipeline(
         }
         // a) nama kota cocok DI DALAM blok kode pos ini → bukti terkuat
         for (const ck of ckList) {
+          if (provinsiBertentangan(ptenKey, ck)) continue;
           if (calculateCityMatchScore(ptenKey, ck).score >= 0.9) {
             geoVerifiedCityKeys.add(ck);
             claimedMasterCityKeys.add(ck);
@@ -1673,6 +1718,7 @@ export async function executeAnalystPipeline(
       // e) blok tidak dikenal master (data beda vintage) → fuzzy ketat, WAJIB review
       const candidates: { ck: string; score: number }[] = [];
       cityGeoProfile.forEach((_, ck) => {
+        if (provinsiBertentangan(ptenKey, ck)) return;
         const { score } = calculateCityMatchScore(ptenKey, ck);
         if (score >= 0.88) candidates.push({ ck, score });
       });
@@ -1686,6 +1732,7 @@ export async function executeAnalystPipeline(
     let bestKey = '';
     let bestScore = 0;
     kodePosByCity.forEach((_, ck) => {
+      if (provinsiBertentangan(ptenKey, ck)) return;
       const { score } = calculateCityMatchScore(ptenKey, ck);
       if (score > bestScore && score >= 0.88) { bestScore = score; bestKey = ck; }
     });
@@ -1742,7 +1789,17 @@ export async function executeAnalystPipeline(
     let matchedPtenRecord: PTENRecord | null = null;
     if (ptenCityMap.has(cityClean)) {
       const candidates = ptenCityMap.get(cityClean)!;
-      matchedPtenRecord = candidates.find((c) => c.kodePosPten === kpRaw) || candidates[0];
+      const tepat = candidates.find((c) => c.kodePosPten === kpRaw);
+      // Nama kota PTEN yang sama bisa duduk di dua provinsi: BANJAR (Jawa Barat, 46xxx)
+      // dan BANJAR (Kalimantan Selatan, 70xxx). Dulu `candidates[0]` yang menang, sehingga
+      // 76 baris kelurahan Kalimantan Selatan ikut membawa kode pos 46322 (cloud
+      // 2026-09-29). Yang dipilih sekarang rekor yang blok 3 digitnya benar-benar
+      // dimiliki kota master ini; baru kalau tidak ada, jatuh ke kandidat pertama.
+      const rowsKota = kodePosByCity.get(cityClean);
+      const blok = rowsKota?.length ? new Set(rowsKota.map((k) => String(k.kodePos || '').slice(0, 3))) : null;
+      matchedPtenRecord = tepat
+        || (blok ? candidates.find((c) => blok.has(String(c.kodePosPten || '').slice(0, 3))) : undefined)
+        || candidates[0];
     } else if (ptenFuzzyCache.has(cityClean)) {
       const cachedCity = ptenFuzzyCache.get(cityClean)!;
       matchedPtenRecord = cachedCity.rec;
@@ -1757,6 +1814,8 @@ export async function executeAnalystPipeline(
       const cityClean15 = cityClean.slice(0, 15);
 
       for (const [ptenCityKey, candidates] of ptenCityMap.entries()) {
+        // Provinsi berbantah → nama yang mirip tidak boleh jadi jodoh (SOLO vs SOLOK).
+        if (provinsiBertentangan(cityClean, ptenCityKey)) continue;
         const { score, sinyal, catatan } = calculateCityMatchScore(cityClean, ptenCityKey);
         const ptenKey15 = ptenCityKey.slice(0, 15);
         const is15Match = cityClean15.length >= 5 && (cityClean15 === ptenKey15 || ptenCityKey.startsWith(cityClean15) || cityClean.startsWith(ptenKey15));
@@ -1994,6 +2053,7 @@ export async function executeAnalystPipeline(
         || tokenContainmentScore(pk, ck) >= 0.85
         || (keyFonetik.length >= 4 && keyFonetik === phonKeyOf(pk));
       if (!namaMirip) return;
+      if (provinsiBertentangan(ck, pk)) return;
       const score = calculateCityMatchScore(ck, pk).score;
       if (score > bestScore) { bestScore = score; bestKey = pk; ambiguous = false; }
       else if (score === bestScore) ambiguous = true;

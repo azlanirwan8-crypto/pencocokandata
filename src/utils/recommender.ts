@@ -260,13 +260,23 @@ function evaluateMasterCandidate(
   const targetDati = cleanDati(target['Dati II']);
   const masterDati = cleanDati(m['Dati II']);
   const datiSim = textSimilarityScore(target['Dati II'] || '', m['Dati II'] || '');
-  const datiMatch = !hasDirectionalConflict(target['Dati II'] || '', m['Dati II'] || '') &&
-    (datiSim > 0.75 || (targetDati && masterDati && (targetDati === masterDati || targetDati.replace(/\s+/g, '') === masterDati.replace(/\s+/g, ''))));
 
   const targetProv = cleanProvinsi(target.Provinsi);
   const masterProv = cleanProvinsi(m.Provinsi);
   const provSim = textSimilarityScore(target.Provinsi || '', m.Provinsi || '');
   const provMatch = provSim > 0.75 || (targetProv && masterProv && (targetProv === masterProv || targetProv.replace(/\s+/g, '') === masterProv.replace(/\s+/g, '')));
+
+  // ── LAPIS 0: provinsi adalah payung Dati II, jadi ia diperiksa TERLEBIH DAHULU ──
+  // Dua kabupaten/kota boleh bernama sama di provinsi berbeda (BANJAR Jabar vs BANJAR
+  // Kalsel, SOLO Jateng vs SOLOK Sumbar). Dulu `datiMatch` dinilai sebelum provinsi
+  // sama sekali, sehingga 'SOLO' × 'KOTA SOLOK' (kemiripan 96%) langsung dapat skor 72
+  // + label "Kota/Kabupaten Sama" dan menang sebagai Rank 1 — terukur 2026-09-29 lewat
+  // baris PURWOSARI / LAWEYAN / 57142 di Data Analyst. Provinsi yang tidak diketahui di
+  // salah satu sisi TIDAK memveto: tanpa bukti wilayah mesinnya tetap seperti dulu.
+  const provinsiBeda = Boolean(targetProv && masterProv && targetProv !== masterProv);
+
+  const datiMatch = !provinsiBeda && !hasDirectionalConflict(target['Dati II'] || '', m['Dati II'] || '') &&
+    (datiSim > 0.75 || (targetDati && masterDati && (targetDati === masterDati || targetDati.replace(/\s+/g, '') === masterDati.replace(/\s+/g, ''))));
 
   // Proteksi mutlak hierarki administratif Indonesia:
   // 1. Jika terbukti berbeda Provinsi, kelurahan/kecamatan sama adalah homonim/kebetulan nama sama!
@@ -614,7 +624,15 @@ export function findClosestMasterRecommendation(
     }
   }
 
-  if (datiPool.length > 0) {
+  // ── Nama Dati II yang sama BELUM TENTU kota yang sama ──
+  // 'SOLO' (Jawa Tengah) ketemu 'Kota Solok' (Sumatera Barat) di indeks byDati, dan
+  // karena seluruh poolnya lalu dibuang gerbang provinsi, baris jatuh ke fallback
+  // "pakai saja pool mentah" — sehingga kantor SOLOK tetap jadi Rank 1 untuk kelurahan
+  // Kota Solo (terukur 2026-09-29 pada Data Cabang asli). Kalau tidak ada SATU PUN
+  // cabang sekota yang berada di provinsi baris ini, match nama itu bukan kota kita:
+  // cari di provinsi sendiri (TIER 2), jangan pasang kantor nyebrang provinsi.
+  const datiPoolSerumpun = datiPool.filter(matchesProvince);
+  if (datiPool.length > 0 && datiPoolSerumpun.length > 0) {
     // Jika di Dati II target ditemukan cabang, SEMUA kandidat WAJIB dari Dati II ini!
     // Tidak boleh bercampur dengan cabang dari kota/provinsi lain!
     rawPool.push(...datiPool);

@@ -65,5 +65,61 @@ const b2 = h2.rows.find((r) => r.kelurahan === 'BABURINO');
 asa('cabang sekota tetap terpakai (Fase 2 tidak jadi kosong)', b2?.namaOutlet, 'MABA');
 asa('dan tetap kota HALMAHERA TIMUR', b2?.kotaPten, 'HALMAHERA TIMUR');
 
+// ── KP2: penjaga PROVINSI — nama mirip beda provinsi tidak boleh jadi jodoh ──
+// Pindai cloud 2026-09-29 atas 479 nama kota PTEN × 172 nama kota Data Kode Pos:
+// BANGKA (Kep. Bangka Belitung) vs BANGKALAN (Jawa Timur) dinilai mesin 0,93 dan
+// SOLO vs SOLOK 0,96 — bentuk hurufnya tidak bisa dibedakan dari salah ketik yang
+// wajib lolos (MANOKWAR → MANOKWARI), jadi provinsi yang memutuskan. Kasus nyatanya
+// dilaporkan operator: kelurahan Kota Solo digariskan 1.356 km ke kantor SOLOK.
+const jalankanNama = (daftarPten) =>
+  executeAnalystPipeline(
+    [cabang({ 'Nama Outlet': 'SUNGAILIAT', Cabang: 'BANGKA', 'Status Outlet': 'KC', 'Dati II': 'BANGKA', Provinsi: 'KEPULAUAN BANGKA BELITUNG', 'KODE POS': '33115', Kelurahan: 'SUNGUELIAU', Kecamatan: 'SUNGAILIAT', 'Branch Code': '04100001', 'Kode Cabang': '04100001', 'Sandi Cabang': '04100001' })],
+    daftarPten,
+    [
+      kp('33115', 'SUNGUELIAU', 'SUNGAILIAT', 'Kabupaten Bangka', 'KEPULAUAN BANGKA BELITUNG'),
+      kp('69161', 'TANAH MERAH', 'BANGKALAN', 'Kabupaten Bangkalan', 'JAWA TIMUR'),
+    ],
+    [],
+    []
+  );
+
+const h3 = await jalankanNama([pten('69161', 'BANGKALAN')]);
+const bangka = h3.rows.find((r) => r.kelurahan === 'SUNGUELIAU');
+asa('KP2 Bangka tidak dibajak BANGKALAN dari Jawa Timur', bangka?.kotaPten || '(kosong)', '(kosong)');
+asa('KP2 barisnya masuk antrean, bukan hilang', [bangka?.kategori, bangka?.statusAnalisa], ['TIDAK_ANALISA', 'PERLU_REVIEW']);
+asa('KP2 barisnya tetap ada (tidak hilang diam-diam)', h3.rows.filter((r) => r.kelurahan === 'SUNGUELIAU').length, 1);
+const h4 = await jalankanNama([pten('69161', 'BANGKALAN'), pten('33115', 'BANGKA')]);
+asa('KP2 begitu PTEN-nya benar, kotanya terisi seperti biasa', h4.rows.find((r) => r.kelurahan === 'SUNGUELIAU')?.kotaPten, 'BANGKA');
+
+// ── KP3: nama kota PTEN yang SAMA duduk di dua provinsi — yang dipilih harus rekor
+//    yang blok kode posnya memang milik kota master ini. Pindai cloud 2026-09-29:
+//    76 baris kelurahan BANJAR (Kalimantan Selatan, 70xxx) ikut membawa kode pos
+//    PTEN 46322 milik BANJAR (Jawa Barat) karena `candidates[0]` yang menang.
+// Kode pos kantor sengaja 70322 — TIDAK ada di daftar PTEN — supaya jalur
+// `candidates.find(kodePos === kodePosPten)` tidak menang dan pemilihan per blok
+// yang memutuskan (kalau kantor kebetulan 70155, jalur tepat sudah benar sendiri).
+const jalankanBanjar = (daftarPten) =>
+  executeAnalystPipeline(
+    [cabang({ 'Nama Outlet': 'BANJAR BARU', Cabang: 'BANJAR', 'Status Outlet': 'KC', 'Dati II': 'BANJAR', Provinsi: 'KALIMANTAN SELATAN', 'KODE POS': '70322', Kelurahan: 'TURTANG JAYA', Kecamatan: 'BANJAR', 'Branch Code': '06100001', 'Kode Cabang': '06100001', 'Sandi Cabang': '06100001' })],
+    daftarPten,
+    [
+      kp('70155', 'TURTANG JAYA', 'BANJAR', 'Kabupaten Banjar', 'KALIMANTAN SELATAN'),
+      kp('70181', 'PARUNG', 'JAWA', 'Kabupaten Banjar', 'KALIMANTAN SELATAN'),
+    ],
+    [],
+    []
+  );
+
+const h5 = await jalankanBanjar([pten('46322', 'BANJAR'), pten('70155', 'BANJAR')]);
+// Kelurahan yang kode posnya TIDAK ada di tabel PTEN: di sini `candidates[0]` yang
+// dulu memutuskan, jadi inilah baris yang benar-benar membuktikan penjaga blok.
+const parung = h5.rows.find((r) => r.kelurahan === 'PARUNG');
+asa('KP3 kotanya tetap BANJAR', parung?.kotaPten, 'BANJAR');
+asa('KP3 Parung (70181) dapat kode pos PTEN blok 70xxx, bukan 46xxx Jawa Barat', parung?.kodePosPten, '70155');
+asa('KP3 kontrol: kelurahan yang kode posnya persis di PTEN tetap pakai yang persis',
+  h5.rows.find((r) => r.kelurahan === 'TURTANG JAYA')?.kodePosPten, '70155');
+asa('KP3 kontrol: bila hanya rekor Jawa Barat yang ada, tetap terpakai (jangan kosong)',
+  (await jalankanBanjar([pten('46322', 'BANJAR')])).rows.find((r) => r.kelurahan === 'PARUNG')?.kodePosPten, '46322');
+
 console.log(gagal === 0 ? '\nSEMUA LULUS' : `\n${gagal} TEST GAGAL`);
 process.exit(gagal === 0 ? 0 : 1);

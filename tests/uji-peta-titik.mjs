@@ -29,6 +29,11 @@ const TITIK = {
   '23111': { lat: 5.5707329, lng: 95.3687717, sumber: 'desa' },
   '40111': { lat: -6.9181138, lng: 107.6085594, sumber: 'desa' },
   '10110': { lat: -6.1762629, lng: 106.8293243, sumber: 'desa' },
+  // Dipakai PT5b — pasangan nyata dari garis 1.356 km di cloud 2026-09-29:
+  // Kepatihan Kulon (Kota Solo) dan kantor cabang di Solok.
+  '57129': { lat: -7.56729266666667, lng: 110.835381966667, sumber: 'desa' },
+  '57136': { lat: -7.5435942, lng: 110.818449866667, sumber: 'desa' },
+  '27322': { lat: -0.7893972, lng: 100.6623641, sumber: 'desa' },
 };
 
 const cabang = (o) => ({
@@ -112,8 +117,8 @@ const kantorRows = [
   cabang({ 'Status Outlet': 'KCP', 'Nama Outlet': 'TANPA KODE POS', 'Branch Code': '60200002', 'Kode Cabang': 'XX', 'Sandi Cabang': '09', 'KODE POS': '' }),
 ];
 const kantor = indeksKantorCabang(kantorRows, TITIK);
-asa('PT5 kantor cabang dicari lewat Branch Code', kantor.get('60105300').kode, '20242');
-asa('PT5 kantor cabang dicari lewat Kode Cabang', kantor.get('MUL').kode, '23111');
+asa('PT5 kantor cabang dicari lewat Branch Code', kantor.get('60105300').kantor[0].kode, '20242');
+asa('PT5 kantor cabang dicari lewat Kode Cabang', kantor.get('MUL').kantor[0].kode, '23111');
 asa('PT5 kantor tanpa kode pos tidak ikut diindeks', kantor.has('XX'), false);
 
 const finalRows = [
@@ -137,6 +142,31 @@ asa('PT5 baris tanpa outlet tidak jadi garis, tetap dihitung', [tanpaKantor, (ko
 asa('PT5 outlet lain tetap dapat garisnya sendiri', (koneksi.get('24111') || []).map((k) => k.kode), ['23111']);
 asa('PT5 status terburuk menang', [status.get('24111'), status.get('23611')], ['ANOMALI', 'REVIEW']);
 asa('PT5 kode pos tak bertitik tetap dihitung statusnya', status.get('97111'), 'OK');
+
+// ── PT5b: singkatan cabang BUKAN identitas (terukur di cloud 2026-09-29) ──
+// 'SLO' dipakai kantor di Jawa Tengah DAN Sumatera Barat; 94 dari 165 kode cabang dipakai
+// >1 kota (ABN = Ambon + Kep Seribu, KIM = 20 kota) dan 'Sandi Cabang' malah kode WILAYAH
+// 2 digit. Sebelum aturan ini, baris Kota Solo yang Branch Code-nya tidak ada di Data
+// Cabang jatuh ke singkatan itu lalu digariskan 1.356 km ke kantor SOLOK — garis yang
+// terlihat seperti bukti padahal tebakan buta.
+const kantorSlo = [
+  cabang({ 'Status Outlet': 'KC', 'Nama Outlet': 'SOLO KUSUMO', 'Branch Code': '61701900', 'Kode Cabang': 'SLO', 'Sandi Cabang': '11', 'KODE POS': '57136', Provinsi: 'JAWA TENGAH' }),
+  cabang({ 'Status Outlet': 'KC', 'Nama Outlet': 'SOLOK', 'Branch Code': '61301900', 'Kode Cabang': 'SLO', 'Sandi Cabang': '11', 'KODE POS': '27322', Provinsi: 'SUMATERA BARAT' }),
+];
+const idxSlo = indeksKantorCabang(kantorSlo, TITIK);
+const barisSlo = (o) => [{
+  kodePosKelurahan: '57129', kelurahan: 'Kepatihan Kulon', branchCode: o.bc || '',
+  kodeCabang: o.kc || '', sandiCabang: '', namaOutlet: '', provinsi: o.prov || '',
+  statusAnalisa: 'PERLU_REVIEW', placementStatus: 'REVIEW', is3RoleLengkap: true,
+}];
+const garisSlo = (o) => { const { koneksi, tanpaKantor } = bangunJembatanOutlet(barisSlo(o), TITIK, idxSlo); return [(koneksi.get('57129') || []).map((k) => k.kode), tanpaKantor]; };
+
+asa('PT5b singkatan + provinsi tepat satu kantor -> garis ke kantornya', garisSlo({ kc: 'SLO', prov: 'Jawa Tengah' }), [['57136'], 0]);
+asa('PT5b provinsi lain memilih kantornya sendiri', garisSlo({ kc: 'SLO', prov: 'Sumatera Barat' }), [['27322'], 0]);
+asa('PT5b provinsi tak dikenal -> TIDAK digaris', garisSlo({ kc: 'SLO', prov: 'Riau' }), [[], 1]);
+asa('PT5b baris tanpa provinsi tidak boleh ditebak lewat singkatan', garisSlo({ kc: 'SLO' }), [[], 1]);
+asa('PT5b Branch Code tetap identitas, tidak butuh provinsi', garisSlo({ bc: '61301900' }), [['27322'], 0]);
+asa('PT5b nama outlet juga identitas', garisSlo({ kc: 'SLO', prov: 'Jawa Tengah', bc: '61701900' }), [['57136'], 0]);
 
 // ── PT6: tidak ada jalur yang mengarang koordinat di luar kotak Indonesia ──
 const diLuarNegeri = cabang({ 'Status Outlet': 'KC', 'Nama Outlet': 'SINGAPURA', 'KODE POS': '24313', Wilayah: '01', Latitude: 1.35, Longitude: 103.82 });

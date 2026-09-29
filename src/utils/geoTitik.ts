@@ -1,5 +1,7 @@
 // Kunci pencocokan wilayah untuk penentuan titik peta. Murni (tanpa leaflet/React)
 // supaya bisa dipakai komponen peta DAN diuji di Node.
+import { cleanProvinsi } from './normalizer';
+
 export const normWilayah = (s: string) => String(s || '').toUpperCase().replace(/\s+/g, ' ').trim();
 
 /** Lepas "KABUPATEN " / "KOTA " — tabel kode pos memakai prefiks, data PTEN tidak. */
@@ -101,6 +103,7 @@ export interface BarisJembatan {
   sandiCabang?: string | null;
   branchCode?: string | null;
   kodeCabang?: string | null;
+  provinsi?: string | null;
   statusAnalisa?: string;
   placementStatus?: string;
   is3RoleLengkap?: boolean;
@@ -113,6 +116,7 @@ export interface BarisCabang {
   'Kode Cabang'?: string | null;
   'Nama Outlet'?: string | null;
   'KODE POS'?: string | null;
+  'Provinsi'?: string | null;
 }
 
 export interface KantorCabang {
@@ -120,39 +124,96 @@ export interface KantorCabang {
   lat: number;
   lng: number;
   outlet: string;
+  /** Provinsi kantor, sudah dinormalkan (`cleanProvinsi`). Kosong bila Data Cabang tidakisinya. */
+  prov: string;
+}
+
+/**
+ * Satu kunci bisa dipegang beberapa kantor. `identitas` = kunci itu pernah dipakai sebagai
+ * Branch Code / Nama Outlet (khas satu cabang), bukan sebagai singkatan atau sandi wilayah.
+ */
+interface DaftarKantor {
+  kantor: KantorCabang[];
+  identitas: boolean;
 }
 
 const kunciNorm = (s: unknown) => String(s ?? '').trim().toUpperCase();
 
+/** Kunci provinsi untuk hak veto; '' = tidak diketahui, jadi tidak boleh memveto apa pun. */
+const kunciProv = (s: unknown) => cleanProvinsi(s);
+
 /**
- * Kunci cabang -> titik KANTOR cabang itu sendiri.
+ * Kunci cabang -> daftar titik KANTOR yang mengenal kunci itu.
  *
  * Kantor diambil dari `KODE POS` baris Data Cabang lalu koordinatnya dicari di Data
  * Kode Pos — sumber yang sama dengan titik cabang di peta, jadi kedua ujung garis nyata.
- * Prioritas kunci: Branch Code (paling spesifik) > Kode Cabang > Sandi > Nama Outlet.
+ *
+ * Dulu keempat kunci (Branch Code, Kode Cabang, Sandi Cabang, Nama Outlet) dicampur
+ * dan yang pertama masuk menang. Terukur di cloud 2026-09-29 itu salah: `kodeCabang`
+ * dipakai bersama oleh 94 dari 165 kode (ABN = Ambon DAN Kep Seribu, KIM = 20 kota,
+ * SLO = Solo + Karanganyar + Boyolali) dan `sandiCabang` cuma kode WILAYAH 2 digit
+ * ('11' menutup seluruh Solo Raya). Baris yang Branch Code-nya tidak ada di Data Cabang
+ * lalu jatuh ke singkatan itu dan digariskan ke kantor di pulau seberang — terukur
+ * sampai 1.356 km (kelurahan Kota Solo menempel ke kantor SOLOK).
+ * Sekarang kunci dikelompokkan: identitas (Branch Code + nama outlet) boleh langsung
+ * menarik garis; singkatan hanya boleh dipakai bila provinsinya cocok DAN sisanya
+ * tinggal satu kantor.
  */
 export function indeksKantorCabang(
   masterRows: readonly BarisCabang[],
   titik: Record<string, { lat: number; lng: number }>
-): Map<string, KantorCabang> {
-  const indeks = new Map<string, KantorCabang>();
+): Map<string, DaftarKantor> {
+  const indeks = new Map<string, DaftarKantor>();
+  const catat = (k: unknown, kantor: KantorCabang, identitas: boolean) => {
+    const kunci = kunciNorm(k);
+    if (!kunci) return;
+    const ada = indeks.get(kunci);
+    if (!ada) indeks.set(kunci, { kantor: [kantor], identitas });
+    else {
+      if (identitas) ada.identitas = true;
+      if (!ada.kantor.some((x) => x.kode === kantor.kode && x.outlet === kantor.outlet)) ada.kantor.push(kantor);
+    }
+  };
   for (const m of masterRows) {
     const kode = kodePosLima(m['KODE POS']);
     const t = kode ? titik[kode] : undefined;
     if (!t || !Number.isFinite(t.lat) || !Number.isFinite(t.lng)) continue;
-    const kantor: KantorCabang = { kode, lat: t.lat, lng: t.lng, outlet: kunciNorm(m['Nama Outlet']) || kode };
-    for (const k of [m['Branch Code'], m['Kode Cabang'], m['Sandi Cabang'], m['Nama Outlet']]) {
-      const kunci = kunciNorm(k);
-      if (kunci && !indeks.has(kunci)) indeks.set(kunci, kantor);
-    }
+    const kantor: KantorCabang = {
+      kode, lat: t.lat, lng: t.lng,
+      outlet: kunciNorm(m['Nama Outlet']) || kode,
+      prov: kunciProv(m['Provinsi']),
+    };
+    catat(m['Branch Code'], kantor, true);
+    catat(m['Nama Outlet'], kantor, true);
+    catat(m['Kode Cabang'], kantor, false);
+    catat(m['Sandi Cabang'], kantor, false);
   }
   return indeks;
 }
 
-const cariKantor = (indeks: Map<string, KantorCabang>, r: BarisJembatan): KantorCabang | undefined => {
-  for (const k of [r.branchCode, r.kodeCabang, r.sandiCabang, r.namaOutlet]) {
-    const kunci = kunciNorm(k);
-    if (kunci && indeks.has(kunci)) return indeks.get(kunci);
+/**
+ * Kantor pemilik sebuah baris Data Final.
+ *
+ * Urutan: Branch Code → Nama Outlet (identitas), baru Kode Cabang → Sandi Cabang
+ * (singkatan). Singkatan hanya diterima bila provinsinya tidak berbantah dan hanya ada
+ * SATU kantor yang tersisa; kalau tidak, barisnya dianggap tidak pasti dan tidak digaris.
+ */
+const cariKantor = (
+  indeks: Map<string, DaftarKantor>,
+  r: BarisJembatan
+): KantorCabang | undefined => {
+  const provBaris = kunciProv(r.provinsi);
+  for (const k of [r.branchCode, r.namaOutlet]) {
+    const daftar = indeks.get(kunciNorm(k));
+    if (daftar?.identitas && daftar.kantor.length === 1) return daftar.kantor[0];
+  }
+  for (const k of [r.kodeCabang, r.sandiCabang]) {
+    const daftar = indeks.get(kunciNorm(k));
+    // Singkatan boleh dipakai hanya bila provinsi baris MEMILIH tepat satu kantor.
+    // Kantor yang provinsinya kosong di Data Cabang ikut dicoret: tidak bisa dipastikan.
+    if (!daftar || !provBaris) continue;
+    const sisa = daftar.kantor.filter((x) => x.prov === provBaris);
+    if (sisa.length === 1) return sisa[0];
   }
   return undefined;
 };
@@ -172,11 +233,15 @@ const cariKantor = (indeks: Map<string, KantorCabang>, r: BarisJembatan): Kantor
  * kelurahannya. Sisanya jadi 12.860 garis unik di 7.039 titik kode pos: median 13,4 km,
  * P90 94,4 km, terjauh 3.073 km — jadi garisnya memang punya panjang.
  * Biayanya 51 ms sekali per ganti data (bukan per ganti lapisan).
+ *
+ * `tanpaKantor` sekarang berarti "kantornya tidak bisa dipastikan": tidak ketemu sama sekali,
+ * ATAU hanya ketemu lewat singkatan yang provinsinya berbantah / masih dipakai banyak kantor.
+ * Baris begitu TIDAK digaris — garis ke pulau seberang lebih menyesatkan daripada tidak ada.
  */
 export function bangunJembatanOutlet(
   rows: readonly BarisJembatan[],
   titik: Record<string, { lat: number; lng: number }>,
-  kantor: Map<string, KantorCabang>
+  kantor: Map<string, DaftarKantor>
 ): { koneksi: Map<string, KoneksiTitik[]>; status: Map<string, StatusTitik>; tanpaKantor: number } {
   const agregat = new Map<string, Map<string, KoneksiTitik>>();
   const status = new Map<string, StatusTitik>();

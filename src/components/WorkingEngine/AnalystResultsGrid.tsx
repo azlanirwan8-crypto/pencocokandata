@@ -48,6 +48,7 @@ import { ThFilter } from '../ThFilter';
 import { useFilterSort } from '../../utils/useFilterSort';
 import type { DefinisiKolomFilter } from '../../utils/filterSort';
 import { useNotification } from '../Notification/NotificationContext';
+import { indeksWilayahCabang, nyebrangWilayahCabang } from '../../utils/finalAnomaly';
 
 /** Satu sel "validasi fase N" di tab Data Final: badge hasil + alasannya satu baris. */
 const SelValidasi: React.FC<{
@@ -142,7 +143,9 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   const [searchTerm, setSearchTerm] = useTampilanTersimpan<string>('tampilan.analyst.cari', '');
   // Pencarian 83 ribu baris: biarkan input langsung, saring di nilai tertunda
   const deferredSearch = useDeferredValue(searchTerm);
-  const [statusFilter, setStatusFilter] = useTampilanTersimpan<'ALL' | 'ANOMALI' | 'EXACT_MATCH' | 'HIGH_CONFIDENCE' | 'PENEMPATAN_REVIEW'>('tampilan.analyst.status', 'ALL');
+  const [statusFilter, setStatusFilter] = useTampilanTersimpan<
+    'ALL' | 'ANOMALI' | 'EXACT_MATCH' | 'HIGH_CONFIDENCE' | 'PENEMPATAN_REVIEW' | 'LINTAS_PROVINSI'
+  >('tampilan.analyst.status', 'ALL');
   // Inner tab pada tiap fase: hasil mesin yang siap disetujui vs yang masih butuh
   // kerja operator. Satu state untuk semua fase — hanya labelnya yang berbeda.
   const [innerTab, setInnerTab] = useTampilanTersimpan<'BERES' | 'MANUAL'>('tampilan.analyst.innerTab', 'BERES');
@@ -361,6 +364,10 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   // ── HIGH-PERFORMANCE SINGLE-PASS STAGE PARTITIONING & ANALYTICS O(N) ──
   // Mengelompokkan seluruh dataset dalam 1 pass tunggal untuk menghilangkan loop berulang
   // (sebelumnya ada 5x full scans atas 83.000 data per render).
+  // Provinsi/pulau kantor cabang dihitung sekali per perubahan Data Cabang; predikatnya
+  // dipakai bersama kartu anomali Data Final dan gerbang setujui massal di App.
+  const indeksWilayah = useMemo(() => indeksWilayahCabang(masterRows), [masterRows]);
+
   const rowAnalytics = useMemo(() => {
     const stageBuckets: Record<1 | 2 | 3 | 4, { beres: AnalystRow[]; manual: AnalystRow[]; all: AnalystRow[] }> = {
       1: { beres: [], manual: [], all: [] },
@@ -380,6 +387,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     let placementVerified = 0;
     let approved = 0;
     let role3Complete = 0;
+    let lintasWilayah = 0;
     let f1ApprovedCount = 0;
     let f2ApprovedCount = 0;
     let f3ApprovedCount = 0;
@@ -436,6 +444,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
 
         if (r.isFinalApproved) approved++;
         if (r.is3RoleLengkap) role3Complete++;
+        if (nyebrangWilayahCabang(r, indeksWilayah)) lintasWilayah++;
       }
     }
 
@@ -472,6 +481,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
         placementVerified,
         approved,
         role3Complete,
+        lintasWilayah,
         accuracyRate,
         isAllApproved,
       },
@@ -497,7 +507,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
         } as Record<'all' | 'fase1' | 'fase2' | 'fase3', boolean>,
       },
     };
-  }, [rows]);
+  }, [rows, indeksWilayah]);
 
   const { wilayahList, stats, phaseState, stageBuckets } = rowAnalytics;
 
@@ -545,6 +555,9 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       if (statusFilter === 'EXACT_MATCH' && r.statusAnalisa !== 'EXACT_MATCH') return false;
       if (statusFilter === 'HIGH_CONFIDENCE' && r.statusAnalisa !== 'HIGH_CONFIDENCE') return false;
       if (statusFilter === 'PENEMPATAN_REVIEW' && r.placementStatus === 'VERIFIED') return false;
+      // Predikat yang sama dengan gerbang setujui massal: baris yang tertahan di sana
+      // persis baris yang muncul di sini, tanpa angka kedua yang bisa menyimpang.
+      if (statusFilter === 'LINTAS_PROVINSI' && !nyebrangWilayahCabang(r, indeksWilayah)) return false;
 
       if (q) {
         const match =
@@ -566,7 +579,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       }
       return true;
     });
-  }, [stageBuckets, stageTab, innerTab, selectedWilayah, statusFilter, deferredSearch]);
+  }, [stageBuckets, stageTab, innerTab, selectedWilayah, statusFilter, deferredSearch, indeksWilayah]);
 
   const definisiKolom = useMemo(() => buatDefinisiKolomGrid(kotaKodePosDari), [kotaKodePosDari]);
   const definisiUntuk = useMemo(
@@ -1310,6 +1323,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
               <option value="HIGH_CONFIDENCE">High Confidence ({stats.highConf})</option>
               {stats.anomalies > 0 && <option value="ANOMALI">Perlu Review / Anomali ({stats.anomalies})</option>}
               {stats.placementReview > 0 && <option value="PENEMPATAN_REVIEW">Penempatan Belum Terverifikasi ({stats.placementReview})</option>}
+              {stats.lintasWilayah > 0 && <option value="LINTAS_PROVINSI">Lintas Provinsi ({stats.lintasWilayah})</option>}
             </select>
           </div>
 

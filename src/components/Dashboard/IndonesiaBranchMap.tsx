@@ -2359,6 +2359,11 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                 Seluruh baris Data Final terpetakan
               </span>
             )}
+            {jembatanFinal.tanpaKantor > 0 && (
+              <span style={{ color: '#c2410c', fontWeight: 600, lineHeight: 1.35 }}>
+                {jembatanFinal.tanpaKantor.toLocaleString('id-ID')} baris tidak digaris — kantornya tidak pasti (kode/sandi cabang dipakai banyak kota dan provinsinya tidak cocok)
+              </span>
+            )}
             <div style={{ height: 1, background: '#e9ebec' }} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
               <span style={{ fontWeight: 700, color: '#405189', marginBottom: '0.05rem' }}>Status Titik</span>

@@ -4,9 +4,10 @@ export { getHeaderStyle, getDataCellStyle, applyStandardSheetStyle, exportFinalR
 export { exportFinalRowsToPdf, tabelPdfFinal, labelLingkup } from '../src/utils/pdfExport';
 export { isKimBranchAceh, findKimBranch, findClosestMasterRecommendation, buildMasterProximityIndex } from '../src/utils/recommender';
 export { KOLOM_FINAL, JUDUL_KOLOM_FINAL, barisKeExcelFinal, buatDefinisiKolomGrid, KOLOM_FILTER_FINAL, barisKeExcelAnalyst } from '../src/utils/finalColumns';
-export { detectFinalAnomalies, KATEGORI_ANOMALI, URUTAN_KATEGORI } from '../src/utils/finalAnomaly';
+export { detectFinalAnomalies, KATEGORI_ANOMALI, URUTAN_KATEGORI, indeksWilayahCabang, lintasWilayahCabang, nyebrangWilayahCabang } from '../src/utils/finalAnomaly';
+export { calculateRealDistance } from '../src/utils/geoDistance';
 export { getIslandFromProvinsi } from '../src/utils/roleMatcher';
-export { formatWilayahName, benturanIdentitas, indeksSisiSelisih, cariPadananSelisih, bedaSisiSelisih, kunciNamaSelisih } from '../src/utils/normalizer';
+export { formatWilayahName, benturanIdentitas, indeksSisiSelisih, cariPadananSelisih, bedaSisiSelisih, kunciNamaSelisih, cleanProvinsi } from '../src/utils/normalizer';
 
 export { kunciKelKec, kotaCocok, kodePosLima, bangunJembatanOutlet, indeksKantorCabang, bagiPinKeSelLayar } from '../src/utils/geoTitik';
 export { tabrakKotaPtenKodePos } from '../src/utils/tabrakKotaPten';

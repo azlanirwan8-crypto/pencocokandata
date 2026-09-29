@@ -20,7 +20,7 @@ import { FinalDataManager } from './components/WorkingEngine/FinalDataManager';
 import { cityMatchKey, makeFinalKey, barisFinalLengkap, pilFinalDariCloud, hitungBit, bitTemuanBaris, AnalisaDibatalkan, type AnalystRow, type AnalystCoverage } from './utils/analystPipeline';
 import { jalankanAnalisaDiWorker, batalAnalisaDiWorker } from './utils/analystRunner';
 import { SinyalTemuanModal } from './components/WorkingEngine/SinyalTemuanModal';
-import { detectFinalAnomalies } from './utils/finalAnomaly';
+import { detectFinalAnomalies, indeksWilayahCabang, nyebrangWilayahCabang } from './utils/finalAnomaly';
 import type { ActiveTab } from './components/Sidebar';
 
 import type { MasterRow, TargetRow, WilayahStat, WilayahSetting } from './types';
@@ -484,6 +484,10 @@ export const App: React.FC = () => {
   const finalAnomali = useMemo(() => detectFinalAnomalies(finalRows, masterRows), [finalRows, masterRows]);
   const anomaliIds = useMemo(() => new Set(finalAnomali.map((a) => a.row.id)), [finalAnomali]);
 
+  // Provinsi/pulau kantor cabang, dari Data Cabang. Dipakai gerbang setujui massal dan
+  // saringan "lintas provinsi" supaya keduanya menilai baris yang SAMA dengan kartu anomali.
+  const wilayahCabang = useMemo(() => indeksWilayahCabang(masterRows), [masterRows]);
+
   // Anomali ikut lingkup yang SAME dengan baris yang sedang dilihat. Sengaja disaring
   // lewat id `dashboardFilteredRows`, bukan lewat kunci wilayah lagi: filter 'ALL' punya
   // jalur sendiri di atas dan menyalin perbandingan kuncinya ke sini membuat kartu ini
@@ -886,15 +890,26 @@ export const App: React.FC = () => {
   // menjalankannya menghasilkan Final Data berisi puluhan ribu tanda "-".
   const handleApproveAllAnalystFinal = () => {
     const lulus = (r: AnalystRow) => r.kategori !== 'TIDAK_ANALISA' && barisFinalLengkap(r);
-    const moving = analystRows.filter(lulus).map((r) => ({ ...r, isFinalApproved: true }));
+    const siap = analystRows.filter(lulus);
+    // Gerbang wilayah: kantor yang duduk di luar provinsi/pulau asal data tidak boleh ikut
+    // masuk Data Final lewat setujui massal. Kondisi ini sudah lama dihitung kartu anomali
+    // tapi hanya sebagai catatan, jadi kasus Solo (Jawa Tengah) → cabang SOLOK (Sumatera
+    // Barat) lolos sampai ke Final. Aturan resmi Aceh→KIM dikecualikan di dalam predikatnya.
+    const nyebrang = siap.filter((r) => nyebrangWilayahCabang(r, wilayahCabang));
+    const idNyebrang = new Set(nyebrang.map((r) => r.id));
+    const moving = siap.filter((r) => !idNyebrang.has(r.id)).map((r) => ({ ...r, isFinalApproved: true }));
     const ditahan = analystRows.filter((r) => r.kategori !== 'TIDAK_ANALISA' && !barisFinalLengkap(r)).length;
     if (moving.length === 0) {
-      notify(
-        ditahan > 0
-          ? `${ditahan.toLocaleString('id-ID')} baris ditahan — kolom cabangnya masih kosong. Tekan "Ulangi Analisa Total" untuk menjalankan Fase 2, tunggu sampai Nama Outlet terisi, lalu setujui lagi.`
-          : 'Tidak ada baris yang siap disetujui.',
-        'warning'
-      );
+      const bagian: string[] = [];
+      if (ditahan > 0)
+        bagian.push(
+          `${ditahan.toLocaleString('id-ID')} baris kolom cabangnya masih kosong — tekan "Ulangi Analisa Total" untuk menjalankan Fase 2, tunggu sampai Nama Outlet terisi, lalu setujui lagi`
+        );
+      if (nyebrang.length > 0)
+        bagian.push(
+          `${nyebrang.toLocaleString('id-ID')} baris kantornya berada di luar provinsi/pulau asal data — saring Data Analyst dengan "Lintas Provinsi" untuk memeriksanya`
+        );
+      notify(bagian.length > 0 ? `${bagian.join('; ')}.` : 'Tidak ada baris yang siap disetujui.', 'warning');
       return;
     }
     const idPindah = new Set(moving.map((r) => r.id));
@@ -917,13 +932,13 @@ export const App: React.FC = () => {
     setItem('analyst_results_data', remaining).catch(() => {});
     setAnalystCoverage(null);
     setActiveTab('final');
-    const menungguKota = remaining.length - ditahan;
-    notify(
-      `${moving.length.toLocaleString('id-ID')} baris disetujui masuk Data Final` +
-        (ditahan > 0 ? ` — ${ditahan.toLocaleString('id-ID')} baris tanpa cabang tetap di antrean.` : '') +
-        (menungguKota > 0 ? ` ${menungguKota.toLocaleString('id-ID')} baris TIDAK_ANALISA menunggu pemetaan kota.` : '.'),
-      'success'
-    );
+    const menungguKota = remaining.length - ditahan - nyebrang.length;
+    const laporan: string[] = [`${moving.length.toLocaleString('id-ID')} baris disetujui masuk Data Final`];
+    if (ditahan > 0) laporan.push(`${ditahan.toLocaleString('id-ID')} baris tanpa cabang tetap di antrean`);
+    if (nyebrang.length > 0)
+      laporan.push(`${nyebrang.length.toLocaleString('id-ID')} baris ditahan karena kantornya lintas provinsi/pulau`);
+    if (menungguKota > 0) laporan.push(`${menungguKota.toLocaleString('id-ID')} baris TIDAK_ANALISA menunggu pemetaan kota`);
+    notify(`${laporan.join('. ')}.`, 'success');
   };
 
   // "Kembalikan ke Data Analyst": pindahkan seluruh Final Data kembali ke antrean analisa.
@@ -1086,7 +1101,25 @@ export const App: React.FC = () => {
   // pilihan besar harus lewat satu pembaruan array supaya tidak membekukan tab.
   const handlePatchMassalAnalyst = (rowIds: string[], patch: Partial<AnalystRow>) => {
     if (rowIds.length === 0) return;
-    const ids = new Set(rowIds);
+    // "Setujui" massal dari grid memakai predikat yang sama dengan tombol "Saya Setuju":
+    // baris yang kantornya duduk di luar provinsi/pulau asal data jangan ditandai siap final.
+    let ids = new Set(rowIds);
+    if (patch.isFinalApproved) {
+      const olehId = new Map(analystRows.map((r) => [r.id, r]));
+      const nyebrang = rowIds.filter((id) => {
+        const r = olehId.get(id);
+        return !!r && nyebrangWilayahCabang(r, wilayahCabang);
+      });
+      if (nyebrang.length > 0) {
+        const ditolak = new Set(nyebrang);
+        ids = new Set(rowIds.filter((id) => !ditolak.has(id)));
+        notify(
+          `${nyebrang.length.toLocaleString('id-ID')} dari ${rowIds.length.toLocaleString('id-ID')} baris terpilih tidak disetujui — kantornya berada di luar provinsi/pulau asal data. Saring Data Analyst dengan "Lintas Provinsi" untuk memeriksanya.`,
+          'warning'
+        );
+        if (ids.size === 0) return;
+      }
+    }
     setAnalystRows((prev) => {
       const next = prev.map((r) => (ids.has(r.id) ? { ...r, ...patch } : r));
       setItemDebounced('analyst_results_data', next);

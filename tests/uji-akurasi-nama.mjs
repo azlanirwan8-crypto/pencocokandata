@@ -87,6 +87,22 @@ const PASANGAN = [
   ['SOLOK', 'SOLOK SELATAN', false, 'kabupaten vs kota'],
   ['LABUHAN BATU', 'LABUHA', false, 'awal sama'],
   ['BENER MERIAH', 'TAHAN BENER', false, 'satu kata sama'],
+  // ── hasil pindai cloud 2026-09-29: 479 nama PTEN × 172 nama Data Kode Pos ──
+  // Delapan pasangan berbeda ejaan di bawah ini justru kota yang SAMA, jadi harus lolos.
+  // Enam pasangan BEDA provinsi yang juga lolos ambang (SOLO/SOLOK 0,96 · MERANTI/
+  // MENTAWAI 0,95 · LIMA PULUH/LIMA PULUH KOTO 0,93 · BANGKA/BANGKALAN 0,93 ·
+  // BANYUASIN/BANYUMAS 0,93 · SERIBU/ARU 0,93) sengaja TIDAK dipasang sebagai kasus di
+  // sini: bentuk hurufnya tidak bisa dibedakan dari salah ketik yang wajib lolos
+  // (MANOKWAR → MANOKWARI, PADANGSIDIMPUAN → PADANG SIDEMPUAN). Yang memisahkan mereka
+  // adalah penjaga provinsi di pipeline, dan itu diuji di uji-kota-pten.mjs.
+  ['PADANGSIDIMPUAN', 'PADANG SIDEMPUAN', true, 'spasi vs gabung'],
+  ['PEMATANGSIANTAR', 'PEMATANG SIANTAR', true, 'spasi vs gabung'],
+  ['TANJUNGBALAI', 'TANJUNG BALAI', true, 'spasi vs gabung'],
+  ['LABUHANBATU', 'LABUHAN BATU', true, 'spasi vs gabung'],
+  ['LABUHANBATU SELATAN', 'LABUHAN BATU UTARA', false, 'gabung vs spasi, arah beda'],
+  ['SAWAHLUNTO', 'SAWAH LUNTO', true, 'spasi vs gabung'],
+  ['BATANGHARI', 'BATANG HARI', true, 'spasi vs gabung'],
+  ['SUNGAIPENUH', 'SUNGAI PENUH', true, 'spasi vs gabung'],
 ];
 
 function lev(a, b) {
@@ -142,7 +158,7 @@ const asa = (label, ok, keterangan) => {
   else console.log(`OK    ${label}`);
 };
 const akurasi = hasil.benar / hasil.total;
-asa('akurasi >= 90,0% pada 72 pasangan berlabel', akurasi >= 0.9, `${(akurasi * 100).toFixed(1)}%`);
+asa(`akurasi >= 90,0% pada ${PASANGAN.length} pasangan berlabel`, akurasi >= 0.9, `${(akurasi * 100).toFixed(1)}%`);
 asa('mesin mengalahkan Levenshtein saja', hasil.benar > bl, `${hasil.benar} vs ${bl}`);
 asa('salah gabung <= 5', hasil.salahGabung.length <= 5, `${hasil.salahGabung.length}`);
 asa('terlewat <= 2', hasil.lewat.length <= 2, `${hasil.lewat.length}`);

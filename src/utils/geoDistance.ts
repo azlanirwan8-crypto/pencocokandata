@@ -1,7 +1,7 @@
 // Utility for Real-World Geographic Distance Calculation & Google Maps Integration
 // Menghitung estimasi jarak fisik nyata (Kilometer) dan menyediakan rute Google Maps resmi
 
-import { cleanText, cleanDati, cleanKecamatan, cleanKelurahan, normalizeKodePos, hasDirectionalConflict, findSharedStreetOrLandmark } from './normalizer.ts';
+import { cleanText, cleanDati, cleanKecamatan, cleanKelurahan, cleanProvinsi, normalizeKodePos, hasDirectionalConflict, findSharedStreetOrLandmark } from './normalizer.ts';
 import type { TargetRow, MasterRow } from '../types';
 
 /**
@@ -232,12 +232,24 @@ export function buildGoogleMapsDirectionsUrl(target: TargetRow, master: MasterRo
  * Untuk jarak rute nyata, gunakan buildGoogleMapsDirectionsUrl().
  */
 export function calculateRealDistance(target: TargetRow, master: MasterRow): RealDistanceInfo {
+  // ── PENJAGA PROVINSI ──
+  // Semua "jarak" fungsi ini disimpulkan dari KEMIRIPAN NAMA, bukan koordinat:
+  // 'SOLOK' memuat 'SOLO', jadi kantor di Sumatera Barat dulu dinilai 9,7 km dari
+  // kelurahan Kota Solo (Jawa Tengah) dan MENANG sebagai cabang terdekat. Terukur di
+  // cloud 2026-09-29: 897 baris Data Final yang sudah disetujui memasang kantor beda
+  // provinsi dengan cara ini (terjauh 4.103 km — PEG BINTANG, Papua Pegunungan, ke
+  // TANJUNG UBAN di Kepri). Nama yang mirip di provinsi berbeda tidak lagi dihitung
+  // berdekatan; kalau provinsinya tidak diketahui, penjaga ini diam (tidak menebak).
+  const provTarget = cleanProvinsi(target.Provinsi);
+  const provMaster = cleanProvinsi(master.Provinsi);
+  const bedaProvinsi = !!provTarget && !!provMaster && provTarget !== provMaster;
+
   const targetDatiRaw = cleanText(target['Dati II']);
   const masterDatiRaw = cleanText(master['Dati II']);
   const targetDatiClean = cleanDati(target['Dati II']);
   const masterDatiClean = cleanDati(master['Dati II']);
   const datiConflict = hasDirectionalConflict(target['Dati II'] || '', master['Dati II'] || '');
-  const datiMatch = !datiConflict && !!(
+  const datiMatch = !bedaProvinsi && !datiConflict && !!(
     (targetDatiClean && masterDatiClean && targetDatiClean === masterDatiClean) ||
     (targetDatiRaw && masterDatiRaw && (targetDatiRaw.includes(masterDatiRaw) || masterDatiRaw.includes(targetDatiRaw)))
   );
@@ -247,7 +259,7 @@ export function calculateRealDistance(target: TargetRow, master: MasterRow): Rea
   const targetKecClean = cleanKecamatan(target.Kecamatan);
   const masterKecClean = cleanKecamatan(master.Kecamatan);
   const kecConflict = hasDirectionalConflict(target.Kecamatan || '', master.Kecamatan || '');
-  const kecMatch = !kecConflict && !!(
+  const kecMatch = !bedaProvinsi && !kecConflict && !!(
     (targetKecClean && masterKecClean && targetKecClean === masterKecClean) ||
     (targetKecRaw && masterKecRaw && (targetKecRaw.includes(masterKecRaw) || masterKecRaw.includes(targetKecRaw)))
   );
@@ -257,7 +269,7 @@ export function calculateRealDistance(target: TargetRow, master: MasterRow): Rea
   const targetKelClean = cleanKelurahan(target.Kelurahan);
   const masterKelClean = cleanKelurahan(master.Kelurahan);
   const kelConflict = hasDirectionalConflict(target.Kelurahan || '', master.Kelurahan || '');
-  const kelMatch = !kelConflict && !!(
+  const kelMatch = !bedaProvinsi && !kelConflict && !!(
     (targetKelClean && masterKelClean && targetKelClean === masterKelClean) ||
     (targetKelRaw && masterKelRaw && (targetKelRaw.includes(masterKelRaw) || masterKelRaw.includes(targetKelRaw)))
   );

@@ -36,27 +36,86 @@ export const URUTAN_KATEGORI = PRIORITY;
 
 const isAcehText = (s: string) => /ACEH|NANGGROE|\bNAD\b/.test(String(s || '').toUpperCase());
 
-export function detectFinalAnomalies(finalRows: AnalystRow[], masterRows: MasterRow[]): FinalAnomaly[] {
-  // Peta pulau & provinsi cabang di-resolusi dari Master (baris final tidak menyimpan
-  // provinsi cabang — yang tersimpan hanya nama outlet / kode cabangnya).
-  const islandByOutlet = new Map<string, string>();
-  const islandByKode = new Map<string, string>();
-  const provinsiByOutlet = new Map<string, string>();
-  const provinsiByKode = new Map<string, string>();
+/**
+ * Peta provinsi & pulau KANTOR cabang, di-resolusi dari Data Cabang.
+ *
+ * Baris Data Final tidak menyimpan provinsi cabang — yang tersimpan hanya nama outlet
+ * dan kode cabangnya. SATU-SATUNYA tempat kelas "beda provinsi / beda pulau" dihitung,
+ * supaya kartu anomali, saringan grid dan gerbang setujui massal membaca angka yang sama.
+ */
+export interface IndeksWilayahCabang {
+  islandByOutlet: Map<string, string>;
+  islandByKode: Map<string, string>;
+  provinsiByOutlet: Map<string, string>;
+  provinsiByKode: Map<string, string>;
+}
+
+export function indeksWilayahCabang(masterRows: readonly MasterRow[]): IndeksWilayahCabang {
+  const idx: IndeksWilayahCabang = {
+    islandByOutlet: new Map(), islandByKode: new Map(),
+    provinsiByOutlet: new Map(), provinsiByKode: new Map(),
+  };
   for (const m of masterRows) {
     const island = getIslandFromProvinsi(m.Provinsi, m['Dati II'], `${m.Kelurahan} ${m.Kecamatan}`);
     const provinsi = cleanProvinsi(m.Provinsi);
     const no = String(m['Nama Outlet'] || '').trim().toUpperCase();
-    if (no && !islandByOutlet.has(no)) {
-      islandByOutlet.set(no, island);
-      provinsiByOutlet.set(no, provinsi);
+    if (no && !idx.islandByOutlet.has(no)) {
+      idx.islandByOutlet.set(no, island);
+      idx.provinsiByOutlet.set(no, provinsi);
     }
     const kc = String(m['Kode Cabang'] || m['Branch Code'] || '').trim();
-    if (kc && !islandByKode.has(kc)) {
-      islandByKode.set(kc, island);
-      provinsiByKode.set(kc, provinsi);
+    if (kc && !idx.islandByKode.has(kc)) {
+      idx.islandByKode.set(kc, island);
+      idx.provinsiByKode.set(kc, provinsi);
     }
   }
+  return idx;
+}
+
+/** Baris yang cukup untuk menilai wilayah; field lain tidak dibaca. */
+export type BarisWilayahCabang = Pick<AnalystRow, 'namaOutlet' | 'kodeCabang' | 'branchCode' | 'provinsi' | 'kotaPten' | 'kotaPtenMax15' | 'kelurahan' | 'kecamatan'>
+  & Partial<Pick<AnalystRow, 'fase2Sumber'>>;
+
+/**
+ * Apakah kantor yang terpasang duduk di luar wilayah asal baris?
+ * Aceh dikecualikan: penempatan ke Cabang KIM memang lintas kota di sana, dan itu
+ * aturan resmi (`aturanAceh` di pipeline, `fase2Sumber = ATURAN_ACEH_KIM`).
+ * Kantor yang tidak dikenal di Data Cabang mengembalikan false — tanpa bukti provinsi
+ * tidak ada yang boleh dilarang.
+ */
+export function lintasWilayahCabang(
+  r: BarisWilayahCabang,
+  idx: IndeksWilayahCabang
+): { provinsi: boolean; pulau: boolean; provinsiBaris: string; provinsiCabang: string; pulauBaris: string; pulauCabang: string } {
+  const teks = `${r.provinsi} ${r.kotaPten} ${r.kotaPtenMax15} ${r.kelurahan} ${r.kecamatan}`;
+  const kosong = { provinsi: false, pulau: false, provinsiBaris: '', provinsiCabang: '', pulauBaris: '', pulauCabang: '' };
+  if (isAcehText(teks) || r.fase2Sumber === 'ATURAN_ACEH_KIM') return kosong;
+  const outletKey = String(r.namaOutlet || '').trim().toUpperCase();
+  const kodeKey = String(r.kodeCabang || r.branchCode || '').trim();
+  const pulauBaris = getIslandFromProvinsi(r.provinsi, r.kotaPtenMax15 || r.kotaPten, `${r.kelurahan} ${r.kecamatan}`);
+  const provinsiBaris = cleanProvinsi(r.provinsi);
+  const pulauCabang = idx.islandByOutlet.get(outletKey) ?? idx.islandByKode.get(kodeKey) ?? '';
+  const provinsiCabang = idx.provinsiByOutlet.get(outletKey) ?? idx.provinsiByKode.get(kodeKey) ?? '';
+  return {
+    provinsi: !!(provinsiCabang && provinsiBaris && provinsiCabang !== provinsiBaris),
+    pulau: !!(pulauCabang && pulauBaris !== 'Lainnya' && pulauCabang !== 'Lainnya' && pulauBaris !== pulauCabang),
+    provinsiBaris, provinsiCabang, pulauBaris, pulauCabang,
+  };
+}
+
+/**
+ * Bentuk singkat untuk gerbang (setujui massal, saringan grid) yang hanya perlu ya/tidak.
+ * Alasannya harus tetap dibaca dari `lintasWilayahCabang()` bila akan ditampilkan.
+ */
+export function nyebrangWilayahCabang(r: BarisWilayahCabang, idx: IndeksWilayahCabang): boolean {
+  const w = lintasWilayahCabang(r, idx);
+  return w.provinsi || w.pulau;
+}
+
+export function detectFinalAnomalies(finalRows: AnalystRow[], masterRows: MasterRow[]): FinalAnomaly[] {
+  // Peta pulau & provinsi cabang di-resolusi dari Master (baris final tidak menyimpan
+  // provinsi cabang — yang tersimpan hanya nama outlet / kode cabangnya).
+  const idx = indeksWilayahCabang(masterRows);
 
   const out: FinalAnomaly[] = [];
   for (const r of finalRows) {
@@ -70,27 +129,19 @@ export function detectFinalAnomalies(finalRows: AnalystRow[], masterRows: Master
     // Yang sudah diproses tetap dinilai penuh seperti sebelumnya.
     const sudahDianalisa = r.statusAnalisa !== 'MENUNGGU';
 
-    const outletKey = String(r.namaOutlet || '').trim().toUpperCase();
-    const kodeKey = String(r.kodeCabang || r.branchCode || '').trim();
-    const cabangIsland = islandByOutlet.get(outletKey) ?? islandByKode.get(kodeKey);
-    const cabangProvinsi = provinsiByOutlet.get(outletKey) ?? provinsiByKode.get(kodeKey);
-    // Aceh dikecualikan dari dua aturan wilayah: penempatan ke Cabang KIM memang lintas kota.
-    const bukanAceh = !isAcehText(`${r.provinsi} ${r.kotaPten} ${r.kotaPtenMax15} ${r.kelurahan} ${r.kecamatan}`);
-
-    if (bukanAceh) {
-      const rowIsland = getIslandFromProvinsi(r.provinsi, r.kotaPtenMax15 || r.kotaPten, `${r.kelurahan} ${r.kecamatan}`);
-      if (cabangIsland && rowIsland !== 'Lainnya' && cabangIsland !== 'Lainnya' && rowIsland !== cabangIsland) {
-        cats.push('PULAU');
-        reasons.push(`Penempatan beda pulau: asal ${rowIsland} → cabang ${cabangIsland}`);
-      }
-
-      // Lebih spesifik dari PULAU: beda provinsi tapi masih satu pulau (mis. Jawa Barat
-      // → Jawa Tengah) selama ini lolos, padahal itu justru yang mau dilihat operator.
-      const rowProvinsi = cleanProvinsi(r.provinsi);
-      if (cabangProvinsi && rowProvinsi && cabangProvinsi !== rowProvinsi) {
-        cats.push('PROVINSI');
-        reasons.push(`Penempatan beda provinsi: asal ${rowProvinsi.toUpperCase()} → cabang ${cabangProvinsi.toUpperCase()}`);
-      }
+    // Aceh dikecualikan di dalam lintasWilayahCabang(): penempatan ke Cabang KIM memang
+    // lintas kota di sana. Predikat yang SAMA dipakai gerbang setujui massal dan saringan
+    // grid, jadi angka kartu tidak bisa menyimpang dari baris yang benar-benar tertahan.
+    const wilayah = lintasWilayahCabang(r, idx);
+    if (wilayah.pulau) {
+      cats.push('PULAU');
+      reasons.push(`Penempatan beda pulau: asal ${wilayah.pulauBaris} → cabang ${wilayah.pulauCabang}`);
+    }
+    // Lebih spesifik dari PULAU: beda provinsi tapi masih satu pulau (mis. Jawa Barat
+    // → Jawa Tengah) selama ini lolos, padahal itu justru yang mau dilihat operator.
+    if (wilayah.provinsi) {
+      cats.push('PROVINSI');
+      reasons.push(`Penempatan beda provinsi: asal ${wilayah.provinsiBaris.toUpperCase()} → cabang ${wilayah.provinsiCabang.toUpperCase()}`);
     }
 
     if (r.statusAnalisa === 'ANOMALI') {
