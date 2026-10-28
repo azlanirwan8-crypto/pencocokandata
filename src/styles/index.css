@@ -2587,40 +2587,182 @@ body {
   flex: none;
 }
 
-.tm-mid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
-  gap: 0.55rem 1rem;
+/* Kartu identitas merchant — padanan kartu profil gelap di halaman sumber. */
+.tm-profil {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.9rem 1.25rem;
   margin-top: 0.85rem;
-  padding: 0.75rem 0.85rem;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--bg-table-header);
+  padding: 1.1rem 1.2rem;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 58%, #172554 100%);
+  box-shadow: var(--shadow-lg);
 }
 
-.tm-mid-item {
+.tm-profil::after {
+  content: "";
+  position: absolute;
+  right: -3rem;
+  bottom: -3.5rem;
+  width: 11rem;
+  height: 11rem;
+  border-radius: 50%;
+  background: rgba(59, 130, 246, 0.22);
+  filter: blur(26px);
+  pointer-events: none;
+}
+
+.tm-profil-kiri {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: 0.35rem;
+  flex: 1 1 280px;
   min-width: 0;
 }
 
-.tm-mid-label {
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--text-muted);
+.tm-profil-kanan {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
 }
 
-.tm-mid-nilai {
+.tm-profil-lencana {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.3rem;
-  font-size: 0.8rem;
+  gap: 0.4rem;
+}
+
+.tm-profil-mid {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.16rem 0.55rem;
+  border-radius: 0.45rem;
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+  white-space: nowrap;
+}
+
+.tm-profil-multi {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.64rem;
+  font-weight: 800;
+  padding: 0.14rem 0.45rem;
+  border-radius: 0.35rem;
+  background: #fbbf24;
+  color: #451a03;
+  white-space: nowrap;
+}
+
+.tm-profil-kriteria {
+  font-size: 0.68rem;
   font-weight: 600;
-  color: var(--text-heading);
+  padding: 0.14rem 0.5rem;
+  border-radius: 0.35rem;
+  background: rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+}
+
+.tm-profil-nama {
+  font-size: 1.3rem;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: #ffffff;
+  overflow-wrap: anywhere;
+}
+
+.tm-profil-lokasi {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.74rem;
+  color: #cbd5e1;
+}
+
+.tm-profil-lokasi svg {
+  flex: none;
+  color: #60a5fa;
+}
+
+.tm-profil-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.22rem 0.72rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.tm-profil-status i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.tm-profil-status--aktif {
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  background: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+}
+
+.tm-profil-status--proses {
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  background: rgba(245, 158, 11, 0.22);
+  color: #fcd34d;
+}
+
+.tm-profil-status--tolak {
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
+.tm-profil-status--lain {
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  background: rgba(59, 130, 246, 0.22);
+  color: #93c5fd;
+}
+
+.tm-profil-metrik {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.66rem;
+  color: #94a3b8;
+  overflow-wrap: anywhere;
+}
+
+.tm-profil-metrik strong {
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.tm-profil-aktivitas {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #93c5fd;
+}
+
+@media (min-width: 720px) {
+  .tm-profil-kanan {
+    align-items: flex-end;
+    text-align: right;
+  }
 }
 
 .tm-histori { margin-top: 0.9rem; }

@@ -8,6 +8,8 @@ import {
   AlertCircle,
   Clock,
   Timer,
+  Flag,
+  MapPin,
 } from 'lucide-react';
 import type { BarisMerchant, KartuRingkasan, KartuTahun, MuatanTracking } from '../../utils/trackingMerchant';
 import {
@@ -40,6 +42,13 @@ const KELAS_KERANJANG: Record<string, string> = {
   proses: 'badge badge-level2',
   tolak: 'badge badge-diff',
   lain: 'badge badge-unmatched',
+};
+
+/** Teks badge mengikuti halaman sumber: status Active selalu tertulis "Active (NMID Terbit)". */
+const labelStatusSumber = (status: string) => {
+  const s = String(status || '').toLowerCase();
+  if (s.includes('active')) return 'Active (NMID Terbit)';
+  return status || 'In Process';
 };
 
 export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = ({
@@ -491,41 +500,40 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
 
           {jejak.length > 0 && (
             <>
-              <div className="tm-mid">
-                <div className="tm-mid-item">
-                  <span className="tm-mid-label">MID</span>
-                  <span className="tm-mid-nilai">
-                    {midJejak || jejak[0].mid}
-                    {jejak.length > 1 && <span className="badge badge-level1">Multi-Riwayat ({jejak.length}×)</span>}
+              {/* Kartu identitas merchant — susunannya mengikuti kartu profil di halaman sumber. */}
+              <div className="tm-profil">
+                <div className="tm-profil-kiri">
+                  <div className="tm-profil-lencana">
+                    <span className="tm-profil-mid">MID: {midJejak || jejak[0].mid}</span>
+                    {jejak.length > 1 && (
+                      <span className="tm-profil-multi">
+                        <Flag size={10} />
+                        Multi-Riwayat ({jejak.length}×)
+                      </span>
+                    )}
+                    {jejak[0].kriteria && <span className="tm-profil-kriteria">{jejak[0].kriteria}</span>}
+                  </div>
+                  <div className="tm-profil-nama">{jejak[0].namaMerchant || 'Merchant QRIS'}</div>
+                  <div className="tm-profil-lokasi">
+                    <MapPin size={13} />
+                    <span>
+                      {[jejak[0].kabupatenKota, jejak[0].provinsi].filter(Boolean).join(' • ') || 'Indonesia'}
+                    </span>
+                  </div>
+                </div>
+                <div className="tm-profil-kanan">
+                  <span className={`tm-profil-status tm-profil-status--${keranjangStatus(jejak[0].status)}`}>
+                    <i aria-hidden="true" />
+                    {labelStatusSumber(jejak[0].status)}
                   </span>
-                </div>
-                <div className="tm-mid-item">
-                  <span className="tm-mid-label">Nama Merchant</span>
-                  <span className="tm-mid-nilai">{jejak[0].namaMerchant || '-'}</span>
-                </div>
-                <div className="tm-mid-item">
-                  <span className="tm-mid-label">Kriteria</span>
-                  <span className="tm-mid-nilai">{jejak[0].kriteria || '-'}</span>
-                </div>
-                <div className="tm-mid-item">
-                  <span className="tm-mid-label">Lokasi</span>
-                  <span className="tm-mid-nilai">
-                    {[jejak[0].kabupatenKota, jejak[0].provinsi].filter(Boolean).join(' • ') || '-'}
-                  </span>
-                </div>
-                <div className="tm-mid-item">
-                  <span className="tm-mid-label">Cabang</span>
-                  <span className="tm-mid-nilai">{jejak[0].branchCode || '-'}</span>
-                </div>
-                <div className="tm-mid-item">
-                  <span className="tm-mid-label">Aktivitas</span>
-                  <span className="tm-mid-nilai">{jejak.length} pengajuan terdata</span>
-                </div>
-                <div className="tm-mid-item">
-                  <span className="tm-mid-label">Status Terkini</span>
-                  <span className="tm-mid-nilai">
-                    <span className={KELAS_KERANJANG[keranjangStatus(jejak[0].status)]}>{jejak[0].status || '-'}</span>
-                  </span>
+                  {jejak[0].branchCode && jejak[0].branchCode !== '-' && (
+                    <div className="tm-profil-metrik">
+                      Cabang: <strong>{jejak[0].branchCode}</strong>
+                    </div>
+                  )}
+                  <div className="tm-profil-aktivitas">
+                    {jejak.length} Aktivitas Tercatat{jejak.length > 1 ? ' (Multi-Event)' : ''}
+                  </div>
                 </div>
               </div>
 
