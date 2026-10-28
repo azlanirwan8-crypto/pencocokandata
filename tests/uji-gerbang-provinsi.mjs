@@ -147,5 +147,26 @@ asa('JP6 kontrol: provinsi sama tetap dinilai penuh', skorSolokAsli?.score >= 72
 asa('JP6 kontrol: provinsinya tidak diketahui → tidak ada veto (mesin tetap jalan)',
   findClosestMasterRecommendation(target({ Provinsi: '', 'Dati II': 'SOLOK', Kelurahan: 'PANDAN', Kecamatan: 'TANJUNG HARAPAN', 'KODE POS': '27322' }), indeksHanyaSolok)?.candidates?.[0]?.master?.['Nama Outlet'], 'SOLOK');
 
+// ── 7. NAMA KANTOR YANG BERULANG tidak boleh jadi bukti ──
+// Data Cabang asli punya DUA kantor bernama persis 'VETERAN': Kota Surakarta (kode SRS,
+// Jawa Tengah) dan Makassar (kode MAT, Sulawesi Selatan). Indeks yang mengunci nama ke
+// penulis pertama menuduh 7 baris Solo → VETERAN (SRS) nyebrang ke Sulawesi — gerbangnya
+// sendiri yang salah, bukan datanya.
+const idxNamaKembar = indeksWilayahCabang([
+  cabang({ 'Nama Outlet': 'VETERAN', 'Kode Cabang': 'SRS', 'Branch Code': 'SRS', Provinsi: 'JAWA TENGAH', 'Dati II': 'KOTA SURAKARTA', Kelurahan: 'KEPARAK', Kecamatan: 'LAWEYAN', 'KODE POS': '57153' }),
+  cabang({ 'Nama Outlet': 'VETERAN', 'Kode Cabang': 'MAT', 'Branch Code': 'MAT', Provinsi: 'SULAWESI SELATAN', 'Dati II': 'KOTA MAKASSAR', Kelurahan: 'LAKABANG', Kecamatan: 'MARISO', 'KODE POS': '90145' }),
+]);
+const barisSoloVeteran = (kode) => baris({ namaOutlet: 'VETERAN', kodeCabang: kode, branchCode: kode });
+asa('JP7 Solo → VETERAN (SRS, kantor Surakarta) TIDAK ditahan', nyebrangWilayahCabang(barisSoloVeteran('SRS'), idxNamaKembar), false);
+asa('JP7 Solo → VETERAN (MAT, kantor Makassar) ditahan', nyebrangWilayahCabang(barisSoloVeteran('MAT'), idxNamaKembar), true);
+asa('JP7 nama kembar tanpa kode cabang → gerbang diam, tidak menebak',
+  nyebrangWilayahCabang({ ...barisSoloVeteran('SRS'), kodeCabang: '', branchCode: '' }, idxNamaKembar), false);
+const idxKodeKembar = indeksWilayahCabang([
+  cabang({ 'Nama Outlet': 'A SATU', 'Kode Cabang': 'XX', 'Branch Code': 'XX', Provinsi: 'JAWA TENGAH', 'Dati II': 'SURAKARTA', Kelurahan: 'X', Kecamatan: 'Y', 'KODE POS': '57100' }),
+  cabang({ 'Nama Outlet': 'B DUA', 'Kode Cabang': 'XX', 'Branch Code': 'XX', Provinsi: 'SUMATERA BARAT', 'Dati II': 'PADANG', Kelurahan: 'Z', Kecamatan: 'W', 'KODE POS': '25100' }),
+]);
+asa('JP7 kode cabang kembar tanpa nama dikenal → tidak ditahan',
+  nyebrangWilayahCabang({ provinsi: 'JAWA TENGAH', kotaPten: 'SOLO', kotaPtenMax15: 'SOLO', kelurahan: 'X', kecamatan: 'Y', namaOutlet: 'TIDAK DIKENAL', kodeCabang: 'XX', branchCode: 'XX' }, idxKodeKembar), false);
+
 console.log(gagal === 0 ? '\nSEMUA LULUS' : `\n${gagal} TEST GAGAL`);
 process.exit(gagal === 0 ? 0 : 1);

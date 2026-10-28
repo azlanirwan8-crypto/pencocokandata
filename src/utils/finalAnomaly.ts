@@ -48,27 +48,58 @@ export interface IndeksWilayahCabang {
   islandByKode: Map<string, string>;
   provinsiByOutlet: Map<string, string>;
   provinsiByKode: Map<string, string>;
+  islandByPasangan: Map<string, string>;
+  provinsiByPasangan: Map<string, string>;
+  /** Kunci yang dipakai bersama >1 provinsi: tidak boleh membuktikan apa pun. */
+  outletRagu: Set<string>;
+  kodeRagu: Set<string>;
+}
+
+/**
+ * Kunci → provinsi, HANYA bila kuncinya tidak ambigu. Nama outlet dan kode cabang sama-sama
+ * berulang di Data Cabang: `VETERAN` ada dua (Kota Surakarta/Jawa Tengah kode SRS, dan
+ * Makassar/Sulawesi Selatan kode MAT). Dulu yang menang penulis pertama, sehingga 7 baris
+ * Solo → VETERAN (SRS) yang benar ikut dituduh nyebrang ke Sulawesi. Kunci yang menampung
+ * lebih dari satu provinsi dibuat tidak dikenal — tanpa bukti wilayah gerbangnya diam,
+ * bukan menebak dan menahan baris yang benar.
+ */
+function catatWilayah(
+  kunci: string,
+  provinsi: string,
+  island: string,
+  olehKunci: Map<string, string>,
+  olehPulau: Map<string, string>,
+  provinsiPerKunci: Map<string, Set<string>>
+) {
+  if (!kunci || !provinsi) return;
+  const himpunan = provinsiPerKunci.get(kunci) || new Set<string>();
+  provinsiPerKunci.set(kunci, himpunan);
+  himpunan.add(provinsi);
+  if (himpunan.size > 1) { olehKunci.delete(kunci); olehPulau.delete(kunci); return; }
+  if (!olehKunci.has(kunci)) { olehKunci.set(kunci, provinsi); olehPulau.set(kunci, island); }
 }
 
 export function indeksWilayahCabang(masterRows: readonly MasterRow[]): IndeksWilayahCabang {
   const idx: IndeksWilayahCabang = {
     islandByOutlet: new Map(), islandByKode: new Map(),
     provinsiByOutlet: new Map(), provinsiByKode: new Map(),
+    islandByPasangan: new Map(), provinsiByPasangan: new Map(),
+    outletRagu: new Set(), kodeRagu: new Set(),
   };
+  const provinsiPerOutlet = new Map<string, Set<string>>();
+  const provinsiPerKode = new Map<string, Set<string>>();
+  const provinsiPerPasangan = new Map<string, Set<string>>();
   for (const m of masterRows) {
     const island = getIslandFromProvinsi(m.Provinsi, m['Dati II'], `${m.Kelurahan} ${m.Kecamatan}`);
     const provinsi = cleanProvinsi(m.Provinsi);
     const no = String(m['Nama Outlet'] || '').trim().toUpperCase();
-    if (no && !idx.islandByOutlet.has(no)) {
-      idx.islandByOutlet.set(no, island);
-      idx.provinsiByOutlet.set(no, provinsi);
-    }
     const kc = String(m['Kode Cabang'] || m['Branch Code'] || '').trim();
-    if (kc && !idx.islandByKode.has(kc)) {
-      idx.islandByKode.set(kc, island);
-      idx.provinsiByKode.set(kc, provinsi);
-    }
+    catatWilayah(no, provinsi, island, idx.provinsiByOutlet, idx.islandByOutlet, provinsiPerOutlet);
+    catatWilayah(kc, provinsi, island, idx.provinsiByKode, idx.islandByKode, provinsiPerKode);
+    catatWilayah(no && kc ? `${no}|${kc}` : '', provinsi, island, idx.provinsiByPasangan, idx.islandByPasangan, provinsiPerPasangan);
   }
+  provinsiPerOutlet.forEach((p, k) => { if (p.size > 1) idx.outletRagu.add(k); });
+  provinsiPerKode.forEach((p, k) => { if (p.size > 1) idx.kodeRagu.add(k); });
   return idx;
 }
 
@@ -94,8 +125,20 @@ export function lintasWilayahCabang(
   const kodeKey = String(r.kodeCabang || r.branchCode || '').trim();
   const pulauBaris = getIslandFromProvinsi(r.provinsi, r.kotaPtenMax15 || r.kotaPten, `${r.kelurahan} ${r.kecamatan}`);
   const provinsiBaris = cleanProvinsi(r.provinsi);
-  const pulauCabang = idx.islandByOutlet.get(outletKey) ?? idx.islandByKode.get(kodeKey) ?? '';
-  const provinsiCabang = idx.provinsiByOutlet.get(outletKey) ?? idx.provinsiByKode.get(kodeKey) ?? '';
+  // Urutan bukti: pasangan nama+kode (paling spesifik) → nama → kode. Kunci yang dipakai
+  // bersama lebih dari satu provinsi dilewati; ia tidak membuktikan apa-apa.
+  const pasangan = outletKey && kodeKey ? `${outletKey}|${kodeKey}` : '';
+  const ambil = (peta: Map<string, string>, kunci: string, ragu: boolean) => (kunci && !ragu ? peta.get(kunci) : undefined);
+  const provinsiCabang =
+    idx.provinsiByPasangan.get(pasangan) ??
+    ambil(idx.provinsiByOutlet, outletKey, idx.outletRagu.has(outletKey)) ??
+    ambil(idx.provinsiByKode, kodeKey, idx.kodeRagu.has(kodeKey)) ??
+    '';
+  const pulauCabang =
+    idx.islandByPasangan.get(pasangan) ??
+    ambil(idx.islandByOutlet, outletKey, idx.outletRagu.has(outletKey)) ??
+    ambil(idx.islandByKode, kodeKey, idx.kodeRagu.has(kodeKey)) ??
+    '';
   return {
     provinsi: !!(provinsiCabang && provinsiBaris && provinsiCabang !== provinsiBaris),
     pulau: !!(pulauCabang && pulauBaris !== 'Lainnya' && pulauCabang !== 'Lainnya' && pulauBaris !== pulauCabang),
