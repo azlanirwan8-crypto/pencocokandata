@@ -27,6 +27,7 @@ import { tulisLembarExcel } from '../../utils/excel';
 import { tanggalBerkas } from '../../utils/normalizer';
 import { getItem, setItem } from '../../utils/storage';
 import { getUnitCategory, getWondrRecommendation } from '../../utils/roleHelpers';
+import { gabungImporRole, kunciOrganisasiRole } from '../../utils/roleMerge';
 import { loadRoleMappingFromNeon, saveRoleMappingToNeon } from '../../utils/neonSync';
 import { useNotification } from '../Notification/NotificationContext';
 import { DialogPanel } from '../BaseModal';
@@ -522,32 +523,29 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
           return;
         }
 
-        // Impor = TAMBAH dengan dedup kunci `organisasiTujuan`; data lama tidak dibuang
-        // diam-diam (mengosongkan pustaka punya tombol Reset sendiri).
-        const kunciOrg = (x: { organisasiTujuan: string }) => String(x.organisasiTujuan || '').toUpperCase().trim();
-        const sudahAda = new Set(roleList.map(kunciOrg));
-        const terlihat = new Set<string>();
-        const barisBaru: typeof imported = [];
-        let duplikatBerkas = 0;
-        let duplikatPustaka = 0;
-        imported.forEach((item) => {
-          const k = kunciOrg(item);
-          if (terlihat.has(k)) { duplikatBerkas++; return; }
-          terlihat.add(k);
-          if (sudahAda.has(k)) { duplikatPustaka++; return; }
-          barisBaru.push(item);
-        });
-        const gabungan = [...roleList, ...barisBaru];
+        // Impor = TAMBAL. Baris yang belum ada disimpan; role yang masih kosong diisi
+        // dari Excel; baris yang ketiga role-nya sudah terisi dibiarkan utuh walaupun
+        // Excel bilang lain. Menimpa `1` jadi `0` akan menghapus keputusan operator,
+        // jadi penulisan hanya satu arah. Logika penuh + uji: src/utils/roleMerge.ts.
+        const {
+          gabungan, barisBaru, organisasiDitambal, slotDitambal,
+          sudahPenuh, tidakBerubah, duplikatBerkas,
+        } = gabungImporRole(roleList, imported);
 
         setRoleList(gabungan);
         handleSaveData(gabungan);
         if (fileInputRef.current) fileInputRef.current.value = '';
+        const bagian = [
+          `${barisBaru.toLocaleString('id-ID')} organisasi baru`,
+          `${organisasiDitambal.toLocaleString('id-ID')} organisasi ditambal (${slotDitambal.toLocaleString('id-ID')} role)`,
+          `${sudahPenuh.toLocaleString('id-ID')} sudah lengkap 3 role (dilewati)`,
+          `${tidakBerubah.toLocaleString('id-ID')} tidak berubah`,
+        ];
+        if (duplikatBerkas) bagian.push(`${duplikatBerkas.toLocaleString('id-ID')} duplikat di dalam berkas`);
         notify(
-          `Impor Mapping Role: ${barisBaru.length.toLocaleString('id-ID')} organisasi baru` +
-            `${duplikatPustaka ? `, ${duplikatPustaka.toLocaleString('id-ID')} sudah ada (dilewati)` : ''}` +
-            `${duplikatBerkas ? `, ${duplikatBerkas.toLocaleString('id-ID')} duplikat di dalam berkas (dilewati)` : ''}.` +
+          `Impor Mapping Role: ${bagian.join(', ')}.` +
             ` Total pustaka kini ${gabungan.length.toLocaleString('id-ID')} baris.`,
-          barisBaru.length ? 'success' : 'info'
+          barisBaru + slotDitambal > 0 ? 'success' : 'info'
         );
       } catch (err: any) {
         notify('Gagal membaca format file Excel: ' + err.message, 'error');
@@ -672,6 +670,19 @@ export const RoleMappingManager: React.FC<RoleMappingManagerProps> = ({
       qrsCabapv2: formData.qrsCabapv2 ? 1 : 0,
       grandTotal: Math.max(1, Number(formData.grandTotal) || 1),
     };
+
+    // Satu baris per organisasi adalah prasyarat aturan tambal di impor; tanpa penjaga
+    // ini, baris kembar lolos dan slot kosong di salah satunya tidak pernah tersentuh.
+    const dupIdx = roleList.findIndex(
+      (item, i) => i !== editingIndex && kunciOrganisasiRole(item) === kunciOrganisasiRole(normalizedItem)
+    );
+    if (dupIdx >= 0) {
+      notify(
+        `"${normalizedItem.organisasiTujuan}" sudah ada di pustaka. Pakai tombol Edit pada baris itu, jangan tambah baru.`,
+        'warning'
+      );
+      return;
+    }
 
     let updatedList: RoleMappingRecord[];
     if (modalMode === 'edit' && editingIndex !== null) {

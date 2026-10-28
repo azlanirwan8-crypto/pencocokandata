@@ -13,6 +13,7 @@ export { kunciKelKec, kotaCocok, kodePosLima, bangunJembatanOutlet, indeksKantor
 export { tabrakKotaPtenKodePos } from '../src/utils/tabrakKotaPten';
 export { BATAS_DAFTAR_NILAI, KOSONG, barisLolosFilter, cariDalamNilai, daftarNilaiUnik, dasarDaftarNilai, jumlahFilterAktif, saringBaris, sortirBaris, terapkanKeadaan } from '../src/utils/filterSort';
 export { resolveBranchCoordinates, kategoriUnitCabang, clusterMasterRowsForMap, sumberPerkiraan } from '../src/utils/geoCoder';
+export { gabungImporRole, kunciOrganisasiRole, punyaTigaRole } from '../src/utils/roleMerge';
 export { STATUS_PAKAI, STATUS_BELUM_PAKAI, kunciIdentitasCabang, indeksCabangTerpakai, adalahCabangTerpakai, statusPakaiCabang, himpunCabangTerpakai } from '../src/utils/cabangUsage';
 export {
   SUMBER_ANALISA, sumberFase, nilaiKesiapan, hitungKesiapan, statusFase, alasanFaseTerkunci,
