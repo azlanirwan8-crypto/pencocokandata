@@ -12,7 +12,7 @@ import {
   LABEL_KERANJANG, SUMUR_TRACKING, PERIODE_QR_DEFAULT, SARINGAN_REKAP_KOSONG, barisKeExcelTm, cocokCari,
   daftarMerchantTerverifikasi, daftarPeriodeQr, formatAngka, halamanDaftar, kartuMerchant,
   keranjangStatus, keteranganRef, labelStatusSumber, periodeQrAktif, ringkasAngkaBesar, riwayatMerchant,
-  ringkasTracking, saringMerchantTerverifikasi, segmenDonat, temukanMerchant,
+  ringkasTracking, saringMerchantTerverifikasi, segmenDonat, temukanMerchant, warnaLembut,
 } from './out/entry-uji.js';
 
 let gagal = 0;
@@ -459,6 +459,23 @@ asa('donat: potongan & offset mengikuti pangsa MID unik',
 asa('donat: total nol tidak menghasilkan NaN',
   segmenDonat([{ name: 'A', color: '#111111', rawCount: 0, uniqueCount: 0, pct: 0, dupEliminated: 0, desc: '', isApi: false }], 0)[0].dasharray,
   '0.000 251.327');
+asa('donat: satu potongan penuh = keliling cincin (dipakai sebagai keadaan awal animasi)',
+  segmenDonat([{ name: 'A', color: '#111111', rawCount: 1, uniqueCount: 1, pct: 100, dupEliminated: 0, desc: '', isApi: false }], 1)[0].dasharray,
+  '251.327 0.000');
+asa('donat: potongan yang busurnya tak terlihat ditandai, bukan digambar', cincin.map((s) => s.tampil), [true, true]);
+const cincinKecil = segmenDonat([
+  { name: 'A', color: '#111111', rawCount: 10000, uniqueCount: 10000, pct: 99.99, dupEliminated: 0, desc: '', isApi: false },
+  { name: 'B', color: '#222222', rawCount: 1, uniqueCount: 1, pct: 0.01, dupEliminated: 0, desc: '', isApi: true },
+], 10001);
+asa('donat: porsi 0,01% (0,025 px) dilewati seperti sumber', cincinKecil.map((s) => s.tampil), [true, false]);
+
+// Pil persen & angka MID memakai warna jenis QR dari data, bukan hex komponen.
+asa('warna lembut: hex 6 digit jadi rgba', warnaLembut('#7c3aed', 0.14), 'rgba(124, 58, 237, 0.14)');
+asa('warna lembut: hex 3 digit dikembangkan', warnaLembut('#0af', 0.5), 'rgba(0, 170, 255, 0.5)');
+asa('warna lembut: alfa dijepit 0..1',
+  [warnaLembut('#000000', 4), warnaLembut('#000000', -1)], ['rgba(0, 0, 0, 1)', 'rgba(0, 0, 0, 0)']);
+asa('warna lembut: bukan hex dikembalikan apa adanya', warnaLembut('var(--x)', 0.2), 'var(--x)');
+asa('warna lembut: kosong jatuh ke abu-abu lembut', warnaLembut('', 0.2), 'rgba(100, 116, 139, 0.12)');
 
 // ── (9) Daftar merchant terverifikasi: satu baris per MID ──────────────────
 const daftarMid = daftarMerchantTerverifikasi(baris);
@@ -499,8 +516,49 @@ asa('komponen: 20 baris per halaman seperti sumber', /UKURAN_HALAMAN_REKAP = 20/
 asa('komponen: Aktivitas dirender sebelum Kinerja tahunan',
   komponenTm.indexOf('glass-card tm-aktivitas') >= 0 &&
     komponenTm.indexOf('glass-card tm-aktivitas') < komponenTm.indexOf('glass-card tm-tahunan'), true);
+asa('komponen: daftar MID terverifikasi jadi bagian paling bawah, setelah Kinerja tahunan',
+  komponenTm.indexOf('glass-card tm-tahunan') >= 0 &&
+    komponenTm.indexOf('glass-card tm-tahunan') < komponenTm.indexOf('glass-card tm-rekap'), true);
 asa('komponen: komposisi kosong diberi pemberitahuan, bukan angka karangan',
   [komponenTm.includes('tm-qr-nihil'), komponenTm.includes('totalUniqueMIDs:')], [true, false]);
+asa('komponen: pemilih periode tersegmentasi seperti sumber',
+  [komponenTm.includes('Kumulatif ({periodeKumulatif.shortLabel})'), komponenTm.includes('(Aktif)'),
+    komponenTm.includes('Pilih Tahun')], [true, true, true]);
+asa('komponen: rekap agregasi bisa diekspor sendiri',
+  [komponenTm.includes('Export Excel'), /eksporRekapQr = useCallback/.test(komponenTm),
+    komponenTm.includes("'MID Unik (Validasi)'")], [true, true, true]);
+asa('komponen: potongan donat tak terlihat dilewati',
+  /segmen\s*\.filter\(\(s\) => s\.tampil\)/.test(komponenTm), true);
+asa('komponen: pil angka memakai warna jenis QR dari data',
+  [/warnaLembut\(g\.color, 0\.14\)/.test(komponenTm), /warnaLembut\(warnaJenis\(m\.jenisQr\), 0\.1\)/.test(komponenTm)],
+  [true, true]);
+asa('komponen: total rekap menyebut periode & menyatakan 100% unik',
+  [komponenTm.includes('TOTAL REKAP ({periodeData.shortLabel})'), komponenTm.includes('100% Unik')],
+  [true, true]);
+
+// Animasi chart: cincin digambar setelah frame pertama, bilah & legenda lewat CSS,
+// dan semuanya harus dimatikan saat pengguna memilih reduced motion.
+const gayaTm = readFileSync(fileURLToPath(new URL('../src/styles/index.css', import.meta.url)), 'utf8');
+asa('komponen: cincin digambar bertahap dan diulang saat periode berganti',
+  [/KELILING_DONAT = \(2 \* Math\.PI \* 40\)\.toFixed\(3\)/.test(komponenTm),
+    /const CincinKomposisi[\s\S]*requestAnimationFrame\(\(\) => setSiap\(true\)\)/.test(komponenTm),
+    /<CincinKomposisi/.test(komponenTm), /key=\{kunciPeriodeAktif\}/.test(komponenTm)],
+  [true, true, true, true]);
+asa('komponen: kartu galat memakai kelas, bukan gaya inline',
+  [komponenTm.includes('glass-card tm-galat'), komponenTm.includes("fontSize: '0.84rem'")], [true, false]);
+asa('komponen: kartu kepala memakai kelas, bukan gaya inline',
+  [komponenTm.includes('glass-card tm-kepala-kartu'), komponenTm.includes("marginBottom: '1rem'"),
+    /\.tm-kepala-kartu \{ margin-bottom: 1rem; \}/.test(gayaTm), /\.tm-kepala-judul \{/.test(gayaTm)],
+  [true, false, true, true]);
+asa('gaya: animasi chart tersedia (cincin, bilah, legenda, kartu tahunan, ringkasan)',
+  ['@keyframes tm-muncul', '@keyframes tm-bilah', '@keyframes tm-naik', '.tm-donat circle',
+    '.tm-qr-bar-track > i', '.tm-tahun-seg', '.tm-ringkasan .tm-kartu']
+    .map((kunci) => gayaTm.includes(kunci)),
+  [true, true, true, true, true, true, true]);
+asa('gaya: animasi dimatikan saat prefers-reduced-motion',
+  /prefers-reduced-motion: reduce[\s\S]{0,200}animation-duration: 0\.001ms/.test(gayaTm), true);
+asa('gaya: panel tujuan gulir tidak tertutup topbar lengket',
+  /\.tm-aktivitas,\s*\n\.tm-rekap \{\s*\n\s*scroll-margin-top: 4\.2rem;/.test(gayaTm), true);
 
 console.log(gagal === 0 ? 'SEMUA LULUS' : `${gagal} UJIAN GAGAL`);
 process.exit(gagal === 0 ? 0 : 1);

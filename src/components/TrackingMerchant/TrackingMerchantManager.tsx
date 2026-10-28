@@ -16,6 +16,7 @@ import type {
   BarisMerchant,
   KartuRingkasan,
   KartuTahun,
+  KelompokQr,
   MuatanTracking,
   PeriodeQr,
   SaringanRekap,
@@ -42,6 +43,7 @@ import {
   saringMerchantTerverifikasi,
   segmenDonat,
   temukanMerchant,
+  warnaLembut,
 } from '../../utils/trackingMerchant';
 import { tulisLembarExcel } from '../../utils/excel';
 import { tanggalBerkas } from '../../utils/normalizer';
@@ -64,6 +66,15 @@ const KELAS_KERANJANG: Record<string, string> = {
 /** Sama dengan REKAP_PAGE_SIZE halaman sumber. */
 const UKURAN_HALAMAN_REKAP = 20;
 
+/** Kunci periode kumulatif di literal sumber — labelnya "Kumulatif (2021 - 2026)". */
+const KUNCI_PERIODE_KUMULATIF = 'ALL';
+
+/**
+ * Keliling cincin donat (r = 40, sama dengan `segmenDonat`). Dipakai sebagai
+ * keadaan awal supaya potongan digambar dari nol sebelum transisi CSS berjalan.
+ */
+const KELILING_DONAT = (2 * Math.PI * 40).toFixed(3);
+
 // Warna label mengikuti getPengajuanBadge() di halaman sumber; urutan cek penting
 // karena 'Edit Settlement' harus diputuskan sebelum 'Edit'.
 function kelasJenisPengajuan(jenis?: string): string {
@@ -75,6 +86,63 @@ function kelasJenisPengajuan(jenis?: string): string {
   if (teks.includes('Blokir')) return 'tm-jenis tm-jenis--merah';
   return 'tm-jenis';
 }
+
+/**
+ * Cincin komposisi jenis QR. Potongan digambar dari nol lalu dianimasikan CSS pada
+ * frame berikutnya; induknya diberi `key` per periode sehingga komponen ini di-remount
+ * dan animasinya berjalan ulang tanpa perlu setState balik ke nol.
+ */
+const CincinKomposisi: React.FC<{ kelompok: KelompokQr[]; total: number; label: string }> = ({
+  kelompok,
+  total,
+  label,
+}) => {
+  const segmen = useMemo(() => segmenDonat(kelompok, total), [kelompok, total]);
+  const [siap, setSiap] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setSiap(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  return (
+    <div className="tm-donat">
+      <svg
+        viewBox="0 0 120 120"
+        role="img"
+        aria-label={`Komposisi jenis QR ${label}: ${kelompok
+          .map((g) => `${g.name} ${formatAngka(g.pct)}%`)
+          .join(', ')}`}
+      >
+        <circle cx="60" cy="60" r="40" fill="none" stroke="var(--border-subtle)" strokeWidth="15" />
+        <g transform="rotate(-90 60 60)">
+          {segmen
+            .filter((s) => s.tampil)
+            .map((s, i) => (
+              <circle
+                key={s.name}
+                cx="60"
+                cy="60"
+                r="40"
+                fill="none"
+                stroke={s.color}
+                strokeWidth="15"
+                strokeLinecap="round"
+                style={{
+                  strokeDasharray: siap ? s.dasharray : `0 ${KELILING_DONAT}`,
+                  strokeDashoffset: s.dashoffset,
+                  transitionDelay: `${i * 70}ms`,
+                }}
+              />
+            ))}
+        </g>
+      </svg>
+      <div className="tm-donat-tengah">
+        <div className="tm-donat-nilai">{ringkasAngkaBesar(total)}</div>
+        <div className="tm-donat-label">MID Unik</div>
+      </div>
+    </div>
+  );
+};
 
 export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = ({
   onTrackingCountChange,
@@ -250,10 +318,21 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
       : periodeQr && periodeQr[PERIODE_QR_DEFAULT]
         ? PERIODE_QR_DEFAULT
         : periodeTersedia[0] || '';
-  const segmenCincin = useMemo(
-    () => (periodeData ? segmenDonat(periodeData.qrGroups, periodeData.totalUniqueMIDs) : []),
-    [periodeData]
+  // Kontrol periode meniru sumber: tahun berjalan + kumulatif sebagai tombol,
+  // tahun lampau di satu select.
+  const periodeKumulatif = useMemo(
+    () => (periodeQr && periodeQr[KUNCI_PERIODE_KUMULATIF]) || null,
+    [periodeQr]
   );
+  const tahunQr = useMemo(
+    () =>
+      periodeTersedia
+        .filter((kunci) => kunci !== KUNCI_PERIODE_KUMULATIF)
+        .sort((a, b) => b.localeCompare(a)),
+    [periodeTersedia]
+  );
+  const tahunTerbaru = tahunQr[0] || '';
+  const tahunPilihan = tahunQr.slice(1);
   // Warna titik jenis QR diambil dari komposisi sumber; nama yang tidak ada di sana abu-abu.
   const warnaQr = useMemo(() => {
     const peta: Record<string, string> = {};
@@ -292,6 +371,33 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
     },
     [ubahSaringanRekap]
   );
+
+  // Ekspor rekap agregasi per jenis QR — angka literal periode yang sedang tampil,
+  // bukan hitungan baris perwakilan.
+  const eksporRekapQr = useCallback(() => {
+    if (!periodeData) {
+      notify('Komposisi jenis QR belum tersinkron — tidak ada yang bisa diekspor.', 'warning');
+      return;
+    }
+    const kolomRaw = `Raw Data (${periodeData.shortLabel})`;
+    try {
+      tulisLembarExcel({
+        namaLembar: `Rekap_Jenis_QR_${periodeData.shortLabel}`.replace(/[^0-9A-Za-z]+/g, '_'),
+        namaBerkas: `Rekap_Jenis_QR_${periodeData.shortLabel.replace(/[^0-9A-Za-z]+/g, '-')}_${tanggalBerkas()}.xlsx`,
+        kolom: ['Jenis QR', kolomRaw, 'MID Unik (Validasi)', 'Pangsa (%)', 'Duplikat'],
+        baris: periodeData.qrGroups.map((g) => ({
+          'Jenis QR': g.name,
+          [kolomRaw]: g.rawCount,
+          'MID Unik (Validasi)': g.uniqueCount,
+          'Pangsa (%)': g.pct,
+          Duplikat: g.dupEliminated,
+        })),
+      });
+      notify(`Rekap ${periodeData.shortLabel} diekspor (${periodeData.qrGroups.length} jenis QR).`, 'success');
+    } catch (err) {
+      notify(err instanceof Error ? err.message : 'Gagal mengekspor rekap jenis QR.', 'error');
+    }
+  }, [periodeData, notify]);
 
   // Satu aturan pencarian untuk dua jalur: data yang sedang tampil, dan data yang baru
   // diambil dari sumber. Hasilnya sama supaya "tidak ketemu" tidak pernah sepihak.
@@ -347,10 +453,10 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
   return (
     <div>
       {/* 1. Kepala menu + aksi sync */}
-      <div className="glass-card" style={{ marginBottom: '1rem' }}>
+      <div className="glass-card tm-kepala-kartu">
         <div className="tm-kepala">
           <div>
-            <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div className="section-title tm-kepala-judul">
               <Radar size={18} />
               <span>Tracking Merchant</span>
             </div>
@@ -399,19 +505,8 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
       )}
 
       {galat && (
-        <div
-          className="glass-card"
-          style={{
-            marginBottom: '1rem',
-            padding: '0.75rem 1rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '0.75rem',
-            fontSize: '0.84rem',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className="glass-card tm-galat">
+          <div className="tm-galat-isi">
             <AlertCircle size={16} />
             <span>{galat}</span>
           </div>
@@ -653,78 +748,147 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
           `baris`. Periode yang tidak tersimpan dikatakan apa adanya, tidak dikarang. */}
       {statusMuat !== 'memuat' && baris.length > 0 && (
         <>
-          <div className="tm-qr-grid">
+          {/* Kontrol periode meniru sumber: tahun berjalan, kumulatif, lalu tahun lampau. */}
+          {periodeTersedia.length > 0 && (
+            <div className="tm-periode" role="group" aria-label="Periode komposisi jenis QR">
+              {tahunTerbaru && (
+                <button
+                  type="button"
+                  className={
+                    kunciPeriodeAktif === tahunTerbaru
+                      ? 'tm-periode-tombol tm-periode-tombol--aktif'
+                      : 'tm-periode-tombol'
+                  }
+                  aria-pressed={kunciPeriodeAktif === tahunTerbaru}
+                  onClick={() => setPeriodePilih(tahunTerbaru)}
+                >
+                  Tahun {tahunTerbaru} (Aktif)
+                </button>
+              )}
+              {periodeKumulatif && (
+                <button
+                  type="button"
+                  className={
+                    kunciPeriodeAktif === KUNCI_PERIODE_KUMULATIF
+                      ? 'tm-periode-tombol tm-periode-tombol--aktif'
+                      : 'tm-periode-tombol'
+                  }
+                  aria-pressed={kunciPeriodeAktif === KUNCI_PERIODE_KUMULATIF}
+                  onClick={() => setPeriodePilih(KUNCI_PERIODE_KUMULATIF)}
+                >
+                  Kumulatif ({periodeKumulatif.shortLabel})
+                </button>
+              )}
+              {tahunPilihan.length > 0 && (
+                <select
+                  className="tm-periode-pilih"
+                  aria-label="Pilih tahun komposisi jenis QR"
+                  value={tahunPilihan.includes(kunciPeriodeAktif) ? kunciPeriodeAktif : ''}
+                  onChange={(e) => {
+                    if (e.target.value) setPeriodePilih(e.target.value);
+                  }}
+                >
+                  <option value="">Pilih Tahun</option>
+                  {tahunPilihan.map((kunci) => (
+                    <option key={kunci} value={kunci}>
+                      {periodeQr?.[kunci]?.label || kunci} · {formatAngka(periodeQr?.[kunci]?.totalRawEvents || 0)} log
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+
+          <div className="tm-qr-grid" key={kunciPeriodeAktif}>
             <div className="glass-card tm-qr-kartu">
               <div className="tm-qr-kepala">
                 <div>
                   <div className="tm-qr-judul">Distribusi Komposisi Jenis QR</div>
                   <div className="tm-qr-sub">
                     {periodeData
-                      ? `${periodeData.label} • ${formatAngka(periodeData.totalRawEvents)} log mentah → ${formatAngka(periodeData.totalUniqueMIDs)} MID unik`
+                      ? 'Berdasarkan nomor MID unik terverifikasi'
                       : `Komposisi jenis QR dibaca dari ${SUMUR_TRACKING} saat sync.`}
                   </div>
                 </div>
-                {periodeTersedia.length > 0 && (
-                  <select
-                    className="filter-select"
-                    aria-label="Periode komposisi jenis QR"
-                    value={kunciPeriodeAktif}
-                    onChange={(e) => setPeriodePilih(e.target.value)}
-                  >
-                    {periodeTersedia.map((kunci) => (
-                      <option key={kunci} value={kunci}>
-                        {periodeQr?.[kunci]?.shortLabel || kunci}
-                      </option>
-                    ))}
-                  </select>
+                {periodeData && (
+                  <span className="tm-qr-pil">
+                    {`${periodeData.qrGroups.length} · ${formatAngka(periodeData.totalUniqueMIDs)} MID UNIK (${periodeData.shortLabel})`}
+                  </span>
                 )}
               </div>
 
               {periodeData ? (
-                <div className="tm-donat-baris">
-                  <div className="tm-donat">
-                    <svg
-                      viewBox="0 0 120 120"
-                      width="120"
-                      height="120"
-                      role="img"
-                      aria-label={`Komposisi jenis QR ${periodeData.label}: ${periodeData.qrGroups
-                        .map((g) => `${g.name} ${formatAngka(g.pct)}%`)
-                        .join(', ')}`}
-                    >
-                      <circle cx="60" cy="60" r="40" fill="none" stroke="var(--border-subtle)" strokeWidth="15" />
-                      <g transform="rotate(-90 60 60)">
-                        {segmenCincin.map((s) => (
-                          <circle
-                            key={s.name}
-                            cx="60"
-                            cy="60"
-                            r="40"
-                            fill="none"
-                            stroke={s.color}
-                            strokeWidth="15"
-                            strokeDasharray={s.dasharray}
-                            strokeDashoffset={s.dashoffset}
-                          />
-                        ))}
-                      </g>
-                    </svg>
-                    <div className="tm-donat-tengah">
-                      <div className="tm-donat-nilai">{ringkasAngkaBesar(periodeData.totalUniqueMIDs)}</div>
-                      <div className="tm-donat-label">MID Unik</div>
-                    </div>
+                <>
+                  <div className="tm-donat-baris">
+                    <CincinKomposisi
+                      kelompok={periodeData.qrGroups}
+                      total={periodeData.totalUniqueMIDs}
+                      label={periodeData.label}
+                    />
+                    <ul className="tm-qr-legend">
+                      {periodeData.qrGroups.map((g) => (
+                        <li key={g.name}>
+                          <button
+                            type="button"
+                            className="tm-qr-legend-baris"
+                            onClick={() => saringDaftarDariAgregasi(g.name)}
+                            title={`Saring daftar merchant terverifikasi ke ${g.name}`}
+                          >
+                            <i className="tm-qr-titik" style={{ background: g.color }} aria-hidden="true" />
+                            <span className="tm-qr-legend-nama">{g.name}</span>
+                            {g.isApi && <span className="tm-tag tm-tag--api">API</span>}
+                            <span className="tm-qr-legend-angka">{formatAngka(g.uniqueCount)}</span>
+                            <strong className="tm-qr-legend-pct" style={{ background: warnaLembut(g.color, 0.14) }}>
+                              {formatAngka(g.pct)}%
+                            </strong>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                  <ul className="tm-qr-legend">
-                    {periodeData.qrGroups.map((g) => (
-                      <li key={g.name}>
-                        <i className="tm-qr-titik" style={{ background: g.color }} aria-hidden="true" />
-                        <span className="tm-qr-legend-nama">{g.name}</span>
-                        <span className="tm-qr-legend-angka">{formatAngka(g.uniqueCount)}</span>
-                        <strong className="tm-qr-legend-pct">{formatAngka(g.pct)}%</strong>
-                      </li>
+
+                  {/* Empat jenis QR terbesar, seperti daftar bilah di sumber. */}
+                  <div className="tm-qr-bar-daftar">
+                    {periodeData.qrGroups.slice(0, 4).map((g) => (
+                      <div key={g.name} className="tm-qr-bar">
+                        <div className="tm-qr-bar-kepala">
+                          <span className="tm-qr-bar-nama">
+                            <i className="tm-qr-titik" style={{ background: g.color }} aria-hidden="true" />
+                            {g.name}
+                            <span className={g.isApi ? 'tm-tag tm-tag--api' : 'tm-tag tm-tag--non-api'}>
+                              {g.isApi ? 'API' : 'NON-API'}
+                            </span>
+                          </span>
+                          <span className="tm-qr-bar-angka">
+                            <strong>{formatAngka(g.uniqueCount)}</strong>
+                            <span>{formatAngka(g.pct)}%</span>
+                          </span>
+                        </div>
+                        <div className="tm-qr-bar-track">
+                          <i
+                            style={{ width: `${Math.max(g.pct, 0.5)}%`, background: g.color }}
+                            aria-hidden="true"
+                          />
+                        </div>
+                        <div className="tm-qr-bar-kaki">
+                          <span>
+                            Raw Log ({periodeData.shortLabel}): {formatAngka(g.rawCount)}
+                          </span>
+                          <span className="tm-qr-bar-redup">−{formatAngka(g.dupEliminated)} Duplikat Dieliminasi</span>
+                        </div>
+                      </div>
                     ))}
-                  </ul>
-                </div>
+                  </div>
+
+                  <div className="tm-qr-total">
+                    <span>
+                      Raw Log ({periodeData.shortLabel}): <strong>{formatAngka(periodeData.totalRawEvents)}</strong>
+                    </span>
+                    <span>
+                      <strong>−{formatAngka(periodeData.duplicateEventsEliminated)}</strong> Duplikat Dieliminasi
+                    </span>
+                  </div>
+                </>
               ) : (
                 <div className="tm-qr-nihil">
                   <AlertCircle size={14} />
@@ -737,16 +901,23 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
               )}
             </div>
 
-            <div className="glass-card tm-qr-kartu">
+            <div className="glass-card tm-qr-kartu tm-qr-rekap">
               <div className="tm-qr-kepala">
                 <div>
                   <div className="tm-qr-judul">Tabel Ringkasan Agregasi per Jenis QR</div>
                   <div className="tm-qr-sub">
-                    {periodeData
-                      ? `${periodeData.label} • ${periodeData.qrGroups.length} jenis QR, ${formatAngka(periodeData.duplicateEventsEliminated)} log duplikat dieliminasi`
-                      : 'Rekap per jenis QR mengikuti periode komposisi di samping.'}
+                    Perbandingan kuantitas MID unik, riwayat log, dan eliminasi multi-event
                   </div>
                 </div>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm tm-qr-ekspor"
+                  onClick={eksporRekapQr}
+                  disabled={!periodeData}
+                >
+                  <Download size={13} aria-hidden="true" />
+                  Export Excel
+                </button>
               </div>
 
               {periodeData ? (
@@ -755,11 +926,11 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
                     <thead>
                       <tr>
                         <th>Jenis QR</th>
-                        <th className="tm-kanan">Raw Log</th>
-                        <th className="tm-kanan">MID Unik</th>
-                        <th className="tm-kanan">% Pangsa</th>
-                        <th className="tm-kanan">Duplikasi</th>
-                        <th className="tm-tengah">Aksi</th>
+                        <th className="tm-kanan">Raw Data ({periodeData.shortLabel})</th>
+                        <th className="tm-kanan">MID Unik (Validasi)</th>
+                        <th className="tm-kanan">Pangsa (%)</th>
+                        <th className="tm-kanan">Duplikat</th>
+                        <th className="tm-tengah">Aksi Filter</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -769,21 +940,36 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
                             <div className="tm-qr-nama">
                               <i className="tm-qr-titik" style={{ background: g.color }} aria-hidden="true" />
                               <span>{g.name}</span>
+                              <span className={g.isApi ? 'tm-tag tm-tag--api' : 'tm-tag tm-tag--non-api'}>
+                                {g.isApi ? 'API' : 'NON-API'}
+                              </span>
                             </div>
                             {g.desc && <div className="tm-qr-desc">{g.desc}</div>}
                           </td>
                           <td className="tm-kanan tm-mono">{formatAngka(g.rawCount)}</td>
-                          <td className="tm-kanan tm-mono tm-tebal">{formatAngka(g.uniqueCount)}</td>
+                          <td className="tm-kanan">
+                            <span
+                              className="tm-qr-unik"
+                              style={{
+                                background: warnaLembut(g.color, 0.1),
+                                borderColor: warnaLembut(g.color, 0.28),
+                              }}
+                            >
+                              {formatAngka(g.uniqueCount)}
+                            </span>
+                          </td>
                           <td className="tm-kanan tm-mono">{formatAngka(g.pct)}%</td>
-                          <td className="tm-kanan tm-mono tm-redup">{formatAngka(g.dupEliminated)}</td>
+                          <td className="tm-kanan tm-mono tm-redup">
+                            {g.dupEliminated > 0 ? `−${formatAngka(g.dupEliminated)}` : '0'}
+                          </td>
                           <td className="tm-tengah">
                             <button
                               type="button"
-                              className="btn btn-outline btn-sm"
+                              className="tm-qr-filter"
                               onClick={() => saringDaftarDariAgregasi(g.name)}
                               title={`Saring daftar merchant terverifikasi ke ${g.name}`}
                             >
-                              Filter List
+                              Filter List ↓
                             </button>
                           </td>
                         </tr>
@@ -791,12 +977,17 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
                     </tbody>
                     <tfoot>
                       <tr>
-                        <td>TOTAL REKAP</td>
+                        <td>TOTAL REKAP ({periodeData.shortLabel})</td>
                         <td className="tm-kanan tm-mono">{formatAngka(periodeData.totalRawEvents)}</td>
                         <td className="tm-kanan tm-mono">{formatAngka(periodeData.totalUniqueMIDs)}</td>
-                        <td className="tm-kanan tm-mono">100%</td>
-                        <td className="tm-kanan tm-mono">{formatAngka(periodeData.duplicateEventsEliminated)}</td>
-                        <td />
+                        <td className="tm-kanan tm-mono">100,0%</td>
+                        <td className="tm-kanan tm-mono">−{formatAngka(periodeData.duplicateEventsEliminated)}</td>
+                        <td className="tm-tengah">
+                          <span className="tm-qr-unik-100">
+                            <Check size={11} aria-hidden="true" />
+                            100% Unik
+                          </span>
+                        </td>
                       </tr>
                     </tfoot>
                   </table>
@@ -808,189 +999,26 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
                 </div>
               )}
               {periodeData && (
-                <p className="tm-qr-catatan">
-                  Baris TOTAL dibaca langsung dari angka periode di sumber; jumlah per jenis QR bisa
-                  berbeda tipis dari TOTAL karena pembulatan di sumber.
-                </p>
+                <>
+                  <p className="tm-qr-nota">
+                    <Check size={12} aria-hidden="true" />
+                    <span>
+                      Angka MID unik sudah dideduplikasi per nomor MID: satu MID yang muncul di beberapa log
+                      hanya dihitung sekali, sehingga pangsa jenis QR tidak menggelembung.
+                    </span>
+                  </p>
+                  <p className="tm-qr-catatan">
+                    Baris TOTAL dibaca langsung dari angka periode di sumber; jumlah per jenis QR bisa
+                    berbeda tipis dari TOTAL karena pembulatan di sumber.
+                  </p>
+                </>
               )}
-            </div>
-          </div>
-
-          {/* Daftar merchant terverifikasi — satu baris per MID, nama & wilayah dari objek induk. */}
-          <div className="glass-card tm-rekap" ref={panelRekapRef}>
-            <div className="tm-qr-kepala">
-              <div>
-                <div className="tm-qr-judul">Daftar Merchant Terverifikasi (MID Unik)</div>
-                <div className="tm-qr-sub">
-                  Satu baris per MID. Nama, kriteria, dan wilayah dibaca dari objek induk seperti
-                  tabel sumber — nomor rekening tidak ikut karena dipotong parser.
-                </div>
-              </div>
-              <span className="tm-qr-pil">
-                {formatAngka(halamanMerchant.total)} / {formatAngka(merchantTerverifikasi.length)} MID
-              </span>
-            </div>
-
-            <div className="tm-rekap-saring">
-              <div className="search-input-wrapper">
-                <Search size={15} className="search-icon-pos" />
-                <input
-                  type="text"
-                  className="search-input"
-                  placeholder="Cari MID, nama merchant, atau kota…"
-                  value={saringanRekap.kueri}
-                  onChange={(e) => ubahSaringanRekap({ kueri: e.target.value })}
-                />
-              </div>
-              <select
-                className="filter-select"
-                aria-label="Saring jenis QR"
-                value={saringanRekap.jenisQr}
-                onChange={(e) => ubahSaringanRekap({ jenisQr: e.target.value })}
-              >
-                <option value="">Semua jenis QR</option>
-                <option value="GROUP_API">Grup: QR API</option>
-                <option value="GROUP_NON_API">Grup: QR Non-API</option>
-                {opsiJenisQr.map((j) => (
-                  <option key={j} value={j}>
-                    {j}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="filter-select"
-                aria-label="Saring jumlah log"
-                value={saringanRekap.duplikasi}
-                onChange={(e) => ubahSaringanRekap({ duplikasi: e.target.value as SaringanRekap['duplikasi'] })}
-              >
-                <option value="">Semua log</option>
-                <option value="multi">Multi-log (flag)</option>
-                <option value="single">Satu log</option>
-              </select>
-              {(saringanRekap.kueri || saringanRekap.jenisQr || saringanRekap.duplikasi) && (
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  onClick={() => ubahSaringanRekap(SARINGAN_REKAP_KOSONG)}
-                >
-                  Reset saringan
-                </button>
-              )}
-            </div>
-
-            <div className="table-container">
-              <table className="modern-table tm-rekap-tabel">
-                <thead>
-                  <tr>
-                    <th>No</th>
-                    <th>MID</th>
-                    <th>Nama Merchant</th>
-                    <th>Jenis QR</th>
-                    <th>Kriteria &amp; Wilayah</th>
-                    <th>Validasi MID</th>
-                    <th>Update Terakhir</th>
-                    <th>Aksi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {halamanMerchant.isi.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="tm-rekap-kosong">
-                        Tidak ada MID yang cocok dengan saringan ini.
-                      </td>
-                    </tr>
-                  ) : (
-                    halamanMerchant.isi.map((m, i) => (
-                      <tr key={m.mid}>
-                        <td className="tm-mono">{formatAngka(halamanMerchant.mulai + i)}</td>
-                        <td className="tm-mono tm-tebal">{m.mid}</td>
-                        <td>
-                          <div className="tm-rekap-nama">{m.nama || '-'}</div>
-                          <span className={KELAS_KERANJANG[keranjangStatus(m.statusTerakhir)]}>
-                            {labelStatusSumber(m.statusTerakhir)}
-                          </span>
-                        </td>
-                        <td>
-                          <span className="tm-qr">
-                            <i className="tm-qr-titik" style={{ background: warnaJenis(m.jenisQr) }} aria-hidden="true" />
-                            {m.jenisQr || '-'}
-                          </span>
-                        </td>
-                        <td>
-                          <div>{m.kriteria || '-'}</div>
-                          <div className="tm-rekap-wilayah">
-                            {[m.kota, m.provinsi].filter(Boolean).join(' • ') || '-'}
-                          </div>
-                        </td>
-                        <td>
-                          {m.jumlahRiwayat > 1 ? (
-                            <span className="tm-validasi tm-validasi--multi">
-                              <Flag size={10} aria-hidden="true" />
-                              MID Unik ({m.jumlahRiwayat}× Log)
-                            </span>
-                          ) : (
-                            <span className="tm-validasi tm-validasi--tunggal">
-                              <Check size={10} aria-hidden="true" />
-                              MID Unik (1× Log)
-                            </span>
-                          )}
-                        </td>
-                        <td className="tm-mono">{m.lastUpdate || '-'}</td>
-                        <td>
-                          <button
-                            type="button"
-                            className="tm-mid-tombol"
-                            onClick={() => {
-                              setMidJejak(m.mid);
-                              setKueriJejak(m.mid);
-                              setKueriKosong('');
-                            }}
-                          >
-                            Riwayat &rarr;
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="tm-rekap-halaman">
-              <span>
-                {halamanMerchant.total === 0
-                  ? 'Tidak ada baris'
-                  : `${formatAngka(halamanMerchant.mulai)}–${formatAngka(halamanMerchant.akhir)} dari ${formatAngka(
-                      halamanMerchant.total
-                    )} MID`}
-              </span>
-              <div className="tm-rekap-nav">
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  disabled={halamanMerchant.halaman <= 1}
-                  onClick={() => setHalamanRekap(halamanMerchant.halaman - 1)}
-                >
-                  Sebelumnya
-                </button>
-                <span>
-                  Halaman {halamanMerchant.halaman} / {halamanMerchant.totalHalaman}
-                </span>
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  disabled={halamanMerchant.halaman >= halamanMerchant.totalHalaman}
-                  onClick={() => setHalamanRekap(halamanMerchant.halaman + 1)}
-                >
-                  Berikutnya
-                </button>
-              </div>
             </div>
           </div>
         </>
       )}
 
-      {/* 4. Kinerja onboarding per tahun — tetap di bawah Aktivitas & rekap. */}
+      {/* 4. Kinerja onboarding per tahun — komposisi dulu, daftar MID paling bawah. */}
       {distribusi.length > 0 && (
         <div className="glass-card tm-tahunan">
           <div className="tm-tahunan-kepala">
@@ -1037,6 +1065,216 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
                 )}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* 5. Daftar merchant terverifikasi — satu baris per MID, nama & wilayah dari objek induk. */}
+      {statusMuat !== 'memuat' && baris.length > 0 && (
+        <div className="glass-card tm-rekap" ref={panelRekapRef}>
+          <div className="tm-qr-kepala">
+            <div>
+              <div className="tm-qr-judul">Daftar Merchant Terverifikasi (MID Unik)</div>
+              <div className="tm-qr-sub">
+                Satu baris per MID. Nama, kriteria, dan wilayah dibaca dari objek induk seperti
+                tabel sumber — nomor rekening tidak ikut karena dipotong parser.
+              </div>
+            </div>
+            <div className="tm-rekap-lencana">
+              {merchantTerverifikasi.length > 0 && (
+                <span className="tm-qr-pil tm-qr-pil--hijau">
+                  <Check size={11} aria-hidden="true" />
+                  100% Deduplikasi
+                </span>
+              )}
+              <span className="tm-qr-pil">
+                Menampilkan {formatAngka(halamanMerchant.total)} dari{' '}
+                {formatAngka(merchantTerverifikasi.length)} merchant MID unik
+              </span>
+            </div>
+          </div>
+
+          <div className="tm-rekap-saring">
+            <div className="search-input-wrapper">
+              <Search size={15} className="search-icon-pos" />
+              <input
+                type="text"
+                className="search-input"
+                placeholder="Cari MID, nama merchant, atau kota…"
+                value={saringanRekap.kueri}
+                onChange={(e) => ubahSaringanRekap({ kueri: e.target.value })}
+              />
+            </div>
+            <select
+              className="filter-select"
+              aria-label="Saring jenis QR"
+              value={saringanRekap.jenisQr}
+              onChange={(e) => ubahSaringanRekap({ jenisQr: e.target.value })}
+            >
+              <option value="">Semua jenis QR</option>
+              <optgroup label="Klasifikasi Makro">
+                <option value="GROUP_API">QR API (semua jenis API)</option>
+                <option value="GROUP_NON_API">QR Non-API</option>
+              </optgroup>
+              <optgroup label="Kategori Individual">
+                {opsiJenisQr.map((j) => (
+                  <option key={j} value={j}>
+                    {j}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+            <select
+              className="filter-select"
+              aria-label="Saring jumlah log"
+              value={saringanRekap.duplikasi}
+              onChange={(e) => ubahSaringanRekap({ duplikasi: e.target.value as SaringanRekap['duplikasi'] })}
+            >
+              <option value="">Semua Status Log</option>
+              <option value="multi">Multi-Riwayat (Telah Dideduplikasi)</option>
+              <option value="single">Riwayat Tunggal (1× Log)</option>
+            </select>
+            {(saringanRekap.kueri || saringanRekap.jenisQr || saringanRekap.duplikasi) && (
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => ubahSaringanRekap(SARINGAN_REKAP_KOSONG)}
+              >
+                Reset saringan
+              </button>
+            )}
+          </div>
+
+          <div className="table-container">
+            <table className="modern-table tm-rekap-tabel">
+              <thead>
+                <tr>
+                  <th>No</th>
+                  <th>MID</th>
+                  <th>Nama Merchant</th>
+                  <th>Jenis QR</th>
+                  <th>Kriteria &amp; Wilayah</th>
+                  <th>Validasi MID</th>
+                  <th>Update Terakhir</th>
+                  <th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {halamanMerchant.isi.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="tm-rekap-kosong">
+                      Tidak ada MID yang cocok dengan saringan ini.
+                    </td>
+                  </tr>
+                ) : (
+                  halamanMerchant.isi.map((m, i) => (
+                    <tr key={m.mid}>
+                      <td className="tm-mono">{formatAngka(halamanMerchant.mulai + i)}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="tm-rekap-mid"
+                          onClick={() => {
+                            setMidJejak(m.mid);
+                            setKueriJejak(m.mid);
+                            setKueriKosong('');
+                          }}
+                          title={`Buka riwayat MID ${m.mid}`}
+                        >
+                          {m.mid}
+                        </button>
+                      </td>
+                      <td>
+                        <div className="tm-rekap-nama">{m.nama || '-'}</div>
+                        <span className={KELAS_KERANJANG[keranjangStatus(m.statusTerakhir)]}>
+                          {labelStatusSumber(m.statusTerakhir)}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className="tm-qr-pil-jenis"
+                          style={{
+                            background: warnaLembut(warnaJenis(m.jenisQr), 0.1),
+                            borderColor: warnaLembut(warnaJenis(m.jenisQr), 0.24),
+                          }}
+                        >
+                          <i
+                            className="tm-qr-titik"
+                            style={{ background: warnaJenis(m.jenisQr) }}
+                            aria-hidden="true"
+                          />
+                          {m.jenisQr || '-'}
+                        </span>
+                      </td>
+                      <td>
+                        <div>{m.kriteria || '-'}</div>
+                        <div className="tm-rekap-wilayah">
+                          {[m.kota, m.provinsi].filter(Boolean).join(' • ') || '-'}
+                        </div>
+                      </td>
+                      <td>
+                        {m.jumlahRiwayat > 1 ? (
+                          <span className="tm-validasi tm-validasi--multi">
+                            <Flag size={10} aria-hidden="true" />
+                            MID Unik ({m.jumlahRiwayat}× Log)
+                          </span>
+                        ) : (
+                          <span className="tm-validasi tm-validasi--tunggal">
+                            <Check size={10} aria-hidden="true" />
+                            MID Unik (1× Log)
+                          </span>
+                        )}
+                      </td>
+                      <td className="tm-mono">{m.lastUpdate || '-'}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="tm-mid-tombol"
+                          onClick={() => {
+                            setMidJejak(m.mid);
+                            setKueriJejak(m.mid);
+                            setKueriKosong('');
+                          }}
+                        >
+                          Riwayat &rarr;
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="tm-rekap-halaman">
+            <span>
+              {halamanMerchant.total === 0
+                ? 'Tidak ada baris'
+                : `${formatAngka(halamanMerchant.mulai)}–${formatAngka(halamanMerchant.akhir)} dari ${formatAngka(
+                    halamanMerchant.total
+                  )} merchant MID unik`}
+            </span>
+            <div className="tm-rekap-nav">
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                disabled={halamanMerchant.halaman <= 1}
+                onClick={() => setHalamanRekap(halamanMerchant.halaman - 1)}
+              >
+                Sebelumnya
+              </button>
+              <span>
+                Halaman {halamanMerchant.halaman} / {halamanMerchant.totalHalaman}
+              </span>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                disabled={halamanMerchant.halaman >= halamanMerchant.totalHalaman}
+                onClick={() => setHalamanRekap(halamanMerchant.halaman + 1)}
+              >
+                Berikutnya
+              </button>
+            </div>
           </div>
         </div>
       )}

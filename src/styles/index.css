@@ -2226,6 +2226,14 @@ body {
   flex-wrap: wrap;
 }
 
+.tm-kepala-kartu { margin-bottom: 1rem; }
+
+.tm-kepala-judul {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .tm-kepala-aksi {
   display: flex;
   align-items: center;
@@ -3104,6 +3112,53 @@ body {
 .tm-jejak-tanda--terkini { color: var(--accent-secondary); }
 
 /* ── Komposisi & rekap jenis QR + daftar merchant terverifikasi ──────────── */
+.tm-periode {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.9rem;
+}
+
+.tm-periode-tombol,
+.tm-periode-pilih {
+  padding: 0.36rem 0.85rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.3;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.tm-periode-pilih {
+  padding-right: 1.6rem;
+  color: var(--text-primary);
+}
+
+.tm-periode-tombol:hover,
+.tm-periode-pilih:hover {
+  background: var(--bg-hover-row);
+  color: var(--text-heading);
+}
+
+.tm-periode-tombol--aktif,
+.tm-periode-tombol--aktif:hover {
+  background: var(--accent-secondary);
+  border-color: var(--accent-secondary);
+  color: #fff;
+}
+
+.tm-periode-tombol:focus-visible,
+.tm-periode-pilih:focus-visible {
+  outline: 2px solid var(--accent-secondary);
+  outline-offset: 1px;
+}
+
 .tm-qr-grid {
   display: grid;
   grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.45fr);
@@ -3156,6 +3211,20 @@ body {
   white-space: nowrap;
 }
 
+.tm-qr-pil svg { flex: 0 0 auto; }
+
+.tm-qr-pil--hijau {
+  background: var(--accent-emerald-subtle);
+  color: var(--accent-emerald);
+}
+
+.tm-rekap-lencana {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .tm-qr-nihil {
   display: flex;
   align-items: flex-start;
@@ -3173,6 +3242,24 @@ body {
 .tm-qr-nihil svg {
   flex: 0 0 auto;
   margin-top: 0.1rem;
+}
+
+/* Galat sync: kartu tipis, bukan kotak bergaya inline. */
+.tm-galat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.84rem;
+  color: var(--accent-rose);
+}
+
+.tm-galat-isi {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .tm-qr-catatan {
@@ -3193,11 +3280,15 @@ body {
 .tm-donat {
   position: relative;
   flex: 0 0 auto;
-  width: 120px;
-  height: 120px;
+  width: 11rem;
+  height: 11rem;
 }
 
-.tm-donat svg { display: block; }
+.tm-donat svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
 
 .tm-donat-tengah {
   position: absolute;
@@ -3211,7 +3302,7 @@ body {
 }
 
 .tm-donat-nilai {
-  font-size: 1.02rem;
+  font-size: 1.25rem;
   font-weight: 800;
   line-height: 1.05;
   font-variant-numeric: tabular-nums;
@@ -3219,7 +3310,7 @@ body {
 }
 
 .tm-donat-label {
-  font-size: 0.52rem;
+  font-size: 0.56rem;
   font-weight: 800;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -3227,7 +3318,7 @@ body {
 }
 
 .tm-qr-legend {
-  flex: 1 1 190px;
+  flex: 1 1 210px;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -3237,14 +3328,32 @@ body {
   list-style: none;
 }
 
-.tm-qr-legend li {
+.tm-qr-legend li { min-width: 0; }
+
+.tm-qr-legend-baris {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  width: 100%;
   min-width: 0;
+  padding: 0.26rem 0.45rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-table-header);
+  font-family: inherit;
   font-size: 0.7rem;
   line-height: 1.35;
+  text-align: left;
   white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.tm-qr-legend-baris:hover { background: var(--bg-hover-row); }
+
+.tm-qr-legend-baris:focus-visible {
+  outline: 2px solid var(--accent-secondary);
+  outline-offset: 1px;
 }
 
 .tm-qr-titik {
@@ -3273,10 +3382,134 @@ body {
 
 .tm-qr-legend-pct {
   flex: 0 0 auto;
-  min-width: 2.9rem;
-  text-align: right;
+  min-width: 3.3rem;
+  padding: 0.06rem 0.4rem;
+  border-radius: var(--radius-full);
+  text-align: center;
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.66rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-heading);
+}
+
+/* Label API / Non-API kecil di legenda, bilah, dan tabel agregasi. */
+.tm-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.02rem 0.3rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: 0.54rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.tm-tag--api {
+  background: var(--accent-purple-subtle);
+  border-color: rgba(101, 89, 204, 0.25);
+  color: var(--accent-purple);
+}
+
+.tm-tag--non-api {
+  background: var(--bg-table-header);
+  border-color: var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+/* Bilah empat jenis QR terbesar. */
+.tm-qr-bar-daftar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.tm-qr-bar-kepala {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+}
+
+.tm-qr-bar-nama {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 700;
+  color: var(--text-heading);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tm-qr-bar-angka {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.tm-qr-bar-angka strong {
+  font-size: 0.7rem;
+  color: var(--text-heading);
+}
+
+.tm-qr-bar-track {
+  height: 0.4rem;
+  margin: 0.28rem 0 0.22rem;
+  border-radius: var(--radius-full);
+  background: var(--bg-table-header);
+  overflow: hidden;
+}
+
+.tm-qr-bar-track > i {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+}
+
+.tm-qr-bar-kaki {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.3rem 0.6rem;
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.tm-qr-bar-redup {
+  font-weight: 700;
+  color: #d68b0c;
+}
+
+.tm-qr-total {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.4rem 0.8rem;
+  margin-top: 0.85rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-table-header);
+  font-size: 0.64rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.tm-qr-total strong {
+  font-variant-numeric: tabular-nums;
   color: var(--text-heading);
 }
 
@@ -3338,10 +3571,100 @@ body {
   color: var(--text-muted);
 }
 
+/* Satu sel = satu baris, kecuali keterangan di bawah nama jenis QR. */
+.tm-qr-tabel td .tm-qr-desc {
+  max-width: 15rem;
+  white-space: normal;
+  line-height: 1.4;
+}
+
 .tm-kanan { text-align: right; }
 .tm-tengah { text-align: center; }
-.tm-tebal { font-weight: 800; color: var(--text-heading); }
-.tm-redup { color: var(--text-muted); }
+
+/* Warna sel td menang atas kelas tunggal — spesifisitas dinaikkan. */
+.tm-qr-tabel td.tm-redup { color: #d68b0c; font-weight: 700; }
+
+/* Angka MID unik ber-pil warna jenis QR; nilainya dari data, bukan hex karangan. */
+.tm-qr-unik {
+  display: inline-flex;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-heading);
+}
+
+.tm-qr-unik-100 {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.12rem 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--accent-emerald-subtle);
+  color: var(--accent-emerald);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.tm-qr-filter {
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--accent-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tm-qr-filter:hover { text-decoration: underline; }
+
+.tm-qr-filter:focus-visible {
+  outline: 2px solid var(--accent-secondary);
+  outline-offset: 1px;
+}
+
+.tm-qr-ekspor {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.tm-qr-rekap .table-container {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: none;
+  max-height: none;
+}
+
+.tm-qr-nota {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0.7rem 0 0;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid rgba(10, 179, 156, 0.25);
+  border-radius: var(--radius-md);
+  background: var(--accent-emerald-subtle);
+  font-size: 0.64rem;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text-primary);
+  white-space: normal;
+}
+
+.tm-qr-nota svg {
+  flex: 0 0 auto;
+  margin-top: 0.12rem;
+  color: var(--accent-emerald);
+}
 
 .tm-qr-tabel .tm-mono,
 .tm-rekap-tabel .tm-mono {
@@ -3380,6 +3703,38 @@ body {
   font-weight: 700;
   color: var(--text-heading);
   margin-bottom: 0.15rem;
+}
+
+.tm-rekap-mid {
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--accent-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tm-rekap-mid:hover { text-decoration: underline; }
+
+.tm-rekap-mid:focus-visible {
+  outline: 2px solid var(--accent-secondary);
+  outline-offset: 1px;
+}
+
+.tm-qr-pil-jenis {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--text-heading);
+  white-space: nowrap;
 }
 
 .tm-rekap-wilayah {
@@ -3447,6 +3802,91 @@ body {
   text-align: center;
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
+}
+
+/* ── Animasi chart & kartu ────────────────────────────────────────────────── */
+/* Semua animasi di bawah dimatikan otomatis oleh blok prefers-reduced-motion
+   di akhir berkas. */
+
+@keyframes tm-muncul {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes tm-bilah {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes tm-naik {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Kartu ringkasan di atas masuk berurutan. */
+.tm-ringkasan .tm-kartu {
+  animation: tm-naik 0.4s ease-out both;
+}
+
+.tm-ringkasan .tm-kartu:nth-child(2) { animation-delay: 0.04s; }
+.tm-ringkasan .tm-kartu:nth-child(3) { animation-delay: 0.08s; }
+.tm-ringkasan .tm-kartu:nth-child(4) { animation-delay: 0.12s; }
+.tm-ringkasan .tm-kartu:nth-child(5) { animation-delay: 0.16s; }
+
+/* Cincin donat tumbuh dari 0 ke pangsa masing-masing; dipicu `cincinSiap`. */
+.tm-donat circle {
+  transition: stroke-dasharray 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tm-donat-tengah {
+  animation: tm-muncul 0.5s ease-out 0.35s both;
+}
+
+/* Baris legenda masuk berurutan. */
+.tm-qr-legend li {
+  animation: tm-muncul 0.45s ease-out both;
+}
+
+.tm-qr-legend li:nth-child(1) { animation-delay: 0.05s; }
+.tm-qr-legend li:nth-child(2) { animation-delay: 0.1s; }
+.tm-qr-legend li:nth-child(3) { animation-delay: 0.15s; }
+.tm-qr-legend li:nth-child(4) { animation-delay: 0.2s; }
+.tm-qr-legend li:nth-child(5) { animation-delay: 0.25s; }
+.tm-qr-legend li:nth-child(6) { animation-delay: 0.3s; }
+.tm-qr-legend li:nth-child(7) { animation-delay: 0.35s; }
+.tm-qr-legend li:nth-child(8) { animation-delay: 0.4s; }
+
+/* Bilah komposisi tumbuh dari kiri. */
+.tm-qr-bar-track > i {
+  transform-origin: left center;
+  animation: tm-bilah 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.tm-qr-bar:nth-child(1) .tm-qr-bar-track > i { animation-delay: 0.15s; }
+.tm-qr-bar:nth-child(2) .tm-qr-bar-track > i { animation-delay: 0.25s; }
+.tm-qr-bar:nth-child(3) .tm-qr-bar-track > i { animation-delay: 0.35s; }
+.tm-qr-bar:nth-child(4) .tm-qr-bar-track > i { animation-delay: 0.45s; }
+
+/* Kartu tahunan & segmen statusnya. */
+.tm-tahun {
+  animation: tm-naik 0.45s ease-out both;
+}
+
+.tm-tahun:nth-child(2) { animation-delay: 0.05s; }
+.tm-tahun:nth-child(3) { animation-delay: 0.1s; }
+.tm-tahun:nth-child(4) { animation-delay: 0.15s; }
+.tm-tahun:nth-child(5) { animation-delay: 0.2s; }
+.tm-tahun:nth-child(6) { animation-delay: 0.25s; }
+
+.tm-tahun-seg {
+  transform-origin: left center;
+  animation: tm-bilah 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Tujuan gulir tidak tertutup topbar lengket (terukur 46 px). */
+.tm-aktivitas,
+.tm-rekap {
+  scroll-margin-top: 4.2rem;
 }
 
 @media (max-width: 1100px) {

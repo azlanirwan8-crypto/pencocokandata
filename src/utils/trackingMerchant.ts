@@ -421,6 +421,11 @@ export interface SegmenDonat {
   /** Nilai `stroke-dasharray` dan `stroke-dashoffset` untuk SVG 120×120, r = 40. */
   dasharray: string;
   dashoffset: string;
+  /**
+   * Sumber hanya menggambar potongan yang panjang busurnya > 0,05 px; sisanya
+   * dilewati supaya tidak muncul titik warna yang menyesatkan.
+   */
+  tampil: boolean;
 }
 
 /** Potongan cincin donat, urut seperti di sumber. */
@@ -440,10 +445,28 @@ export function segmenDonat(
       color: g.color,
       dasharray: `${panjang.toFixed(3)} ${(keliling - panjang).toFixed(3)}`,
       dashoffset: (-akumulasi).toFixed(3),
+      tampil: panjang > 0.05,
     });
     akumulasi += panjang;
   }
   return hasil;
+}
+
+/**
+ * Warna hex sumber (#rrggbb) jadi rgba untuk pil persen berlatar lembut. Warna
+ * yang bukan hex (muatan lama) dikembalikan apa adanya tanpa alfa.
+ */
+export function warnaLembut(warna: string, alfa: number): string {
+  const teks = String(warna || '').trim();
+  const cocok = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(teks);
+  if (!cocok) return teks || 'rgba(100, 116, 139, 0.12)';
+  let hex = cocok[1];
+  if (hex.length === 3) hex = hex.split('').map((c) => c + c).join('');
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  const a = Math.min(1, Math.max(0, Number(alfa) || 0));
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
 }
 
 // ─── Daftar merchant terverifikasi (satu baris per MID unik) ────────────────

@@ -24,5 +24,5 @@ export {
   SUMUR_TRACKING, PERIODE_QR_DEFAULT, SARINGAN_REKAP_KOSONG, barisKeExcelTm, cocokCari, kartuMerchant,
   keranjangStatus, keteranganRef, labelStatusSumber, riwayatMerchant, ringkasTracking, temukanMerchant,
   daftarPeriodeQr, periodeQrAktif, formatAngka, ringkasAngkaBesar, segmenDonat, daftarMerchantTerverifikasi,
-  saringMerchantTerverifikasi, halamanDaftar,
+  saringMerchantTerverifikasi, halamanDaftar, warnaLembut,
 } from '../src/utils/trackingMerchant';
