@@ -2556,8 +2556,10 @@ body {
 
 .tm-contoh-catatan {
   display: flex;
-  align-items: flex-start;
-  gap: 0.4rem;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
   margin-top: 0.7rem;
   padding: 0.5rem 0.7rem;
   border: 1px solid rgba(247, 184, 75, 0.45);
@@ -2566,6 +2568,23 @@ body {
   color: #8a5a06;
   font-size: 0.76rem;
   line-height: 1.4;
+}
+
+.tm-contoh-isi {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  flex: 1 1 360px;
+  min-width: 0;
+}
+
+.tm-contoh-isi svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.tm-contoh-cek {
+  flex: none;
 }
 
 .tm-mid {

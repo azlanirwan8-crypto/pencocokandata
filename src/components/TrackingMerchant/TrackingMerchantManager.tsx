@@ -59,9 +59,13 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
   const [galatJejak, setGalatJejak] = useState<string>('');
   /** Kartu contoh untuk MID yang tidak ada di data — ditampilkan saja, tidak disimpan. */
   const [jejakContoh, setJejakContoh] = useState<BarisMerchant[] | null>(null);
+  const [memeriksaSumber, setMemeriksaSumber] = useState(false);
   const panelJejakRef = useRef<HTMLDivElement | null>(null);
+  /** Stempel `diambilPada` data yang sedang tampil — pembanding saat cloud diperiksa ulang. */
+  const stempelRef = useRef<string>('');
 
   const uatMuatan = useCallback((muatan: MuatanTracking) => {
+    stempelRef.current = String(muatan.diambilPada || '');
     setBaris(muatan.baris);
     setRingkasan(Array.isArray(muatan.ringkasan) ? muatan.ringkasan : []);
     setDistribusi(Array.isArray(muatan.distribusi) ? muatan.distribusi : []);
@@ -91,7 +95,47 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
     };
   }, [uatMuatan]);
 
-  const handleSync = useCallback(async () => {
+  // Realtime ringan: cloud hanya dibaca (tidak menulis, tidak menyentuh sumber), jadi
+  // aman dijalankan berkala. Hasil sync siapa pun langsung terlihat tanpa reload.
+  useEffect(() => {
+    let hidup = true;
+    let sedangDiperiksa = false;
+
+    const periksaCloud = async () => {
+      if (!hidup || sedangDiperiksa || document.visibilityState === 'hidden') return;
+      sedangDiperiksa = true;
+      try {
+        const cloud = await loadTrackingMerchantFromNeon();
+        if (!hidup || !cloud || !Array.isArray(cloud.baris) || cloud.baris.length === 0) return;
+        if (String(cloud.diambilPada) <= stempelRef.current) return;
+        uatMuatan(cloud);
+        setItem(KUNCI_STORAGE_TRACKING, cloud).catch(() => undefined);
+        notify(
+          `Data Tracking Merchant diperbarui otomatis: ${ringkasTracking(cloud.baris).riwayat.toLocaleString('id-ID')} riwayat tersinkron.`,
+          'info'
+        );
+      } catch {
+        // Diamkan; percobaan berikutnya mengulang sendiri.
+      } finally {
+        sedangDiperiksa = false;
+      }
+    };
+
+    const saatTerlihat = () => {
+      if (document.visibilityState === 'visible') void periksaCloud();
+    };
+    const pewaktu = window.setInterval(() => void periksaCloud(), 60_000);
+    document.addEventListener('visibilitychange', saatTerlihat);
+    window.addEventListener('focus', saatTerlihat);
+    return () => {
+      hidup = false;
+      window.clearInterval(pewaktu);
+      document.removeEventListener('visibilitychange', saatTerlihat);
+      window.removeEventListener('focus', saatTerlihat);
+    };
+  }, [notify, uatMuatan]);
+
+  const handleSync = useCallback(async (): Promise<BarisMerchant[] | null> => {
     setStatusMuat('syncing');
     setGalat(null);
     const hasil = await syncTrackingMerchantDariSumber();
@@ -100,7 +144,7 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
       const pesan = hasil.pesan || `Tidak bisa menghubungi ${SUMUR_TRACKING}.`;
       setGalat(pesan);
       notify(`Sync gagal: ${pesan}`, 'error');
-      return;
+      return null;
     }
     uatMuatan(hasil.muatan);
     setStatusMuat('siap');
@@ -117,6 +161,7 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
     if (!hasil.tersimpanDiCloud) {
       notify('Cloud gagal menerima hasil sync — data ini hanya tersimpan di browser ini.', 'warning');
     }
+    return hasil.muatan.baris;
   }, [notify, uatMuatan]);
 
   // Satu sumber angka merchant — diturunkan dari baris, dipakai baris meta DAN badge
@@ -152,31 +197,58 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
     return `${bersih(distribusi[0].label)} – ${bersih(distribusi[distribusi.length - 1].label)}`;
   }, [distribusi]);
 
-  const bukaJejak = useCallback(
-    (kueri: string) => {
-      setKueriJejak(kueri);
-      const mid = temukanMerchant(baris, kueri);
+  // Satu aturan pencarian untuk dua jalur: data yang sedang tampil, dan data yang baru
+  // diambil dari sumber. Hasilnya sama supaya "tidak ketemu" tidak pernah sepihak.
+  const tampilkanHasilCari = useCallback(
+    (kueri: string, daftar: BarisMerchant[]): 'ditemukan' | 'ambigu' | 'contoh' => {
+      const mid = temukanMerchant(daftar, kueri);
       if (mid) {
         setGalatJejak('');
         setJejakContoh(null);
         setMidJejak(mid);
-        return;
+        return 'ditemukan';
       }
       setMidJejak(null);
-      const kandidat = kandidatMerchant(baris, kueri);
+      const kandidat = kandidatMerchant(daftar, kueri);
       if (kandidat.length > 0) {
         setJejakContoh(null);
         setGalatJejak(
           `"${kueri.trim()}" cocok dengan beberapa MID: ${kandidat.join(', ')}${kandidat.length >= 6 ? ', …' : ''}. Tulis MID lengkap untuk membuka jejaknya.`
         );
-        return;
+        return 'ambigu';
       }
       // Tidak ada padanan: tampilkan kartu contoh seperti halaman sumber, bukan layar kosong.
       setGalatJejak('');
       setJejakContoh(contohJejakMerchant(kueri));
+      return 'contoh';
     },
-    [baris]
+    []
   );
+
+  const bukaJejak = useCallback(
+    (kueri: string) => {
+      setKueriJejak(kueri);
+      tampilkanHasilCari(kueri, baris);
+    },
+    [baris, tampilkanHasilCari]
+  );
+
+  // Dipakai tombol "Cek ke sumber": tarik data terbaru dulu (aksi yang sama dengan Sync
+  // Data), lalu ulangi pencarian atas baris baru — bukan atas data lama.
+  const cekSumberLaluCari = useCallback(async () => {
+    const kueri = kueriJejak;
+    if (!kueri.trim() || memeriksaSumber) return;
+    setMemeriksaSumber(true);
+    try {
+      const barisBaru = await handleSync();
+      if (!barisBaru) return;
+      if (tampilkanHasilCari(kueri, barisBaru) === 'contoh') {
+        notify(`"${kueri.trim()}" juga tidak ada di hasil sinkron terbaru ${SUMUR_TRACKING}.`, 'warning');
+      }
+    } finally {
+      setMemeriksaSumber(false);
+    }
+  }, [handleSync, kueriJejak, memeriksaSumber, notify, tampilkanHasilCari]);
 
   // Klik "Lihat jejak" / pencarian membawa operator ke panel ini, bukan membuka lapisan lain.
   useEffect(() => {
@@ -397,12 +469,23 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
 
           {jejakContoh && (
             <div className="tm-contoh-catatan">
-              <AlertCircle size={14} />
-              <span>
-                Kartu contoh: MID ini tidak ada di {baris.length.toLocaleString('id-ID')} baris hasil
-                sinkron. Isinya disusun seperti halaman sumber (nomor referensi acak) dan{' '}
-                <strong>tidak</strong> disimpan, dihitung, atau ikut diekspor.
-              </span>
+              <div className="tm-contoh-isi">
+                <AlertCircle size={14} />
+                <span>
+                  Kartu contoh: MID ini tidak ada di {baris.length.toLocaleString('id-ID')} baris hasil
+                  sinkron. Isinya disusun seperti halaman sumber (nomor referensi acak) dan{' '}
+                  <strong>tidak</strong> disimpan, dihitung, atau ikut diekspor.
+                </span>
+              </div>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm tm-contoh-cek"
+                onClick={() => void cekSumberLaluCari()}
+                disabled={memeriksaSumber || sinkronSedang}
+              >
+                <RefreshCw size={13} className={memeriksaSumber || sinkronSedang ? 'tm-putar' : undefined} />
+                <span>{memeriksaSumber ? 'Memeriksa sumber…' : 'Cek ke sumber'}</span>
+              </button>
             </div>
           )}
 
