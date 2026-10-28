@@ -10,11 +10,12 @@ import {
   Store,
   Users,
   Mail,
+  Radar,
   ChevronDown,
   ChevronRight
 } from 'lucide-react';
 
-export type ActiveTab = 'dashboard' | 'working' | 'final' | 'wilayah' | 'pten' | 'master' | 'mapping_role' | 'kodepos';
+export type ActiveTab = 'dashboard' | 'working' | 'final' | 'wilayah' | 'pten' | 'master' | 'mapping_role' | 'kodepos' | 'tracking_merchant';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -27,6 +28,7 @@ interface SidebarProps {
   ptenCount?: number;
   roleMappingCount?: number;
   kodeposCount?: number;
+  trackingCount?: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -40,6 +42,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ptenCount,
   roleMappingCount,
   kodeposCount,
+  trackingCount,
 }) => {
   // Is Data Master submenu expanded?
   const isMasterActive = activeTab === 'master' || activeTab === 'wilayah' || activeTab === 'pten' || activeTab === 'mapping_role' || activeTab === 'kodepos';
@@ -116,7 +119,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </button>
 
-          {/* 4. Data Master (Collapsible Parent) */}
+          {/* 4. Tracking Merchant (salinan data dari 154.19.37.201, hanya-baca) */}
+          <button
+            type="button"
+            className={`sidebar-nav-item ${activeTab === 'tracking_merchant' ? 'active' : ''}`}
+            onClick={() => setActiveTab('tracking_merchant')}
+            id="sidebar-btn-tracking-merchant"
+            title="Tracking Merchant (sync dari 154.19.37.201/migrasi)"
+          >
+            <div className="nav-item-icon">
+              <Radar size={17} />
+            </div>
+            <span className="nav-item-label">Tracking Merchant</span>
+            {trackingCount !== undefined && trackingCount > 0 && (
+              <span className="sidebar-badge badge-target">{trackingCount.toLocaleString('id-ID')}</span>
+            )}
+          </button>
+
+          {/* 5. Data Master (Collapsible Parent) */}
           <div>
             <button
               type="button"

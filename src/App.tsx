@@ -14,6 +14,7 @@ import { WilayahManager } from './components/WilayahData/WilayahManager';
 import { PTENManager } from './components/PTENData/PTENManager';
 import { RoleMappingManager } from './components/RoleMapping/RoleMappingManager';
 import { KodePosManager } from './components/KodePosData/KodePosManager';
+import { TrackingMerchantManager } from './components/TrackingMerchant/TrackingMerchantManager';
 import { AnalystCanvas } from './components/WorkingEngine/AnalystCanvas';
 import { AnalystResultsGrid } from './components/WorkingEngine/AnalystResultsGrid';
 import { FinalDataManager } from './components/WorkingEngine/FinalDataManager';
@@ -27,6 +28,7 @@ import {
   jumlahBarisDilewati,
 } from './utils/analystSources';
 import { SinyalTemuanModal } from './components/WorkingEngine/SinyalTemuanModal';
+import { KUNCI_STORAGE_TRACKING, type MuatanTracking } from './utils/trackingMerchant';
 import { detectFinalAnomalies, indeksWilayahCabang, nyebrangWilayahCabang } from './utils/finalAnomaly';
 import type { ActiveTab } from './components/Sidebar';
 
@@ -60,6 +62,7 @@ import {
   clearTargetFromNeon,
   fetchKodePosExport,
   fetchKodePosStats,
+  loadTrackingMerchantFromNeon,
   type KodePosRow,
 } from './utils/neonSync';
 import { NeonDatabaseModal } from './components/NeonDatabaseModal';
@@ -107,6 +110,9 @@ export const App: React.FC = () => {
   const [ptenCount, setPtenCount] = useState<number>(DEFAULT_PTEN_DATA.length);
   const [roleMappingCount, setRoleMappingCount] = useState<number>(DEFAULT_ROLE_MAPPING_DATA.length);
   const [kodePosCount, setKodePosCount] = useState<number>(0);
+  // Tracking Merchant: jumlahnya saja yang naik ke App (untuk badge sidebar); isinya
+  // tetap milik managernya karena datanya datang dari luar, bukan dari pipeline.
+  const [trackingMerchantCount, setTrackingMerchantCount] = useState<number>(0);
 
   // New Data Analyst 3-Phase Engine State (100% Data Master Driven)
   const [analystRows, setAnalystRows] = useState<AnalystRow[]>([]);
@@ -179,7 +185,7 @@ export const App: React.FC = () => {
       // Read local IndexedDB immediately in parallel so the UI is ready instantly
       // -----------------------------------------------------------------------
       try {
-        const [savedMaster, savedTarget, savedWilayah, savedPten, savedRoleMapping, savedCityOverrides] = await Promise.all([
+        const [savedMaster, savedTarget, savedWilayah, savedPten, savedRoleMapping, savedCityOverrides, savedTracking] = await Promise.all([
           getItem<{ rows: MasterRow[]; fileName: string }>('master_data').catch(() => null),
           getItem<{
             rows: TargetRow[];
@@ -191,6 +197,7 @@ export const App: React.FC = () => {
           getItem<PTENRecord[]>('pten_master_data').catch(() => null),
           getItem<RoleMappingRecord[]>('role_mapping_data').catch(() => null),
           getItem<Record<string, string>>('analyst_city_overrides').catch(() => null),
+          getItem<MuatanTracking>(KUNCI_STORAGE_TRACKING).catch(() => null),
         ]);
 
         if (savedMaster && savedMaster.rows && savedMaster.rows.length > 0) {
@@ -229,6 +236,11 @@ export const App: React.FC = () => {
 
         if (savedCityOverrides && typeof savedCityOverrides === 'object' && !Array.isArray(savedCityOverrides)) {
           setCityOverrides(savedCityOverrides);
+        }
+
+        // Badge Tracking Merchant = merchant yang ter-sync terakhir di browser ini.
+        if (savedTracking && Array.isArray(savedTracking.baris) && savedTracking.baris.length > 0) {
+          setTrackingMerchantCount(new Set(savedTracking.baris.map((b) => b.mid)).size);
         }
 
         const savedKodePos = await getItem<any[]>('kodepos_master_data');
@@ -279,13 +291,20 @@ export const App: React.FC = () => {
       (async () => {
         try {
           // Check cloud status & load data in parallel
-          const [neonCheck, neonMaster, neonTarget, neonWilayah, neonKodePosStats] = await Promise.allSettled([
+          const [neonCheck, neonMaster, neonTarget, neonWilayah, neonKodePosStats, neonTracking] = await Promise.allSettled([
             checkNeonStatus(),
             loadMasterFromNeon(),
             loadTargetFromNeon(),
             loadWilayahFromNeon(),
             fetchKodePosStats(),
+            loadTrackingMerchantFromNeon(),
           ]);
+
+          // Cloud menang atas angka lokal: tiap sync menulis hasilnya ke sana, jadi badge ini
+          // membaca populasi yang sama dengan yang dilihat pengguna lain.
+          if (neonTracking.status === 'fulfilled' && neonTracking.value?.baris?.length) {
+            setTrackingMerchantCount(new Set(neonTracking.value.baris.map((b) => b.mid)).size);
+          }
 
           if (neonCheck.status === 'fulfilled' && neonCheck.value.connected) {
             setIsNeonConnected(true);
@@ -1440,6 +1459,7 @@ export const App: React.FC = () => {
         ptenCount={ptenCount}
         roleMappingCount={roleMappingCount}
         kodeposCount={kodePosCount}
+        trackingCount={trackingMerchantCount}
       />
 
       {/* 2. Main Content Area */}
@@ -1692,6 +1712,11 @@ export const App: React.FC = () => {
                 kodePosListRef.current = null; // invalidasi cache pipeline bila master kodepos berubah
               }}
             />
+          )}
+
+          {/* MENU UTAMA: TRACKING MERCHANT (sync hanya-baca dari 154.19.37.201) */}
+          {activeTab === 'tracking_merchant' && (
+            <TrackingMerchantManager onTrackingCountChange={setTrackingMerchantCount} />
           )}
         </main>
       </div>

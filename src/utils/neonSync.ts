@@ -1,4 +1,5 @@
 import type { MasterRow, TargetRow, WilayahSetting } from '../types';
+import type { MuatanTracking } from './trackingMerchant';
 
 export interface NeonStatus {
   connected: boolean;
@@ -967,4 +968,45 @@ export function loadRoleMappingFromNeon(): Promise<any[] | null> {
 }
 export function saveRoleMappingToNeon(rows: any[]): Promise<boolean> {
   return saveKeyToNeon('/api/rolemapping', rows);
+}
+
+/**
+ * Tracking Merchant. Data ini bukan milik aplikasi: sumbernya halaman tracking di
+ * 154.19.37.201, jadi cloud hanya menyimpan hasil sync terakhir supaya semua pengguna
+ * membuka menu ini dengan angka yang sama. Tidak ada jalur tulis dari aplikasi ke sumber.
+ */
+export function loadTrackingMerchantFromNeon(): Promise<MuatanTracking | null> {
+  return loadKeyFromNeon<MuatanTracking>('/api/tracking-merchant');
+}
+
+export function saveTrackingMerchantToNeon(muatan: MuatanTracking): Promise<boolean> {
+  return saveKeyToNeon('/api/tracking-merchant', muatan);
+}
+
+export interface HasilSyncTracking {
+  muatan: MuatanTracking | null;
+  /** false = baris berhasil diambil dari sumber, tapi gagal masuk cloud. */
+  tersimpanDiCloud: boolean;
+  pesan?: string;
+}
+
+/**
+ * Tarik ulang dari sumber lewat fungsi serverless. Retri dicabut (0): satu percobaan
+ * sudah memakan sampai ±25 detik di sisi sumber, mengulanginya hanya membuat tombol
+ * terasa macet.
+ */
+export async function syncTrackingMerchantDariSumber(): Promise<HasilSyncTracking> {
+  try {
+    const res = await fetchWithRetry('/api/tracking-merchant?ambil=1', { method: 'GET' }, 40_000, 0);
+    if (!res.ok) {
+      return { muatan: null, tersimpanDiCloud: false, pesan: `Server imbal HTTP ${res.status}.` };
+    }
+    const json = await res.json();
+    if (!json?.ok || !json.data || !Array.isArray(json.data.baris)) {
+      return { muatan: null, tersimpanDiCloud: false, pesan: json?.error || 'Balasan sumber tidak dikenali.' };
+    }
+    return { muatan: json.data as MuatanTracking, tersimpanDiCloud: Boolean(json.tersimpanDiCloud) };
+  } catch (err: any) {
+    return { muatan: null, tersimpanDiCloud: false, pesan: err?.message || 'Gagal menghubungi sumber data.' };
+  }
 }
