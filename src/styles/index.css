@@ -2233,55 +2233,12 @@ body {
   flex-wrap: wrap;
 }
 
-.tm-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem 1.4rem;
-  margin-top: 0.9rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--border-subtle);
-}
-
-.tm-meta-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-}
-
-.tm-meta-label {
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-.tm-meta-nilai {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--text-heading);
-}
-
-.tm-sensitif {
-  margin-top: 0.7rem;
-  padding: 0.5rem 0.7rem;
-  border: 1px solid rgba(247, 184, 75, 0.45);
-  border-radius: var(--radius-md);
-  background: var(--accent-amber-subtle);
-  color: #8a5a06;
-  font-size: 0.75rem;
-  line-height: 1.35;
-}
-
 /* Empat kartu ringkasan — angkanya dibaca apa adanya dari halaman sumber. */
 .tm-ringkasan {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 0.75rem;
-  margin-bottom: 0.4rem;
+  margin-bottom: 1rem;
 }
 
 .tm-kartu {
@@ -2341,32 +2298,8 @@ body {
 .tm-kartu--ungu { border-color: rgba(101, 89, 204, 0.4); }
 .tm-kartu--ungu .tm-kartu-nilai { color: var(--accent-purple); }
 
-.tm-kartu-catatan {
-  margin: 0 0 0.9rem;
-  font-size: 0.7rem;
-  line-height: 1.4;
-  color: var(--text-muted);
-}
-
 .tm-putar {
   animation: qdrSpin 0.9s linear infinite;
-}
-
-.tm-jumlah-label {
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-}
-
-.tm-bersih-cari {
-  position: absolute;
-  right: 8px;
-  display: inline-flex;
-  align-items: center;
-  background: none;
-  border: none;
-  padding: 2px;
-  cursor: pointer;
-  color: var(--text-secondary);
 }
 
 .tm-kosong {
@@ -2391,56 +2324,6 @@ body {
   line-height: 1.5;
 }
 
-.tm-kosong-sel {
-  text-align: center;
-  padding: 2.5rem;
-  color: var(--text-secondary);
-}
-
-.tm-nomor {
-  text-align: center;
-  color: var(--text-secondary);
-}
-
-.tm-halaman-bawah {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  margin-top: 0.85rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--border-subtle);
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-}
-
-.tm-halaman {
-  min-width: 28px;
-  height: 28px;
-  padding: 0 0.4rem;
-  font-size: 0.74rem;
-  font-weight: 500;
-  border-radius: 4px;
-  border: 1px solid #ced4da;
-  background: var(--bg-card);
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.tm-halaman:hover {
-  border-color: var(--border-active);
-  color: var(--accent-blue);
-}
-
-.tm-halaman-aktif {
-  font-weight: 700;
-  border-color: var(--accent-blue);
-  background: var(--accent-blue);
-  color: var(--text-inverse);
-}
-
 /* ── Distribusi & pertumbuhan tahunan (kartu 2021–2026) ─────────────────── */
 .tm-tahunan {
   padding: 1rem 1.1rem;
@@ -2456,15 +2339,6 @@ body {
   padding-bottom: 0.7rem;
   margin-bottom: 0.85rem;
   border-bottom: 1px solid var(--border-subtle);
-}
-
-.tm-tahunan-eyebrow {
-  display: block;
-  font-size: 0.63rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--accent-secondary);
 }
 
 .tm-tahunan-judul {
