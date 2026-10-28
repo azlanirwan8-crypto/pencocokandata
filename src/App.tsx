@@ -26,6 +26,7 @@ import type { ActiveTab } from './components/Sidebar';
 import type { MasterRow, TargetRow, WilayahStat, WilayahSetting } from './types';
 import { buildMasterIndex, analyzeMasterHealth } from './utils/matcher';
 import { formatWilayahName, kapital } from './utils/normalizer';
+import { indeksCabangTerpakai } from './utils/cabangUsage';
 import { formatWilayahCode } from './utils/excel';
 import type { RoleMappingRecord } from './components/RoleMapping/RoleMappingManager';
 import { DEFAULT_ROLE_MAPPING_DATA } from './components/RoleMapping/RoleMappingManager';
@@ -487,6 +488,11 @@ export const App: React.FC = () => {
   // Provinsi/pulau kantor cabang, dari Data Cabang. Dipakai gerbang setujui massal dan
   // saringan "lintas provinsi" supaya keduanya menilai baris yang SAMA dengan kartu anomali.
   const wilayahCabang = useMemo(() => indeksWilayahCabang(masterRows), [masterRows]);
+  // "Status Pakai" sebuah cabang diturunkan dari Data Final: kantor yang tertulis di
+  // sana sudah dipakai hasil analisa. Dihitung sekali di sini supaya badge di tabel
+  // Data Cabang dan penghitungnya memakai angka yang sama.
+  const kunciCabangTerpakai = useMemo(() => indeksCabangTerpakai(finalRows), [finalRows]);
+
 
   // Anomali ikut lingkup yang SAME dengan baris yang sedang dilihat. Sengaja disaring
   // lewat id `dashboardFilteredRows`, bukan lewat kunci wilayah lagi: filter 'ALL' punya
@@ -1488,6 +1494,7 @@ export const App: React.FC = () => {
               onResetMaster={handleResetMaster}
               masterHealth={masterHealth}
               wilayahSettings={wilayahSettings}
+              cabangTerpakai={kunciCabangTerpakai}
             />
           )}
 

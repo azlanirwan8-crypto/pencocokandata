@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useDeferredValue, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useDeferredValue, useEffect } from 'react';
 import {
   Store,
   Search,
@@ -28,6 +28,10 @@ import { parseExcelFile, validateMasterHeaders, downloadMasterTemplate, tulisLem
 import { tanggalBerkas, kapital } from '../../utils/normalizer';
 import { MasterHealthCard } from './MasterHealthCard';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
+import { useFilterSort } from '../../utils/useFilterSort';
+import type { DefinisiKolomFilter } from '../../utils/filterSort';
+import { KOLOM_STATUS_PAKAI, STATUS_BELUM_PAKAI, STATUS_PAKAI, himpunCabangTerpakai } from '../../utils/cabangUsage';
+import { ThFilter } from '../ThFilter';
 import { DialogPanel } from '../BaseModal';
 import { useNotification } from '../Notification/NotificationContext';
 
@@ -37,6 +41,8 @@ interface CabangManagerProps {
   onResetMaster: () => void;
   masterHealth: MasterHealth;
   wilayahSettings?: WilayahSetting[];
+  /** Kunci identitas cabang yang sudah dipakai hasil analisa (dibuat dari Data Final). */
+  cabangTerpakai: ReadonlySet<string>;
 }
 
 export const CabangManager: React.FC<CabangManagerProps> = ({
@@ -44,6 +50,7 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
   onMasterLoaded,
   onResetMaster,
   masterHealth,
+  cabangTerpakai,
 }) => {
   const { add: notify } = useNotification();
   const [activeSubTab, setActiveSubTab] = useState<'list' | 'health'>('list');
@@ -161,6 +168,33 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
     });
   }, [masterRows, deferredSearch, searchBy, selectedWilayah]);
 
+  // ── Status Pakai: diturunkan dari Data Final, tidak disimpan di baris master ──
+  // Sekali jalan atas seluruh baris; sel tabel, saringan kepala kolom, dan ekspor
+  // semuanya membaca Set yang sama supaya angkanya tidak mungkin berbeda.
+  const barisTerpakai = useMemo(() => himpunCabangTerpakai(masterRows, cabangTerpakai), [masterRows, cabangTerpakai]);
+  const labelStatusPakai = useCallback(
+    (r: MasterRow): string => (barisTerpakai.has(r) ? STATUS_PAKAI : STATUS_BELUM_PAKAI),
+    [barisTerpakai]
+  );
+
+  const definisiHeader = useMemo<readonly DefinisiKolomFilter<MasterRow>[]>(
+    () => [{ kunci: KOLOM_STATUS_PAKAI, nilai: labelStatusPakai }],
+    [labelStatusPakai]
+  );
+
+  // `barisTampil` = hasil saringan+sortiran (tabel); `barisTersaring` = hasil saringan
+  // saja dalam urutan masuk (ekspor) — sama seperti tabel Data Final.
+  const {
+    baris: barisTampil,
+    tersaring: barisTersaring,
+    urut,
+    saring,
+    gantiUrut,
+    setNilaiKolom,
+    bersihkanSemua,
+    jumlahAktif,
+  } = useFilterSort('cabang', definisiHeader, filteredRows);
+
   // Completeness stats for Master Data
   const completenessStats = useMemo(() => {
     let complete = 0;
@@ -185,12 +219,12 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
   }, [masterRows]);
 
   // Pagination calculation
-  const totalPages = pageSize === 'ALL' ? 1 : Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const totalPages = pageSize === 'ALL' ? 1 : Math.max(1, Math.ceil(barisTampil.length / pageSize));
   const paginatedRows = useMemo(() => {
-    if (pageSize === 'ALL') return filteredRows;
+    if (pageSize === 'ALL') return barisTampil;
     const start = (page - 1) * pageSize;
-    return filteredRows.slice(start, start + pageSize);
-  }, [filteredRows, page, pageSize]);
+    return barisTampil.slice(start, start + pageSize);
+  }, [barisTampil, page, pageSize]);
 
   // Windowing "Lihat Semua" + indeks O(1) pengganti masterRows.indexOf() per baris
   const cabangScrollRef = useRef<HTMLDivElement | null>(null);
@@ -239,15 +273,20 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
     }
   };
 
-  // Export Excel handler — yang diunduh adalah daftar yang sedang tampil (ikut pencarian),
-  // bukan seluruh master, supaya angka di berkas sama dengan angka di layar.
+  // Export Excel handler — yang diunduh adalah daftar yang sedang tampil (ikut pencarian
+  // dan saringan kepala kolom), bukan seluruh master, supaya angka di berkas sama dengan
+  // angka di layar.
   const handleExportExcel = () => {
     const kolom = [
+      KOLOM_STATUS_PAKAI,
       'Wilayah', 'Sandi Cabang', 'Sandi', 'Cabang', 'Nama Outlet', 'Branch Code', 'Kode Cabang',
       'Status Outlet', 'KODE POS', 'Kelurahan', 'Kecamatan', 'Dati II', 'Kode Dati II', 'Provinsi',
       'ALAMAT', 'Telp',
     ];
-    const exportData = filteredRows.map((r) => ({
+    // Snapshot untuk dibaca orang: kalau berkas ini diimpor lagi, nilainya dihitung ulang
+    // dari Data Final, bukan diambil dari kolom Excel.
+    const exportData = barisTersaring.map((r) => ({
+      [KOLOM_STATUS_PAKAI]: labelStatusPakai(r),
       Wilayah: r.Wilayah || '',
       'Sandi Cabang': r['Sandi Cabang'] || (r.Sandi && r.Cabang ? `${r.Sandi} - ${r.Cabang}` : r.Cabang || r.Sandi || ''),
       Sandi: r.Sandi || '',
@@ -725,8 +764,18 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
                 <option value={25}>25 Baris</option>
                 <option value={50}>50 Baris</option>
                 <option value={100}>100 Baris</option>
-                <option value="ALL">Lihat Semua ({filteredRows.length})</option>
+                <option value="ALL">Lihat Semua ({barisTampil.length})</option>
               </select>
+              {jumlahAktif > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => { bersihkanSemua(); setPage(1); }}
+                  title="Hapus semua saringan kolom"
+                >
+                  <X size={12} /> Bersihkan saringan ({jumlahAktif})
+                </button>
+              )}
             </div>
           </div>
 
@@ -736,6 +785,21 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
               <thead>
                 <tr>
                   <th style={{ width: '40px', textAlign: 'center' }}>No</th>
+                  <ThFilter
+                    label={KOLOM_STATUS_PAKAI}
+                    definisi={definisiHeader[0]}
+                    sumber={filteredRows}
+                    semuaDefinisi={definisiHeader}
+                    saringSemua={saring}
+                    urutKolom={urut.kolom}
+                    urutNaik={urut.naik}
+                    onUrut={() => gantiUrut(KOLOM_STATUS_PAKAI)}
+                    terpilih={saring[KOLOM_STATUS_PAKAI] || []}
+                    onTerapkan={(n) => { setNilaiKolom(KOLOM_STATUS_PAKAI, n); setPage(1); }}
+                    tengah
+                    gayaSel={{ width: '120px', minWidth: '120px' }}
+                    title="Cabang yang kantornya dipakai oleh hasil analisa (Data Final)"
+                  />
                   <th style={{ width: '78px', textAlign: 'center' }}>Wilayah</th>
                   {hasCombinedSandiCabang ? (
                     <th>Sandi & Cabang</th>
@@ -758,10 +822,12 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {filteredRows.length === 0 ? (
+                {barisTampil.length === 0 ? (
                   <tr>
-                    <td colSpan={hasCombinedSandiCabang ? 12 : 13} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
-                      Tidak ada data cabang yang cocok dengan pencarian "{searchTerm}".
+                    <td colSpan={hasCombinedSandiCabang ? 14 : 15} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
+                      {jumlahAktif > 0
+                        ? 'Tidak ada data cabang yang cocok dengan pencarian dan saringan kolom.'
+                        : `Tidak ada data cabang yang cocok dengan pencarian "${searchTerm}".`}
                     </td>
                   </tr>
                 ) : (
@@ -775,6 +841,9 @@ export const CabangManager: React.FC<CabangManagerProps> = ({
                       return (
                       <tr key={idx} data-vrow={i === 0 ? 'true' : undefined} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
                         <td style={{ textAlign: 'center', color: '#878a99' }}>{globalIdx}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <span className={barisTerpakai.has(r) ? 'badge badge-match' : 'badge badge-unmatched'}>{labelStatusPakai(r)}</span>
+                        </td>
                         <td style={{ textAlign: 'center' }}>
                           <span className="badge badge-level1">{r.Wilayah || '-'}</span>
                         </td>
