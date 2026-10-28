@@ -345,30 +345,6 @@ export function contohJejakMerchant(mid: string, acak: () => number = Math.rando
   ];
 }
 
-export interface ContohMerchant {
-  mid: string;
-  nama: string;
-  total: number;
-}
-
-/** Tombol "pilihan cepat": MID dengan riwayat terbanyak lebih dulu. */
-export function contohMerchant(baris: readonly BarisMerchant[], maks = 3): ContohMerchant[] {
-  const peta = new Map<string, ContohMerchant>();
-  for (const r of baris) {
-    if (!r.mid) continue;
-    const ada = peta.get(r.mid);
-    if (ada) {
-      ada.total = Math.max(ada.total, r.totalRiwayat || 1);
-      if (!ada.nama) ada.nama = r.namaMerchant || '';
-      continue;
-    }
-    peta.set(r.mid, { mid: r.mid, nama: r.namaMerchant || '', total: r.totalRiwayat || 1 });
-  }
-  return Array.from(peta.values())
-    .sort((a, b) => b.total - a.total || a.mid.localeCompare(b.mid))
-    .slice(0, maks);
-}
-
 /** Sub-keterangan di bawah Ref No, persis istilah halaman sumber. */
 export function keteranganRef(status: string): string {
   return /reject/i.test(String(status || ''))

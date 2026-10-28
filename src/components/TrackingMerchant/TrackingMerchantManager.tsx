@@ -17,7 +17,6 @@ import {
   KUNCI_STORAGE_TRACKING,
   SUMUR_TRACKING,
   barisKeExcelTm,
-  contohMerchant,
   contohJejakMerchant,
   kandidatMerchant,
   keranjangStatus,
@@ -199,7 +198,6 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
     () => jejakContoh ?? (midJejak ? riwayatMerchant(baris, midJejak) : []),
     [baris, jejakContoh, midJejak]
   );
-  const contoh = useMemo(() => contohMerchant(baris, 3), [baris]);
   const rentangTahun = useMemo(() => {
     if (distribusi.length === 0) return '';
     const bersih = (label: string) => label.replace(/TAHUN\s+/i, '').replace(/\s*YTD/i, '').trim();
@@ -457,17 +455,6 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
               </button>
             )}
           </div>
-
-          {contoh.length > 0 && (
-            <div className="tm-aktivitas-contoh">
-              {contoh.map((c) => (
-                <button key={c.mid} type="button" className="tm-contoh-mid" onClick={() => bukaJejak(c.mid)}>
-                  <strong>{c.mid}</strong>
-                  <small>{c.nama || 'tanpa nama'} — {c.total} riwayat</small>
-                </button>
-              ))}
-            </div>
-          )}
 
           {galatJejak && (
             <div className="tm-aktivitas-galat">

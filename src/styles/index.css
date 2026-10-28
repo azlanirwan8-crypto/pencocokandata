@@ -2512,34 +2512,6 @@ body {
 
 .tm-aktivitas-cari .search-input { width: 100%; }
 
-.tm-aktivitas-contoh {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.55rem;
-  font-size: 0.7rem;
-  color: var(--text-muted);
-}
-
-.tm-contoh-mid {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.05rem;
-  padding: 0.25rem 0.5rem;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--bg-card);
-  font-size: 0.7rem;
-  color: var(--text-heading);
-  text-align: left;
-  cursor: pointer;
-}
-
-.tm-contoh-mid:hover { border-color: var(--accent-secondary); }
-.tm-contoh-mid small { font-size: 0.6rem; font-weight: 600; color: var(--text-muted); }
-
 .tm-aktivitas-galat {
   display: flex;
   align-items: center;
