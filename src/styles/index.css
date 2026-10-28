@@ -2069,6 +2069,152 @@ body {
   transform-origin: center;
 }
 
+/* ── Checklist Kesiapan Data (Data Analyst Engine) ─────────────────────────────
+   Empat sumber wajib tampil tercentang terkunci; hanya Mapping Role yang bisa
+   dilepas. Status 'contoh' dan 'kosong' harus beda terlihat, karena badge lama
+   selalu hijau walaupun sumbernya belum terisi. */
+.kesiapan-list {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.kesiapan-judul {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.kesiapan-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem 0.2rem 0.35rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  cursor: default;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.kesiapan-item input[type='checkbox'] {
+  width: 13px;
+  height: 13px;
+  accent-color: var(--accent-emerald);
+  cursor: inherit;
+  margin: 0;
+}
+
+.kesiapan-item.is-siap {
+  border-color: rgba(10, 179, 156, 0.35);
+  background: var(--accent-emerald-subtle);
+  color: var(--accent-emerald);
+}
+
+.kesiapan-item.is-contoh {
+  border-color: rgba(247, 184, 75, 0.45);
+  background: var(--accent-amber-subtle);
+  color: #b47b16;
+}
+
+.kesiapan-item.is-kosong {
+  border-color: rgba(240, 101, 72, 0.4);
+  background: var(--accent-rose-subtle);
+  color: var(--accent-rose);
+}
+
+.kesiapan-item.is-lepas {
+  border-color: var(--border-subtle);
+  background: var(--bg-main);
+  color: var(--text-muted);
+}
+
+/* Tanda status di baris Kesiapan Data: ✓ siap, ! masih contoh, ✗ kosong, – tidak dipakai. */
+.kesiapan-tanda {
+  font-weight: 800;
+  width: 0.85rem;
+  text-align: center;
+}
+
+.kesiapan-meta {
+  font-weight: 500;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.kesiapan-arti {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  flex-basis: 100%;
+  margin-top: 0.1rem;
+}
+
+/* ── Checkbox fase di kartu stepper ─────────────────────────────────────────────
+   Fase 1 & 2 selalu tercentang (sumbernya wajib) dan hanya bisa terlihat merah
+   kalau datanya belum siap. Fase 3 satu-satunya yang bisa dilepas. */
+.fase-cek {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+
+.fase-cek input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent-emerald);
+  cursor: pointer;
+}
+
+.fase-cek.is-wajib input[type='checkbox'] {
+  cursor: not-allowed;
+  accent-color: var(--accent-blue);
+}
+
+.fase-cek.is-kunci input[type='checkbox'] {
+  cursor: not-allowed;
+  accent-color: var(--accent-rose);
+}
+
+.fase-cek.is-opsional input[type='checkbox'] {
+  accent-color: var(--accent-amber);
+}
+
+/* Penanda sifat fase di kartu stepper: Fase 1-2 wajib (datanya tidak bisa dilepas),
+   Fase 3 opsional (Mapping Role boleh dilepas lewat checklist Kesiapan Data).
+   Tanpa ini kartu Fase 2 dan Fase 3 tampak sama-sama "redup menunggu". */
+.fase-tag {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.05rem 0.32rem;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.fase-tag.is-wajib {
+  background: var(--accent-blue-subtle);
+  border-color: rgba(64, 81, 137, 0.25);
+  color: var(--accent-blue);
+}
+
+.fase-tag.is-opsional {
+  background: var(--accent-amber-subtle);
+  border-color: rgba(247, 184, 75, 0.45);
+  color: #b47b16;
+}
+
 /* Hormati preferensi pengguna yang tidak suka animasi */
 @media (prefers-reduced-motion: reduce) {
   *,

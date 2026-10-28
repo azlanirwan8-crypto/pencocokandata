@@ -19,14 +19,21 @@ import { AnalystResultsGrid } from './components/WorkingEngine/AnalystResultsGri
 import { FinalDataManager } from './components/WorkingEngine/FinalDataManager';
 import { cityMatchKey, makeFinalKey, barisFinalLengkap, pilFinalDariCloud, hitungBit, bitTemuanBaris, AnalisaDibatalkan, type AnalystRow, type AnalystCoverage } from './utils/analystPipeline';
 import { jalankanAnalisaDiWorker, batalAnalisaDiWorker } from './utils/analystRunner';
+import {
+  KUNCI_SUMBER_DIPILIH,
+  catatanSumber,
+  hitungKesiapan,
+  halanganNyalakanRole,
+  jumlahBarisDilewati,
+} from './utils/analystSources';
 import { SinyalTemuanModal } from './components/WorkingEngine/SinyalTemuanModal';
 import { detectFinalAnomalies, indeksWilayahCabang, nyebrangWilayahCabang } from './utils/finalAnomaly';
 import type { ActiveTab } from './components/Sidebar';
 
 import type { MasterRow, TargetRow, WilayahStat, WilayahSetting } from './types';
 import { buildMasterIndex, analyzeMasterHealth } from './utils/matcher';
-import { formatWilayahName, kapital } from './utils/normalizer';
 import { indeksCabangTerpakai } from './utils/cabangUsage';
+import { formatWilayahName, kapital } from './utils/normalizer';
 import { formatWilayahCode } from './utils/excel';
 import type { RoleMappingRecord } from './components/RoleMapping/RoleMappingManager';
 import { DEFAULT_ROLE_MAPPING_DATA } from './components/RoleMapping/RoleMappingManager';
@@ -111,6 +118,9 @@ export const App: React.FC = () => {
   const [cityOverrides, setCityOverrides] = useState<Record<string, string>>({});
   // Kartu sinyal yang sedang dibuka detail temuannya (nomor 1..13, null = tertutup).
   const [sinyalDibuka, setSinyalDibuka] = useState<number | null>(null);
+  // 🧷 Checklist Kesiapan Data: satu-satunya sumber yang boleh dilepas adalah Mapping
+  // Role. Melepasnya berarti Fase 3 dilewati, bukan sekadar kolomnya dikosongkan.
+  const [roleDipakai, setRoleDipakai] = useState<boolean>(true);
   // A7: penanda "N baris belum disetujui" yang bisa diklik — fase yang sedang disaring.
   // Full Master Kode Pos list (loaded once from cloud, cached in memory for pipeline runs)
   const kodePosListRef = useRef<KodePosRow[] | null>(null);
@@ -238,17 +248,24 @@ export const App: React.FC = () => {
         if (localStorage.getItem('analyst_purge_v2') !== 'done') {
           await deleteKey('analyst_results_data');
           await deleteKey('analyst_final_data');
+          await deleteKey(KUNCI_SUMBER_DIPILIH);
           localStorage.setItem('analyst_purge_v2', 'done');
         } else {
-          const [savedAnalyst, savedFinal] = await Promise.all([
+          const [savedAnalyst, savedFinal, savedPilihanSumber] = await Promise.all([
             getItem<AnalystRow[]>('analyst_results_data'),
             getItem<AnalystRow[]>('analyst_final_data'),
+            getItem<{ roleDipakai: boolean }>(KUNCI_SUMBER_DIPILIH),
           ]);
           if (savedAnalyst && Array.isArray(savedAnalyst) && savedAnalyst.length > 0) {
             setAnalystRows(savedAnalyst);
           }
           if (savedFinal && Array.isArray(savedFinal) && savedFinal.length > 0) {
             setFinalRows(savedFinal);
+          }
+          // Pilihan dibaca sepasang dengan hasilnya: hasil yang dikerjakan tanpa role
+          // tidak boleh ditampilkan seolah-olah role ikut dipakai, dan sebaliknya.
+          if (savedPilihanSumber && typeof savedPilihanSumber.roleDipakai === 'boolean') {
+            setRoleDipakai(savedPilihanSumber.roleDipakai);
           }
         }
       } catch (err) {
@@ -488,11 +505,68 @@ export const App: React.FC = () => {
   // Provinsi/pulau kantor cabang, dari Data Cabang. Dipakai gerbang setujui massal dan
   // saringan "lintas provinsi" supaya keduanya menilai baris yang SAMA dengan kartu anomali.
   const wilayahCabang = useMemo(() => indeksWilayahCabang(masterRows), [masterRows]);
+
+  // 🧷 Kesiapan Data menghitung ulang angka yang BENAR-BENAR akan dipakai run berikut,
+  // bukan angka yang tadi ditampilkan. Kode Pos memakai yang lebih besar antara cache
+  // browser dan statistik cloud, karena pipeline mengambil dari salah satunya
+  // (lihat handleStartAnalystPipeline) — dulu badge hijau di atas 139 baris contoh.
+  const kesiapanSumber = useMemo(
+    () =>
+      hitungKesiapan(
+        {
+          pten: ptenList.length,
+          kodepos: Math.max(kodePosMasterRows.length, kodePosCount),
+          wilayah: wilayahSettings.length,
+          cabang: masterRows.length,
+          role: roleMappingList.length,
+        },
+        {
+          // PTEN bawaan BUKAN contoh: defaultPtenData.ts berisi 8.828 blok nyata yang
+          // ikut dalam bundel. Yang benar-benar contoh hanya Kode Pos (140 baris) dan
+          // Mapping Role (33 baris) — dan itu sudah dibedakan pipeline di tempat lain.
+          pten: 0,
+          kodepos: DEFAULT_KODEPOS_DATA.length,
+          wilayah: 0,
+          cabang: 0,
+          role: DEFAULT_ROLE_MAPPING_DATA.length,
+        },
+        roleDipakai
+      ),
+    [ptenList.length, kodePosMasterRows.length, kodePosCount, wilayahSettings.length, masterRows.length, roleMappingList.length, roleDipakai]
+  );
+
+  // Kesiapan yang menjelaskan BARIS YANG SUDAH ada, bukan rencana run berikutnya.
+  // Dua-duanya bisa bohong kalau hanya membaca centangan: hasil lama yang role-nya
+  // sudah terhitung tidak boleh diklaim "tidak diikutkan" hanya karena centangnya baru
+  // dilepas, dan sebaliknya. Tandanya `fase3Dilewati` yang ditulis mesin saat run.
+  const kesiapanHasil = useMemo(() => {
+    if (analystRows.length === 0) return kesiapanSumber;
+    const dipakai = jumlahBarisDilewati(analystRows) === 0;
+    return { ...kesiapanSumber, role: { ...kesiapanSumber.role, dipakai } };
+  }, [kesiapanSumber, analystRows]);
+
+  const handleToggleRole = () => {
+    const mau = !roleDipakai;
+    if (mau) {
+      const halangan = halanganNyalakanRole(roleDipakai, finalRows.length);
+      if (halangan) {
+        notify(halangan, 'warning');
+        return;
+      }
+    }
+    setRoleDipakai(mau);
+    void setItem(KUNCI_SUMBER_DIPILIH, { roleDipakai: mau });
+    notify(
+      mau
+        ? 'Mapping Role ikut dianalisa — Fase 3 berjalan lagi pada analisa berikutnya.'
+        : 'Mapping Role dilepas — Fase 3 dilewati dan barisnya ditandai "Dilewati", bukan "Belum selesai".'
+    );
+  };
+
   // "Status Pakai" sebuah cabang diturunkan dari Data Final: kantor yang tertulis di
   // sana sudah dipakai hasil analisa. Dihitung sekali di sini supaya badge di tabel
   // Data Cabang dan penghitungnya memakai angka yang sama.
   const kunciCabangTerpakai = useMemo(() => indeksCabangTerpakai(finalRows), [finalRows]);
-
 
   // Anomali ikut lingkup yang SAME dengan baris yang sedang dilihat. Sengaja disaring
   // lewat id `dashboardFilteredRows`, bukan lewat kunci wilayah lagi: filter 'ALL' punya
@@ -615,7 +689,7 @@ export const App: React.FC = () => {
     setIsCancelling(false);
     setIsAnalyzing(true);
     setAnalystProgress(10);
-    setAnalystMessage(`Menyiapkan 5 Data Master & indeks memori O(1)... (Fase ${targetFase})`);
+    setAnalystMessage(`Menyiapkan ${roleDipakai ? '5' : '4'} Data Master & indeks memori O(1)... (Fase ${targetFase})`);
     // Hanya fase yang akan dijalankan yang di-reset. Dulu seluruh kartu dinolkan di sini,
     // jadi menekan "Lanjut Fase 2" membuat kartu Fase 1 terlihat menghitung ulang dari 0
     // padahal fase itu sudah selesai dan disetujui.
@@ -684,6 +758,9 @@ export const App: React.FC = () => {
           // kosong terkunci selamanya (jalur perbaikan lewat "Ulangi Analisa" mati).
           excludeFinalKeys: finalRows.filter(barisFinalLengkap).map((fr) => makeFinalKey(fr.kodePosPten, fr.kelurahan, fr.kecamatan, fr.kotaPten)),
           sampaiFase: targetFase,
+          // Sumber terpakai yang EFEKTIF, bukan sekadar centangan: tabel role kosong
+          // berarti Fase 3 memang tidak ada bahannya, jadi mesin harus melewatinya.
+          roleDipakai: kesiapanSumber.role.dipakai,
         },
         (phase, pct, _processed, _total, msg) => {
           setAnalystProgress(pct);
@@ -764,6 +841,9 @@ export const App: React.FC = () => {
     let total = 0;
     let a = 0, b = 0, c = 0;
     let t2 = 0, t3 = 0, final = 0;
+    // Baris yang Fase 3-nya memang dilewati (Mapping Role lepas) tidak boleh dihitung
+    // sebagai "belum selesai" — tanpa ini tombol "Masuk ke Data Final" tidak aktif lagi.
+    let c3lewati = 0;
     const sinyalOut: Record<number, number> = {};
 
     for (let i = 0; i < analystRows.length; i++) {
@@ -773,6 +853,7 @@ export const App: React.FC = () => {
         if (r.fase1Approved) a++;
         if (r.fase2Approved) b++;
         if (r.fase3Approved) c++;
+        if (r.fase3Dilewati) c3lewati++;
         if (barisFinalLengkap(r)) t2++;
         if (r.statusAnalisa && r.statusAnalisa !== 'MENUNGGU') t3++;
         if (r.isFinalApproved) final++;
@@ -786,13 +867,16 @@ export const App: React.FC = () => {
     const pct = (n: number) => (total ? Math.floor((n / total) * 100) : 0);
     return {
       phaseApproval: {
-        pct: { 1: pct(a), 2: pct(b), 3: pct(c) } as { 1: number; 2: number; 3: number },
-        sisa: { 1: total - a, 2: total - b, 3: total - c } as { 1: number; 2: number; 3: number },
-        selesai: { 1: total > 0 && a === total, 2: total > 0 && b === total, 3: total > 0 && c === total } as {
+        pct: { 1: pct(a), 2: pct(b), 3: pct(c + c3lewati) } as { 1: number; 2: number; 3: number },
+        sisa: { 1: total - a, 2: total - b, 3: total - c - c3lewati } as { 1: number; 2: number; 3: number },
+        selesai: { 1: total > 0 && a === total, 2: total > 0 && b === total, 3: total > 0 && c + c3lewati === total } as {
           1: boolean;
           2: boolean;
           3: boolean;
         },
+        /** Baris Fase 3 yang memang tidak dihitung mesin, bukan yang tertunda. */
+        dilewati: { 1: false, 2: false, 3: c3lewati > 0 } as { 1: boolean; 2: boolean; 3: boolean },
+        jumlahDilewati: c3lewati,
         total,
         // Fase yang kolomnya belum pernah ditulis mesin belum layak disetujui: layar Data
         // Analyst menampilkan kolom Fase 2 dari kandidat, jadi barisnya bisa tetap kosong
@@ -800,7 +884,7 @@ export const App: React.FC = () => {
         tertulis: {
           1: analystRows.length > 0,
           2: total > 0 && t2 > 0,
-          3: total > 0 && t3 > 0,
+          3: total > 0 && (t3 > 0 || c3lewati > 0),
         } as { 1: boolean; 2: boolean; 3: boolean },
         semuaSudahFinal: total > 0 && final === total,
       },
@@ -1510,13 +1594,10 @@ export const App: React.FC = () => {
                 onBatalkanAnalysis={handleBatalkanAnalisa}
                 isCancelling={isCancelling}
                 hasExistingResults={analystRows.length > 0}
-                masterCounts={{
-                  pten: ptenList.length,
-                  kodepos: kodePosCount,
-                  wilayah: wilayahSettings.length,
-                  cabang: masterRows.length,
-                  role: roleMappingList.length,
-                }}
+                kesiapan={kesiapanSumber}
+                roleDipakai={roleDipakai}
+                onToggleRole={handleToggleRole}
+                jumlahBarisDilewati={jumlahBarisDilewati(analystRows)}
                 phaseProgress={phaseProgress}
                 currentActivePhase={currentActivePhase}
                 completedPhases={completedPhases}
@@ -1555,6 +1636,7 @@ export const App: React.FC = () => {
                   onRemoveCityOverride={handleRemoveCityOverride}
                   masterRows={masterRows}
                   roleMappingList={roleMappingList}
+                  catatanSumber={catatanSumber(kesiapanHasil)}
                 />
               )}
             </div>

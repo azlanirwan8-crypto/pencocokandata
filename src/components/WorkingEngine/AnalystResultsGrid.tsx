@@ -102,6 +102,8 @@ interface AnalystResultsGridProps {
   roleMappingList?: RoleMappingRecord[];
   /** N0 butir 4: baris manual tidak bisa dibetulkan di sini — bawa operator ke menu Data Cabang. */
   onBukaMasterCabang?: () => void;
+  /** Sumber yang dipakai run ini — ditulis di header agar hasil bisa dijelaskan ulang. */
+  catatanSumber?: string;
 }
 
 // Cache rekomendasi Fase 2: mesin ini ±10 ms/baris dan dipanggil ulang tiap jendela
@@ -133,6 +135,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   masterRows = [],
   roleMappingList = [],
   onBukaMasterCabang,
+  catatanSumber = '',
 }) => {
   const { add: notify } = useNotification();
   // A6: tampilan (tab/filter/cari/urut/halaman) bertahan saat pindah menu — komponen ini
@@ -391,6 +394,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     let f1ApprovedCount = 0;
     let f2ApprovedCount = 0;
     let f3ApprovedCount = 0;
+    let f3DilewatiCount = 0;
     let f2TertulisCount = 0;
     let f3TertulisCount = 0;
 
@@ -403,7 +407,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       let stage: 1 | 2 | 3 | 4 = 4;
       if (isTidakAnalisa || !r.fase1Approved) stage = 1;
       else if (!r.fase2Approved) stage = 2;
-      else if (!r.fase3Approved) stage = 3;
+      else if (!r.fase3Approved && !r.fase3Dilewati) stage = 3;
 
       // Is manual needed calculation
       let isManual = !!r.perluManual;
@@ -426,6 +430,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
         if (r.fase1Approved) f1ApprovedCount++;
         if (r.fase2Approved) f2ApprovedCount++;
         if (r.fase3Approved) f3ApprovedCount++;
+        if (r.fase3Dilewati) f3DilewatiCount++;
         if (barisFinalLengkap(r)) f2TertulisCount++;
         if (r.statusAnalisa && r.statusAnalisa !== 'MENUNGGU') f3TertulisCount++;
 
@@ -488,7 +493,10 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       phaseState: {
         fase1Done: total > 0 && f1ApprovedCount === total,
         fase2Done: total > 0 && f2ApprovedCount === total,
-        fase3Done: total > 0 && f3ApprovedCount === total,
+        // Baris yang Fase 3-nya memang tidak dihitung mesin (Mapping Role dilepas)
+        // sudah selesai menurut definisi, bukan tertunda selamanya.
+        fase3Done: total > 0 && f3ApprovedCount + f3DilewatiCount === total,
+        dilewati3: f3DilewatiCount,
         // Fase yang belum PERNAH ditulis ke baris tidak boleh disetujui: grid menampilkan
         // kolom Fase 2 dari kandidat master (`f2Aktif`), jadi layarnya bisa tampak penuh
         // padahal field barisnya masih kosong — menyetujui tanpa menjalankan fasenya
@@ -496,7 +504,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
         // Gerbangnya "nol baris tertulis", bukan "semua baris tertulis": sebagian kelurahan
         // memang tidak punya cabang, dan itu ditahan satu per satu di pintu Data Final.
         fase2Tertulis: total > 0 && f2TertulisCount > 0,
-        fase3Tertulis: total > 0 && f3TertulisCount > 0,
+        fase3Tertulis: total > 0 && (f3TertulisCount > 0 || f3DilewatiCount > 0),
         queue,
         step,
         locked: {
@@ -803,6 +811,9 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
     const map = new Map<string, RoleMatchScored[]>();
     if (viewTab !== 'fase3' || !renderedRows.length || !roleMappingList.length) return map;
     renderedRows.forEach((r) => {
+      // Baris yang Fase 3-nya dilewati tidak boleh dihitung kandidatnya: kandidat itu
+      // bukan hasil mesin dan tidak boleh appearing sebagai sesuatu untuk disetujui.
+      if (r.fase3Dilewati) return;
       const activeBranchCode = r.branchCode || f2Aktif.get(r.id)?.branchCode || '';
       const activeMaster = masterByBranchCode.get(String(activeBranchCode).trim());
       const topRoles = findTopRoleMatchesByLocation(activeMaster, targetFromAnalystRow(r), roleMappingList, masterRows, 3);
@@ -866,7 +877,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   };
 
   const handleExportPdf = () => {
-    const result = exportAnalystExecutivePdf({ rows, stats: { total: stats.total, exact: stats.exact, highConf: stats.highConf, anomalies: stats.anomalies, approved: stats.approved, role3Complete: stats.role3Complete, accuracyRate: stats.accuracyRate }, wilayahCount: wilayahList.length });
+    const result = exportAnalystExecutivePdf({ rows, stats: { total: stats.total, exact: stats.exact, highConf: stats.highConf, anomalies: stats.anomalies, approved: stats.approved, role3Complete: stats.role3Complete, accuracyRate: stats.accuracyRate }, wilayahCount: wilayahList.length, catatanSumber });
     if (result.success) {
       showToast(`Berhasil mengunduh laporan PDF: ${result.filename}`);
     } else {
@@ -1190,11 +1201,22 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
           {phaseState.step === 4 ? <CheckCircle2 size={15} /> : <Lock size={14} />}
           <span>
             {phaseState.step === 1 && 'Langkah 1 dari 4 — Sedang mereview Fase 1 (PTEN & Kode Pos). Klik "Setujui Fase 1" untuk membuka Fase 2.'}
-            {phaseState.step === 2 && 'Langkah 2 dari 4 — Sedang mereview Fase 2 (Wilayah & Cabang). Klik "Setujui Fase 2" untuk membuka Fase 3.'}
-            {phaseState.step === 3 && 'Langkah 3 dari 4 — Sedang mereview Fase 3 (Mapping Role & Wondr). Klik "Setujui Fase 3" untuk membuka Data Final.'}
+            {phaseState.step === 2 && (phaseState.dilewati3 > 0
+              ? 'Langkah 2 — Sedang mereview Fase 2 (Wilayah & Cabang). Klik "Setujui Fase 2" untuk membuka Data Final; Fase 3 dilewati karena Mapping Role tidak diikutkan.'
+              : 'Langkah 2 — Sedang mereview Fase 2 (Wilayah & Cabang). Klik "Setujui Fase 2" untuk membuka Fase 3.')}
+            {phaseState.step === 3 && 'Langkah 3 — Sedang mereview Fase 3 (Mapping Role & Wondr). Klik "Setujui Fase 3" untuk membuka Data Final.'}
             {phaseState.step === 4 && 'Seluruh fase telah disetujui — Data Final terbuka untuk review akhir, persetujuan final, dan ekspor.'}
           </span>
         </div>
+
+        {/* Sumber yang dipakai run ini ditulis apa adanya: hasil tanpa Fase 3 harus bisa
+            dibedakan dari hasil lengkap kalau berkasnya dibaca ulang nanti. */}
+        {catatanSumber && (
+          <div className="kesiapan-arti" style={{ margin: '-0.35rem 0 0.75rem' }}>
+            {catatanSumber}
+            {phaseState.dilewati3 > 0 && ` ${phaseState.dilewati3.toLocaleString('id-ID')} baris bertanda "Fase 3 dilewati".`}
+          </div>
+        )}
 
         {phaseState.step <= 3 && (
           <div style={{ margin: '-0.35rem 0 0.75rem', fontSize: '0.72rem', color: '#878a99' }}>
@@ -1208,7 +1230,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
             {([
               { key: 'fase1', label: '📍 1. Review Fase 1 (PTEN & Kode Pos)', done: phaseState.fase1Done, n: phaseState.queue.fase1 },
               { key: 'fase2', label: '🏢 2. Review Fase 2 (Kanwil & Master Cabang)', done: phaseState.fase2Done, n: phaseState.queue.fase2 },
-              { key: 'fase3', label: '👥 3. Review Fase 3 (Mapping Role & Wondr)', done: phaseState.fase3Done, n: phaseState.queue.fase3 },
+              { key: 'fase3', label: phaseState.dilewati3 > 0 ? '👥 3. Fase 3 (Mapping Role dilewati)' : '👥 3. Review Fase 3 (Mapping Role & Wondr)', done: phaseState.fase3Done, n: phaseState.queue.fase3 },
               { key: 'all', label: '📑 4. Data Final (Semua Atribut)', done: stats.isAllApproved, n: phaseState.queue.all },
             ] as const).map((tab) => {
               const locked = phaseState.locked[tab.key];
@@ -2061,6 +2083,14 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                               borderRight: '2px solid rgba(10,179,156,0.45)',
                               boxSizing: 'border-box',
                             };
+                            if (r.fase3Dilewati)
+                              return (
+                                <td style={tdRole}>
+                                  <span style={{ fontSize: '0.7rem', color: '#adb5bd' }}>
+                                    Fase 3 dilewati — Mapping Role tidak diikutkan pada analisa ini
+                                  </span>
+                                </td>
+                              );
                             if (topRoles.length === 0)
                               return (
                                 <td style={tdRole}>

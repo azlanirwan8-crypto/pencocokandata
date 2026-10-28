@@ -35,7 +35,8 @@ self.onmessage = (e: MessageEvent) => {
     p.previousRows,
     p.excludeFinalKeys ? new Set<string>(p.excludeFinalKeys) : undefined,
     p.sampaiFase,
-    pembatal
+    pembatal,
+    p.roleDipakai ?? true
   )
     .then(({ rows, coverage }) => {
       self.postMessage({ type: 'selesai', rows, coverage });

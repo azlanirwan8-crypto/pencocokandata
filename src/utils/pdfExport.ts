@@ -205,12 +205,15 @@ interface AnalystPdfOptions {
     accuracyRate: string;
   };
   wilayahCount: number;
+  /** Sumber yang dipakai run (checklist Kesiapan Data) — dicetak supaya hasil bisa dijelaskan ulang. */
+  catatanSumber?: string;
 }
 
 export function exportAnalystExecutivePdf({
   rows,
   stats,
   wilayahCount,
+  catatanSumber = '',
 }: AnalystPdfOptions): { success: boolean; filename: string; error?: string } {
   try {
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
@@ -232,7 +235,11 @@ export function exportAnalystExecutivePdf({
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8.5);
     doc.setTextColor(206, 212, 218);
-    doc.text('Data Analyst Engine — Pipeline 3 Fase dengan Multi-Tier AI Analytics', 14, 18);
+    doc.text(
+      catatanSumber ? `Data Analyst Engine — ${catatanSumber}` : 'Data Analyst Engine — Pipeline 3 Fase dengan Multi-Tier AI Analytics',
+      14,
+      18
+    );
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);

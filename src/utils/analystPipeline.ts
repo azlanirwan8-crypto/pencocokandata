@@ -78,6 +78,13 @@ export interface AnalystRow {
   alurWondr: string;
   flowDescription: string;
   fase3Approved: boolean;
+  /**
+   * Baris ini sengaja tidak dihitung Fase 3-nya karena Mapping Role dilepas di
+   * checklist Kesiapan Data. Beda dengan kolom Fase 3 yang kosong karena fase itu
+   * belum giliran jalan (`sampaiFase`): kalau tidak dicatat, barisnya terlihat
+   * "belum selesai" selamanya dan gerbang persetujuan tidak pernah terbuka.
+   */
+  fase3Dilewati?: boolean;
 
   // Overall Status
   confidenceScore: number; // 0 - 100%
@@ -1203,12 +1210,16 @@ export async function executeAnalystPipeline(
   // untuk direview; 2 menambah Fase 2; 3 (default) menyelesaikan semuanya.
   sampaiFase: 1 | 2 | 3 = 3,
   // ✋ Ditulis `true` oleh tombol "Batalkan"; dicek tiap `tick()` di dalam loop.
-  pembatal?: { batal: boolean }
+  pembatal?: { batal: boolean },
+  // 🧷 Checklist Kesiapan Data: `false` = Mapping Role dilepas, Fase 3 tidak dihitung
+  // dan setiap baris ditandai `fase3Dilewati` supaya gerbang persetujuan tidak macet.
+  roleDipakai = true
 ): Promise<{ rows: AnalystRow[]; coverage: AnalystCoverage }> {
   const startTime = performance.now();
   // 🚦 Alur bertahap: fase di atas `sampaiFase` tidak dihitung (Fase 3 = bagian termahal)
   // dan field-nya dibiarkan kosong supaya kartu/gridfase berikutnya tetap "belum jalan".
-  const fase3Jalan = sampaiFase >= 3;
+  const fase3Jalan = sampaiFase >= 3 && roleDipakai;
+
   const fase2Jalan = sampaiFase >= 2;
 
   // 1. Persiapkan Index Master untuk O(1) Quick Lookup
@@ -2412,6 +2423,7 @@ export async function executeAnalystPipeline(
         alurWondr: roleBaris?.alurWondr || '',
         flowDescription: roleBaris?.flowDescription || '',
         fase3Approved: false,
+        fase3Dilewati: !roleDipakai,
 
         // Overall
         confidenceScore: roleBaris?.confidenceScore || 0,

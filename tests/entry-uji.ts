@@ -14,3 +14,7 @@ export { tabrakKotaPtenKodePos } from '../src/utils/tabrakKotaPten';
 export { BATAS_DAFTAR_NILAI, KOSONG, barisLolosFilter, cariDalamNilai, daftarNilaiUnik, dasarDaftarNilai, jumlahFilterAktif, saringBaris, sortirBaris, terapkanKeadaan } from '../src/utils/filterSort';
 export { resolveBranchCoordinates, kategoriUnitCabang, clusterMasterRowsForMap, sumberPerkiraan } from '../src/utils/geoCoder';
 export { STATUS_PAKAI, STATUS_BELUM_PAKAI, kunciIdentitasCabang, indeksCabangTerpakai, adalahCabangTerpakai, statusPakaiCabang, himpunCabangTerpakai } from '../src/utils/cabangUsage';
+export {
+  SUMBER_ANALISA, sumberFase, nilaiKesiapan, hitungKesiapan, statusFase, alasanFaseTerkunci,
+  halanganNyalakanRole, jumlahBarisDilewati, catatanSumber, faseWajib, KUNCI_SUMBER_DIPILIH,
+} from '../src/utils/analystSources';

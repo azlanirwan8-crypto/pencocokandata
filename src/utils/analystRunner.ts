@@ -19,6 +19,8 @@ export interface KirimanAnalisa {
   previousRows?: AnalystRow[];
   excludeFinalKeys?: string[];
   sampaiFase?: 1 | 2 | 3;
+  /** false = Mapping Role dilepas di checklist Kesiapan Data, Fase 3 tidak dihitung. */
+  roleDipakai?: boolean;
 }
 
 export type ProgresAnalisa = (phase: 1 | 2 | 3, pct: number, processed: number, total: number, msg: string) => void;
