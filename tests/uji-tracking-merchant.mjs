@@ -175,5 +175,19 @@ for (const k of ['aktif', 'proses', 'tolak', 'lain']) {
 asa('penjelasan Reject mengatakan alasannya tidak ada di sumber', /tidak menyertakan kolom alasan/.test(KETERANGAN_STATUS.tolak), true);
 asa('sumber tidak punya kolom nmid — angka itu rekaan halaman sumber', FIELD_TM.includes('nmid'), false);
 
+// ── (4) Penjaga waktu: sumber lambat, jangan sampai fungsi mati diam-diam ──
+// Terukur 2026-10-28: tiga percobaan unduhan ke 154.19.37.201 → 8,5 s; 52,5 s;
+// dan satu terpotong di 60 s (41.743 byte dari 793.373).
+const neonSync = readFileSync(fileURLToPath(new URL('../src/utils/neonSync.ts', import.meta.url)), 'utf8');
+const maxDur = Number((sumberApi.match(/export const maxDuration = (\d+)/) || [])[1]);
+const abort = Number((sumberApi.match(/UNDUH_ABORT_MS = (\d+)_000/) || [])[1]);
+const klien = Number((neonSync.match(/'\/api\/tracking-merchant\?ambil=1'.*?, (\d+)_000, 0/) || [])[1]);
+asa('fungsi punya maxDuration 60 s (konvensi repo untuk kerja lambat)', maxDur, 60);
+asa('abort unduhan (50 s) di dalam anggaran fungsi', abort > 0 && abort < maxDur, true);
+asa('timeout klien (75 s) lebih panjang dari fungsi', klien > maxDur, true);
+asa('unduhan terpotong ditolak, bukan diimpor setengah',
+  [sumberApi.includes('terpotong'), sumberApi.includes('html.length < diharapkan * 0.98')], [true, true]);
+asa('balasan HTML dikenali sebagai rute belum ter-deploy', /belum terpasang di server/.test(neonSync), true);
+
 console.log(gagal === 0 ? 'SEMUA LULUS' : `${gagal} UJIAN GAGAL`);
 process.exit(gagal === 0 ? 0 : 1);

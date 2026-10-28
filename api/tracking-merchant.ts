@@ -475,6 +475,14 @@ const KUNCI_TM = 'tracking_merchant_data';
 const SUMUR_TM = process.env.TRACKING_MERCHANT_URL || 'http://154.19.37.201/migrasi/';
 /** Satu unduhan HTML ±0,8 MB per sync; 3 menit cukup untuk klik berulang tanpa membebani sumber. */
 const USIA_MAKSIMAL_MS = 3 * 60 * 1000;
+/**
+ * Sumbernya lambat dan tidak stabil: terukur 2026-10-28, tiga percobaan berturut-turut
+ * selesai dalam 8,5 s, 52,5 s, dan satu percobaan terpotong di 60 s (41 KB dari 793 KB).
+ * Tanpa durasi maksimum yang sama dengan fungsi /api lain, Sync akan mati di tengah jalan.
+ */
+export const maxDuration = 60;
+/** Sisa anggaran fungsi untuk menulis app_store setelah unduhan selesai. */
+const UNDUH_ABORT_MS = 50_000;
 
 /** Hasil ekstraksi terakhir per instans fungsi — bukan pengganti penyimpanan cloud. */
 let memoar: { pada: number; muatan: unknown } | null = null;
@@ -482,14 +490,22 @@ let memoar: { pada: number; muatan: unknown } | null = null;
 /** GET biasa tanpa kredensial, tanpa cookie, tanpa header apa pun: murni anonim. */
 async function unduhSumber(): Promise<any[]> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 25_000);
+  const timer = setTimeout(() => controller.abort(), UNDUH_ABORT_MS);
   let html = '';
+  let diharapkan = 0;
   try {
     const res = await fetch(SUMUR_TM, { redirect: 'follow', signal: controller.signal });
     if (!res.ok) throw new Error(`Sumber menolak dengan HTTP ${res.status}.`);
+    diharapkan = Number(res.headers.get('content-length') || 0);
     html = await res.text();
   } finally {
     clearTimeout(timer);
+  }
+  // Unduhan terpotong bukan tidak mungkin (servernya pernah berhenti di tengah
+  // pengiriman). Lebih baik gagal dengan pesan yang benar daripada setengah data
+  // masuk dan terbaca seperti hasil sync yang lengkap.
+  if (diharapkan > 0 && html.length < diharapkan * 0.98) {
+    throw new Error(`Unduhan dari sumber terpotong (${html.length.toLocaleString('id-ID')} dari ${diharapkan.toLocaleString('id-ID')} byte). Coba Sync lagi.`);
   }
   return ratakanMerchantTm(ambilLiteralTrackingMID(html));
 }

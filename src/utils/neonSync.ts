@@ -991,22 +991,42 @@ export interface HasilSyncTracking {
 }
 
 /**
- * Tarik ulang dari sumber lewat fungsi serverless. Retri dicabut (0): satu percobaan
- * sudah memakan sampai ±25 detik di sisi sumber, mengulanginya hanya membuat tombol
- * terasa macet.
+ * Tarik ulang dari sumber lewat fungsi serverless. Timeout klien lebih panjang dari
+ * durasi maksimum fungsi (60 s di api/tracking-merchant.ts) supaya yang dilaporkan ke
+ * operator adalah kegagalan sebenarnya, bukan abort kita sendiri. Retri 0: satu
+ * percobaan sudah bisa makan 50 detik, mengulanginya hanya membekukan tombol.
  */
 export async function syncTrackingMerchantDariSumber(): Promise<HasilSyncTracking> {
   try {
-    const res = await fetchWithRetry('/api/tracking-merchant?ambil=1', { method: 'GET' }, 40_000, 0);
-    if (!res.ok) {
-      return { muatan: null, tersimpanDiCloud: false, pesan: `Server imbal HTTP ${res.status}.` };
+    const res = await fetchWithRetry('/api/tracking-merchant?ambil=1', { method: 'GET' }, 75_000, 0);
+    const teks = await res.text();
+    let json: any = null;
+    try {
+      json = JSON.parse(teks);
+    } catch {
+      // Rute serverless yang belum ter-deploy menghasilkan HTTP 200 berisi HTML aplikasi
+      // (rewrite SPA). Tanpa pemeriksaan ini operator hanya melihat error parser yang bingung.
+      const halamanHtml = /^\s*<(!doctype|html)/i.test(teks);
+      return {
+        muatan: null,
+        tersimpanDiCloud: false,
+        pesan: halamanHtml
+          ? 'Rute /api/tracking-merchant belum terpasang di server — yang dibalas adalah halaman aplikasi (HTML). Deploy dulu, lalu Sync lagi.'
+          : `Balasan server bukan JSON yang sah (HTTP ${res.status}).`,
+      };
     }
-    const json = await res.json();
-    if (!json?.ok || !json.data || !Array.isArray(json.data.baris)) {
-      return { muatan: null, tersimpanDiCloud: false, pesan: json?.error || 'Balasan sumber tidak dikenali.' };
+    if (!res.ok || !json.ok || !json.data || !Array.isArray(json.data.baris)) {
+      return { muatan: null, tersimpanDiCloud: false, pesan: json.error || `Gagal mengambil data (HTTP ${res.status}).` };
     }
     return { muatan: json.data as MuatanTracking, tersimpanDiCloud: Boolean(json.tersimpanDiCloud) };
   } catch (err: any) {
-    return { muatan: null, tersimpanDiCloud: false, pesan: err?.message || 'Gagal menghubungi sumber data.' };
+    const dibatalkan = String(err?.name || '') === 'AbortError';
+    return {
+      muatan: null,
+      tersimpanDiCloud: false,
+      pesan: dibatalkan
+        ? 'Permintaan sync melewati 75 detik dan dibatalkan. Data yang sudah ada tidak diubah — coba Sync lagi.'
+        : err?.message || 'Gagal menghubungi sumber data.',
+    };
   }
 }
