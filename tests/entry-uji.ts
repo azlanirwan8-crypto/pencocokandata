@@ -21,6 +21,6 @@ export {
 } from '../src/utils/analystSources';
 export {
   KOLOM_TM, KOLOM_EKSPOR_TM, DEFINISI_KOLOM_TM, KUNCI_STORAGE_TRACKING, KETERANGAN_STATUS, LABEL_KERANJANG,
-  SUMUR_TRACKING, barisKeExcelTm, cocokCari, contohMerchant, keranjangStatus, keteranganRef,
+  SUMUR_TRACKING, barisKeExcelTm, cocokCari, contohJejakMerchant, contohMerchant, kandidatMerchant, keranjangStatus, keteranganRef,
   riwayatMerchant, ringkasTracking, temukanMerchant,
 } from '../src/utils/trackingMerchant';

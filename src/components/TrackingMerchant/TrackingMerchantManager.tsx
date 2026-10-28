@@ -16,6 +16,8 @@ import {
   SUMUR_TRACKING,
   barisKeExcelTm,
   contohMerchant,
+  contohJejakMerchant,
+  kandidatMerchant,
   keranjangStatus,
   keteranganRef,
   riwayatMerchant,
@@ -55,12 +57,16 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
   const [midJejak, setMidJejak] = useState<string | null>(null);
   const [kueriJejak, setKueriJejak] = useState<string>('');
   const [galatJejak, setGalatJejak] = useState<string>('');
+  /** Kartu contoh untuk MID yang tidak ada di data — ditampilkan saja, tidak disimpan. */
+  const [jejakContoh, setJejakContoh] = useState<BarisMerchant[] | null>(null);
   const panelJejakRef = useRef<HTMLDivElement | null>(null);
 
   const uatMuatan = useCallback((muatan: MuatanTracking) => {
     setBaris(muatan.baris);
     setRingkasan(Array.isArray(muatan.ringkasan) ? muatan.ringkasan : []);
     setDistribusi(Array.isArray(muatan.distribusi) ? muatan.distribusi : []);
+    // Data berganti: kartu contoh lama bisa jadi sudah punya padanan nyata.
+    setJejakContoh(null);
   }, []);
 
   // Muat: browser dulu supaya tabel langsung terisi, lalu cloud menang kalau lebih baru.
@@ -135,7 +141,10 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
     notify(`${baris.length.toLocaleString('id-ID')} riwayat merchant diunduh.`, 'success');
   };
 
-  const jejak = useMemo(() => (midJejak ? riwayatMerchant(baris, midJejak) : []), [baris, midJejak]);
+  const jejak = useMemo(
+    () => jejakContoh ?? (midJejak ? riwayatMerchant(baris, midJejak) : []),
+    [baris, jejakContoh, midJejak]
+  );
   const contoh = useMemo(() => contohMerchant(baris, 3), [baris]);
   const rentangTahun = useMemo(() => {
     if (distribusi.length === 0) return '';
@@ -147,23 +156,32 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
     (kueri: string) => {
       setKueriJejak(kueri);
       const mid = temukanMerchant(baris, kueri);
-      if (!mid) {
-        setMidJejak(null);
+      if (mid) {
+        setGalatJejak('');
+        setJejakContoh(null);
+        setMidJejak(mid);
+        return;
+      }
+      setMidJejak(null);
+      const kandidat = kandidatMerchant(baris, kueri);
+      if (kandidat.length > 0) {
+        setJejakContoh(null);
         setGalatJejak(
-          `Tidak ada MID atau nama merchant yang cocok dengan "${kueri.trim()}" di ${baris.length.toLocaleString('id-ID')} baris tersinkron.`
+          `"${kueri.trim()}" cocok dengan beberapa MID: ${kandidat.join(', ')}${kandidat.length >= 6 ? ', …' : ''}. Tulis MID lengkap untuk membuka jejaknya.`
         );
         return;
       }
+      // Tidak ada padanan: tampilkan kartu contoh seperti halaman sumber, bukan layar kosong.
       setGalatJejak('');
-      setMidJejak(mid);
+      setJejakContoh(contohJejakMerchant(kueri));
     },
     [baris]
   );
 
-  // Klik "Lihat jejak" dari tabel membawa operator ke panel ini, bukan membuka lapisan lain.
+  // Klik "Lihat jejak" / pencarian membawa operator ke panel ini, bukan membuka lapisan lain.
   useEffect(() => {
-    if (midJejak) panelJejakRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [midJejak]);
+    if (midJejak || jejakContoh) panelJejakRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [midJejak, jejakContoh]);
 
   const sinkronSedang = statusMuat === 'syncing';
 
@@ -348,11 +366,11 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
               <Search size={13} />
               <span>Cari MID</span>
             </button>
-            {(midJejak || kueriJejak || galatJejak) && (
+            {(midJejak || jejakContoh || kueriJejak || galatJejak) && (
               <button
                 type="button"
                 className="btn btn-outline btn-sm"
-                onClick={() => { setMidJejak(null); setKueriJejak(''); setGalatJejak(''); }}
+                onClick={() => { setMidJejak(null); setJejakContoh(null); setKueriJejak(''); setGalatJejak(''); }}
               >
                 Reset
               </button>
@@ -377,13 +395,24 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
             </div>
           )}
 
-          {midJejak && jejak.length > 0 && (
+          {jejakContoh && (
+            <div className="tm-contoh-catatan">
+              <AlertCircle size={14} />
+              <span>
+                Kartu contoh: MID ini tidak ada di {baris.length.toLocaleString('id-ID')} baris hasil
+                sinkron. Isinya disusun seperti halaman sumber (nomor referensi acak) dan{' '}
+                <strong>tidak</strong> disimpan, dihitung, atau ikut diekspor.
+              </span>
+            </div>
+          )}
+
+          {jejak.length > 0 && (
             <>
               <div className="tm-mid">
                 <div className="tm-mid-item">
                   <span className="tm-mid-label">MID</span>
                   <span className="tm-mid-nilai">
-                    {midJejak}
+                    {midJejak || jejak[0].mid}
                     {jejak.length > 1 && <span className="badge badge-level1">Multi-Riwayat ({jejak.length}×)</span>}
                   </span>
                 </div>
