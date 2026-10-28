@@ -9,8 +9,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   DEFINISI_KOLOM_TM, KOLOM_EKSPOR_TM, KOLOM_TM, KUNCI_STORAGE_TRACKING, KETERANGAN_STATUS,
-  LABEL_KERANJANG, SUMUR_TRACKING, barisKeExcelTm, cocokCari, kandidatMerchant, keranjangStatus,
-  keteranganRef, riwayatMerchant, ringkasTracking, temukanMerchant,
+  LABEL_KERANJANG, SUMUR_TRACKING, barisKeExcelTm, cocokCari, kartuMerchant, keranjangStatus,
+  keteranganRef, labelStatusSumber, riwayatMerchant, ringkasTracking, temukanMerchant,
 } from './out/entry-uji.js';
 
 let gagal = 0;
@@ -101,11 +101,11 @@ asa('fallback kota dari induk saat event tidak punya kabupaten_kota', baris[2].p
 const SENSITIF = ['nomor_rekening', 'nomor_ktp', 'nomor_npwp', 'email', 'no_hp', 'no_telp', 'inputer_name', 'rekening'];
 const kunciBaris = Object.keys(baris[0]).sort();
 asa('kolom sensitif tidak pernah keluar dari fungsi', SENSITIF.filter((k) => JSON.stringify(baris).toLowerCase().includes(k.toLowerCase())), []);
-asa('bentuk baris = whitelist + penanda riwayat', kunciBaris, [
+asa('bentuk baris = whitelist + penanda riwayat + identitas induk', kunciBaris, [
   'alamat', 'branchCode', 'idxRiwayat', 'jenisPengajuan', 'jenisQr', 'jenisUsaha', 'kabupatenKota',
-  'kecamatan', 'kelurahan', 'kodePos', 'kriteria', 'lastUpdate', 'mid', 'merchantSegment',
-  'namaMerchant', 'provinsi', 'refNo', 'referralCode', 'sumberOnboarding', 'status', 'tglPengajuan',
-  'totalRiwayat',
+  'kecamatan', 'kelurahan', 'kodePos', 'kotaInduk', 'kriteria', 'kriteriaInduk', 'lastUpdate', 'mid',
+  'merchantSegment', 'namaMerchant', 'namaMerchantInduk', 'provinsi', 'provinsiInduk', 'refNo',
+  'referralCode', 'status', 'statusTerakhir', 'sumberOnboarding', 'tglPengajuan', 'totalRiwayat',
 ].sort());
 asa('daftar putih sumber = 20 kolom operasional', FIELD_TM.length, 20);
 asa('Jenis Usaha ikut terbawa (kolom 18 sumber)', baris[0].jenisUsaha, 'TELECOMMUNICATION EQUIPMENT & TELEPHONE SALES');
@@ -141,21 +141,22 @@ asa('cari tidak cocok', cocokCari(baris[0], 'surabaya tidak ada'), false);
 asa('cari kosong = semua lolos', cocokCari(baris[0], '  '), true);
 
 const riwayat = riwayatMerchant(baris, '601741069');
-asa('riwayat satu MID, terbaru dulu', riwayat.map((r) => r.tglPengajuan), ['2026-10-22 20:05:59', '2025-01-09 08:00:00']);
+asa('riwayat satu MID, urutan sumber (idx 1 dulu)', riwayat.map((r) => r.tglPengajuan), ['2026-10-22 20:05:59', '2025-01-09 08:00:00']);
 asa('riwayat MID lain tidak ikut', riwayatMerchant(baris, '601771072').length, 1);
 
 // Panel Aktivitas: kotak cari harus berakhir di MID yang benar sebelum jejaknya dibuka.
+// Semantiknya disamakan dengan searchTrackingMID() sumber: MID persis atau nama induk.
 asa('cari jejak: MID persis', temukanMerchant(baris, '601741069'), '601741069');
+asa('cari jejak: MID persis dengan spasi di tepi', temukanMerchant(baris, ' 601741069 '), '601741069');
 asa('cari jejak: nama merchant', temukanMerchant(baris, 'aisa'), '601741069');
-asa('cari jejak: awalan MID yang unik', temukanMerchant(baris, '601771'), '601771072');
-asa('cari jejak: awalan ambigu tidak dipilihkan salah satu', temukanMerchant(baris, '6017'), null);
+asa('cari jejak: awalan MID tidak dikenali sumber → null', temukanMerchant(baris, '601771'), null);
+asa('cari jejak: potongan MID → null', temukanMerchant(baris, '6017'), null);
 asa('cari jejak: kata kunci asing → null', temukanMerchant(baris, 'surabaya tidak ada'), null);
 asa('cari jejak: kueri kosong → null', temukanMerchant(baris, '   '), null);
-asa('pencarian ambigu menampilkan kandidat, bukan "tidak ada"', kandidatMerchant(baris, '6017'), ['601741069', '601771072']);
-asa('kandidat awalan unik = satu MID', kandidatMerchant(baris, '601771'), ['601771072']);
-asa('kandidat kosong untuk kueri kosong', kandidatMerchant(baris, '  '), []);
-asa('keterangan ref mengikuti istilah sumber', [keteranganRef('Reject by PTEN'), keteranganRef('Active')],
-  ['FDS NMR v5.2 Compliance Check', 'Lifecycle Onboarding Stage']);
+asa('keterangan ref: sumber peka huruf besar/kecil', [keteranganRef('Reject by PTEN'), keteranganRef('Rejected By Approver 1'), keteranganRef('rejected by approver 1'), keteranganRef('Active')],
+  ['FDS NMR v5.2 Compliance Check', 'FDS NMR v5.2 Compliance Check', 'Lifecycle Onboarding Stage', 'Lifecycle Onboarding Stage']);
+asa('badge status: Active selalu tertulis NMID Terbit', [labelStatusSumber('Active'), labelStatusSumber('active'), labelStatusSumber('Rejected By Approver 1'), labelStatusSumber('Send To Cardlink'), labelStatusSumber('')],
+  ['Active (NMID Terbit)', 'Active (NMID Terbit)', 'Rejected By Approver 1', 'Send To Cardlink', 'In Process']);
 
 asa('label keranjang dipakai bersama', [LABEL_KERANJANG.aktif, LABEL_KERANJANG.tolak], ['Active', 'Reject']);
 asa('kunci saringan = teks header tabel', DEFINISI_KOLOM_TM.map((d) => d.kunci), KOLOM_TM.map((c) => c.label));
@@ -190,7 +191,55 @@ for (const k of ['aktif', 'proses', 'tolak', 'lain']) {
 asa('penjelasan Reject mengatakan alasannya tidak ada di sumber', /tidak menyertakan kolom alasan/.test(KETERANGAN_STATUS.tolak), true);
 asa('sumber tidak punya kolom nmid — angka itu rekaan halaman sumber', FIELD_TM.includes('nmid'), false);
 
-// ── (4) Penjaga waktu: sumber lambat, jangan sampai fungsi mati diam-diam ──
+// ── (3b) Kartu MID & urutan event: sama dengan renderMIDDetail() sumber ─────
+// Terukur 2026-10-29 di sumber: kartu membaca objek INDUK (nama/kriteria/kota/provinsi/
+// status_terakhir), tabel merender event apa adanya. MID 666100032 adalah kasus nyata
+// yang membedakan keduanya: kriteria induk UMI vs event terakhir UKE, status induk Active
+// vs event terbaru ditolak, dan urutan tersimpan tidak kronologis.
+const HTML_PARITAS = `<html><body><script>
+  const trackingMIDDatabase = [
+    {
+      "mid": "666100032", "nama_merchant": "Induk Merchant QA", "kriteria": "(UMI) Usaha Mikro",
+      "kota": "Blitar", "provinsi": "Jawa Timur", "status_terakhir": "Active", "status": "Active",
+      "events": [
+        { "mid": "666100032", "nama_merchant": "Nama Event Saja", "ref_no": "REF-A",
+          "jenis_pengajuan": "Edit Merchant Data Non PTEN", "jenis_qr": "QR Sticker & API",
+          "tgl_pengajuan": "2026-07-30 18:14:01", "last_update": "2026-07-30 18:14:01",
+          "status": "Active", "kriteria_merchant": "(UMI) Usaha Mikro",
+          "kabupaten_kota": "Blitar", "provinsi": "Jawa Timur" },
+        { "mid": "666100032", "nama_merchant": "Nama Event Saja", "ref_no": "REF-B",
+          "jenis_pengajuan": "Edit Merchant Data PTEN", "jenis_qr": "QR Sticker & API",
+          "tgl_pengajuan": "2026-09-17 17:41:36", "last_update": "2026-09-17 17:41:36",
+          "status": "Rejected By Approver 1", "kriteria_merchant": "(UKE) Usaha Kecil",
+          "kabupaten_kota": "Blitar", "provinsi": "Jawa Timur" },
+        { "mid": "666100032", "nama_merchant": "Nama Event Saja", "ref_no": "REF-C",
+          "jenis_pengajuan": "Edit Merchant Data Non PTEN", "jenis_qr": "QR Sticker & API",
+          "tgl_pengajuan": "2026-06-30 14:00:00", "last_update": "2026-06-30 14:00:00",
+          "status": "Active", "kriteria_merchant": "(UMI) Usaha Mikro",
+          "kabupaten_kota": "Blitar", "provinsi": "Jawa Timur" }
+      ]
+    }
+  ];
+</script></body></html>`;
+const paritas = ratakanMerchantTm(ambilLiteralTrackingMID(HTML_PARITAS));
+const jejakParitas = riwayatMerchant(paritas, '666100032');
+const kartuParitas = kartuMerchant(jejakParitas);
+asa('urutan event = urutan tersimpan sumber, bukan tanggal', jejakParitas.map((r) => r.refNo), ['REF-A', 'REF-B', 'REF-C']);
+asa('kartu: nama dari induk', kartuParitas.nama, 'Induk Merchant QA');
+asa('kartu: kriteria dari induk, bukan event terakhir', kartuParitas.kriteria, '(UMI) Usaha Mikro');
+asa('kartu: status dari status_terakhir induk, bukan event terbaru', kartuParitas.status, 'Active (NMID Terbit)');
+asa('kartu: lokasi kota • provinsi induk', kartuParitas.lokasi, 'Blitar • Jawa Timur');
+asa('kartu: MID seperti sumber', kartuParitas.mid, '666100032');
+asa('kartu kosong → null', kartuMerchant([]), null);
+asa('kartu tanpa status_terakhir jatuh ke status event terakhir',
+  kartuMerchant(riwayatMerchant(baris, '601741069')).status, 'Active (NMID Terbit)');
+asa('cari jejak: nama induk dikenali', temukanMerchant(paritas, 'induk merchant'), '666100032');
+asa('cari jejak: nama event saja tidak dikenali (sumber memakai nama induk)', temukanMerchant(paritas, 'nama event'), null);
+asa('kartu muatan lama tanpa kolom induk tetap terisi',
+  [kartuMerchant(riwayatMerchant(baris, '601771072')).nama, kartuMerchant(riwayatMerchant(baris, '601771072')).lokasi],
+  ['UD IVAN JAYA 2', 'Tapanuli Tengah • Sumatera Utara']);
+
+
 // Terukur 2026-10-28: tiga percobaan unduhan ke 154.19.37.201 → 8,5 s; 52,5 s;
 // dan satu terpotong di 60 s (41.743 byte dari 793.373).
 const neonSync = readFileSync(fileURLToPath(new URL('../src/utils/neonSync.ts', import.meta.url)), 'utf8');

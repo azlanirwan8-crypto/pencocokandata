@@ -484,8 +484,14 @@ const teksTm = (v) => (v === null || v === undefined ? '' : String(v).trim());
 
 /**
  * Rata menjadi satu baris per riwayat pengajuan. MID dengan lebih dari satu event
- * menghasilkan lebih dari satu baris; idxRiwayat 1 = paling baru, supaya penanda
- * "2/3" di tabel terbaca seperti riwayat keberapa.
+ * menghasilkan lebih dari satu baris, urutannya PERSIS urutan event di sumber — halaman
+ * sumber merender apa adanya dan menandai event pertama sebagai "Tahap Terkini", jadi
+ * mengurutkan ulang di sini akan membuat jejak yang dibuka tidak sama dengan sumber.
+ *
+ * Identitas tingkat merchant (nama, kriteria, kota, provinsi, status_terakhir) juga
+ * disimpan per baris: kartu MID di sumber dibaca dari objek induk, bukan dari event,
+ * dan nilai induk bisa berbeda dari event (mis. kriteria induk UMI sementara event
+ * terakhir UKE).
  */
 function ratakanMerchantTm(list) {
   const baris = [];
@@ -493,15 +499,8 @@ function ratakanMerchantTm(list) {
   for (const m of asal) {
     if (!m || typeof m !== 'object') continue;
     const events = Array.isArray(m.events) && m.events.length > 0 ? m.events : [{}];
-    const urut = events
-      .map((ev, idx) => ({ ev: ev && typeof ev === 'object' ? ev : {}, idx }))
-      .sort((a, b) => {
-        const x = teksTm(a.ev.tgl_pengajuan), y = teksTm(b.ev.tgl_pengajuan);
-        if (x !== y) return x < y ? 1 : -1;
-        return a.idx - b.idx;
-      });
-    urut.forEach(function (pas, n) {
-      const ev = pas.ev;
+    events.forEach(function (evMentah, n) {
+      const ev = evMentah && typeof evMentah === 'object' ? evMentah : {};
       const barisNi = {};
       for (const k of FIELD_TM) barisNi[k] = teksTm(ev[k]);
       // Nilai identitas merchant kadang hanya ada di induk, bukan di event.
@@ -531,8 +530,13 @@ function ratakanMerchantTm(list) {
         kodePos: barisNi.kode_pos,
         jenisUsaha: barisNi.jenis_usaha,
         referralCode: barisNi.referral_code,
-        totalRiwayat: urut.length,
+        totalRiwayat: events.length,
         idxRiwayat: n + 1,
+        namaMerchantInduk: teksTm(m.nama_merchant),
+        kriteriaInduk: teksTm(m.kriteria),
+        kotaInduk: teksTm(m.kota),
+        provinsiInduk: teksTm(m.provinsi),
+        statusTerakhir: teksTm(m.status_terakhir),
       });
     });
   }

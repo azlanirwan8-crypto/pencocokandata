@@ -17,9 +17,10 @@ import {
   KUNCI_STORAGE_TRACKING,
   SUMUR_TRACKING,
   barisKeExcelTm,
-  kandidatMerchant,
+  kartuMerchant,
   keranjangStatus,
   keteranganRef,
+  labelStatusSumber,
   riwayatMerchant,
   ringkasTracking,
   temukanMerchant,
@@ -42,13 +43,6 @@ const KELAS_KERANJANG: Record<string, string> = {
   lain: 'badge badge-unmatched',
 };
 
-/** Teks badge mengikuti halaman sumber: status Active selalu tertulis "Active (NMID Terbit)". */
-const labelStatusSumber = (status: string) => {
-  const s = String(status || '').toLowerCase();
-  if (s.includes('active')) return 'Active (NMID Terbit)';
-  return status || 'In Process';
-};
-
 export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = ({
   onTrackingCountChange,
 }) => {
@@ -63,7 +57,6 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
   // Panel Aktivitas Tracking Merchant: MID yang jejaknya sedang dibuka + kata kunci input.
   const [midJejak, setMidJejak] = useState<string | null>(null);
   const [kueriJejak, setKueriJejak] = useState<string>('');
-  const [galatJejak, setGalatJejak] = useState<string>('');
   /** Kueri yang tidak punya padanan di data nyata — ditampilkan sebagai pemberitahuan, bukan kartu. */
   const [kueriKosong, setKueriKosong] = useState<string>('');
   const [memeriksaSumber, setMemeriksaSumber] = useState(false);
@@ -197,6 +190,8 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
     () => (midJejak ? riwayatMerchant(baris, midJejak) : []),
     [baris, midJejak]
   );
+  // Kartu identitas memakai objek induk — sama seperti renderMIDDetail() di sumber.
+  const kartu = useMemo(() => kartuMerchant(jejak), [jejak]);
   const rentangTahun = useMemo(() => {
     if (distribusi.length === 0) return '';
     const bersih = (label: string) => label.replace(/TAHUN\s+/i, '').replace(/\s*YTD/i, '').trim();
@@ -206,26 +201,16 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
   // Satu aturan pencarian untuk dua jalur: data yang sedang tampil, dan data yang baru
   // diambil dari sumber. Hasilnya sama supaya "tidak ketemu" tidak pernah sepihak.
   const tampilkanHasilCari = useCallback(
-    (kueri: string, daftar: BarisMerchant[]): 'ditemukan' | 'ambigu' | 'kosong' => {
+    (kueri: string, daftar: BarisMerchant[]): 'ditemukan' | 'kosong' => {
       const mid = temukanMerchant(daftar, kueri);
       if (mid) {
-        setGalatJejak('');
         setKueriKosong('');
         setMidJejak(mid);
         return 'ditemukan';
       }
-      setMidJejak(null);
-      const kandidat = kandidatMerchant(daftar, kueri);
-      if (kandidat.length > 0) {
-        setKueriKosong('');
-        setGalatJejak(
-          `"${kueri.trim()}" cocok dengan beberapa MID: ${kandidat.join(', ')}${kandidat.length >= 6 ? ', …' : ''}. Tulis MID lengkap untuk membuka jejaknya.`
-        );
-        return 'ambigu';
-      }
       // Tidak ada padanan: beri tahu apa adanya. Halaman sumber mengarang kartu di titik ini,
       // tapi data karangan (ref acak) tidak pernah bisa sama dengan sumber — jadi tidak ditampilkan.
-      setGalatJejak('');
+      setMidJejak(null);
       setKueriKosong(kueri.trim());
       return 'kosong';
     },
@@ -445,23 +430,16 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
               <Search size={13} />
               <span>Cari MID</span>
             </button>
-            {(midJejak || kueriKosong || kueriJejak || galatJejak) && (
+            {(midJejak || kueriKosong || kueriJejak) && (
               <button
                 type="button"
                 className="btn btn-outline btn-sm"
-                onClick={() => { setMidJejak(null); setKueriKosong(''); setKueriJejak(''); setGalatJejak(''); }}
+                onClick={() => { setMidJejak(null); setKueriKosong(''); setKueriJejak(''); }}
               >
                 Reset
               </button>
             )}
           </div>
-
-          {galatJejak && (
-            <div className="tm-aktivitas-galat">
-              <AlertCircle size={14} />
-              <span>{galatJejak}</span>
-            </div>
-          )}
 
           {kueriKosong && (
             <div className="tm-aktivitas-catatan">
@@ -485,33 +463,31 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
             </div>
           )}
 
-          {jejak.length > 0 && (
+          {kartu && jejak.length > 0 && (
             <>
               {/* Kartu identitas merchant — susunannya mengikuti kartu profil di halaman sumber. */}
               <div className="tm-profil">
                 <div className="tm-profil-kiri">
                   <div className="tm-profil-lencana">
-                    <span className="tm-profil-mid">MID: {midJejak || jejak[0].mid}</span>
+                    <span className="tm-profil-mid">MID: {kartu.mid}</span>
                     {jejak.length > 1 && (
                       <span className="tm-profil-multi">
                         <Flag size={10} />
                         Multi-Riwayat ({jejak.length}×)
                       </span>
                     )}
-                    {jejak[0].kriteria && <span className="tm-profil-kriteria">{jejak[0].kriteria}</span>}
+                    <span className="tm-profil-kriteria">{kartu.kriteria}</span>
                   </div>
-                  <div className="tm-profil-nama">{jejak[0].namaMerchant || 'Merchant QRIS'}</div>
+                  <div className="tm-profil-nama">{kartu.nama}</div>
                   <div className="tm-profil-lokasi">
                     <MapPin size={13} />
-                    <span>
-                      {[jejak[0].kabupatenKota, jejak[0].provinsi].filter(Boolean).join(' • ') || 'Indonesia'}
-                    </span>
+                    <span>{kartu.lokasi}</span>
                   </div>
                 </div>
                 <div className="tm-profil-kanan">
-                  <span className={`tm-profil-status tm-profil-status--${keranjangStatus(jejak[0].status)}`}>
+                  <span className={`tm-profil-status tm-profil-status--${keranjangStatus(kartu.status)}`}>
                     <i aria-hidden="true" />
-                    {labelStatusSumber(jejak[0].status)}
+                    {kartu.status}
                   </span>
                   {jejak[0].branchCode && jejak[0].branchCode !== '-' && (
                     <div className="tm-profil-metrik">
@@ -528,7 +504,9 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
                 <div className="tm-histori-judul">
                   <Clock size={14} />
                   <span>Histori Pengajuan &amp; Perubahan Siklus (Data Lake QRIS)</span>
-                  <span className="tm-histori-jumlah">{jejak.length} Pengajuan Terdata</span>
+                  <span className="tm-histori-jumlah">
+                    {jejak.length} Pengajuan Terdata{jejak.length > 1 ? ' (Multi-Riwayat)' : ''}
+                  </span>
                 </div>
                 <div className="table-container">
                   <table className="modern-table tm-histori-tabel">
@@ -545,11 +523,15 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
                     <tbody>
                       {jejak.map((r, i) => (
                         <tr key={`${r.refNo}-${r.tglPengajuan}-${i}`}>
-                          <td>{r.jenisPengajuan || '-'}</td>
-                          <td>{r.jenisQr || '-'}</td>
+                          <td>{r.jenisPengajuan || 'Pengajuan'}</td>
+                          <td>{r.jenisQr || 'QR Sticker'}</td>
                           <td className="tm-mono">{r.tglPengajuan || '-'}</td>
                           <td className="tm-mono">{r.lastUpdate || '-'}</td>
-                          <td><span className={KELAS_KERANJANG[keranjangStatus(r.status)]}>{r.status || '-'}</span></td>
+                          <td>
+                            <span className={KELAS_KERANJANG[keranjangStatus(r.status)]}>
+                              {labelStatusSumber(r.status)}
+                            </span>
+                          </td>
                           <td>
                             <div className="tm-ref">{r.refNo || '-'}</div>
                             <div className="tm-ref-ket">{keteranganRef(r.status)}</div>
@@ -569,7 +551,9 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
                 <ol className="tm-jejak-daftar">
                   {jejak.map((r, i) => {
                     const terkini = i === 0;
-                    const nada = terkini ? 'terkini' : keranjangStatus(r.status) === 'tolak' ? 'tolak' : 'lama';
+                    // Sumber mewarnai titik merah untuk Reject lebih dulu, baru biru untuk tahap terkini.
+                    const nada =
+                      keranjangStatus(r.status) === 'tolak' ? 'tolak' : terkini ? 'terkini' : 'lama';
                     return (
                       <li key={`${r.refNo}-${r.tglPengajuan}-${i}`} className={`tm-jejak-node tm-jejak-node--${nada}`}>
                         <div className="tm-jejak-kartu">

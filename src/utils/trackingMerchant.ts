@@ -37,8 +37,19 @@ export interface BarisMerchant {
   referralCode: string;
   /** Jumlah riwayat yang tersimpan untuk MID ini — dipakai penanda "2/3". */
   totalRiwayat: number;
-  /** Urutan riwayat ini dalam MID-nya, 1 = paling baru. */
+  /** Urutan riwayat ini PERSIS seperti di sumber (1 = tampil paling atas / "Tahap Terkini"). */
   idxRiwayat: number;
+  /**
+   * Identitas tingkat merchant di sumber. Kartu MID di halaman sumber dibaca dari objek
+   * induk, bukan dari event — nilainya bisa berbeda (nama, kriteria, status terakhir).
+   * Tidak ada pada muatan lama yang tersimpan sebelum kolom ini ikut disinkron.
+   */
+  namaMerchantInduk?: string;
+  kriteriaInduk?: string;
+  kotaInduk?: string;
+  provinsiInduk?: string;
+  /** `status_terakhir` induk; kosong pada muatan lama. */
+  statusTerakhir?: string;
 }
 
 /**
@@ -257,47 +268,84 @@ export function cocokCari(baris: BarisMerchant, teks: string): boolean {
   return KOLOM_TM.some((k) => k.nilai(baris).toLowerCase().includes(q));
 }
 
-/** Seluruh riwayat satu MID, terbaru dulu — dipakai panel detail. */
+/**
+ * Seluruh riwayat satu MID dengan urutan PERSIS seperti sumber (`idxRiwayat` naik), karena
+ * halaman sumber menandai baris pertama sebagai "Tahap Terkini" dan merender tabel apa
+ * adanya. Muatan lama tanpa `idxRiwayat` jatuh ke urutan tanggal terbaru dulu.
+ */
 export function riwayatMerchant(baris: readonly BarisMerchant[], mid: string): BarisMerchant[] {
   return baris
     .filter((r) => r.mid === mid)
-    .sort((a, b) => (a.tglPengajuan < b.tglPengajuan ? 1 : a.tglPengajuan > b.tglPengajuan ? -1 : 0));
+    .sort((a, b) => {
+      const x = Number(a.idxRiwayat) || 0;
+      const y = Number(b.idxRiwayat) || 0;
+      if (x !== y) return x - y;
+      return a.tglPengajuan < b.tglPengajuan ? 1 : a.tglPengajuan > b.tglPengajuan ? -1 : 0;
+    });
 }
 
+/** Nama yang dipakai sumber saat mencari: nama merchant INDUK, bukan nama di event. */
+const namaIndukMerchant = (r: BarisMerchant) => r.namaMerchantInduk || r.namaMerchant || '';
+
 /**
- * MID dari kata kunci pencarian panel Aktivitas — MID persis menang, lalu awalan MID
- * yang unik, baru nama merchant. Kata kunci yang cocok ke banyak MID sengaja TIDAK
- * dipilihkan salah satu: lebih baik bilang tidak ketemu daripada membuka jejak MID
- * yang bukan dimaksud operator.
+ * MID dari kata kunci pencarian panel Aktivitas — semantiknya sama dengan
+ * `searchTrackingMID` halaman sumber: MID persis, atau nama merchant induk yang memuat
+ * kata kunci (tanpa peduli huruf besar/kecil), dan yang pertama di urutan data menang.
+ * Sumber tidak mengenal awalan MID, jadi awalan pun tidak dipilihkan di sini.
  */
 export function temukanMerchant(baris: readonly BarisMerchant[], kueri: string): string | null {
-  const q = String(kueri || '').trim().toLowerCase();
+  const q = String(kueri || '').trim();
   if (!q) return null;
-  const persis = baris.find((r) => r.mid.toLowerCase() === q);
-  if (persis) return persis.mid;
-  const awalan = Array.from(new Set(baris.filter((r) => r.mid.toLowerCase().startsWith(q)).map((r) => r.mid)));
-  if (awalan.length === 1) return awalan[0];
-  const nama = baris.find((r) => r.namaMerchant && r.namaMerchant.toLowerCase().includes(q));
-  return nama ? nama.mid : null;
+  const ql = q.toLowerCase();
+  const kena = baris.find((r) => r.mid === q || namaIndukMerchant(r).toLowerCase().includes(ql));
+  return kena ? kena.mid : null;
 }
 
 /**
- * MID yang cocok sebagian (awalan MID atau potongan nama). Dipakai saat pencarian
- * ambigu: `temukanMerchant` sengaja mengembalikan null, tapi operator perlu tahu
- * MID mana saja yang cocok — "tidak ada" adalah jawaban yang salah di situ.
+ * Sub-keterangan di bawah Ref No. Sumber memakai `status.includes('Reject')` — peka
+ * huruf besar/kecil, jadi "rejected by ..." huruf kecil pun jatuh ke label lifecycle.
  */
-export function kandidatMerchant(baris: readonly BarisMerchant[], kueri: string, maks = 6): string[] {
-  const q = String(kueri || '').trim().toLowerCase();
-  if (!q) return [];
-  const kena = baris.filter(
-    (r) => r.mid.toLowerCase().startsWith(q) || (r.namaMerchant || '').toLowerCase().includes(q)
-  );
-  return Array.from(new Set(kena.map((r) => r.mid))).slice(0, maks);
-}
-
-/** Sub-keterangan di bawah Ref No, persis istilah halaman sumber. */
 export function keteranganRef(status: string): string {
-  return /reject/i.test(String(status || ''))
+  return String(status || '').includes('Reject')
     ? 'FDS NMR v5.2 Compliance Check'
     : 'Lifecycle Onboarding Stage';
+}
+
+/** Teks badge status, persis `getStatusBadge()` halaman sumber. */
+export function labelStatusSumber(status: unknown): string {
+  const teks = String(status ?? '');
+  if (teks.toLowerCase().includes('active')) return 'Active (NMID Terbit)';
+  return teks || 'In Process';
+}
+
+export interface KartuMerchant {
+  mid: string;
+  nama: string;
+  kriteria: string;
+  lokasi: string;
+  status: string;
+}
+
+/**
+ * Isi kartu identitas MID, dibaca seperti `renderMIDDetail()` di sumber: nama, kriteria,
+ * kota, dan provinsi dari objek INDUK; status = `status_terakhir` induk, atau status
+ * event TERAKHIR di urutan sumber, atau "Active". Muatan lama tanpa kolom induk jatuh
+ * ke nilai event baris pertama supaya kartu tetap terisi.
+ */
+export function kartuMerchant(jejak: readonly BarisMerchant[]): KartuMerchant | null {
+  if (jejak.length === 0) return null;
+  const r = jejak[0];
+  const isi = (nilai: string | undefined, cadangan: string) =>
+    nilai && nilai.trim() ? nilai : cadangan;
+  const statusTerakhir =
+    isi(r.statusTerakhir, jejak[jejak.length - 1].status) || 'Active';
+  const kota = r.kotaInduk !== undefined ? r.kotaInduk : r.kabupatenKota;
+  const provinsi = isi(r.provinsiInduk, r.provinsi) || 'Indonesia';
+  return {
+    mid: r.mid,
+    nama: isi(r.namaMerchantInduk, r.namaMerchant) || 'Merchant QRIS',
+    kriteria: isi(r.kriteriaInduk, r.kriteria) || 'Kriteria Reguler',
+    lokasi: [kota, provinsi].filter(Boolean).join(' • ') || 'Indonesia',
+    status: labelStatusSumber(statusTerakhir),
+  };
 }
