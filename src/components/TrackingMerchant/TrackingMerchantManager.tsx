@@ -412,7 +412,7 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
           </button>
         </div>
       ) : (
-        // Aktivitas satu MID — pintu masuk dari kotak cari dan pilihan cepat.
+        // Aktivitas satu MID — pintu masuk dari kotak cari.
         <div className="glass-card tm-aktivitas" ref={panelJejakRef}>
           <div className="tm-aktivitas-kepala">
             <div className="section-title">Aktivitas Tracking Merchant</div>
