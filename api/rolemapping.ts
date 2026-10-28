@@ -536,6 +536,7 @@ function ratakanMerchantTm(list) {
         kriteriaInduk: teksTm(m.kriteria),
         kotaInduk: teksTm(m.kota),
         provinsiInduk: teksTm(m.provinsi),
+        jenisQrInduk: teksTm(m.jenis_qr),
         statusTerakhir: teksTm(m.status_terakhir),
       });
     });
@@ -673,6 +674,96 @@ function ambilDistribusiSumber(html) {
   }
   return hasil;
 }
+
+/**
+ * Komposisi jenis QR per periode (2021–2026 + ALL). Angkanya literal
+ * `PERIODS_MASTER_DATA` di halaman sumber — bukan hasil hitung `trackingMIDDatabase`
+ * (262 merchant perwakilan), jadi satu-satunya cara menyamakan tampilan adalah menyalin
+ * nilainya saat sync. Yang diambil hanya angka, label, dan warna; kelas Tailwind sumber
+ * tidak ikut karena gayanya ditulis sendiri di aplikasi ini.
+ */
+const MARKER_PERIODE_QR = 'PERIODS_MASTER_DATA = ';
+const WARNA_QR_BAKU = '#64748b';
+
+const angkaTm = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const warnaTm = (v) => {
+  const teks = teksTm(v);
+  return /^#[0-9a-f]{3,8}$/i.test(teks) ? teks : WARNA_QR_BAKU;
+};
+
+function ambilLiteralPeriodeQr(html) {
+  const teks = String(html || '');
+  const mulai = teks.indexOf(MARKER_PERIODE_QR);
+  if (mulai < 0) {
+    throw new Error('Halaman sumber tidak lagi memuat komposisi jenis QR (marker PERIODS_MASTER_DATA tidak ditemukan).');
+  }
+  let buka = mulai + MARKER_PERIODE_QR.length;
+  while (buka < teks.length && /\s/.test(teks[buka])) buka++;
+  let dalam = 0, i = buka, kurung = false, lolos = false;
+  for (; i < teks.length; i++) {
+    const c = teks[i];
+    if (kurung) {
+      if (lolos) lolos = false;
+      else if (c === '\\') lolos = true;
+      else if (c === '"') kurung = false;
+      continue;
+    }
+    if (c === '"') { kurung = true; continue; }
+    if (c === '[' || c === '{') dalam++;
+    else if (c === ']' || c === '}') {
+      dalam--;
+      if (dalam === 0) { i++; break; }
+    }
+  }
+  if (dalam !== 0) throw new Error('Literal komposisi jenis QR tidak tertutup — halaman sumber berubah format.');
+  let hasil;
+  try {
+    hasil = JSON.parse(teks.slice(buka, i));
+  } catch (err) {
+    throw new Error('Literal komposisi jenis QR gagal dibaca sebagai JSON: ' + (err && err.message ? err.message : err));
+  }
+  if (!hasil || typeof hasil !== 'object' || Array.isArray(hasil)) {
+    throw new Error('Komposisi jenis QR sumber bukan objek per periode.');
+  }
+  return hasil;
+}
+
+function rapikanPeriodeQr(literal) {
+  const hasil = {};
+  for (const kunci of Object.keys(literal || {})) {
+    const p = literal[kunci];
+    if (!p || typeof p !== 'object') continue;
+    const kelompok = [];
+    const grup = p.qrGroups && typeof p.qrGroups === 'object' ? p.qrGroups : {};
+    for (const k of Object.keys(grup)) {
+      const g = grup[k];
+      if (!g || typeof g !== 'object') continue;
+      kelompok.push({
+        name: teksTm(g.name) || k,
+        rawCount: angkaTm(g.rawCount),
+        uniqueCount: angkaTm(g.uniqueCount),
+        pct: angkaTm(g.pct),
+        dupEliminated: angkaTm(g.dupEliminated),
+        desc: teksTm(g.desc),
+        color: warnaTm(g.color),
+        isApi: Boolean(g.isApi),
+      });
+    }
+    hasil[kunci] = {
+      label: teksTm(p.label) || kunci,
+      shortLabel: teksTm(p.shortLabel) || kunci,
+      totalRawEvents: angkaTm(p.totalRawEvents),
+      totalUniqueMIDs: angkaTm(p.totalUniqueMIDs),
+      duplicateEventsEliminated: angkaTm(p.duplicateEventsEliminated),
+      qrGroups: kelompok,
+    };
+  }
+  return hasil;
+}
 // <<PANAH-AKHIR>>
 
 const KUNCI_TM = 'tracking_merchant_data';
@@ -692,7 +783,7 @@ const UNDUH_ABORT_MS = 50_000;
 let memoar: { pada: number; muatan: unknown } | null = null;
 
 /** GET biasa tanpa kredensial, tanpa cookie, tanpa header apa pun: murni anonim. */
-async function unduhSumber(): Promise<{ baris: any[]; ringkasan: any[]; distribusi: any[] }> {
+async function unduhSumber(): Promise<{ baris: any[]; ringkasan: any[]; distribusi: any[]; periodeQr: any }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), UNDUH_ABORT_MS);
   let html = '';
@@ -715,12 +806,13 @@ async function unduhSumber(): Promise<{ baris: any[]; ringkasan: any[]; distribu
     baris: ratakanMerchantTm(ambilLiteralTrackingMID(html)),
     ringkasan: ambilRingkasanSumber(html),
     distribusi: ambilDistribusiSumber(html),
+    periodeQr: rapikanPeriodeQr(ambilLiteralPeriodeQr(html)),
   };
 }
 
-async function bangunMuatan(): Promise<{ diambilPada: string; sumber: string; baris: any[]; ringkasan: any[]; distribusi: any[] }> {
-  const { baris, ringkasan, distribusi } = await unduhSumber();
-  return { diambilPada: new Date().toISOString(), sumber: SUMUR_TM, baris, ringkasan, distribusi };
+async function bangunMuatan(): Promise<{ diambilPada: string; sumber: string; baris: any[]; ringkasan: any[]; distribusi: any[]; periodeQr: any }> {
+  const { baris, ringkasan, distribusi, periodeQr } = await unduhSumber();
+  return { diambilPada: new Date().toISOString(), sumber: SUMUR_TM, baris, ringkasan, distribusi, periodeQr };
 }
 
 /**
@@ -759,7 +851,7 @@ async function tanganiTrackingMerchant(req: any, res: any) {
                          : { ok: true, configured: true, data: null });
       }
 
-      let muatan: { diambilPada: string; sumber: string; baris: any[]; ringkasan?: any[]; distribusi?: any[] };
+      let muatan: { diambilPada: string; sumber: string; baris: any[]; ringkasan?: any[]; distribusi?: any[]; periodeQr?: any };
       if (memoar && Date.now() - memoar.pada < USIA_MAKSIMAL_MS) {
         muatan = memoar.muatan as any;
       } else {

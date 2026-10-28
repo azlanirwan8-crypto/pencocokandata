@@ -9,8 +9,10 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   DEFINISI_KOLOM_TM, KOLOM_EKSPOR_TM, KOLOM_TM, KUNCI_STORAGE_TRACKING, KETERANGAN_STATUS,
-  LABEL_KERANJANG, SUMUR_TRACKING, barisKeExcelTm, cocokCari, kartuMerchant, keranjangStatus,
-  keteranganRef, labelStatusSumber, riwayatMerchant, ringkasTracking, temukanMerchant,
+  LABEL_KERANJANG, SUMUR_TRACKING, PERIODE_QR_DEFAULT, SARINGAN_REKAP_KOSONG, barisKeExcelTm, cocokCari,
+  daftarMerchantTerverifikasi, daftarPeriodeQr, formatAngka, halamanDaftar, kartuMerchant,
+  keranjangStatus, keteranganRef, labelStatusSumber, periodeQrAktif, ringkasAngkaBesar, riwayatMerchant,
+  ringkasTracking, saringMerchantTerverifikasi, segmenDonat, temukanMerchant,
 } from './out/entry-uji.js';
 
 let gagal = 0;
@@ -31,8 +33,9 @@ asa('penanda blok ekstraksi ada di api/rolemapping.ts', iAwal >= 0 && iAkhir > i
 const potongan = sumberApi.slice(iAwal + AWAL.length, iAkhir);
 const {
   FIELD_TM, ambilLiteralTrackingMID, ratakanMerchantTm, ambilRingkasanSumber, ambilDistribusiSumber,
+  ambilLiteralPeriodeQr, rapikanPeriodeQr,
 } = new Function(
-  `${potongan}\nreturn { FIELD_TM, ambilLiteralTrackingMID, ratakanMerchantTm, ambilRingkasanSumber, ambilDistribusiSumber };`
+  `${potongan}\nreturn { FIELD_TM, ambilLiteralTrackingMID, ratakanMerchantTm, ambilRingkasanSumber, ambilDistribusiSumber, ambilLiteralPeriodeQr, rapikanPeriodeQr };`
 )();
 
 // Sumbernya tidak pernah mengirim JSON endpoint — hanya HTML dengan literal ini.
@@ -72,6 +75,7 @@ const HTML_UJI = `<html><body>
     {
       "mid": "601771072", "nama_merchant": "UD IVAN JAYA 2", "kriteria": "(UME) Usaha Menengah",
       "kota": "Tapanuli Tengah", "provinsi": "Sumatera Utara", "rekening": "2120******",
+      "jenis_qr": "QR API",
       "events": [
         {
           "mid": "601771072", "nama_merchant": "UD IVAN JAYA 2", "ref_no": "REF2629501349216",
@@ -102,10 +106,11 @@ const SENSITIF = ['nomor_rekening', 'nomor_ktp', 'nomor_npwp', 'email', 'no_hp',
 const kunciBaris = Object.keys(baris[0]).sort();
 asa('kolom sensitif tidak pernah keluar dari fungsi', SENSITIF.filter((k) => JSON.stringify(baris).toLowerCase().includes(k.toLowerCase())), []);
 asa('bentuk baris = whitelist + penanda riwayat + identitas induk', kunciBaris, [
-  'alamat', 'branchCode', 'idxRiwayat', 'jenisPengajuan', 'jenisQr', 'jenisUsaha', 'kabupatenKota',
-  'kecamatan', 'kelurahan', 'kodePos', 'kotaInduk', 'kriteria', 'kriteriaInduk', 'lastUpdate', 'mid',
-  'merchantSegment', 'namaMerchant', 'namaMerchantInduk', 'provinsi', 'provinsiInduk', 'refNo',
-  'referralCode', 'status', 'statusTerakhir', 'sumberOnboarding', 'tglPengajuan', 'totalRiwayat',
+  'alamat', 'branchCode', 'idxRiwayat', 'jenisPengajuan', 'jenisQr', 'jenisQrInduk', 'jenisUsaha',
+  'kabupatenKota', 'kecamatan', 'kelurahan', 'kodePos', 'kotaInduk', 'kriteria', 'kriteriaInduk',
+  'lastUpdate', 'mid', 'merchantSegment', 'namaMerchant', 'namaMerchantInduk', 'provinsi',
+  'provinsiInduk', 'refNo', 'referralCode', 'status', 'statusTerakhir', 'sumberOnboarding',
+  'tglPengajuan', 'totalRiwayat',
 ].sort());
 asa('daftar putih sumber = 20 kolom operasional', FIELD_TM.length, 20);
 asa('Jenis Usaha ikut terbawa (kolom 18 sumber)', baris[0].jenisUsaha, 'TELECOMMUNICATION EQUIPMENT & TELEPHONE SALES');
@@ -380,6 +385,122 @@ asa('kartu tahunan: hanya 2026 YTD yang unggulan',
 asa('kartu tahunan: bagian reject sesudahnya tidak ikut terbaca',
   tahunan[1].kaki.map((k) => k.nilai), ['530.550 (74%)', '132.744 (18%)', '533.204 (74%)']);
 asa('kartu tahunan: halaman tanpa bagian distribusi → kosong', ambilDistribusiSumber('<html>tanpa kartu</html>'), []);
+
+// ── (8) Komposisi jenis QR: literal PERIODS_MASTER_DATA ────────────────────
+// Angka komposisi BUKAN hasil hitung `trackingMIDDatabase` (262 merchant perwakilan),
+// melainkan literal terpisah di halaman sumber. Fixture memakai bentuk asli 2026-10-29:
+// `qrGroups` adalah OBJEK ber-key nama grup, bukan array.
+const HTML_PERIODE = `<html><body><script>
+  const PERIODS_MASTER_DATA = {
+    "2025": {
+      "label": "Tahun 2025", "shortLabel": "2025",
+      "totalRawEvents": 503893, "totalUniqueMIDs": 371186, "duplicateEventsEliminated": 132707,
+      "qrGroups": {
+        "QR Sticker": { "name": "QR Sticker", "rawCount": 470000, "uniqueCount": 350000,
+          "pct": 94.29, "dupEliminated": 120000, "desc": "Statis (Meja / Kasir UMKM)",
+          "color": "#0284c7", "isApi": false }
+      }
+    },
+    "2026": {
+      "label": "Tahun 2026", "shortLabel": "2026",
+      "totalRawEvents": 720663, "totalUniqueMIDs": 540939, "duplicateEventsEliminated": 179724,
+      "qrGroups": {
+        "QR Sticker": { "name": "QR Sticker", "rawCount": 661452, "uniqueCount": 504924,
+          "pct": 93.34, "dupEliminated": 156528, "desc": "Statis (Meja / Kasir UMKM)",
+          "color": "#0284c7", "isApi": false },
+        "QR API": { "name": "QR API", "rawCount": 196, "uniqueCount": 12178,
+          "pct": 2.25, "dupEliminated": 1, "desc": "E-Commerce & Payment Gateway API",
+          "color": "bg-sky-50", "isApi": true }
+      }
+    }
+  };
+  const sesudah = { contoh: ']}' };
+</script></body></html>`;
+
+const literalPeriode = ambilLiteralPeriodeQr(HTML_PERIODE);
+asa('komposisi: periode terbaca dari literal sumber', Object.keys(literalPeriode), ['2025', '2026']);
+const periodeUji = rapikanPeriodeQr(literalPeriode);
+asa('komposisi: label & total periode disalin apa adanya',
+  [periodeUji['2026'].label, periodeUji['2026'].shortLabel, periodeUji['2026'].totalRawEvents,
+    periodeUji['2026'].totalUniqueMIDs, periodeUji['2026'].duplicateEventsEliminated],
+  ['Tahun 2026', '2026', 720663, 540939, 179724]);
+asa('komposisi: urutan grup = urutan sumber', periodeUji['2026'].qrGroups.map((g) => g.name), ['QR Sticker', 'QR API']);
+asa('komposisi: isi grup seperti sumber',
+  periodeUji['2026'].qrGroups[0],
+  { name: 'QR Sticker', rawCount: 661452, uniqueCount: 504924, pct: 93.34, dupEliminated: 156528,
+    desc: 'Statis (Meja / Kasir UMKM)', color: '#0284c7', isApi: false });
+asa('komposisi: warna non-hex sumber diganti warna baku', periodeUji['2026'].qrGroups[1].color, '#64748b');
+asa('komposisi: penanda API ikut tersalin', periodeUji['2026'].qrGroups[1].isApi, true);
+
+let salahPeriode = '';
+try { ambilLiteralPeriodeQr('<html>tanpa komposisi</html>'); } catch (e) { salahPeriode = e.message; }
+asa('komposisi: marker hilang → pesan yang menjelaskan', /tidak lagi memuat komposisi/i.test(salahPeriode), true);
+asa('sync ikut membawa komposisi QR', /periodeQr: rapikanPeriodeQr\(ambilLiteralPeriodeQr\(html\)\)/.test(sumberApi), true);
+
+// Pemilihan periode di layar
+asa('komposisi: default halaman sumber = 2026', PERIODE_QR_DEFAULT, '2026');
+asa('komposisi: daftar periode mengikuti literal', daftarPeriodeQr(periodeUji), ['2025', '2026']);
+asa('komposisi: periode pilihan dipakai', periodeQrAktif(periodeUji, '2025').label, 'Tahun 2025');
+asa('komposisi: kunci tak dikenal jatuh ke 2026', periodeQrAktif(periodeUji, '2019').label, 'Tahun 2026');
+asa('komposisi: tanpa 2026 jatuh ke periode pertama', periodeQrAktif({ '2025': periodeUji['2025'] }, '2019').label, 'Tahun 2025');
+asa('komposisi: muatan lama tanpa komposisi → null', [periodeQrAktif(undefined, '2026'), daftarPeriodeQr(undefined)], [null, []]);
+
+// Angka & donat
+asa('angka ribuan memakai gaya Indonesia', formatAngka(540939), '540.939');
+asa('angka donat diringkas seperti sumber',
+  [ringkasAngkaBesar(540939), ringkasAngkaBesar(4655815), ringkasAngkaBesar(0)], ['540,9k', '4,66M', '0,0k']);
+const cincin = segmenDonat([
+  { name: 'A', color: '#111111', rawCount: 1, uniqueCount: 1, pct: 25, dupEliminated: 0, desc: '', isApi: false },
+  { name: 'B', color: '#222222', rawCount: 3, uniqueCount: 3, pct: 75, dupEliminated: 0, desc: '', isApi: false },
+], 4);
+asa('donat: potongan & offset mengikuti pangsa MID unik',
+  cincin.map((s) => [s.name, s.color, s.dasharray, s.dashoffset]),
+  [['A', '#111111', '62.832 188.496', '0.000'], ['B', '#222222', '188.496 62.832', '-62.832']]);
+asa('donat: total nol tidak menghasilkan NaN',
+  segmenDonat([{ name: 'A', color: '#111111', rawCount: 0, uniqueCount: 0, pct: 0, dupEliminated: 0, desc: '', isApi: false }], 0)[0].dasharray,
+  '0.000 251.327');
+
+// ── (9) Daftar merchant terverifikasi: satu baris per MID ──────────────────
+const daftarMid = daftarMerchantTerverifikasi(baris);
+asa('daftar MID: satu baris per MID unik, urutan sumber', daftarMid.map((m) => m.mid), ['601741069', '601771072']);
+asa('daftar MID: identitas induk; jenis QR induk dipakai, event jadi cadangan',
+  [daftarMid[0].nama, daftarMid[0].jenisQr, daftarMid[1].jenisQr], ['AISA PONSEL', 'QR Sticker', 'QR API']);
+asa('daftar MID: jumlah log & update event terakhir di urutan sumber',
+  [daftarMid[0].jumlahRiwayat, daftarMid[0].lastUpdate], [2, '2025-02-01 09:30:00']);
+
+const cariRekap = (saringan) =>
+  saringMerchantTerverifikasi(daftarMid, { ...SARINGAN_REKAP_KOSONG, ...saringan }).map((m) => m.mid);
+asa('saringan rekap: pencarian MID', cariRekap({ kueri: '601771' }), ['601771072']);
+asa('saringan rekap: pencarian nama & kota',
+  [cariRekap({ kueri: 'ivan' }), cariRekap({ kueri: 'tapanuli' })], [['601771072'], ['601771072']]);
+asa('saringan rekap: nomor rekening tidak dicari (dipotong parser)', cariRekap({ kueri: '2120' }), []);
+asa('saringan rekap: grup QR API / Non-API',
+  [cariRekap({ jenisQr: 'GROUP_API' }), cariRekap({ jenisQr: 'GROUP_NON_API' })],
+  [['601771072'], ['601741069']]);
+asa('saringan rekap: jenis QR persis', cariRekap({ jenisQr: 'QR Sticker' }), ['601741069']);
+asa('saringan rekap: multi-log vs satu log',
+  [cariRekap({ duplikasi: 'multi' }), cariRekap({ duplikasi: 'single' })],
+  [['601741069'], ['601771072']]);
+
+const banyak = Array.from({ length: 45 }, (_, i) => i + 1);
+const hal3 = halamanDaftar(banyak, 3, 20);
+asa('halaman: potongan terakhir 41–45 dari 45', [hal3.isi.length, hal3.mulai, hal3.akhir, hal3.totalHalaman], [5, 41, 45, 3]);
+asa('halaman: nomor di luar rentang dijepit',
+  [halamanDaftar(banyak, 9, 20).halaman, halamanDaftar(banyak, 0, 20).halaman], [3, 1]);
+const halKosong = halamanDaftar([], 2, 20);
+asa('halaman: daftar kosong tidak NaN',
+  [halKosong.isi.length, halKosong.mulai, halKosong.akhir, halKosong.totalHalaman, halKosong.total],
+  [0, 0, 0, 1, 0]);
+
+// Urutan panel & ukuran halaman di komponen
+const komponenTm = readFileSync(
+  fileURLToPath(new URL('../src/components/TrackingMerchant/TrackingMerchantManager.tsx', import.meta.url)), 'utf8');
+asa('komponen: 20 baris per halaman seperti sumber', /UKURAN_HALAMAN_REKAP = 20/.test(komponenTm), true);
+asa('komponen: Aktivitas dirender sebelum Kinerja tahunan',
+  komponenTm.indexOf('glass-card tm-aktivitas') >= 0 &&
+    komponenTm.indexOf('glass-card tm-aktivitas') < komponenTm.indexOf('glass-card tm-tahunan'), true);
+asa('komponen: komposisi kosong diberi pemberitahuan, bukan angka karangan',
+  [komponenTm.includes('tm-qr-nihil'), komponenTm.includes('totalUniqueMIDs:')], [true, false]);
 
 console.log(gagal === 0 ? 'SEMUA LULUS' : `${gagal} UJIAN GAGAL`);
 process.exit(gagal === 0 ? 0 : 1);

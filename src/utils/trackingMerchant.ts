@@ -48,6 +48,8 @@ export interface BarisMerchant {
   kriteriaInduk?: string;
   kotaInduk?: string;
   provinsiInduk?: string;
+  /** `jenis_qr` induk — dasar saringan daftar merchant terverifikasi di sumber. */
+  jenisQrInduk?: string;
   /** `status_terakhir` induk; kosong pada muatan lama. */
   statusTerakhir?: string;
 }
@@ -97,6 +99,32 @@ export interface KartuTahun {
   kaki: KartuTahunKaki[];
 }
 
+/**
+ * Satu kelompok jenis QR pada komposisi per periode. Angkanya literal
+ * `PERIODS_MASTER_DATA` di halaman sumber (jumlah MID di seluruh data lake), bukan hasil
+ * hitung 262 merchant perwakilan — karena itu nilainya disalin saat sync, tidak dihitung.
+ */
+export interface KelompokQr {
+  name: string;
+  rawCount: number;
+  uniqueCount: number;
+  pct: number;
+  dupEliminated: number;
+  desc: string;
+  /** Warna titik/segmen di sumber, sudah divalidasi berbentuk hex oleh parser. */
+  color: string;
+  isApi: boolean;
+}
+
+export interface PeriodeQr {
+  label: string;
+  shortLabel: string;
+  totalRawEvents: number;
+  totalUniqueMIDs: number;
+  duplicateEventsEliminated: number;
+  qrGroups: KelompokQr[];
+}
+
 export interface MuatanTracking {
   diambilPada: string;
   sumber: string;
@@ -104,6 +132,8 @@ export interface MuatanTracking {
   /** Kosong/tidak ada pada muatan lama yang tersimpan sebelum kartu ini ikut disinkron. */
   ringkasan?: KartuRingkasan[];
   distribusi?: KartuTahun[];
+  /** Kosong/tidak ada pada muatan lama sebelum komposisi QR ikut disinkron. */
+  periodeQr?: Record<string, PeriodeQr>;
 }
 
 export const KUNCI_STORAGE_TRACKING = 'tracking_merchant_data';
@@ -347,5 +377,182 @@ export function kartuMerchant(jejak: readonly BarisMerchant[]): KartuMerchant | 
     kriteria: isi(r.kriteriaInduk, r.kriteria) || 'Kriteria Reguler',
     lokasi: [kota, provinsi].filter(Boolean).join(' • ') || 'Indonesia',
     status: labelStatusSumber(statusTerakhir),
+  };
+}
+
+// ─── Komposisi jenis QR (literal PERIODS_MASTER_DATA) ───────────────────────
+// Angka-angka di bawah adalah isi data lake seluruh nasional (jutaan MID) yang
+// ditulis langsung di halaman sumber, BUKAN hasil hitung `baris` (262 merchant
+// perwakilan). Jangan menurunkannya dari `baris`: hasilnya akan beda dari sumber.
+
+/** Periode yang dipilih halaman sumber saat dibuka (tombol "2026"). */
+export const PERIODE_QR_DEFAULT = '2026';
+
+export function daftarPeriodeQr(periode: Record<string, PeriodeQr> | undefined): string[] {
+  return Object.keys(periode || {});
+}
+
+/** Periode terpilih; jatuh ke 2026 lalu ke periode pertama bila kuncinya tidak ada. */
+export function periodeQrAktif(
+  periode: Record<string, PeriodeQr> | undefined,
+  kunci: string
+): PeriodeQr | null {
+  const peta = periode || {};
+  if (peta[kunci]) return peta[kunci];
+  if (peta[PERIODE_QR_DEFAULT]) return peta[PERIODE_QR_DEFAULT];
+  const pertama = Object.keys(peta)[0];
+  return pertama ? peta[pertama] : null;
+}
+
+export function formatAngka(nilai: number): string {
+  return (Number(nilai) || 0).toLocaleString('id-ID');
+}
+
+/** Angka tengah donat: 540.939 → "540,9k"; 4.655.815 → "4,66M" (gaya sumber). */
+export function ringkasAngkaBesar(nilai: number): string {
+  const n = Number(nilai) || 0;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2).replace('.', ',')}M`;
+  return `${(n / 1_000).toFixed(1).replace('.', ',')}k`;
+}
+
+export interface SegmenDonat {
+  name: string;
+  color: string;
+  /** Nilai `stroke-dasharray` dan `stroke-dashoffset` untuk SVG 120×120, r = 40. */
+  dasharray: string;
+  dashoffset: string;
+}
+
+/** Potongan cincin donat, urut seperti di sumber. */
+export function segmenDonat(
+  kelompok: readonly KelompokQr[],
+  total: number,
+  radius = 40
+): SegmenDonat[] {
+  const keliling = 2 * Math.PI * radius;
+  const hasil: SegmenDonat[] = [];
+  let akumulasi = 0;
+  for (const g of kelompok) {
+    const porsi = total > 0 ? g.uniqueCount / total : 0;
+    const panjang = porsi * keliling;
+    hasil.push({
+      name: g.name,
+      color: g.color,
+      dasharray: `${panjang.toFixed(3)} ${(keliling - panjang).toFixed(3)}`,
+      dashoffset: (-akumulasi).toFixed(3),
+    });
+    akumulasi += panjang;
+  }
+  return hasil;
+}
+
+// ─── Daftar merchant terverifikasi (satu baris per MID unik) ────────────────
+
+export interface MerchantTerverifikasi {
+  mid: string;
+  nama: string;
+  kriteria: string;
+  kota: string;
+  provinsi: string;
+  jenisQr: string;
+  jumlahRiwayat: number;
+  statusTerakhir: string;
+  /** `last_update` event TERAKHIR di urutan sumber — sama dengan kolom "Update Terakhir" sumber. */
+  lastUpdate: string;
+}
+
+/**
+ * Satu baris per MID. Identitas dibaca dari objek induk (seperti tabel sumber) dan
+ * `jenisQr` dari `jenis_qr` induk; muatan lama tanpa kolom induk jatuh ke event pertama.
+ */
+export function daftarMerchantTerverifikasi(baris: readonly BarisMerchant[]): MerchantTerverifikasi[] {
+  const urut: string[] = [];
+  const peta = new Map<string, MerchantTerverifikasi>();
+  for (const r of baris) {
+    if (!r.mid) continue;
+    const ada = peta.get(r.mid);
+    if (!ada) {
+      urut.push(r.mid);
+      peta.set(r.mid, {
+        mid: r.mid,
+        nama: r.namaMerchantInduk || r.namaMerchant,
+        kriteria: r.kriteriaInduk || r.kriteria,
+        kota: r.kotaInduk || r.kabupatenKota,
+        provinsi: r.provinsiInduk || r.provinsi,
+        jenisQr: r.jenisQrInduk || r.jenisQr,
+        jumlahRiwayat: Number(r.totalRiwayat) || 1,
+        statusTerakhir: r.statusTerakhir || r.status,
+        lastUpdate: r.lastUpdate,
+      });
+      continue;
+    }
+    if (r.lastUpdate) ada.lastUpdate = r.lastUpdate;
+  }
+  return urut.map((mid) => peta.get(mid) as MerchantTerverifikasi);
+}
+
+export interface SaringanRekap {
+  kueri: string;
+  /** '' | 'GROUP_API' | 'GROUP_NON_API' | nama jenis QR persis. */
+  jenisQr: string;
+  /** '' | 'multi' (lebih dari satu log) | 'single'. */
+  duplikasi: '' | 'multi' | 'single';
+}
+
+export const SARINGAN_REKAP_KOSONG: SaringanRekap = { kueri: '', jenisQr: '', duplikasi: '' };
+
+/**
+ * Saringan daftar merchant mengikuti `filterRekapMerchantTable()` di sumber. Pencarian
+ * di sumber juga menyentuh nomor rekening; kolom itu sengaja tidak ada di aplikasi ini
+ * (dipotong parser), jadi yang dicari hanya MID, nama, dan kota.
+ */
+export function saringMerchantTerverifikasi(
+  list: readonly MerchantTerverifikasi[],
+  saringan: SaringanRekap
+): MerchantTerverifikasi[] {
+  const q = String(saringan.kueri || '').trim().toLowerCase();
+  const jenis = String(saringan.jenisQr || '');
+  return list.filter((m) => {
+    const jq = String(m.jenisQr || '').toLowerCase();
+    if (jenis === 'GROUP_NON_API' && jq.includes('api')) return false;
+    if (jenis === 'GROUP_API' && !jq.includes('api')) return false;
+    if (jenis && jenis !== 'GROUP_API' && jenis !== 'GROUP_NON_API' && m.jenisQr !== jenis) return false;
+    if (saringan.duplikasi === 'multi' && m.jumlahRiwayat <= 1) return false;
+    if (saringan.duplikasi === 'single' && m.jumlahRiwayat > 1) return false;
+    if (q) {
+      const kena =
+        m.mid.toLowerCase().includes(q) ||
+        m.nama.toLowerCase().includes(q) ||
+        m.kota.toLowerCase().includes(q);
+      if (!kena) return false;
+    }
+    return true;
+  });
+}
+
+export interface Halaman<T> {
+  isi: T[];
+  halaman: number;
+  totalHalaman: number;
+  /** Nomor baris pertama & terakhir yang tampil (1-based), 0 bila kosong. */
+  mulai: number;
+  akhir: number;
+  total: number;
+}
+
+export function halamanDaftar<T>(list: readonly T[], halaman: number, ukuran: number): Halaman<T> {
+  const total = list.length;
+  const perHalaman = Math.max(1, Math.floor(ukuran) || 1);
+  const totalHalaman = Math.max(1, Math.ceil(total / perHalaman));
+  const aktif = Math.min(Math.max(1, Math.floor(halaman) || 1), totalHalaman);
+  const mulai = (aktif - 1) * perHalaman;
+  const isi = list.slice(mulai, mulai + perHalaman);
+  return {
+    isi,
+    halaman: aktif,
+    totalHalaman,
+    mulai: total === 0 ? 0 : mulai + 1,
+    akhir: total === 0 ? 0 : mulai + isi.length,
+    total,
   };
 }
