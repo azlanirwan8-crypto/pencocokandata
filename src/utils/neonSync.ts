@@ -974,13 +974,18 @@ export function saveRoleMappingToNeon(rows: any[]): Promise<boolean> {
  * Tracking Merchant. Data ini bukan milik aplikasi: sumbernya halaman tracking di
  * 154.19.37.201, jadi cloud hanya menyimpan hasil sync terakhir supaya semua pengguna
  * membuka menu ini dengan angka yang sama. Tidak ada jalur tulis dari aplikasi ke sumber.
+ *
+ * Rutenya `?tm=1` di fungsi Role Mapping, bukan fungsi sendiri: Vercel Hobby hanya
+ * mengizinkan 12 fungsi per deployment dan api/ sudah berisi 12 sebelum menu ini ada.
  */
+export const JALUR_TRACKING_MERCHANT = '/api/rolemapping?tm=1';
+
 export function loadTrackingMerchantFromNeon(): Promise<MuatanTracking | null> {
-  return loadKeyFromNeon<MuatanTracking>('/api/tracking-merchant');
+  return loadKeyFromNeon<MuatanTracking>(JALUR_TRACKING_MERCHANT);
 }
 
 export function saveTrackingMerchantToNeon(muatan: MuatanTracking): Promise<boolean> {
-  return saveKeyToNeon('/api/tracking-merchant', muatan);
+  return saveKeyToNeon(JALUR_TRACKING_MERCHANT, muatan);
 }
 
 export interface HasilSyncTracking {
@@ -992,13 +997,13 @@ export interface HasilSyncTracking {
 
 /**
  * Tarik ulang dari sumber lewat fungsi serverless. Timeout klien lebih panjang dari
- * durasi maksimum fungsi (60 s di api/tracking-merchant.ts) supaya yang dilaporkan ke
+ * durasi maksimum fungsi (60 s di api/rolemapping.ts) supaya yang dilaporkan ke
  * operator adalah kegagalan sebenarnya, bukan abort kita sendiri. Retri 0: satu
  * percobaan sudah bisa makan 50 detik, mengulanginya hanya membekukan tombol.
  */
 export async function syncTrackingMerchantDariSumber(): Promise<HasilSyncTracking> {
   try {
-    const res = await fetchWithRetry('/api/tracking-merchant?ambil=1', { method: 'GET' }, 75_000, 0);
+    const res = await fetchWithRetry(`${JALUR_TRACKING_MERCHANT}&ambil=1`, { method: 'GET' }, 75_000, 0);
     const teks = await res.text();
     let json: any = null;
     try {
@@ -1011,7 +1016,7 @@ export async function syncTrackingMerchantDariSumber(): Promise<HasilSyncTrackin
         muatan: null,
         tersimpanDiCloud: false,
         pesan: halamanHtml
-          ? 'Rute /api/tracking-merchant belum terpasang di server — yang dibalas adalah halaman aplikasi (HTML). Deploy dulu, lalu Sync lagi.'
+          ? 'Rute sync Tracking Merchant belum terpasang di server — yang dibalas adalah halaman aplikasi (HTML). Deploy dulu, lalu Sync lagi.'
           : `Balasan server bukan JSON yang sah (HTTP ${res.status}).`,
       };
     }

@@ -370,6 +370,10 @@ export async function hapusAppStore(r: Rest, key: string): Promise<void> {
  * Bicara ke Supabase lewat PostgREST + publishable key: tanpa kata sandi basis data.
  */
 export default async function handler(req: any, res: any) {
+  // Vercel Hobby membatasi api/ ke 12 fungsi per deploy. Rute Tracking Merchant
+  // menumpang di sini (?tm=1) karena berkas terpisah akan jadi fungsi ke-13 dan
+  // menggagalkan seluruh deployment.
+  if (String(req.query?.tm || '') === '1') return tanganiTrackingMerchant(req, res);
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,DELETE,POST,PUT');
@@ -418,5 +422,240 @@ export default async function handler(req: any, res: any) {
   } catch (error: any) {
     console.error('Supabase API Error (RoleMapping):', error);
     return res.status(500).json({ ok: false, configured: true, error: pesanRest(error) });
+  }
+}
+
+// ─── PENGAMBILAN DATA TRACKING MERCHANT ──────────────────────────────────────
+// Blok di antara panah di bawah diuji APA ADANYA oleh tests/uji-tracking-merchant.mjs:
+// berkas ini dibaca, potongannya diambil, lalu dijalankan di Node. Karena itu blok ini
+// ditulis tanpa anotasi tipe — TypeScript menerima itu, Node juga.
+// <<PANAH-AWAL>>
+const MARKER_TM = 'trackingMIDDatabase = ';
+
+/**
+ * Whitelist kolom: 20 dari 27 kolom data yang ditampilkan sumber. Sengaja daftar putih,
+ * bukan daftar hitam — yang sengaja TIDAK diambil adalah inputer_name, nomor_rekening,
+ * nomor_ktp, nomor_npwp, email, no_hp, no_telp, dan tidak ada satu pun yang boleh
+ * melewati fungsi ini.
+ */
+const FIELD_TM = [
+  'mid', 'nama_merchant', 'kriteria_merchant', 'jenis_pengajuan', 'jenis_qr', 'tgl_pengajuan',
+  'last_update', 'status', 'ref_no', 'source_onboarding', 'merchant_segment', 'branch_code',
+  'alamat', 'provinsi', 'kabupaten_kota', 'kecamatan', 'kelurahan', 'kode_pos',
+  'jenis_usaha', 'referral_code',
+];
+
+/** Ambil literal `trackingMIDDatabase = [ ... ]` dari HTML — sumbernya bukan JSON endpoint. */
+function ambilLiteralTrackingMID(html) {
+  const teks = String(html || '');
+  const mulai = teks.indexOf(MARKER_TM);
+  if (mulai < 0) {
+    throw new Error('Halaman sumber tidak lagi memuat data Tracking Merchant (marker tidak ditemukan).');
+  }
+  const buka = mulai + MARKER_TM.length;
+  let dalam = 0, i = buka, kurung = false, lolos = false;
+  for (; i < teks.length; i++) {
+    const c = teks[i];
+    if (kurung) {
+      if (lolos) lolos = false;
+      else if (c === '\\') lolos = true;
+      else if (c === '"') kurung = false;
+      continue;
+    }
+    if (c === '"') { kurung = true; continue; }
+    if (c === '[' || c === '{') dalam++;
+    else if (c === ']' || c === '}') {
+      dalam--;
+      if (dalam === 0) { i++; break; }
+    }
+  }
+  if (dalam !== 0) throw new Error('Literal data Tracking Merchant tidak tertutup — halaman sumber berubah format.');
+  let list;
+  try {
+    list = JSON.parse(teks.slice(buka, i));
+  } catch (err) {
+    throw new Error('Literal data Tracking Merchant gagal dibaca sebagai JSON: ' + (err && err.message ? err.message : err));
+  }
+  if (!Array.isArray(list)) throw new Error('Data Tracking Merchant sumber bukan daftar.');
+  return list;
+}
+
+const teksTm = (v) => (v === null || v === undefined ? '' : String(v).trim());
+
+/**
+ * Rata menjadi satu baris per riwayat pengajuan. MID dengan lebih dari satu event
+ * menghasilkan lebih dari satu baris; idxRiwayat 1 = paling baru, supaya penanda
+ * "2/3" di tabel terbaca seperti riwayat keberapa.
+ */
+function ratakanMerchantTm(list) {
+  const baris = [];
+  const asal = Array.isArray(list) ? list : [];
+  for (const m of asal) {
+    if (!m || typeof m !== 'object') continue;
+    const events = Array.isArray(m.events) && m.events.length > 0 ? m.events : [{}];
+    const urut = events
+      .map((ev, idx) => ({ ev: ev && typeof ev === 'object' ? ev : {}, idx }))
+      .sort((a, b) => {
+        const x = teksTm(a.ev.tgl_pengajuan), y = teksTm(b.ev.tgl_pengajuan);
+        if (x !== y) return x < y ? 1 : -1;
+        return a.idx - b.idx;
+      });
+    urut.forEach(function (pas, n) {
+      const ev = pas.ev;
+      const barisNi = {};
+      for (const k of FIELD_TM) barisNi[k] = teksTm(ev[k]);
+      // Nilai identitas merchant kadang hanya ada di induk, bukan di event.
+      if (!barisNi.mid) barisNi.mid = teksTm(m.mid);
+      if (!barisNi['nama_merchant']) barisNi['nama_merchant'] = teksTm(m.nama_merchant);
+      if (!barisNi['kriteria_merchant']) barisNi['kriteria_merchant'] = teksTm(m.kriteria);
+      if (!barisNi.provinsi) barisNi.provinsi = teksTm(m.provinsi);
+      if (!barisNi['kabupaten_kota']) barisNi['kabupaten_kota'] = teksTm(m.kota);
+      baris.push({
+        mid: barisNi.mid,
+        namaMerchant: barisNi['nama_merchant'],
+        kriteria: barisNi['kriteria_merchant'],
+        jenisPengajuan: barisNi['jenis_pengajuan'],
+        jenisQr: barisNi['jenis_qr'],
+        tglPengajuan: barisNi['tgl_pengajuan'],
+        lastUpdate: barisNi['last_update'],
+        status: barisNi.status,
+        refNo: barisNi.ref_no,
+        sumberOnboarding: barisNi['source_onboarding'],
+        merchantSegment: barisNi['merchant_segment'],
+        branchCode: barisNi.branch_code,
+        alamat: barisNi.alamat,
+        provinsi: barisNi.provinsi,
+        kabupatenKota: barisNi['kabupaten_kota'],
+        kecamatan: barisNi.kecamatan,
+        kelurahan: barisNi.kelurahan,
+        kodePos: barisNi.kode_pos,
+        jenisUsaha: barisNi.jenis_usaha,
+        referralCode: barisNi.referral_code,
+        totalRiwayat: urut.length,
+        idxRiwayat: n + 1,
+      });
+    });
+  }
+  return baris;
+}
+// <<PANAH-AKHIR>>
+
+const KUNCI_TM = 'tracking_merchant_data';
+const SUMUR_TM = process.env.TRACKING_MERCHANT_URL || 'http://154.19.37.201/migrasi/';
+/** Satu unduhan HTML ±0,8 MB per sync; 3 menit cukup untuk klik berulang tanpa membebani sumber. */
+const USIA_MAKSIMAL_MS = 3 * 60 * 1000;
+/**
+ * Sumbernya lambat dan tidak stabil: terukur 2026-10-28, tiga percobaan berturut-turut
+ * selesai dalam 8,5 s, 52,5 s, dan satu percobaan terpotong di 60 s (41 KB dari 793 KB).
+ * Tanpa durasi maksimum yang sama dengan fungsi /api lain, Sync akan mati di tengah jalan.
+ */
+export const maxDuration = 60;
+/** Sisa anggaran fungsi untuk menulis app_store setelah unduhan selesai. */
+const UNDUH_ABORT_MS = 50_000;
+
+/** Hasil ekstraksi terakhir per instans fungsi — bukan pengganti penyimpanan cloud. */
+let memoar: { pada: number; muatan: unknown } | null = null;
+
+/** GET biasa tanpa kredensial, tanpa cookie, tanpa header apa pun: murni anonim. */
+async function unduhSumber(): Promise<any[]> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), UNDUH_ABORT_MS);
+  let html = '';
+  let diharapkan = 0;
+  try {
+    const res = await fetch(SUMUR_TM, { redirect: 'follow', signal: controller.signal });
+    if (!res.ok) throw new Error(`Sumber menolak dengan HTTP ${res.status}.`);
+    diharapkan = Number(res.headers.get('content-length') || 0);
+    html = await res.text();
+  } finally {
+    clearTimeout(timer);
+  }
+  // Unduhan terpotong bukan tidak mungkin (servernya pernah berhenti di tengah
+  // pengiriman). Lebih baik gagal dengan pesan yang benar daripada setengah data
+  // masuk dan terbaca seperti hasil sync yang lengkap.
+  if (diharapkan > 0 && html.length < diharapkan * 0.98) {
+    throw new Error(`Unduhan dari sumber terpotong (${html.length.toLocaleString('id-ID')} dari ${diharapkan.toLocaleString('id-ID')} byte). Coba Sync lagi.`);
+  }
+  return ratakanMerchantTm(ambilLiteralTrackingMID(html));
+}
+
+async function bangunMuatan(): Promise<{ diambilPada: string; sumber: string; baris: any[] }> {
+  const baris = await unduhSumber();
+  return { diambilPada: new Date().toISOString(), sumber: SUMUR_TM, baris };
+}
+
+/**
+ * /api/rolemapping?tm=1 — tarik data Tracking Merchant dari 154.19.37.201.
+ * (Berkas sendiri tidak bisa: Hobby membatasi api/ ke 12 fungsi per deploy, dan
+ * api/ sudah berisi 12. Rute ini menumpang fungsi Role Mapping lewat ?tm=1.)
+ *
+ * Browser TIDAK bisa mengambil halaman itu sendiri: servernya tidak mengirim header
+ * CORS dan aplikasinya jalan di HTTPS, jadi permintaan HTTP ke IP akan diblokir dua
+ * kali. Fungsi ini yang berbicara ke sumbernya (anonim, tanpa token), memotong kolom
+ * sensitif, lalu menyimpan sisanya di app_store supaya semua pengguna melihat data sama.
+ *
+ * GET            → baca hasil sync terakhir dari cloud.
+ * GET ?ambil=1   → unduh ulang dari sumber + simpan ke cloud (best effort).
+ * POST <muatan>  → simpan muatan yang sudah dipegang klien.
+ */
+async function tanganiTrackingMerchant(req: any, res: any) {
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') return res.status(200).end();
+
+  const r = rest();
+
+  try {
+    if (req.method === 'GET') {
+      const ambilLangsung = String(req.query?.ambil || '') === '1';
+
+      if (!ambilLangsung) {
+        const tersimpan = await bacaAppStore(r, KUNCI_TM);
+        return res
+          .status(200)
+          .json(tersimpan ? { ok: true, configured: true, data: tersimpan.data, updatedAt: tersimpan.updated_at }
+                         : { ok: true, configured: true, data: null });
+      }
+
+      let muatan: { diambilPada: string; sumber: string; baris: any[] };
+      if (memoar && Date.now() - memoar.pada < USIA_MAKSIMAL_MS) {
+        muatan = memoar.muatan as any;
+      } else {
+        muatan = await bangunMuatan();
+        memoar = { pada: Date.now(), muatan };
+      }
+      // Kegagalan menulis cloud tidak boleh menggagalkan sync: klien tetap menerima
+      // barisnya dan menyimpannya di browser.
+      let tersimpan = true;
+      try {
+        await tulisAppStore(r, KUNCI_TM, muatan);
+      } catch (err: any) {
+        tersimpan = false;
+        console.warn('tracking-merchant: gagal menulis app_store:', err?.message || err);
+      }
+      return res.status(200).json({
+        ok: true,
+        configured: true,
+        data: muatan,
+        tersimpanDiCloud: tersimpan,
+      });
+    }
+
+    if (req.method === 'POST') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+      if (!body || !Array.isArray(body.baris)) {
+        return res.status(400).json({ ok: false, error: 'Muatan harus berisi array `baris`.' });
+      }
+      await tulisAppStore(r, KUNCI_TM, body);
+      return res.status(200).json({ ok: true, configured: true });
+    }
+
+    return res.status(405).json({ ok: false, error: `Metode ${req.method} tidak didukung.` });
+  } catch (err: any) {
+    console.error('Error in tracking-merchant API:', err);
+    return res.status(500).json({ ok: false, error: err?.message || 'Gagal mengambil data Tracking Merchant.' });
   }
 }

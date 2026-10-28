@@ -1,11 +1,11 @@
 // Tracking Merchant — uji dua hal: (1) ekstraksi literal `trackingMIDDatabase` dari HTML
-// sumber + pemotongan kolom sensitif, dijalankan APA ADANYA dari api/tracking-merchant.ts
+// sumber + pemotongan kolom sensitif, dijalankan APA ADANYA dari api/rolemapping.ts
 // (bukan salinan), supaya tidak ada drift antara yang diuji dan yang dipakai produksi;
 // (2) angka turunan & kolom ekspor yang dibaca tabel.
 // Jalankan:
 //   npx vite build --ssr tests/entry-uji.ts --outDir tests/out
 //   node tests/uji-tracking-merchant.mjs
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   DEFINISI_KOLOM_TM, KOLOM_EKSPOR_TM, KOLOM_TM, KUNCI_STORAGE_TRACKING, KETERANGAN_STATUS,
@@ -21,12 +21,12 @@ const asa = (label, dapat, harus) => {
 };
 
 // ── (1) Blok produksi dieksekusi apa adanya ─────────────────────────────────
-const sumberApi = readFileSync(fileURLToPath(new URL('../api/tracking-merchant.ts', import.meta.url)), 'utf8');
+const sumberApi = readFileSync(fileURLToPath(new URL('../api/rolemapping.ts', import.meta.url)), 'utf8');
 const AWAL = '// <<PANAH-AWAL>>';
 const AKHIR = '// <<PANAH-AKHIR>>';
 const iAwal = sumberApi.indexOf(AWAL);
 const iAkhir = sumberApi.indexOf(AKHIR);
-asa('penanda blok ekstraksi ada di api/tracking-merchant.ts', iAwal >= 0 && iAkhir > iAwal, true);
+asa('penanda blok ekstraksi ada di api/rolemapping.ts', iAwal >= 0 && iAkhir > iAwal, true);
 
 const potongan = sumberApi.slice(iAwal + AWAL.length, iAkhir);
 const { FIELD_TM, ambilLiteralTrackingMID, ratakanMerchantTm } = new Function(
@@ -181,13 +181,24 @@ asa('sumber tidak punya kolom nmid — angka itu rekaan halaman sumber', FIELD_T
 const neonSync = readFileSync(fileURLToPath(new URL('../src/utils/neonSync.ts', import.meta.url)), 'utf8');
 const maxDur = Number((sumberApi.match(/export const maxDuration = (\d+)/) || [])[1]);
 const abort = Number((sumberApi.match(/UNDUH_ABORT_MS = (\d+)_000/) || [])[1]);
-const klien = Number((neonSync.match(/'\/api\/tracking-merchant\?ambil=1'.*?, (\d+)_000, 0/) || [])[1]);
+const klien = Number((neonSync.match(/&ambil=1`.*?, (\d+)_000, 0/) || [])[1]);
 asa('fungsi punya maxDuration 60 s (konvensi repo untuk kerja lambat)', maxDur, 60);
 asa('abort unduhan (50 s) di dalam anggaran fungsi', abort > 0 && abort < maxDur, true);
 asa('timeout klien (75 s) lebih panjang dari fungsi', klien > maxDur, true);
 asa('unduhan terpotong ditolak, bukan diimpor setengah',
   [sumberApi.includes('terpotong'), sumberApi.includes('html.length < diharapkan * 0.98')], [true, true]);
 asa('balasan HTML dikenali sebagai rute belum ter-deploy', /belum terpasang di server/.test(neonSync), true);
+
+// ── (5) Batas 12 fungsi api/ milik Vercel Hobby ─────────────────────────────
+// Terukur 2026-10-28: commit yang membuat api/ berisi 13 berkas menggagalkan SEMUA
+// deployment ("Deployment has failed", dpl_FFmNL8yunpsrUKu7pTKLrwYBYfLc), dan produksi
+// tetap menyajikan bundel lama. Karena itu rute Tracking Merchant menumpang di fungsi
+// Role Mapping (?tm=1), bukan berkas sendiri.
+const apiTs = readdirSync(fileURLToPath(new URL('../api/', import.meta.url))).filter((f) => f.endsWith('.ts'));
+asa('api/ tidak melewati 12 fungsi (batas Hobby)', apiTs.length <= 12, true);
+asa('api/tracking-merchant.ts tidak kembali sebagai berkas ke-13', apiTs.includes('tracking-merchant.ts'), false);
+asa('klien memakai rute gabungan ?tm=1',
+  /JALUR_TRACKING_MERCHANT = '\/api\/rolemapping\?tm=1'/.test(neonSync), true);
 
 console.log(gagal === 0 ? 'SEMUA LULUS' : `${gagal} UJIAN GAGAL`);
 process.exit(gagal === 0 ? 0 : 1);
