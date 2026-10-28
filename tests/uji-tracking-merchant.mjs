@@ -9,8 +9,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   DEFINISI_KOLOM_TM, KOLOM_EKSPOR_TM, KOLOM_TM, KUNCI_STORAGE_TRACKING, KETERANGAN_STATUS,
-  LABEL_KERANJANG, SUMUR_TRACKING, barisKeExcelTm, cocokCari, keranjangStatus, riwayatMerchant,
-  ringkasTracking,
+  LABEL_KERANJANG, SUMUR_TRACKING, barisKeExcelTm, cocokCari, contohMerchant, keranjangStatus,
+  keteranganRef, riwayatMerchant, ringkasTracking, temukanMerchant,
 } from './out/entry-uji.js';
 
 let gagal = 0;
@@ -29,8 +29,10 @@ const iAkhir = sumberApi.indexOf(AKHIR);
 asa('penanda blok ekstraksi ada di api/rolemapping.ts', iAwal >= 0 && iAkhir > iAwal, true);
 
 const potongan = sumberApi.slice(iAwal + AWAL.length, iAkhir);
-const { FIELD_TM, ambilLiteralTrackingMID, ratakanMerchantTm, ambilRingkasanSumber } = new Function(
-  `${potongan}\nreturn { FIELD_TM, ambilLiteralTrackingMID, ratakanMerchantTm, ambilRingkasanSumber };`
+const {
+  FIELD_TM, ambilLiteralTrackingMID, ratakanMerchantTm, ambilRingkasanSumber, ambilDistribusiSumber,
+} = new Function(
+  `${potongan}\nreturn { FIELD_TM, ambilLiteralTrackingMID, ratakanMerchantTm, ambilRingkasanSumber, ambilDistribusiSumber };`
 )();
 
 // Sumbernya tidak pernah mengirim JSON endpoint — hanya HTML dengan literal ini.
@@ -142,6 +144,17 @@ const riwayat = riwayatMerchant(baris, '601741069');
 asa('riwayat satu MID, terbaru dulu', riwayat.map((r) => r.tglPengajuan), ['2026-10-22 20:05:59', '2025-01-09 08:00:00']);
 asa('riwayat MID lain tidak ikut', riwayatMerchant(baris, '601771072').length, 1);
 
+// Panel Aktivitas: kotak cari harus berakhir di MID yang benar sebelum jejaknya dibuka.
+asa('cari jejak: MID persis', temukanMerchant(baris, '601741069'), '601741069');
+asa('cari jejak: nama merchant', temukanMerchant(baris, 'aisa'), '601741069');
+asa('cari jejak: awalan MID yang unik', temukanMerchant(baris, '601771'), '601771072');
+asa('cari jejak: awalan ambigu tidak dipilihkan salah satu', temukanMerchant(baris, '6017'), null);
+asa('cari jejak: kata kunci asing → null', temukanMerchant(baris, 'surabaya tidak ada'), null);
+asa('cari jejak: kueri kosong → null', temukanMerchant(baris, '   '), null);
+asa('pilihan cepat mendahulukan MID multi-riwayat', contohMerchant(baris, 1).map((c) => c.mid), ['601741069']);
+asa('keterangan ref mengikuti istilah sumber', [keteranganRef('Reject by PTEN'), keteranganRef('Active')],
+  ['FDS NMR v5.2 Compliance Check', 'Lifecycle Onboarding Stage']);
+
 asa('label keranjang dipakai bersama', [LABEL_KERANJANG.aktif, LABEL_KERANJANG.tolak], ['Active', 'Reject']);
 asa('kunci saringan = teks header tabel', DEFINISI_KOLOM_TM.map((d) => d.kunci), KOLOM_TM.map((c) => c.label));
 asa('header ekspor = No + kolom tabel', KOLOM_EKSPOR_TM, ['No', ...KOLOM_TM.map((c) => c.label)]);
@@ -245,6 +258,77 @@ asa('label &amp; di sumber tetap terbaca', kartu[1].label, 'Active & NMID Terbit
 asa('keterangan kartu dibersihkan dari tag', kartu[1].keterangan.includes('<strong>'), false);
 asa('kaki kartu terbaca', [kartu[0].kakiKiri, kartu[0].kakiKanan], ['28 Kolom Standar', '100% Terarsip']);
 asa('kartu yang tidak ada dilewati, bukan melempar', ambilRingkasanSumber('<html>tanpa kartu</html>'), []);
+
+// ── (7) Kartu distribusi tahunan (2021–2026) ────────────────────────────────
+// Enam kartu "Kinerja Onboarding Merchant" juga teks statis; fixture memakai markup
+// asli 2026-10-28, termasuk kartu 2026 berbingkai oranye dan bagian sesudahnya.
+const HTML_TAHUN = `<html><body>
+  <p>TAHUN 2021 — sebutan lama di luar bagian distribusi, tidak boleh terbaca</p>
+  <span class="text-[10px] font-black text-blue-600 uppercase tracking-widest block">Distribusi &amp; Pertumbuhan Tahunan</span>
+  <div class="grid">
+    <div class="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/90">
+      <div>
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="text-xs font-black text-slate-800 font-mono">TAHUN 2021</span>
+          <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800">3 Periode</span>
+        </div>
+        <div class="text-xl font-black text-slate-900 font-mono">1.680.011</div>
+        <p class="text-[10px] text-slate-400 font-medium mb-3">Mei – Des 2021</p>
+        <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden flex mb-2.5">
+          <div style="width: 92.2%" class="bg-emerald-500 h-full" title="Active: 92.2%"></div>
+          <div style="width: 6.4%" class="bg-red-500 h-full" title="Reject PTEN: 6.4%"></div>
+          <div style="width: 1.4%" class="bg-slate-300 h-full" title="Others: 1.4%"></div>
+        </div>
+      </div>
+      <div class="pt-2 border-t border-slate-200/60 text-[10px] space-y-1 text-slate-500 font-medium">
+        <div class="flex justify-between"><span>Active:</span><strong class="text-emerald-700">1.549.696 (92%)</strong></div>
+        <div class="flex justify-between"><span>Reject PTEN:</span><strong class="text-red-600">107.499 (6%)</strong></div>
+        <div class="flex justify-between"><span>Channel:</span><span class="text-slate-700 font-semibold">Direct Batch</span></div>
+      </div>
+    </div>
+    <div class="p-4 rounded-2xl bg-orange-50/50 border-2 border-orange-400/80">
+      <div>
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="text-xs font-black text-orange-950 font-mono">TAHUN 2026 YTD</span>
+          <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-orange-200 text-orange-900">Aktif Berjalan</span>
+        </div>
+        <div class="text-xl font-black text-orange-900 font-mono">720.663</div>
+        <p class="text-[10px] text-orange-700 font-medium mb-3">s.d 22 Okt 2026</p>
+        <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden flex mb-2.5">
+          <div style="width: 73.6%" class="bg-emerald-500 h-full" title="Active: 73.6%"></div>
+          <div style="width: 18.4%" class="bg-red-500 h-full" title="Reject PTEN: 18.4%"></div>
+          <div style="width: 8.0%" class="bg-slate-300 h-full" title="Others/Failed: 8.0%"></div>
+        </div>
+      </div>
+      <div class="pt-2 border-t border-orange-200 text-[10px] space-y-1 text-slate-700 font-medium">
+        <div class="flex justify-between"><span>Active:</span><strong class="text-emerald-700">530.550 (74%)</strong></div>
+        <div class="flex justify-between"><span>Reject PTEN:</span><strong class="text-red-600 font-black">132.744 (18%)</strong></div>
+        <div class="flex justify-between"><span>BNI MOM:</span><span class="text-purple-700 font-bold">533.204 (74%)</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div>ANALISIS REJECT PTEN (NMR 5.2)</div>
+    <div class="flex justify-between"><span>Active:</span><strong>999.999 (99%)</strong></div>
+  </div>
+</body></html>`;
+const tahunan = ambilDistribusiSumber(HTML_TAHUN);
+asa('kartu tahunan: sebutan di luar bagian tidak ikut', tahunan.length, 2);
+asa('kartu tahunan: label & nilai', tahunan.map((k) => [k.label, k.nilai]),
+  [['TAHUN 2021', '1.680.011'], ['TAHUN 2026 YTD', '720.663']]);
+asa('kartu tahunan: emblem & keterangan', [tahunan[0].emblem, tahunan[0].keterangan], ['3 Periode', 'Mei – Des 2021']);
+asa('kartu tahunan: lebar segmen = angka di sumber', tahunan[0].segmen,
+  [{ jenis: 'aktif', persen: 92.2 }, { jenis: 'tolak', persen: 6.4 }, { jenis: 'lain', persen: 1.4 }]);
+asa('kartu tahunan: baris kaki + nadanya', tahunan[0].kaki.map((k) => [k.label, k.nilai, k.jenis]), [
+  ['Active', '1.549.696 (92%)', 'aktif'],
+  ['Reject PTEN', '107.499 (6%)', 'tolak'],
+  ['Channel', 'Direct Batch', 'saluran'],
+]);
+asa('kartu tahunan: hanya 2026 YTD yang unggulan',
+  [tahunan[0].unggulan, tahunan[1].unggulan], [false, true]);
+asa('kartu tahunan: bagian reject sesudahnya tidak ikut terbaca',
+  tahunan[1].kaki.map((k) => k.nilai), ['530.550 (74%)', '132.744 (18%)', '533.204 (74%)']);
+asa('kartu tahunan: halaman tanpa bagian distribusi → kosong', ambilDistribusiSumber('<html>tanpa kartu</html>'), []);
 
 console.log(gagal === 0 ? 'SEMUA LULUS' : `${gagal} UJIAN GAGAL`);
 process.exit(gagal === 0 ? 0 : 1);

@@ -59,12 +59,40 @@ export interface KartuRingkasan {
   warna: 'biru' | 'hijau' | 'merah' | 'ungu';
 }
 
+/**
+ * Enam kartu "Kinerja Onboarding Merchant (2021 – 2026)" di halaman sumber. Sama seperti
+ * kartu ringkasan, angkanya teks statis di HTML — bukan hasil hitung tabel — jadi dibaca
+ * apa adanya saat sync: label tahun, emblem, total, keterangan, segmen bar, dan baris kaki.
+ */
+export interface KartuTahunSegmen {
+  jenis: 'aktif' | 'tolak' | 'lain';
+  persen: number;
+}
+
+export interface KartuTahunKaki {
+  label: string;
+  nilai: string;
+  jenis: 'aktif' | 'tolak' | 'saluran';
+}
+
+export interface KartuTahun {
+  label: string;
+  emblem: string;
+  nilai: string;
+  keterangan: string;
+  /** Kartu 2026 YTD diberi bingkai oranye di sumber. */
+  unggulan: boolean;
+  segmen: KartuTahunSegmen[];
+  kaki: KartuTahunKaki[];
+}
+
 export interface MuatanTracking {
   diambilPada: string;
   sumber: string;
   baris: BarisMerchant[];
   /** Kosong/tidak ada pada muatan lama yang tersimpan sebelum kartu ini ikut disinkron. */
   ringkasan?: KartuRingkasan[];
+  distribusi?: KartuTahun[];
 }
 
 export const KUNCI_STORAGE_TRACKING = 'tracking_merchant_data';
@@ -234,4 +262,52 @@ export function riwayatMerchant(baris: readonly BarisMerchant[], mid: string): B
   return baris
     .filter((r) => r.mid === mid)
     .sort((a, b) => (a.tglPengajuan < b.tglPengajuan ? 1 : a.tglPengajuan > b.tglPengajuan ? -1 : 0));
+}
+
+/**
+ * MID dari kata kunci pencarian panel Aktivitas — MID persis menang, lalu awalan MID
+ * yang unik, baru nama merchant. Kata kunci yang cocok ke banyak MID sengaja TIDAK
+ * dipilihkan salah satu: lebih baik bilang tidak ketemu daripada membuka jejak MID
+ * yang bukan dimaksud operator.
+ */
+export function temukanMerchant(baris: readonly BarisMerchant[], kueri: string): string | null {
+  const q = String(kueri || '').trim().toLowerCase();
+  if (!q) return null;
+  const persis = baris.find((r) => r.mid.toLowerCase() === q);
+  if (persis) return persis.mid;
+  const awalan = Array.from(new Set(baris.filter((r) => r.mid.toLowerCase().startsWith(q)).map((r) => r.mid)));
+  if (awalan.length === 1) return awalan[0];
+  const nama = baris.find((r) => r.namaMerchant && r.namaMerchant.toLowerCase().includes(q));
+  return nama ? nama.mid : null;
+}
+
+export interface ContohMerchant {
+  mid: string;
+  nama: string;
+  total: number;
+}
+
+/** Tombol "pilihan cepat": MID dengan riwayat terbanyak lebih dulu. */
+export function contohMerchant(baris: readonly BarisMerchant[], maks = 3): ContohMerchant[] {
+  const peta = new Map<string, ContohMerchant>();
+  for (const r of baris) {
+    if (!r.mid) continue;
+    const ada = peta.get(r.mid);
+    if (ada) {
+      ada.total = Math.max(ada.total, r.totalRiwayat || 1);
+      if (!ada.nama) ada.nama = r.namaMerchant || '';
+      continue;
+    }
+    peta.set(r.mid, { mid: r.mid, nama: r.namaMerchant || '', total: r.totalRiwayat || 1 });
+  }
+  return Array.from(peta.values())
+    .sort((a, b) => b.total - a.total || a.mid.localeCompare(b.mid))
+    .slice(0, maks);
+}
+
+/** Sub-keterangan di bawah Ref No, persis istilah halaman sumber. */
+export function keteranganRef(status: string): string {
+  return /reject/i.test(String(status || ''))
+    ? 'FDS NMR v5.2 Compliance Check'
+    : 'Lifecycle Onboarding Stage';
 }

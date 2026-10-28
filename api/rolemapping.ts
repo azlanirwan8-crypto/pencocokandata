@@ -603,6 +603,72 @@ function ambilRingkasanSumber(html) {
   }
   return hasil;
 }
+
+/**
+ * Enam kartu "Kinerja Onboarding Merchant (2021 – 2026)" — teks statis juga, bukan hasil
+ * hitung tabel: total tahunan, emblem, keterangan, lebar segmen bar, dan baris kaki
+ * (Active / Reject PTEN / Channel atau BNI MOM). Yang dibaca hanya angka & label yang
+ * tertulis; tidak ada yang diturunkan dari `trackingMIDDatabase`.
+ */
+const KARTU_TAHUN = ['TAHUN 2021', 'TAHUN 2022', 'TAHUN 2023', 'TAHUN 2024', 'TAHUN 2025', 'TAHUN 2026 YTD'];
+
+function ambilDistribusiSumber(html) {
+  const teks = String(html || '');
+  const awalBagian = teks.indexOf('Pertumbuhan Tahunan');
+  if (awalBagian < 0) return [];
+  const posisi = [];
+  for (const label of KARTU_TAHUN) {
+    const j = teks.indexOf('>' + label + '<', awalBagian);
+    if (j >= 0) posisi.push({ label, j });
+  }
+  posisi.sort((a, b) => a.j - b.j);
+  const hasil = [];
+  for (let i = 0; i < posisi.length; i++) {
+    const kartu = posisi[i];
+    let akhir = i + 1 < posisi.length ? posisi[i + 1].j : teks.length;
+    // Kartu terakhir diikuti bagian lain yang juga punya bar & baris flex — potong di sana.
+    const batas = teks.indexOf('ANALISIS REJECT PTEN', kartu.j);
+    if (batas > 0 && batas < akhir) akhir = batas;
+    const potongan = teks.slice(kartu.j, akhir);
+
+    const emblem = potongan.match(/<\/span>\s*<span[^>]*>([\s\S]*?)<\/span>/);
+    const nilaiM = potongan.match(/text-xl[^>]*>([\s\S]*?)<\/div>/);
+    const nilai = nilaiM ? bersihTeks(nilaiM[1]) : '';
+    if (!nilai) continue;
+    const ketM = potongan.match(/<p[^>]*>([\s\S]*?)<\/p>/);
+
+    const segmen = [];
+    for (const m of potongan.matchAll(/style="width:\s*([\d.]+)%"[^>]*class="bg-(emerald|red|slate)-[^"]*"/g)) {
+      segmen.push({
+        jenis: m[2] === 'emerald' ? 'aktif' : m[2] === 'red' ? 'tolak' : 'lain',
+        persen: Number(m[1]),
+      });
+    }
+
+    const kaki = [];
+    for (const m of potongan.matchAll(/<div class="flex justify-between"><span>([\s\S]*?)<\/span>\s*(?:<strong[^>]*>([\s\S]*?)<\/strong>|<span[^>]*>([\s\S]*?)<\/span>)[\s\S]*?<\/div>/g)) {
+      const label = bersihTeks(m[1]).replace(/:$/, '');
+      if (!label) continue;
+      kaki.push({
+        label,
+        nilai: bersihTeks(m[2] || m[3] || ''),
+        jenis: /^active/i.test(label) ? 'aktif' : /reject/i.test(label) ? 'tolak' : 'saluran',
+      });
+    }
+
+    hasil.push({
+      label: kartu.label,
+      emblem: emblem ? bersihTeks(emblem[1]) : '',
+      nilai,
+      keterangan: ketM ? bersihTeks(ketM[1]) : '',
+      // Bingkai oranye kartu 2026 berada sebelum label, di dalam pembuka div-nya.
+      unggulan: /border-orange-400/.test(teks.slice(Math.max(0, kartu.j - 600), kartu.j)),
+      segmen,
+      kaki,
+    });
+  }
+  return hasil;
+}
 // <<PANAH-AKHIR>>
 
 const KUNCI_TM = 'tracking_merchant_data';
@@ -622,7 +688,7 @@ const UNDUH_ABORT_MS = 50_000;
 let memoar: { pada: number; muatan: unknown } | null = null;
 
 /** GET biasa tanpa kredensial, tanpa cookie, tanpa header apa pun: murni anonim. */
-async function unduhSumber(): Promise<{ baris: any[]; ringkasan: any[] }> {
+async function unduhSumber(): Promise<{ baris: any[]; ringkasan: any[]; distribusi: any[] }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), UNDUH_ABORT_MS);
   let html = '';
@@ -644,12 +710,13 @@ async function unduhSumber(): Promise<{ baris: any[]; ringkasan: any[] }> {
   return {
     baris: ratakanMerchantTm(ambilLiteralTrackingMID(html)),
     ringkasan: ambilRingkasanSumber(html),
+    distribusi: ambilDistribusiSumber(html),
   };
 }
 
-async function bangunMuatan(): Promise<{ diambilPada: string; sumber: string; baris: any[]; ringkasan: any[] }> {
-  const { baris, ringkasan } = await unduhSumber();
-  return { diambilPada: new Date().toISOString(), sumber: SUMUR_TM, baris, ringkasan };
+async function bangunMuatan(): Promise<{ diambilPada: string; sumber: string; baris: any[]; ringkasan: any[]; distribusi: any[] }> {
+  const { baris, ringkasan, distribusi } = await unduhSumber();
+  return { diambilPada: new Date().toISOString(), sumber: SUMUR_TM, baris, ringkasan, distribusi };
 }
 
 /**
@@ -688,7 +755,7 @@ async function tanganiTrackingMerchant(req: any, res: any) {
                          : { ok: true, configured: true, data: null });
       }
 
-      let muatan: { diambilPada: string; sumber: string; baris: any[]; ringkasan?: any[] };
+      let muatan: { diambilPada: string; sumber: string; baris: any[]; ringkasan?: any[]; distribusi?: any[] };
       if (memoar && Date.now() - memoar.pada < USIA_MAKSIMAL_MS) {
         muatan = memoar.muatan as any;
       } else {

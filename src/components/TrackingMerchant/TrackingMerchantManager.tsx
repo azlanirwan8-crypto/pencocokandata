@@ -17,25 +17,26 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import type { BarisMerchant, KartuRingkasan, MuatanTracking } from '../../utils/trackingMerchant';
+import type { BarisMerchant, KartuRingkasan, KartuTahun, MuatanTracking } from '../../utils/trackingMerchant';
 import {
   DEFINISI_KOLOM_TM,
   KOLOM_EKSPOR_TM,
   KOLOM_TM,
   KUNCI_STORAGE_TRACKING,
-  KETERANGAN_STATUS,
   LABEL_KERANJANG,
   SUMUR_TRACKING,
   barisKeExcelTm,
   cocokCari,
+  contohMerchant,
   keranjangStatus,
+  keteranganRef,
   riwayatMerchant,
   ringkasTracking,
+  temukanMerchant,
 } from '../../utils/trackingMerchant';
 import { useFilterSort } from '../../utils/useFilterSort';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
 import { ThFilter } from '../ThFilter';
-import { DialogPanel } from '../BaseModal';
 import { tulisLembarExcel } from '../../utils/excel';
 import { tanggalBerkas } from '../../utils/normalizer';
 import { getItem, setItem } from '../../utils/storage';
@@ -73,6 +74,7 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
   const [diambilPada, setDiambilPada] = useState<string>('');
   const [sumber, setSumber] = useState<string>('');
   const [ringkasan, setRingkasan] = useState<KartuRingkasan[]>([]);
+  const [distribusi, setDistribusi] = useState<KartuTahun[]>([]);
   const [statusMuat, setStatusMuat] = useState<'memuat' | 'siap' | 'syncing'>('memuat');
   const [galat, setGalat] = useState<string | null>(null);
   /** true = hasil sync terakhir benar-benar mendarat di cloud, bukan hanya di browser ini. */
@@ -82,13 +84,19 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
   const deferredSearch = useDeferredValue(searchTerm);
   const [page, setPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number | 'ALL'>(25);
-  const [detailMid, setDetailMid] = useState<string | null>(null);
+
+  // Panel Aktivitas Tracking Merchant: MID yang jejaknya sedang dibuka + kata kunci input.
+  const [midJejak, setMidJejak] = useState<string | null>(null);
+  const [kueriJejak, setKueriJejak] = useState<string>('');
+  const [galatJejak, setGalatJejak] = useState<string>('');
+  const panelJejakRef = useRef<HTMLDivElement | null>(null);
 
   const uatMuatan = useCallback((muatan: MuatanTracking) => {
     setBaris(muatan.baris);
     setDiambilPada(muatan.diambilPada || '');
     setSumber(muatan.sumber || SUMUR_TRACKING);
     setRingkasan(Array.isArray(muatan.ringkasan) ? muatan.ringkasan : []);
+    setDistribusi(Array.isArray(muatan.distribusi) ? muatan.distribusi : []);
   }, []);
 
   // Muat: browser dulu supaya tabel langsung terisi, lalu cloud menang kalau lebih baru.
@@ -205,7 +213,35 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
     notify(`${barisTersaring.length.toLocaleString('id-ID')} riwayat merchant diunduh.`, 'success');
   };
 
-  const detail = useMemo(() => (detailMid ? riwayatMerchant(baris, detailMid) : []), [baris, detailMid]);
+  const jejak = useMemo(() => (midJejak ? riwayatMerchant(baris, midJejak) : []), [baris, midJejak]);
+  const contoh = useMemo(() => contohMerchant(baris, 3), [baris]);
+  const rentangTahun = useMemo(() => {
+    if (distribusi.length === 0) return '';
+    const bersih = (label: string) => label.replace(/TAHUN\s+/i, '').replace(/\s*YTD/i, '').trim();
+    return `${bersih(distribusi[0].label)} – ${bersih(distribusi[distribusi.length - 1].label)}`;
+  }, [distribusi]);
+
+  const bukaJejak = useCallback(
+    (kueri: string) => {
+      setKueriJejak(kueri);
+      const mid = temukanMerchant(baris, kueri);
+      if (!mid) {
+        setMidJejak(null);
+        setGalatJejak(
+          `Tidak ada MID atau nama merchant yang cocok dengan "${kueri.trim()}" di ${baris.length.toLocaleString('id-ID')} baris tersinkron.`
+        );
+        return;
+      }
+      setGalatJejak('');
+      setMidJejak(mid);
+    },
+    [baris]
+  );
+
+  // Klik "Lihat jejak" dari tabel membawa operator ke panel ini, bukan membuka lapisan lain.
+  useEffect(() => {
+    if (midJejak) panelJejakRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [midJejak]);
 
   const sinkronSedang = statusMuat === 'syncing';
 
@@ -303,6 +339,62 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
         </>
       )}
 
+      {distribusi.length > 0 && (
+        <div className="glass-card tm-tahunan">
+          <div className="tm-tahunan-kepala">
+            <div>
+              <span className="tm-tahunan-eyebrow">Distribusi &amp; Pertumbuhan Tahunan</span>
+              <div className="tm-tahunan-judul">Kinerja Onboarding Merchant ({rentangTahun})</div>
+            </div>
+            <div className="tm-legend">
+              <span><i className="tm-legend-titik tm-legend-titik--aktif" />Active (NMID Terbit)</span>
+              <span><i className="tm-legend-titik tm-legend-titik--tolak" />Reject by PTEN</span>
+              <span><i className="tm-legend-titik tm-legend-titik--lain" />Pending / Others</span>
+            </div>
+          </div>
+          <div className="tm-tahun-grid">
+            {distribusi.map((k) => (
+              <div key={k.label} className={k.unggulan ? 'tm-tahun tm-tahun--unggulan' : 'tm-tahun'}>
+                <div className="tm-tahun-atas">
+                  <span className="tm-tahun-label">{k.label}</span>
+                  {k.emblem && <span className="tm-tahun-emblem">{k.emblem}</span>}
+                </div>
+                <div className="tm-tahun-nilai">{k.nilai}</div>
+                {k.keterangan && <p className="tm-tahun-ket">{k.keterangan}</p>}
+                {k.segmen.length > 0 && (
+                  <div
+                    className="tm-tahun-bar"
+                    role="img"
+                    aria-label={k.segmen.map((s) => `${s.jenis} ${s.persen}%`).join(', ')}
+                  >
+                    {k.segmen.map((s) => (
+                      <span key={s.jenis} className={`tm-tahun-seg tm-tahun-seg--${s.jenis}`} style={{ width: `${s.persen}%` }} />
+                    ))}
+                  </div>
+                )}
+                {k.kaki.length > 0 && (
+                  <div className="tm-tahun-kaki">
+                    {k.kaki.map((barisKaki) => (
+                      <div key={barisKaki.label} className="tm-tahun-kaki-baris">
+                        <span>{barisKaki.label}</span>
+                        <strong className={`tm-tahun-kaki-nilai tm-tahun-kaki-nilai--${barisKaki.jenis}`}>
+                          {barisKaki.nilai}
+                        </strong>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <p className="tm-kartu-catatan">
+            Sama seperti kartu di atas: enam kartu tahunan ini juga teks statis di halaman sumber dan
+            dibaca apa adanya saat Sync — bukan hasil hitung {baris.length.toLocaleString('id-ID')} baris
+            yang tersinkron di sini.
+          </p>
+        </div>
+      )}
+
       {galat && (
         <div
           className="glass-card"
@@ -347,7 +439,189 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
           </button>
         </div>
       ) : (
-        <div className="glass-card">
+        <>
+          {/* 2. Aktivitas satu MID — pintu masuk dari kotak cari, sel MID, dan tombol mata */}
+          <div className="glass-card tm-aktivitas" ref={panelJejakRef}>
+            <div className="tm-aktivitas-kepala">
+              <span className="tm-tahunan-eyebrow">Lifecycle Audit Trail &bull; Multi-Event Monitoring</span>
+              <div className="section-title">Aktivitas Tracking Merchant</div>
+              <div className="section-subtitle">
+                Pantau riwayat lengkap perubahan pengajuan satu MID: jenis pengajuan, jenis QR,
+                tanggal pengajuan, last update, dan status permohonan.
+              </div>
+            </div>
+
+            <div className="tm-aktivitas-cari">
+              <div className="search-input-wrapper">
+                <Search size={15} className="search-icon-pos" />
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder="Masukkan Nomor MID atau nama merchant (contoh: 601741069)…"
+                  value={kueriJejak}
+                  onChange={(e) => setKueriJejak(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') bukaJejak(kueriJejak);
+                  }}
+                />
+              </div>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => bukaJejak(kueriJejak)}
+                disabled={!kueriJejak.trim()}
+              >
+                <Search size={13} />
+                <span>Cari MID</span>
+              </button>
+              {(midJejak || kueriJejak || galatJejak) && (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => { setMidJejak(null); setKueriJejak(''); setGalatJejak(''); }}
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+
+            {contoh.length > 0 && (
+              <div className="tm-aktivitas-contoh">
+                <span>Pilihan cepat MID:</span>
+                {contoh.map((c) => (
+                  <button key={c.mid} type="button" className="tm-contoh-mid" onClick={() => bukaJejak(c.mid)}>
+                    <strong>{c.mid}</strong>
+                    <small>{c.nama || 'tanpa nama'} — {c.total} riwayat</small>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {galatJejak && (
+              <div className="tm-aktivitas-galat">
+                <AlertCircle size={14} />
+                <span>{galatJejak}</span>
+              </div>
+            )}
+
+            {midJejak && jejak.length > 0 && (
+              <>
+                <div className="tm-mid">
+                  <div className="tm-mid-item">
+                    <span className="tm-mid-label">MID</span>
+                    <span className="tm-mid-nilai">
+                      {midJejak}
+                      {jejak.length > 1 && <span className="badge badge-level1">Multi-Riwayat ({jejak.length}×)</span>}
+                    </span>
+                  </div>
+                  <div className="tm-mid-item">
+                    <span className="tm-mid-label">Nama Merchant</span>
+                    <span className="tm-mid-nilai">{jejak[0].namaMerchant || '-'}</span>
+                  </div>
+                  <div className="tm-mid-item">
+                    <span className="tm-mid-label">Kriteria</span>
+                    <span className="tm-mid-nilai">{jejak[0].kriteria || '-'}</span>
+                  </div>
+                  <div className="tm-mid-item">
+                    <span className="tm-mid-label">Lokasi</span>
+                    <span className="tm-mid-nilai">
+                      {[jejak[0].kabupatenKota, jejak[0].provinsi].filter(Boolean).join(' • ') || '-'}
+                    </span>
+                  </div>
+                  <div className="tm-mid-item">
+                    <span className="tm-mid-label">Cabang</span>
+                    <span className="tm-mid-nilai">{jejak[0].branchCode || '-'}</span>
+                  </div>
+                  <div className="tm-mid-item">
+                    <span className="tm-mid-label">Aktivitas</span>
+                    <span className="tm-mid-nilai">{jejak.length} pengajuan terdata</span>
+                  </div>
+                  <div className="tm-mid-item">
+                    <span className="tm-mid-label">Status Terkini</span>
+                    <span className="tm-mid-nilai">
+                      <span className={KELAS_KERANJANG[keranjangStatus(jejak[0].status)]}>{jejak[0].status || '-'}</span>
+                    </span>
+                  </div>
+                </div>
+
+                <div className="tm-histori">
+                  <div className="tm-histori-judul">
+                    <Clock size={14} />
+                    <span>Histori Pengajuan &amp; Perubahan Siklus (Data Lake QRIS)</span>
+                    <span className="tm-histori-jumlah">{jejak.length} Pengajuan Terdata</span>
+                  </div>
+                  <div className="table-container">
+                    <table className="modern-table tm-histori-tabel">
+                      <thead>
+                        <tr>
+                          <th>Jenis Pengajuan</th>
+                          <th>Jenis QR</th>
+                          <th>Tanggal Pengajuan</th>
+                          <th>Last Update</th>
+                          <th>Status</th>
+                          <th>Ref No &amp; Keterangan</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {jejak.map((r, i) => (
+                          <tr key={`${r.refNo}-${r.tglPengajuan}-${i}`}>
+                            <td>{r.jenisPengajuan || '-'}</td>
+                            <td>{r.jenisQr || '-'}</td>
+                            <td className="tm-mono">{r.tglPengajuan || '-'}</td>
+                            <td className="tm-mono">{r.lastUpdate || '-'}</td>
+                            <td><span className={KELAS_KERANJANG[keranjangStatus(r.status)]}>{r.status || '-'}</span></td>
+                            <td>
+                              <div className="tm-ref">{r.refNo || '-'}</div>
+                              <div className="tm-ref-ket">{keteranganRef(r.status)}</div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="tm-jejak">
+                  <div className="tm-jejak-judul">
+                    <Timer size={14} />
+                    <span>Kronologi Siklus Perubahan (Lifecycle Audit Trail)</span>
+                  </div>
+                  <ol className="tm-jejak-daftar">
+                    {jejak.map((r, i) => {
+                      const terkini = i === 0;
+                      const nada = terkini ? 'terkini' : keranjangStatus(r.status) === 'tolak' ? 'tolak' : 'lama';
+                      return (
+                        <li key={`${r.refNo}-${r.tglPengajuan}-${i}`} className={`tm-jejak-node tm-jejak-node--${nada}`}>
+                          <div className="tm-jejak-kartu">
+                            <div className="tm-jejak-baris">
+                              <span className="tm-jejak-nama">{r.jenisPengajuan || '-'}</span>
+                              <span className="tm-jejak-qr">({r.jenisQr || '-'})</span>
+                              {jejak.length > 1 && (
+                                <span className="tm-jejak-riwayat">Riwayat {i + 1} dari {jejak.length}</span>
+                              )}
+                              <span className="tm-jejak-tanggal">{r.tglPengajuan || '-'}</span>
+                            </div>
+                            <p className="tm-jejak-status">
+                              Status Pembaruan: <strong>{r.status || '-'}</strong> &bull; Last Update:{' '}
+                              <span className="tm-mono">{r.lastUpdate || '-'}</span>
+                            </p>
+                            <div className="tm-jejak-kaki">
+                              <span>Nomor Referensi: <strong className="tm-mono">{r.refNo || '-'}</strong></span>
+                              <span className={terkini ? 'tm-jejak-tanda tm-jejak-tanda--terkini' : 'tm-jejak-tanda'}>
+                                {terkini ? 'Tahap Terkini' : 'Riwayat Terdahulu'}
+                              </span>
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="glass-card">
           <div className="metrics-grid" style={{ marginBottom: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
             <div className="metric-card blue">
               <div className="metric-header">
@@ -500,7 +774,16 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
                       return (
                         <tr key={`${r.mid}-${r.refNo}-${r.tglPengajuan}-${i}`} data-vrow={i === 0 ? 'true' : undefined}>
                           <td className="tm-nomor">{no}</td>
-                          <td className="code-cell" style={{ textAlign: 'center' }}>{r.mid}</td>
+                          <td className="code-cell" style={{ textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              className="tm-mid-tombol"
+                              onClick={() => bukaJejak(r.mid)}
+                              title={`Buka jejak lifecycle MID ${r.mid}`}
+                            >
+                              {r.mid}
+                            </button>
+                          </td>
                           {KOLOM_SEL.map((k) => {
                             const nilai = k.nilai(r);
                             if (k.label === 'Status' || k.label === 'Status Verifikasi') {
@@ -528,8 +811,8 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
                             <button
                               type="button"
                               className="btn btn-ghost btn-sm"
-                              onClick={() => setDetailMid(r.mid)}
-                              title={`Lihat seluruh riwayat MID ${r.mid}`}
+                              onClick={() => bukaJejak(r.mid)}
+                              title={`Lihat jejak lifecycle MID ${r.mid}`}
                             >
                               <Eye size={13} />
                             </button>
@@ -587,73 +870,12 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
               </div>
             </div>
           )}
-        </div>
-      )}
-
-      {/* 3. Panel riwayat satu merchant (hanya-baca) */}
-      {detailMid && (
-        <DialogPanel onClose={() => setDetailMid(null)} label={`Riwayat merchant ${detailMid}`} closableOnOutside={false}>
-          <div className="modal-header">
-            <div className="modal-title">
-              <Clock size={16} /> Riwayat MID {detailMid}
-            </div>
-            <button type="button" className="modal-close" onClick={() => setDetailMid(null)} aria-label="Tutup">
-              <X size={16} />
-            </button>
           </div>
-          <div className="modal-body">
-            {detail.map((r, idx) => (
-              <div key={`${r.refNo}-${r.tglPengajuan}-${idx}`} className="tm-riwayat">
-                <div className="tm-riwayat-kepala">
-                  <span className={KELAS_KERANJANG[keranjangStatus(r.status)]}>{r.status || '-'}</span>
-                  <span className="tm-riwayat-no">Riwayat {idx + 1} dari {detail.length}</span>
-                </div>
-                <div className="tm-riwayat-keterangan">{KETERANGAN_STATUS[keranjangStatus(r.status)]}</div>
-                <div className="tm-riwayat-grid">
-                  <Baris label="Status Verifikasi" nilai={LABEL_KERANJANG[keranjangStatus(r.status)]} />
-                  <Baris label="Nama Merchant" nilai={r.namaMerchant} />
-                  <Baris label="Ref No" nilai={r.refNo} />
-                  <Baris label="Jenis Pengajuan" nilai={r.jenisPengajuan} />
-                  <Baris label="Jenis QR" nilai={r.jenisQr} />
-                  <Baris label="Tanggal Pengajuan" nilai={r.tglPengajuan} />
-                  <Baris label="Last Update" nilai={r.lastUpdate} />
-                  <Baris label="Sumber Onboarding" nilai={r.sumberOnboarding} />
-                  <Baris label="Kriteria" nilai={r.kriteria} />
-                  <Baris label="Jenis Usaha" nilai={r.jenisUsaha} />
-                  <Baris label="Referral Code" nilai={r.referralCode} />
-                  <Baris label="Segmen Merchant" nilai={r.merchantSegment} />
-                  <Baris label="Cabang" nilai={r.branchCode} />
-                  <Baris label="Alamat" nilai={r.alamat} />
-                  <Baris label="Kelurahan" nilai={r.kelurahan} />
-                  <Baris label="Kecamatan" nilai={r.kecamatan} />
-                  <Baris label="Kota / Kabupaten" nilai={r.kabupatenKota} />
-                  <Baris label="Provinsi" nilai={r.provinsi} />
-                  <Baris label="Kode Pos" nilai={r.kodePos} />
-                </div>
-              </div>
-            ))}
-            <div className="tm-catatan-modal">
-              Nomor KTP, nomor rekening, e-mail dan nomor HP merchant sengaja tidak diambil dari
-              sumber — kolom itu ada di halaman aslinya tapi tidak diambil karena tidak dipakai di pemantauan ini.
-            </div>
-          </div>
-          <div className="modal-footer">
-            <button type="button" className="btn btn-primary btn-sm" onClick={() => setDetailMid(null)}>
-              Tutup
-            </button>
-          </div>
-        </DialogPanel>
+        </>
       )}
     </div>
   );
 };
-
-const Baris: React.FC<{ label: string; nilai: string }> = ({ label, nilai }) => (
-  <div className="tm-riwayat-item">
-    <span className="tm-riwayat-label">{label}</span>
-    <span className="tm-riwayat-nilai">{nilai || '-'}</span>
-  </div>
-);
 
 /** Catatan privasi ditulis satu kali, dipakai di kepala menu. */
 const ShieldNote: React.FC = () => (
