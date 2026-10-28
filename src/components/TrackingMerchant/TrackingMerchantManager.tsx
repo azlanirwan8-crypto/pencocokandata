@@ -17,7 +17,6 @@ import {
   KUNCI_STORAGE_TRACKING,
   SUMUR_TRACKING,
   barisKeExcelTm,
-  contohJejakMerchant,
   kandidatMerchant,
   keranjangStatus,
   keteranganRef,
@@ -65,8 +64,8 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
   const [midJejak, setMidJejak] = useState<string | null>(null);
   const [kueriJejak, setKueriJejak] = useState<string>('');
   const [galatJejak, setGalatJejak] = useState<string>('');
-  /** Kartu contoh untuk MID yang tidak ada di data — ditampilkan saja, tidak disimpan. */
-  const [jejakContoh, setJejakContoh] = useState<BarisMerchant[] | null>(null);
+  /** Kueri yang tidak punya padanan di data nyata — ditampilkan sebagai pemberitahuan, bukan kartu. */
+  const [kueriKosong, setKueriKosong] = useState<string>('');
   const [memeriksaSumber, setMemeriksaSumber] = useState(false);
   const panelJejakRef = useRef<HTMLDivElement | null>(null);
   /** Stempel `diambilPada` data yang sedang tampil — pembanding saat cloud diperiksa ulang. */
@@ -77,8 +76,8 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
     setBaris(muatan.baris);
     setRingkasan(Array.isArray(muatan.ringkasan) ? muatan.ringkasan : []);
     setDistribusi(Array.isArray(muatan.distribusi) ? muatan.distribusi : []);
-    // Data berganti: kartu contoh lama bisa jadi sudah punya padanan nyata.
-    setJejakContoh(null);
+    // Data berganti: pemberitahuan "tidak ditemukan" bisa jadi sudah tidak berlaku.
+    setKueriKosong('');
   }, []);
 
   // Muat: browser dulu supaya tabel langsung terisi, lalu cloud menang kalau lebih baru.
@@ -195,8 +194,8 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
   };
 
   const jejak = useMemo(
-    () => jejakContoh ?? (midJejak ? riwayatMerchant(baris, midJejak) : []),
-    [baris, jejakContoh, midJejak]
+    () => (midJejak ? riwayatMerchant(baris, midJejak) : []),
+    [baris, midJejak]
   );
   const rentangTahun = useMemo(() => {
     if (distribusi.length === 0) return '';
@@ -207,27 +206,28 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
   // Satu aturan pencarian untuk dua jalur: data yang sedang tampil, dan data yang baru
   // diambil dari sumber. Hasilnya sama supaya "tidak ketemu" tidak pernah sepihak.
   const tampilkanHasilCari = useCallback(
-    (kueri: string, daftar: BarisMerchant[]): 'ditemukan' | 'ambigu' | 'contoh' => {
+    (kueri: string, daftar: BarisMerchant[]): 'ditemukan' | 'ambigu' | 'kosong' => {
       const mid = temukanMerchant(daftar, kueri);
       if (mid) {
         setGalatJejak('');
-        setJejakContoh(null);
+        setKueriKosong('');
         setMidJejak(mid);
         return 'ditemukan';
       }
       setMidJejak(null);
       const kandidat = kandidatMerchant(daftar, kueri);
       if (kandidat.length > 0) {
-        setJejakContoh(null);
+        setKueriKosong('');
         setGalatJejak(
           `"${kueri.trim()}" cocok dengan beberapa MID: ${kandidat.join(', ')}${kandidat.length >= 6 ? ', …' : ''}. Tulis MID lengkap untuk membuka jejaknya.`
         );
         return 'ambigu';
       }
-      // Tidak ada padanan: tampilkan kartu contoh seperti halaman sumber, bukan layar kosong.
+      // Tidak ada padanan: beri tahu apa adanya. Halaman sumber mengarang kartu di titik ini,
+      // tapi data karangan (ref acak) tidak pernah bisa sama dengan sumber — jadi tidak ditampilkan.
       setGalatJejak('');
-      setJejakContoh(contohJejakMerchant(kueri));
-      return 'contoh';
+      setKueriKosong(kueri.trim());
+      return 'kosong';
     },
     []
   );
@@ -249,7 +249,7 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
     try {
       const barisBaru = await handleSync();
       if (!barisBaru) return;
-      if (tampilkanHasilCari(kueri, barisBaru) === 'contoh') {
+      if (tampilkanHasilCari(kueri, barisBaru) === 'kosong') {
         notify(`"${kueri.trim()}" juga tidak ada di hasil sinkron terbaru ${SUMUR_TRACKING}.`, 'warning');
       }
     } finally {
@@ -259,8 +259,8 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
 
   // Klik "Lihat jejak" / pencarian membawa operator ke panel ini, bukan membuka lapisan lain.
   useEffect(() => {
-    if (midJejak || jejakContoh) panelJejakRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [midJejak, jejakContoh]);
+    if (midJejak || kueriKosong) panelJejakRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [midJejak, kueriKosong]);
 
   const sinkronSedang = statusMuat === 'syncing';
 
@@ -445,11 +445,11 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
               <Search size={13} />
               <span>Cari MID</span>
             </button>
-            {(midJejak || jejakContoh || kueriJejak || galatJejak) && (
+            {(midJejak || kueriKosong || kueriJejak || galatJejak) && (
               <button
                 type="button"
                 className="btn btn-outline btn-sm"
-                onClick={() => { setMidJejak(null); setJejakContoh(null); setKueriJejak(''); setGalatJejak(''); }}
+                onClick={() => { setMidJejak(null); setKueriKosong(''); setKueriJejak(''); setGalatJejak(''); }}
               >
                 Reset
               </button>
@@ -463,19 +463,19 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
             </div>
           )}
 
-          {jejakContoh && (
-            <div className="tm-contoh-catatan">
-              <div className="tm-contoh-isi">
+          {kueriKosong && (
+            <div className="tm-aktivitas-catatan">
+              <div className="tm-aktivitas-catatan-isi">
                 <AlertCircle size={14} />
                 <span>
-                  Kartu contoh: MID ini tidak ada di {baris.length.toLocaleString('id-ID')} baris hasil
-                  sinkron. Isinya disusun seperti halaman sumber (nomor referensi acak) dan{' '}
-                  <strong>tidak</strong> disimpan, dihitung, atau ikut diekspor.
+                  <strong>&ldquo;{kueriKosong}&rdquo;</strong> tidak ditemukan di{' '}
+                  {baris.length.toLocaleString('id-ID')} baris hasil sinkron — bukan MID terdaftar dan tidak
+                  ada nama merchant yang cocok. Hanya data nyata yang ditampilkan di sini.
                 </span>
               </div>
               <button
                 type="button"
-                className="btn btn-outline btn-sm tm-contoh-cek"
+                className="btn btn-outline btn-sm tm-aktivitas-catatan-aksi"
                 onClick={() => void cekSumberLaluCari()}
                 disabled={memeriksaSumber || sinkronSedang}
               >

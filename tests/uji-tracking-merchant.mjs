@@ -9,7 +9,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   DEFINISI_KOLOM_TM, KOLOM_EKSPOR_TM, KOLOM_TM, KUNCI_STORAGE_TRACKING, KETERANGAN_STATUS,
-  LABEL_KERANJANG, SUMUR_TRACKING, barisKeExcelTm, cocokCari, contohJejakMerchant, kandidatMerchant, keranjangStatus,
+  LABEL_KERANJANG, SUMUR_TRACKING, barisKeExcelTm, cocokCari, kandidatMerchant, keranjangStatus,
   keteranganRef, riwayatMerchant, ringkasTracking, temukanMerchant,
 } from './out/entry-uji.js';
 
@@ -154,10 +154,6 @@ asa('cari jejak: kueri kosong → null', temukanMerchant(baris, '   '), null);
 asa('pencarian ambigu menampilkan kandidat, bukan "tidak ada"', kandidatMerchant(baris, '6017'), ['601741069', '601771072']);
 asa('kandidat awalan unik = satu MID', kandidatMerchant(baris, '601771'), ['601771072']);
 asa('kandidat kosong untuk kueri kosong', kandidatMerchant(baris, '  '), []);
-asa('kartu contoh: dua riwayat, terbaru dulu', contohJejakMerchant('610298607').map((r) => r.status), ['On Progress Approver 1', 'Active']);
-asa('kartu contoh: identitas seperti sumber', (() => { const c = contohJejakMerchant(' 610298607 '); return [c[0].mid, c[0].namaMerchant, c[0].kriteria, c[0].kabupatenKota, c[0].provinsi, c[0].totalRiwayat]; })(), ['610298607', 'MERCHANT ID 610298607', '(UMI) Usaha Mikro', 'Nasional', 'Indonesia', 2]);
-asa('kartu contoh: ref mengikuti pola sumber dan acak', (() => { const c = contohJejakMerchant('1', () => 0); return [c[0].refNo, c[1].refNo]; })(), ['REF26295100000', 'REF26284100000']);
-asa('kartu contoh: ref default berpola 14 digit', contohJejakMerchant('2').every((r) => /^REF262(?:95|84)\d{6}$/.test(r.refNo)), true);
 asa('keterangan ref mengikuti istilah sumber', [keteranganRef('Reject by PTEN'), keteranganRef('Active')],
   ['FDS NMR v5.2 Compliance Check', 'Lifecycle Onboarding Stage']);
 

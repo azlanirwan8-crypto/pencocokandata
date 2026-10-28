@@ -295,56 +295,6 @@ export function kandidatMerchant(baris: readonly BarisMerchant[], kueri: string,
   return Array.from(new Set(kena.map((r) => r.mid))).slice(0, maks);
 }
 
-/**
- * Kartu contoh untuk MID yang tidak ada di data nyata — meniru `searchTrackingMID`
- * di halaman sumber, yang mengarang dua riwayat untuk MID apa pun yang tidak dikenal
- * (nomor referensinya acak). Baris ini hanya untuk ditampilkan; tidak pernah masuk
- * muatan sync, hitungan, maupun ekspor.
- */
-export function contohJejakMerchant(mid: string, acak: () => number = Math.random): BarisMerchant[] {
-  const bersih = String(mid || '').trim();
-  const ref = (awalan: string) => `${awalan}${Math.floor(100000 + acak() * 900000)}`;
-  const dasar = {
-    mid: bersih,
-    namaMerchant: `MERCHANT ID ${bersih}`,
-    kriteria: '(UMI) Usaha Mikro',
-    sumberOnboarding: '',
-    merchantSegment: '',
-    branchCode: '',
-    alamat: '',
-    provinsi: 'Indonesia',
-    kabupatenKota: 'Nasional',
-    kecamatan: '',
-    kelurahan: '',
-    kodePos: '',
-    jenisUsaha: '',
-    referralCode: '',
-    totalRiwayat: 2,
-  };
-  return [
-    {
-      ...dasar,
-      jenisPengajuan: 'Edit Settlement Type',
-      jenisQr: 'QR Sticker',
-      tglPengajuan: '2026-10-22 20:05:58',
-      lastUpdate: '2026-10-22 21:10:00',
-      status: 'On Progress Approver 1',
-      refNo: ref('REF26295'),
-      idxRiwayat: 1,
-    },
-    {
-      ...dasar,
-      jenisPengajuan: 'Add New Merchant',
-      jenisQr: 'QR Sticker',
-      tglPengajuan: '2026-10-09 14:20:15',
-      lastUpdate: '2026-10-22 15:47:01',
-      status: 'Active',
-      refNo: ref('REF26284'),
-      idxRiwayat: 2,
-    },
-  ];
-}
-
 /** Sub-keterangan di bawah Ref No, persis istilah halaman sumber. */
 export function keteranganRef(status: string): string {
   return /reject/i.test(String(status || ''))

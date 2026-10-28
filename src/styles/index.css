@@ -2526,7 +2526,7 @@ body {
   font-weight: 600;
 }
 
-.tm-contoh-catatan {
+.tm-aktivitas-catatan {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2542,7 +2542,7 @@ body {
   line-height: 1.4;
 }
 
-.tm-contoh-isi {
+.tm-aktivitas-catatan-isi {
   display: flex;
   align-items: flex-start;
   gap: 0.4rem;
@@ -2550,12 +2550,12 @@ body {
   min-width: 0;
 }
 
-.tm-contoh-isi svg {
+.tm-aktivitas-catatan-isi svg {
   flex: none;
   margin-top: 1px;
 }
 
-.tm-contoh-cek {
+.tm-aktivitas-catatan-aksi {
   flex: none;
 }
 
