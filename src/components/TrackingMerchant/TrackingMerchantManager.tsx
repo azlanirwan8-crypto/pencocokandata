@@ -23,6 +23,7 @@ import {
   KOLOM_EKSPOR_TM,
   KOLOM_TM,
   KUNCI_STORAGE_TRACKING,
+  KETERANGAN_STATUS,
   LABEL_KERANJANG,
   SUMUR_TRACKING,
   barisKeExcelTm,
@@ -476,7 +477,7 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
                           <td className="code-cell" style={{ textAlign: 'center' }}>{r.mid}</td>
                           {KOLOM_SEL.map((k) => {
                             const nilai = k.nilai(r);
-                            if (k.label === 'Status') {
+                            if (k.label === 'Status' || k.label === 'Status Verifikasi') {
                               const keranjang = keranjangStatus(r.status);
                               return (
                                 <td key={k.label} style={{ textAlign: 'center' }}>
@@ -484,11 +485,11 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
                                 </td>
                               );
                             }
-                            if (k.label === 'Riwayat') {
+                            if (k.label === 'Flagging Riwayat') {
                               return (
-                                <td key={k.label} style={{ textAlign: 'center' }}>
-                                  <span className={r.totalRiwayat > 1 ? 'badge badge-level1' : undefined}>
-                                    {nilai}
+                                <td key={k.label} style={{ textAlign: 'center' }} title={`Riwayat ke-${r.idxRiwayat} dari ${r.totalRiwayat} untuk MID ini`}>
+                                  <span className={r.totalRiwayat > 1 ? 'badge badge-level1' : 'badge badge-unmatched'}>
+                                    {r.totalRiwayat > 1 ? `${nilai} (${r.idxRiwayat}/${r.totalRiwayat})` : nilai}
                                   </span>
                                 </td>
                               );
@@ -581,7 +582,9 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
                   <span className={KELAS_KERANJANG[keranjangStatus(r.status)]}>{r.status || '-'}</span>
                   <span className="tm-riwayat-no">Riwayat {idx + 1} dari {detail.length}</span>
                 </div>
+                <div className="tm-riwayat-keterangan">{KETERANGAN_STATUS[keranjangStatus(r.status)]}</div>
                 <div className="tm-riwayat-grid">
+                  <Baris label="Status Verifikasi" nilai={LABEL_KERANJANG[keranjangStatus(r.status)]} />
                   <Baris label="Nama Merchant" nilai={r.namaMerchant} />
                   <Baris label="Ref No" nilai={r.refNo} />
                   <Baris label="Jenis Pengajuan" nilai={r.jenisPengajuan} />
@@ -590,6 +593,8 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
                   <Baris label="Last Update" nilai={r.lastUpdate} />
                   <Baris label="Sumber Onboarding" nilai={r.sumberOnboarding} />
                   <Baris label="Kriteria" nilai={r.kriteria} />
+                  <Baris label="Jenis Usaha" nilai={r.jenisUsaha} />
+                  <Baris label="Referral Code" nilai={r.referralCode} />
                   <Baris label="Segmen Merchant" nilai={r.merchantSegment} />
                   <Baris label="Cabang" nilai={r.branchCode} />
                   <Baris label="Alamat" nilai={r.alamat} />
@@ -627,7 +632,9 @@ const Baris: React.FC<{ label: string; nilai: string }> = ({ label, nilai }) => 
 /** Catatan privasi ditulis satu kali, dipakai di kepala menu. */
 const ShieldNote: React.FC = () => (
   <span>
-    Kolom sensitif (nomor KTP, nomor rekening, nomor HP, e-mail, nama penginput) dipotong di sisi
-    server sebelum data masuk aplikasi ini maupun cloud.
+    Sumber menampilkan 27 kolom data; yang diambil {KOLOM_TM.length} kolom operasional
+    termasuk Jenis Usaha dan Referral Code. Sisanya — nama penginput, nomor rekening, KTP,
+    NPWP, e-mail, No. HP dan No. telepon — dipotong di sisi server sebelum data masuk
+    aplikasi ini maupun cloud.
   </span>
 );

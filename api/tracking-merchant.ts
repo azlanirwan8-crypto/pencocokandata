@@ -364,14 +364,16 @@ export async function hapusAppStore(r: Rest, key: string): Promise<void> {
 const MARKER_TM = 'trackingMIDDatabase = ';
 
 /**
- * Whitelist kolom. Sengaja daftar putih, bukan daftar hitam: sumbernya punya
- * nomor_ktp, nomor_rekening, nomor_npwp, email, no_hp, no_telp, inputer_name dan
- * referral_code, dan tidak ada satu pun yang boleh melewati fungsi ini.
+ * Whitelist kolom: 20 dari 27 kolom data yang ditampilkan sumber. Sengaja daftar putih,
+ * bukan daftar hitam — yang sengaja TIDAK diambil adalah inputer_name, nomor_rekening,
+ * nomor_ktp, nomor_npwp, email, no_hp, no_telp, dan tidak ada satu pun yang boleh
+ * melewati fungsi ini.
  */
 const FIELD_TM = [
   'mid', 'nama_merchant', 'kriteria_merchant', 'jenis_pengajuan', 'jenis_qr', 'tgl_pengajuan',
   'last_update', 'status', 'ref_no', 'source_onboarding', 'merchant_segment', 'branch_code',
   'alamat', 'provinsi', 'kabupaten_kota', 'kecamatan', 'kelurahan', 'kode_pos',
+  'jenis_usaha', 'referral_code',
 ];
 
 /** Ambil literal `trackingMIDDatabase = [ ... ]` dari HTML — sumbernya bukan JSON endpoint. */
@@ -458,6 +460,8 @@ function ratakanMerchantTm(list) {
         kecamatan: barisNi.kecamatan,
         kelurahan: barisNi.kelurahan,
         kodePos: barisNi.kode_pos,
+        jenisUsaha: barisNi.jenis_usaha,
+        referralCode: barisNi.referral_code,
         totalRiwayat: urut.length,
         idxRiwayat: n + 1,
       });

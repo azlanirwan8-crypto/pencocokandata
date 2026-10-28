@@ -2393,6 +2393,17 @@ body {
   color: var(--text-muted);
 }
 
+.tm-riwayat-keterangan {
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: var(--text-primary);
+  background: var(--accent-blue-subtle);
+  border-left: 3px solid var(--accent-blue);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  padding: 0.4rem 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
 .tm-riwayat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));

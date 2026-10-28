@@ -31,6 +31,10 @@ export interface BarisMerchant {
   kecamatan: string;
   kelurahan: string;
   kodePos: string;
+  /** Klasifikasi usaha (MCC) — kolom 18 dari 27 kolom data sumber. */
+  jenisUsaha: string;
+  /** Program promosi referral — kolom 28 sumber, isinya '-' untuk mayoritas merchant. */
+  referralCode: string;
   /** Jumlah riwayat yang tersimpan untuk MID ini — dipakai penanda "2/3". */
   totalRiwayat: number;
   /** Urutan riwayat ini dalam MID-nya, 1 = paling baru. */
@@ -70,6 +74,18 @@ export const LABEL_KERANJANG: Record<KeranjangStatus, string> = {
   proses: 'On Progress',
   tolak: 'Reject',
   lain: 'Lainnya',
+};
+
+/**
+ * Penjelasan satu keranjang status, dipakai panel detail. Sumbernya sendiri menulis
+ * penjelasan begini (bukan data kolom), jadi boleh dicerminkan — kecuali untuk Reject:
+ * sumber tidak punya kolom alasan, dan itu dikatakan apa adanya.
+ */
+export const KETERANGAN_STATUS: Record<KeranjangStatus, string> = {
+  aktif: 'NMID terbit dan merchant aktif pada jaringan switching — QRIS siap transaksi interbank.',
+  proses: 'Berkas masih dalam tahapan verifikasi approver operasional QRIS.',
+  tolak: 'Berkas ditolak approver/PTEN. Sumber tidak menyertakan kolom alasan penolakan, jadi alasan detailnya tidak ada di aplikasi ini.',
+  lain: 'Status tidak dikenali dari sumber — periksa baris aslinya di halaman sumber.',
 };
 
 export interface RingkasanTm {
@@ -125,30 +141,43 @@ export interface KolomTm {
   judul?: string;
 }
 
+/**
+ * Urutan mengikuti tabel hasil + daftar 27 kolom di halaman sumber, ditambah satu kolom
+ * turunan (`Status Verifikasi`) supaya operator bisa menyaring per keranjang, bukan per
+ * teks status mentah yang ada lima varian.
+ */
 export const KOLOM_TM: readonly KolomTm[] = [
   { label: 'MID', nilai: (r) => r.mid, jenis: 'angka', tengah: true, lebar: 96, judul: 'Merchant ID' },
   { label: 'Nama Merchant', nilai: (r) => r.namaMerchant, lebar: 220 },
   {
-    label: 'Status',
-    nilai: (r) => r.status,
+    label: 'Flagging Riwayat',
+    nilai: (r) => (r.totalRiwayat > 1 ? 'Multi-Event' : 'Tunggal'),
     tengah: true,
-    lebar: 150,
-    judul: 'Status pengajuan terakhir baris ini',
+    lebar: 120,
+    judul: 'MID dengan lebih dari satu pengajuan = Multi-Event (label sumber: Multi-Event / Tunggal)',
   },
   { label: 'Jenis Pengajuan', nilai: (r) => r.jenisPengajuan, lebar: 160 },
   { label: 'Jenis QR', nilai: (r) => r.jenisQr, tengah: true },
   { label: 'Tanggal Pengajuan', nilai: (r) => r.tglPengajuan, lebar: 140 },
   { label: 'Last Update', nilai: (r) => r.lastUpdate, lebar: 140 },
   {
-    label: 'Riwayat',
-    nilai: (r) => `${r.idxRiwayat}/${r.totalRiwayat}`,
+    label: 'Status',
+    nilai: (r) => r.status,
     tengah: true,
-    lebar: 72,
-    judul: 'Riwayat ke-n dari total riwayat MID ini (1 = paling baru)',
+    lebar: 150,
+    judul: 'Teks status persis seperti di sumber',
+  },
+  {
+    label: 'Status Verifikasi',
+    nilai: (r) => LABEL_KERANJANG[keranjangStatus(r.status)],
+    tengah: true,
+    lebar: 120,
+    judul: 'Keranjang status yang dipakai kartu KPI (Active / On Progress / Reject / Lainnya) — kolom turunan',
   },
   { label: 'Ref No', nilai: (r) => r.refNo, lebar: 150 },
   { label: 'Sumber', nilai: (r) => r.sumberOnboarding, tengah: true, lebar: 100, judul: 'Salur onboarding (BNI MOM / N/A)' },
   { label: 'Kriteria', nilai: (r) => r.kriteria, lebar: 150 },
+  { label: 'Jenis Usaha', nilai: (r) => r.jenisUsaha, lebar: 240, judul: 'Klasifikasi usaha (MCC) seperti ditampilkan sumber' },
   { label: 'Segmen Merchant', nilai: (r) => r.merchantSegment, lebar: 200 },
   { label: 'Cabang', nilai: (r) => r.branchCode, lebar: 180, judul: 'branch_code pada pengajuan' },
   { label: 'KODE POS', nilai: (r) => r.kodePos, tengah: true, lebar: 88 },
@@ -157,6 +186,7 @@ export const KOLOM_TM: readonly KolomTm[] = [
   { label: 'Kota / Kabupaten', nilai: (r) => kapital(r.kabupatenKota), lebar: 150 },
   { label: 'Provinsi', nilai: (r) => kapital(r.provinsi), lebar: 140 },
   { label: 'Alamat', nilai: (r) => r.alamat, lebar: 260 },
+  { label: 'Referral Code', nilai: (r) => r.referralCode, tengah: true, lebar: 110, judul: 'Program promosi referral (kolom terakhir sumber)' },
 ];
 
 /** Kunci saringan = teks header, sama seperti tabel lain di aplikasi ini. */

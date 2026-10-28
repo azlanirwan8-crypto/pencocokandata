@@ -8,8 +8,9 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
-  DEFINISI_KOLOM_TM, KOLOM_EKSPOR_TM, KOLOM_TM, KUNCI_STORAGE_TRACKING, LABEL_KERANJANG,
-  SUMUR_TRACKING, barisKeExcelTm, cocokCari, keranjangStatus, riwayatMerchant, ringkasTracking,
+  DEFINISI_KOLOM_TM, KOLOM_EKSPOR_TM, KOLOM_TM, KUNCI_STORAGE_TRACKING, KETERANGAN_STATUS,
+  LABEL_KERANJANG, SUMUR_TRACKING, barisKeExcelTm, cocokCari, keranjangStatus, riwayatMerchant,
+  ringkasTracking,
 } from './out/entry-uji.js';
 
 let gagal = 0;
@@ -48,11 +49,12 @@ const HTML_UJI = `<html><body>
           "status": "On Progress Approver 1", "nomor_rekening": "2020******",
           "nomor_ktp": "12770345********", "nomor_npwp": "-", "email": "a@b.com",
           "no_hp": "081394******", "no_telp": "0636", "kriteria_merchant": "(UME) Usaha Menengah",
-          "jenis_usaha": "TELECOMMUNICATION", "alamat": "LINTAS BARAT PANYABUNGAN",
+          "jenis_usaha": "TELECOMMUNICATION EQUIPMENT & TELEPHONE SALES",
+          "alamat": "LINTAS BARAT PANYABUNGAN",
           "provinsi": "Sumatera Utara", "kabupaten_kota": "Mandailing Natal",
           "kecamatan": "Siabu", "kelurahan": "Aek Mual", "kode_pos": "22976",
           "branch_code": "60108801 - PANYABUNGAN", "merchant_segment": "RR0 - Retail",
-          "referral_code": "-"
+          "referral_code": "RF-2026-A"
         },
         {
           "source_onboarding": "N/A", "nama_merchant": "AISA PONSEL", "ref_no": "REF2510000000001",
@@ -93,15 +95,22 @@ asa('riwayat lama MID pertama jadi idx 2', [baris[1].idxRiwayat, baris[1].status
 asa('merchant kedua tetap muncul walau event-nya minim', [baris[2].mid, baris[2].namaMerchant, baris[2].kabupatenKota], ['601771072', 'UD IVAN JAYA 2', 'Tapanuli Tengah']);
 asa('fallback kota dari induk saat event tidak punya kabupaten_kota', baris[2].provinsi, 'Sumatera Utara');
 
-const SENSITIF = ['nomor_rekening', 'nomor_ktp', 'nomor_npwp', 'email', 'no_hp', 'no_telp', 'inputer_name', 'referral_code', 'jenis_usaha', 'rekening'];
+// 27 kolom data sumber, kita ambil 20 kolom operasional (lihat FIELD_TM di api).
+const SENSITIF = ['nomor_rekening', 'nomor_ktp', 'nomor_npwp', 'email', 'no_hp', 'no_telp', 'inputer_name', 'rekening'];
 const kunciBaris = Object.keys(baris[0]).sort();
 asa('kolom sensitif tidak pernah keluar dari fungsi', SENSITIF.filter((k) => JSON.stringify(baris).toLowerCase().includes(k.toLowerCase())), []);
 asa('bentuk baris = whitelist + penanda riwayat', kunciBaris, [
-  'alamat', 'branchCode', 'idxRiwayat', 'jenisPengajuan', 'jenisQr', 'kabupatenKota', 'kecamatan',
-  'kelurahan', 'kodePos', 'kriteria', 'lastUpdate', 'mid', 'merchantSegment', 'namaMerchant',
-  'provinsi', 'refNo', 'sumberOnboarding', 'status', 'tglPengajuan', 'totalRiwayat',
+  'alamat', 'branchCode', 'idxRiwayat', 'jenisPengajuan', 'jenisQr', 'jenisUsaha', 'kabupatenKota',
+  'kecamatan', 'kelurahan', 'kodePos', 'kriteria', 'lastUpdate', 'mid', 'merchantSegment',
+  'namaMerchant', 'provinsi', 'refNo', 'referralCode', 'sumberOnboarding', 'status', 'tglPengajuan',
+  'totalRiwayat',
 ].sort());
-asa('daftar putih sumber = kolom yang dipakai baris', FIELD_TM.length, 18);
+asa('daftar putih sumber = 20 kolom operasional', FIELD_TM.length, 20);
+asa('Jenis Usaha ikut terbawa (kolom 18 sumber)', baris[0].jenisUsaha, 'TELECOMMUNICATION EQUIPMENT & TELEPHONE SALES');
+asa('Referral Code ikut terbawa (kolom 28 sumber)', baris[0].referralCode, 'RF-2026-A');
+asa('kolom sumber yang tidak ada di baris = hanya yang sensitif',
+  ['inputer_name', 'nomor_rekening', 'nomor_ktp', 'nomor_npwp', 'email', 'no_hp', 'no_telp']
+    .filter((k) => FIELD_TM.includes(k)), []);
 
 let salahMarker = '';
 try { ambilLiteralTrackingMID('<html>tidak ada datanya</html>'); } catch (e) { salahMarker = e.message; }
@@ -144,6 +153,27 @@ asa('kolom wilayah ditampilkan kapital di ekspor', excel[0]['Provinsi'], 'SUMATE
 asa('kolom yang kosong di sumber tetap kosong di Excel', excel[2]['Segmen Merchant'], '');
 asa('kunci storage cloud & lokal sama', KUNCI_STORAGE_TRACKING, 'tracking_merchant_data');
 asa('sumber yang ditampilkan ke user', SUMUR_TRACKING, '154.19.37.201/migrasi');
+
+// ── (3) Kelengkapan kolom: urutan mengikuti sumber + kolom turunan ──────────
+asa('22 kolom tabel (20 kolom sumber + Flagging + Status Verifikasi)', KOLOM_TM.map((c) => c.label), [
+  'MID', 'Nama Merchant', 'Flagging Riwayat', 'Jenis Pengajuan', 'Jenis QR', 'Tanggal Pengajuan',
+  'Last Update', 'Status', 'Status Verifikasi', 'Ref No', 'Sumber', 'Kriteria', 'Jenis Usaha',
+  'Segmen Merchant', 'Cabang', 'KODE POS', 'Kelurahan', 'Kecamatan', 'Kota / Kabupaten',
+  'Provinsi', 'Alamat', 'Referral Code',
+]);
+asa('label Flagging Riwayat memakai istilah sumber', KOLOM_TM.find((c) => c.label === 'Flagging Riwayat').nilai(baris[0]), 'Multi-Event');
+asa('merchant satu riwayat ditandai Tunggal', KOLOM_TM.find((c) => c.label === 'Flagging Riwayat').nilai(baris[2]), 'Tunggal');
+asa('Status Verifikasi adalah keranjang, bukan teks mentah', KOLOM_TM.find((c) => c.label === 'Status Verifikasi').nilai(baris[0]), 'On Progress');
+asa('Status mentah tetap utuh di kolomnya sendiri', baris[0].status, 'On Progress Approver 1');
+asa('saringan kolom turunan ikut terdaftar', DEFINISI_KOLOM_TM.some((d) => d.kunci === 'Status Verifikasi'), true);
+
+const AMBIL_SUMBER = FIELD_TM.length;
+asa('semua kolom sumber yang diambil punya kolom tabel', KOLOM_TM.length - 2, AMBIL_SUMBER);
+for (const k of ['aktif', 'proses', 'tolak', 'lain']) {
+  asa(`penjelasan keranjang ${k} ada`, KETERANGAN_STATUS[k].length > 20, true);
+}
+asa('penjelasan Reject mengatakan alasannya tidak ada di sumber', /tidak menyertakan kolom alasan/.test(KETERANGAN_STATUS.tolak), true);
+asa('sumber tidak punya kolom nmid — angka itu rekaan halaman sumber', FIELD_TM.includes('nmid'), false);
 
 console.log(gagal === 0 ? 'SEMUA LULUS' : `${gagal} UJIAN GAGAL`);
 process.exit(gagal === 0 ? 0 : 1);

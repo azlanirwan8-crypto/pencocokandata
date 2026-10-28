@@ -19,6 +19,6 @@ export {
   halanganNyalakanRole, jumlahBarisDilewati, catatanSumber, faseWajib, KUNCI_SUMBER_DIPILIH,
 } from '../src/utils/analystSources';
 export {
-  KOLOM_TM, KOLOM_EKSPOR_TM, DEFINISI_KOLOM_TM, KUNCI_STORAGE_TRACKING, LABEL_KERANJANG,
+  KOLOM_TM, KOLOM_EKSPOR_TM, DEFINISI_KOLOM_TM, KUNCI_STORAGE_TRACKING, KETERANGAN_STATUS, LABEL_KERANJANG,
   SUMUR_TRACKING, barisKeExcelTm, cocokCari, keranjangStatus, riwayatMerchant, ringkasTracking,
 } from '../src/utils/trackingMerchant';
