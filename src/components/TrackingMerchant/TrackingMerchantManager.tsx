@@ -17,7 +17,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import type { BarisMerchant, MuatanTracking } from '../../utils/trackingMerchant';
+import type { BarisMerchant, KartuRingkasan, MuatanTracking } from '../../utils/trackingMerchant';
 import {
   DEFINISI_KOLOM_TM,
   KOLOM_EKSPOR_TM,
@@ -72,6 +72,7 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
   const [baris, setBaris] = useState<BarisMerchant[]>([]);
   const [diambilPada, setDiambilPada] = useState<string>('');
   const [sumber, setSumber] = useState<string>('');
+  const [ringkasan, setRingkasan] = useState<KartuRingkasan[]>([]);
   const [statusMuat, setStatusMuat] = useState<'memuat' | 'siap' | 'syncing'>('memuat');
   const [galat, setGalat] = useState<string | null>(null);
   /** true = hasil sync terakhir benar-benar mendarat di cloud, bukan hanya di browser ini. */
@@ -87,6 +88,7 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
     setBaris(muatan.baris);
     setDiambilPada(muatan.diambilPada || '');
     setSumber(muatan.sumber || SUMUR_TRACKING);
+    setRingkasan(Array.isArray(muatan.ringkasan) ? muatan.ringkasan : []);
   }, []);
 
   // Muat: browser dulu supaya tabel langsung terisi, lalu cloud menang kalau lebih baru.
@@ -276,6 +278,30 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
           <ShieldNote />
         </div>
       </div>
+
+      {ringkasan.length > 0 && (
+        <>
+          <div className="tm-ringkasan">
+            {ringkasan.map((k) => (
+              <div key={k.label} className={`tm-kartu tm-kartu--${k.warna}`}>
+                <div className="tm-kartu-label">{k.label}</div>
+                <div className="tm-kartu-nilai">{k.nilai}</div>
+                {k.keterangan && <p className="tm-kartu-ket">{k.keterangan}</p>}
+                {(k.kakiKiri || k.kakiKanan) && (
+                  <div className="tm-kartu-kaki">
+                    <span>{k.kakiKiri}</span>
+                    <span>{k.kakiKanan}</span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <p className="tm-kartu-catatan">
+            Kartu di atas dibaca apa adanya dari halaman sumber saat Sync — isinya akumulasi arsip
+            di sumber, bukan hitungan baris yang tersinkron di tabel bawah ini.
+          </p>
+        </>
+      )}
 
       {galat && (
         <div

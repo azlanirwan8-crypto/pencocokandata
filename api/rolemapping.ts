@@ -538,6 +538,71 @@ function ratakanMerchantTm(list) {
   }
   return baris;
 }
+
+/**
+ * Empat kartu besar di halaman sumber BUKAN hasil hitung tabel: angkanya ditulis
+ * langsung di HTML (terukur 2026-10-28 — "5.747.459" hanya muncul sebagai teks, tidak
+ * ada satu pun skrip yang menghitungnya, sementara tabel di bawahnya berisi 167
+ * merchant). Supaya angka di menu ini sama persis dengan sumber, kartunya dibaca apa
+ * adanya saat sync. Label jadi jangkar; kartu yang tidak ditemukan dilewati dan sync
+ * tetap jalan.
+ */
+const KARTU_SUMBER = [
+  { label: 'Total Merchant Terdata', warna: 'biru' },
+  { label: 'Active & NMID Terbit', warna: 'hijau' },
+  { label: 'Reject PTEN (2026 YTD)', warna: 'merah' },
+  { label: 'Digital Onboarding (MOM)', warna: 'ungu' },
+];
+
+function bersihTeks(html) {
+  return String(html || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&amp;/g, '&').replace(/&bull;/g, '•').replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"').replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+}
+
+function ambilRingkasanSumber(html) {
+  const teks = String(html || '');
+  const hasil = [];
+  for (const kartu of KARTU_SUMBER) {
+    let mulai = -1;
+    for (const k of [kartu.label, kartu.label.replace(/&/g, '&amp;')]) {
+      const j = teks.indexOf('>' + k + '<');
+      if (j >= 0) { mulai = j; break; }
+    }
+    if (mulai < 0) continue;
+    const kelasNilai = teks.indexOf('text-3xl', mulai);
+    if (kelasNilai < 0) continue;
+    const bukaNilai = teks.indexOf('>', kelasNilai);
+    const tutupNilai = bukaNilai >= 0 ? teks.indexOf('<', bukaNilai) : -1;
+    if (bukaNilai < 0 || tutupNilai < 0) continue;
+    const nilai = bersihTeks(teks.slice(bukaNilai + 1, tutupNilai));
+    const pBuka = teks.indexOf('<p ', tutupNilai);
+    const pTutup = pBuka >= 0 ? teks.indexOf('</p>', pBuka) : -1;
+    const keterangan = pBuka >= 0 && pTutup > pBuka
+      ? bersihTeks(teks.slice(teks.indexOf('>', pBuka) + 1, pTutup))
+      : '';
+    // Kaki kartu hanya diambil kalau memang menempel (< 400 karakter dari paragraf).
+    const kakiBuka = pTutup >= 0 ? teks.indexOf('border-t', pTutup) : -1;
+    const kaki = kakiBuka >= 0 && kakiBuka - pTutup < 400 ? teks.slice(kakiBuka, kakiBuka + 400) : '';
+    const spans = [];
+    for (const m of kaki.matchAll(/<span[^>]*>([\s\S]*?)<\/span>/g)) {
+      const isi = bersihTeks(m[1]);
+      if (isi) spans.push(isi);
+    }
+    if (!nilai) continue;
+    hasil.push({
+      label: kartu.label,
+      nilai,
+      keterangan,
+      kakiKiri: spans[0] || '',
+      kakiKanan: spans[1] || '',
+      warna: kartu.warna,
+    });
+  }
+  return hasil;
+}
 // <<PANAH-AKHIR>>
 
 const KUNCI_TM = 'tracking_merchant_data';
@@ -557,7 +622,7 @@ const UNDUH_ABORT_MS = 50_000;
 let memoar: { pada: number; muatan: unknown } | null = null;
 
 /** GET biasa tanpa kredensial, tanpa cookie, tanpa header apa pun: murni anonim. */
-async function unduhSumber(): Promise<any[]> {
+async function unduhSumber(): Promise<{ baris: any[]; ringkasan: any[] }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), UNDUH_ABORT_MS);
   let html = '';
@@ -576,12 +641,15 @@ async function unduhSumber(): Promise<any[]> {
   if (diharapkan > 0 && html.length < diharapkan * 0.98) {
     throw new Error(`Unduhan dari sumber terpotong (${html.length.toLocaleString('id-ID')} dari ${diharapkan.toLocaleString('id-ID')} byte). Coba Sync lagi.`);
   }
-  return ratakanMerchantTm(ambilLiteralTrackingMID(html));
+  return {
+    baris: ratakanMerchantTm(ambilLiteralTrackingMID(html)),
+    ringkasan: ambilRingkasanSumber(html),
+  };
 }
 
-async function bangunMuatan(): Promise<{ diambilPada: string; sumber: string; baris: any[] }> {
-  const baris = await unduhSumber();
-  return { diambilPada: new Date().toISOString(), sumber: SUMUR_TM, baris };
+async function bangunMuatan(): Promise<{ diambilPada: string; sumber: string; baris: any[]; ringkasan: any[] }> {
+  const { baris, ringkasan } = await unduhSumber();
+  return { diambilPada: new Date().toISOString(), sumber: SUMUR_TM, baris, ringkasan };
 }
 
 /**
@@ -620,7 +688,7 @@ async function tanganiTrackingMerchant(req: any, res: any) {
                          : { ok: true, configured: true, data: null });
       }
 
-      let muatan: { diambilPada: string; sumber: string; baris: any[] };
+      let muatan: { diambilPada: string; sumber: string; baris: any[]; ringkasan?: any[] };
       if (memoar && Date.now() - memoar.pada < USIA_MAKSIMAL_MS) {
         muatan = memoar.muatan as any;
       } else {

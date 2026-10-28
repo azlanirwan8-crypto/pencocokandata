@@ -29,8 +29,8 @@ const iAkhir = sumberApi.indexOf(AKHIR);
 asa('penanda blok ekstraksi ada di api/rolemapping.ts', iAwal >= 0 && iAkhir > iAwal, true);
 
 const potongan = sumberApi.slice(iAwal + AWAL.length, iAkhir);
-const { FIELD_TM, ambilLiteralTrackingMID, ratakanMerchantTm } = new Function(
-  `${potongan}\nreturn { FIELD_TM, ambilLiteralTrackingMID, ratakanMerchantTm };`
+const { FIELD_TM, ambilLiteralTrackingMID, ratakanMerchantTm, ambilRingkasanSumber } = new Function(
+  `${potongan}\nreturn { FIELD_TM, ambilLiteralTrackingMID, ratakanMerchantTm, ambilRingkasanSumber };`
 )();
 
 // Sumbernya tidak pernah mengirim JSON endpoint — hanya HTML dengan literal ini.
@@ -199,6 +199,52 @@ asa('api/ tidak melewati 12 fungsi (batas Hobby)', apiTs.length <= 12, true);
 asa('api/tracking-merchant.ts tidak kembali sebagai berkas ke-13', apiTs.includes('tracking-merchant.ts'), false);
 asa('klien memakai rute gabungan ?tm=1',
   /JALUR_TRACKING_MERCHANT = '\/api\/rolemapping\?tm=1'/.test(neonSync), true);
+
+// ── (6) Kartu ringkasan sumber dibaca apa adanya ────────────────────────────
+// Angkanya teks statis di HTML sumber (bukan hasil hitung tabel), jadi satu-satunya
+// cara menyamakan tampilan adalah menyalin nilainya saat sync. Fixture di bawah memakai
+// struktur markup asli 2026-10-28.
+const HTML_KARTU = `<div class="grid">
+  <div>
+    <span class="text-[10px] font-bold uppercase tracking-wider">Total Merchant Terdata</span>
+    <div class="text-3xl font-black text-slate-900 tracking-tight font-mono">5.747.459</div>
+    <p class="text-slate-500 text-[11px] mt-1 leading-snug"> Akumulasi 11 batch arsip pendaftaran dari Mei 2021 hingga 22 Oktober 2026. </p>
+  </div>
+  <div class="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between text-[10px] font-semibold">
+    <span>28 Kolom Standar</span><span class="text-blue-700 font-bold">100% Terarsip</span>
+  </div>
+  <div>
+    <span class="text-[10px] font-bold uppercase tracking-wider">Active &amp; NMID Terbit</span>
+    <div class="text-3xl font-black text-emerald-700 tracking-tight font-mono">5.122.585</div>
+    <p class="text-slate-500 text-[11px] mt-1 leading-snug"> Tingkat keberhasilan registrasi nasional mencapai <strong>89,1%</strong> dengan NMID aktif. </p>
+  </div>
+  <div class="pt-3 mt-3 border-t border-emerald-100 flex items-center justify-between text-[10px] font-semibold">
+    <span>Standar Nasional ASPI</span><span class="font-bold">Live Transaksi</span>
+  </div>
+  <div>
+    <span class="text-[10px] font-bold uppercase tracking-wider">Reject PTEN (2026 YTD)</span>
+    <div class="text-3xl font-black text-red-600 tracking-tight font-mono">132.744</div>
+    <p class="text-slate-500 text-[11px] mt-1 leading-snug"> Penolakan meningkat ke <strong>18,4%</strong> di 2026. </p>
+  </div>
+  <div class="pt-3 mt-3 border-t border-red-100 flex items-center justify-between text-[10px] font-semibold">
+    <span>FDS Nama vs MCC &amp; Kodepos</span><span class="font-bold">Butuh Pre-Validation</span>
+  </div>
+  <div>
+    <span class="text-[10px] font-bold uppercase tracking-wider">Digital Onboarding (MOM)</span>
+    <div class="text-3xl font-black text-purple-700 tracking-tight font-mono">1.596.280</div>
+    <p class="text-slate-500 text-[11px] mt-1 leading-snug"> Registrasi melalui aplikasi <strong>BNI MOM</strong> sejak migrasi pertengahan 2023. </p>
+  </div>
+  <div class="pt-3 mt-3 border-t border-purple-100 flex items-center justify-between text-[10px] font-semibold">
+    <span>74% Porsi Pengajuan 2026</span><span class="font-bold">Saluran Utama</span>
+  </div>
+</div>`;
+const kartu = ambilRingkasanSumber(HTML_KARTU);
+asa('empat kartu sumber terbaca', kartu.length, 4);
+asa('nilai kartu = nilai di sumber', kartu.map((k) => k.nilai), ['5.747.459', '5.122.585', '132.744', '1.596.280']);
+asa('label &amp; di sumber tetap terbaca', kartu[1].label, 'Active & NMID Terbit');
+asa('keterangan kartu dibersihkan dari tag', kartu[1].keterangan.includes('<strong>'), false);
+asa('kaki kartu terbaca', [kartu[0].kakiKiri, kartu[0].kakiKanan], ['28 Kolom Standar', '100% Terarsip']);
+asa('kartu yang tidak ada dilewati, bukan melempar', ambilRingkasanSumber('<html>tanpa kartu</html>'), []);
 
 console.log(gagal === 0 ? 'SEMUA LULUS' : `${gagal} UJIAN GAGAL`);
 process.exit(gagal === 0 ? 0 : 1);

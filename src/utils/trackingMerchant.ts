@@ -46,10 +46,25 @@ export interface BarisMerchant {
  * Jumlah merchant TIDAK disimpan di sini: selalu diturunkan dari `baris` (lihat
  * `ringkasTracking`), supaya angka di badge, kartu, dan tabel tidak mungkin berbeda.
  */
+/**
+ * Kartu ringkasan di halaman sumber. Angkanya teks statis di HTML sumber, bukan hasil
+ * hitung tabel, jadi nilainya dibaca apa adanya saat sync.
+ */
+export interface KartuRingkasan {
+  label: string;
+  nilai: string;
+  keterangan: string;
+  kakiKiri: string;
+  kakiKanan: string;
+  warna: 'biru' | 'hijau' | 'merah' | 'ungu';
+}
+
 export interface MuatanTracking {
   diambilPada: string;
   sumber: string;
   baris: BarisMerchant[];
+  /** Kosong/tidak ada pada muatan lama yang tersimpan sebelum kartu ini ikut disinkron. */
+  ringkasan?: KartuRingkasan[];
 }
 
 export const KUNCI_STORAGE_TRACKING = 'tracking_merchant_data';
