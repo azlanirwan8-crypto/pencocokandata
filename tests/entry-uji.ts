@@ -22,9 +22,8 @@ export {
 } from '../src/utils/analystSources';
 export {
   KOLOM_TM, KOLOM_EKSPOR_TM, DEFINISI_KOLOM_TM, KUNCI_STORAGE_TRACKING, KETERANGAN_STATUS, LABEL_KERANJANG,
-  PERIODE_QR_DEFAULT, SARINGAN_REKAP_KOSONG, barisKeExcelTm, cocokCari, kartuMerchant,
+  barisKeExcelTm, cocokCari, kartuMerchant,
   keranjangStatus, keteranganRef, labelStatusSumber, riwayatMerchant, ringkasTracking, temukanMerchant,
-  daftarPeriodeQr, periodeQrAktif, formatAngka, ringkasAngkaBesar, segmenDonat, daftarMerchantTerverifikasi,
-  saringMerchantTerverifikasi, halamanDaftar, warnaLembut, kelasAlamatMerchant, kueriPetaMerchant,
+  kelasAlamatMerchant, kueriPetaMerchant,
   daftarMerchantPeta, kelompokkanMerchantPeta, ringkasMerchantPeta,
 } from '../src/utils/trackingMerchant';

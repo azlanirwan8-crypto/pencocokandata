@@ -1,5 +1,5 @@
-// Tracking Merchant — uji angka turunan, kolom ekspor, dan pemilihan periode yang
-// dibaca tabel. Menu ini hanya menampilkan muatan tersimpan, jadi fixture-nya berbentuk
+// Tracking Merchant — uji angka turunan, kolom ekspor, jejak per MID, dan titik peta.
+// Menu ini hanya menampilkan muatan tersimpan, jadi fixture-nya berbentuk
 // `BarisMerchant` langsung (tidak ada lagi parser sumber yang perlu dijalankan).
 // Jalankan:
 //   npx vite build --ssr tests/entry-uji.ts --outDir tests/out
@@ -8,10 +8,9 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   DEFINISI_KOLOM_TM, KOLOM_EKSPOR_TM, KOLOM_TM, KUNCI_STORAGE_TRACKING, KETERANGAN_STATUS,
-  LABEL_KERANJANG, PERIODE_QR_DEFAULT, SARINGAN_REKAP_KOSONG, barisKeExcelTm, cocokCari,
-  daftarMerchantTerverifikasi, daftarPeriodeQr, formatAngka, halamanDaftar, kartuMerchant,
-  keranjangStatus, keteranganRef, labelStatusSumber, periodeQrAktif, ringkasAngkaBesar, riwayatMerchant,
-  ringkasTracking, saringMerchantTerverifikasi, segmenDonat, temukanMerchant, warnaLembut,
+  LABEL_KERANJANG, barisKeExcelTm, cocokCari, kartuMerchant,
+  keranjangStatus, keteranganRef, labelStatusSumber, riwayatMerchant,
+  ringkasTracking, temukanMerchant,
   kelasAlamatMerchant, kueriPetaMerchant, daftarMerchantPeta, kelompokkanMerchantPeta, ringkasMerchantPeta,
 } from './out/entry-uji.js';
 
@@ -183,128 +182,12 @@ asa('api/ tidak melewati 12 fungsi (batas Hobby)', apiTs.length <= 12, true);
 asa('klien memakai rute gabungan ?tm=1',
   /JALUR_TRACKING_MERCHANT = '\/api\/rolemapping\?tm=1'/.test(neonSync), true);
 
-// ── (8) Komposisi jenis QR: muatan tersimpan ────────────────────────────────
-// Angka komposisi adalah literal data lake nasional yang tersimpan apa adanya;
-// jangan diturunkan dari `baris` (262 merchant perwakilan).
-const periodeUji = {
-  '2025': {
-    label: 'Tahun 2025', shortLabel: '2025',
-    totalRawEvents: 503893, totalUniqueMIDs: 371186, duplicateEventsEliminated: 132707,
-    qrGroups: [
-      { name: 'QR Sticker', rawCount: 470000, uniqueCount: 350000, pct: 94.29,
-        dupEliminated: 120000, desc: 'Statis (Meja / Kasir UMKM)', color: '#0284c7', isApi: false },
-    ],
-  },
-  '2026': {
-    label: 'Tahun 2026', shortLabel: '2026',
-    totalRawEvents: 720663, totalUniqueMIDs: 540939, duplicateEventsEliminated: 179724,
-    qrGroups: [
-      { name: 'QR Sticker', rawCount: 661452, uniqueCount: 504924, pct: 93.34,
-        dupEliminated: 156528, desc: 'Statis (Meja / Kasir UMKM)', color: '#0284c7', isApi: false },
-      { name: 'QR API', rawCount: 196, uniqueCount: 12178, pct: 2.25,
-        dupEliminated: 1, desc: 'E-Commerce & Payment Gateway API', color: '#64748b', isApi: true },
-    ],
-  },
-};
-
-// Pemilihan periode di layar
-asa('komposisi: default halaman sumber = 2026', PERIODE_QR_DEFAULT, '2026');
-asa('komposisi: daftar periode mengikuti literal', daftarPeriodeQr(periodeUji), ['2025', '2026']);
-asa('komposisi: periode pilihan dipakai', periodeQrAktif(periodeUji, '2025').label, 'Tahun 2025');
-asa('komposisi: kunci tak dikenal jatuh ke 2026', periodeQrAktif(periodeUji, '2019').label, 'Tahun 2026');
-asa('komposisi: tanpa 2026 jatuh ke periode pertama', periodeQrAktif({ '2025': periodeUji['2025'] }, '2019').label, 'Tahun 2025');
-asa('komposisi: muatan lama tanpa komposisi → null', [periodeQrAktif(undefined, '2026'), daftarPeriodeQr(undefined)], [null, []]);
-
-// Angka & donat
-asa('angka ribuan memakai gaya Indonesia', formatAngka(540939), '540.939');
-asa('angka donat diringkas seperti sumber',
-  [ringkasAngkaBesar(540939), ringkasAngkaBesar(4655815), ringkasAngkaBesar(0)], ['540,9k', '4,66M', '0,0k']);
-const cincin = segmenDonat([
-  { name: 'A', color: '#111111', rawCount: 1, uniqueCount: 1, pct: 25, dupEliminated: 0, desc: '', isApi: false },
-  { name: 'B', color: '#222222', rawCount: 3, uniqueCount: 3, pct: 75, dupEliminated: 0, desc: '', isApi: false },
-], 4);
-asa('donat: potongan & offset mengikuti pangsa MID unik',
-  cincin.map((s) => [s.name, s.color, s.dasharray, s.dashoffset]),
-  [['A', '#111111', '62.832 188.496', '0.000'], ['B', '#222222', '188.496 62.832', '-62.832']]);
-asa('donat: total nol tidak menghasilkan NaN',
-  segmenDonat([{ name: 'A', color: '#111111', rawCount: 0, uniqueCount: 0, pct: 0, dupEliminated: 0, desc: '', isApi: false }], 0)[0].dasharray,
-  '0.000 251.327');
-asa('donat: satu potongan penuh = keliling cincin (dipakai sebagai keadaan awal animasi)',
-  segmenDonat([{ name: 'A', color: '#111111', rawCount: 1, uniqueCount: 1, pct: 100, dupEliminated: 0, desc: '', isApi: false }], 1)[0].dasharray,
-  '251.327 0.000');
-asa('donat: potongan yang busurnya tak terlihat ditandai, bukan digambar', cincin.map((s) => s.tampil), [true, true]);
-const cincinKecil = segmenDonat([
-  { name: 'A', color: '#111111', rawCount: 10000, uniqueCount: 10000, pct: 99.99, dupEliminated: 0, desc: '', isApi: false },
-  { name: 'B', color: '#222222', rawCount: 1, uniqueCount: 1, pct: 0.01, dupEliminated: 0, desc: '', isApi: true },
-], 10001);
-asa('donat: porsi 0,01% (0,025 px) dilewati seperti sumber', cincinKecil.map((s) => s.tampil), [true, false]);
-
-// Pil persen & angka MID memakai warna jenis QR dari data, bukan hex komponen.
-asa('warna lembut: hex 6 digit jadi rgba', warnaLembut('#7c3aed', 0.14), 'rgba(124, 58, 237, 0.14)');
-asa('warna lembut: hex 3 digit dikembangkan', warnaLembut('#0af', 0.5), 'rgba(0, 170, 255, 0.5)');
-asa('warna lembut: alfa dijepit 0..1',
-  [warnaLembut('#000000', 4), warnaLembut('#000000', -1)], ['rgba(0, 0, 0, 1)', 'rgba(0, 0, 0, 0)']);
-asa('warna lembut: bukan hex dikembalikan apa adanya', warnaLembut('var(--x)', 0.2), 'var(--x)');
-asa('warna lembut: kosong jatuh ke abu-abu lembut', warnaLembut('', 0.2), 'rgba(100, 116, 139, 0.12)');
-
-// ── (9) Daftar merchant terverifikasi: satu baris per MID ──────────────────
-const daftarMid = daftarMerchantTerverifikasi(baris);
-asa('daftar MID: satu baris per MID unik, urutan sumber', daftarMid.map((m) => m.mid), ['601741069', '601771072']);
-asa('daftar MID: identitas induk; jenis QR induk dipakai, event jadi cadangan',
-  [daftarMid[0].nama, daftarMid[0].jenisQr, daftarMid[1].jenisQr], ['AISA PONSEL', 'QR Sticker', 'QR API']);
-asa('daftar MID: jumlah log & update event terakhir di urutan sumber',
-  [daftarMid[0].jumlahRiwayat, daftarMid[0].lastUpdate], [2, '2025-02-01 09:30:00']);
-
-const cariRekap = (saringan) =>
-  saringMerchantTerverifikasi(daftarMid, { ...SARINGAN_REKAP_KOSONG, ...saringan }).map((m) => m.mid);
-asa('saringan rekap: pencarian MID', cariRekap({ kueri: '601771' }), ['601771072']);
-asa('saringan rekap: pencarian nama & kota',
-  [cariRekap({ kueri: 'ivan' }), cariRekap({ kueri: 'tapanuli' })], [['601771072'], ['601771072']]);
-asa('saringan rekap: nomor rekening tidak dicari (tidak ada di muatan)', cariRekap({ kueri: '2120' }), []);
-asa('saringan rekap: grup QR API / Non-API',
-  [cariRekap({ jenisQr: 'GROUP_API' }), cariRekap({ jenisQr: 'GROUP_NON_API' })],
-  [['601771072'], ['601741069']]);
-asa('saringan rekap: jenis QR persis', cariRekap({ jenisQr: 'QR Sticker' }), ['601741069']);
-asa('saringan rekap: multi-log vs satu log',
-  [cariRekap({ duplikasi: 'multi' }), cariRekap({ duplikasi: 'single' })],
-  [['601741069'], ['601771072']]);
-
-const banyak = Array.from({ length: 45 }, (_, i) => i + 1);
-const hal3 = halamanDaftar(banyak, 3, 20);
-asa('halaman: potongan terakhir 41–45 dari 45', [hal3.isi.length, hal3.mulai, hal3.akhir, hal3.totalHalaman], [5, 41, 45, 3]);
-asa('halaman: nomor di luar rentang dijepit',
-  [halamanDaftar(banyak, 9, 20).halaman, halamanDaftar(banyak, 0, 20).halaman], [3, 1]);
-const halKosong = halamanDaftar([], 2, 20);
-asa('halaman: daftar kosong tidak NaN',
-  [halKosong.isi.length, halKosong.mulai, halKosong.akhir, halKosong.totalHalaman, halKosong.total],
-  [0, 0, 0, 1, 0]);
-
-// Urutan panel & ukuran halaman di komponen
+// Urutan panel di komponen
 const komponenTm = readFileSync(
   fileURLToPath(new URL('../src/components/TrackingMerchant/TrackingMerchantManager.tsx', import.meta.url)), 'utf8');
-asa('komponen: 20 baris per halaman seperti sumber', /UKURAN_HALAMAN_REKAP = 20/.test(komponenTm), true);
 asa('komponen: Aktivitas dirender sebelum Kinerja tahunan',
   komponenTm.indexOf('glass-card tm-aktivitas') >= 0 &&
     komponenTm.indexOf('glass-card tm-aktivitas') < komponenTm.indexOf('glass-card tm-tahunan'), true);
-asa('komponen: daftar MID terverifikasi jadi bagian paling bawah, setelah Kinerja tahunan',
-  komponenTm.indexOf('glass-card tm-tahunan') >= 0 &&
-    komponenTm.indexOf('glass-card tm-tahunan') < komponenTm.indexOf('glass-card tm-rekap'), true);
-asa('komponen: komposisi kosong diberi pemberitahuan, bukan angka karangan',
-  [komponenTm.includes('tm-qr-nihil'), komponenTm.includes('totalUniqueMIDs:')], [true, false]);
-asa('komponen: pemilih periode tersegmentasi seperti sumber',
-  [komponenTm.includes('Kumulatif ({periodeKumulatif.shortLabel})'), komponenTm.includes('(Aktif)'),
-    komponenTm.includes('Pilih Tahun')], [true, true, true]);
-asa('komponen: rekap agregasi bisa diekspor sendiri',
-  [komponenTm.includes('Export Excel'), /eksporRekapQr = useCallback/.test(komponenTm),
-    komponenTm.includes("'MID Unik (Validasi)'")], [true, true, true]);
-asa('komponen: potongan donat tak terlihat dilewati',
-  /segmen\s*\.filter\(\(s\) => s\.tampil\)/.test(komponenTm), true);
-asa('komponen: pil angka memakai warna jenis QR dari data',
-  [/warnaLembut\(g\.color, 0\.14\)/.test(komponenTm), /warnaLembut\(warnaJenis\(m\.jenisQr\), 0\.1\)/.test(komponenTm)],
-  [true, true]);
-asa('komponen: total rekap menyebut periode & menyatakan 100% unik',
-  [komponenTm.includes('TOTAL REKAP ({periodeData.shortLabel})'), komponenTm.includes('100% Unik')],
-  [true, true]);
 
 // ── Titik peta: kelas alamat, kueri, kelompok, dan angka panel ─────────────
 const barisPeta = [
@@ -358,27 +241,21 @@ asa('peta: alamat perkiraan ikut bila diminta',
 asa('peta: ringkasan menghitung titik unik, bukan baris', ringkasMerchantPeta(petaA),
   { total: 4, presisi: 2, kasar: 1, tidakValid: 1, titikPresisi: 1, titikKasar: 1 });
 
-// Animasi chart: cincin digambar setelah frame pertama, bilah & legenda lewat CSS,
-// dan semuanya harus dimatikan saat pengguna memilih reduced motion.
+// Animasi panel yang tersisa: kartu ringkasan dan kartu tahunan lewat CSS, dan
+// semuanya harus dimatikan saat pengguna memilih reduced motion.
 const gayaTm = readFileSync(fileURLToPath(new URL('../src/styles/index.css', import.meta.url)), 'utf8');
-asa('komponen: cincin digambar bertahap dan diulang saat periode berganti',
-  [/KELILING_DONAT = \(2 \* Math\.PI \* 40\)\.toFixed\(3\)/.test(komponenTm),
-    /const CincinKomposisi[\s\S]*requestAnimationFrame\(\(\) => setSiap\(true\)\)/.test(komponenTm),
-    /<CincinKomposisi/.test(komponenTm), /key=\{kunciPeriodeAktif\}/.test(komponenTm)],
-  [true, true, true, true]);
 asa('komponen: kartu kepala memakai kelas, bukan gaya inline',
   [komponenTm.includes('glass-card tm-kepala-kartu'), komponenTm.includes("marginBottom: '1rem'"),
     /\.tm-kepala-kartu \{ margin-bottom: 1rem; \}/.test(gayaTm), /\.tm-kepala-judul \{/.test(gayaTm)],
   [true, false, true, true]);
-asa('gaya: animasi chart tersedia (cincin, bilah, legenda, kartu tahunan, ringkasan)',
-  ['@keyframes tm-muncul', '@keyframes tm-bilah', '@keyframes tm-naik', '.tm-donat circle',
-    '.tm-qr-bar-track > i', '.tm-tahun-seg', '.tm-ringkasan .tm-kartu']
+asa('gaya: animasi kartu tahunan & ringkasan tersedia',
+  ['@keyframes tm-bilah', '@keyframes tm-naik', '.tm-tahun-seg', '.tm-ringkasan .tm-kartu']
     .map((kunci) => gayaTm.includes(kunci)),
-  [true, true, true, true, true, true, true]);
+  [true, true, true, true]);
 asa('gaya: animasi dimatikan saat prefers-reduced-motion',
   /prefers-reduced-motion: reduce[\s\S]{0,200}animation-duration: 0\.001ms/.test(gayaTm), true);
 asa('gaya: panel tujuan gulir tidak tertutup topbar lengket',
-  /\.tm-aktivitas,\s*\n\.tm-rekap \{\s*\n\s*scroll-margin-top: 4\.2rem;/.test(gayaTm), true);
+  /\.tm-aktivitas \{\s*\n\s*scroll-margin-top: 4\.2rem;/.test(gayaTm), true);
 
 console.log(gagal === 0 ? 'SEMUA LULUS' : `${gagal} UJIAN GAGAL`);
 process.exit(gagal === 0 ? 0 : 1);
