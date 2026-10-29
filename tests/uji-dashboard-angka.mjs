@@ -111,6 +111,11 @@ asa('DA19 prefiks KABUPATEN/KOTA dilepas saat membanding kota', kotaCocok('KABUP
 asa('DA20 nama kota terpotong 15 karakter tetap bertemu (Bula)', kotaCocok('Kabupaten Seram Bagian Timur', 'SERAM BAGIAN TI'), true);
 asa('DA21 kota beda benar tidak dianggap sama', kotaCocok('KABUPATEN TEBO', 'KOTA BANDAR LAMPUNG'), false);
 asa('DA22 kecamatan beda tidak boleh tertukar', kunciKelKec('Bula', 'Bula') === kunciKelKec('Bula', 'Bula Barat'), false);
+// Kasus nyata 2026-10-29: pin DKI berlabel "KOTA ADMINISTRASI ..." sedangkan Tracking
+// Merchant menyimpan "JAKARTA PUSAT" — busur kota DKI hilang bila prefiks ini tidak dilepas.
+asa('DA26 prefiks KOTA ADMINISTRASI dilepas (Jakarta Pusat)', kotaCocok('KOTA ADMINISTRASI JAKARTA PUSAT', 'JAKARTA PUSAT'), true);
+asa('DA27 prefiks KOTA ADM. dilepas (Jakarta Selatan)', kotaCocok('KOTA ADM. JAKARTA SELATAN', 'Jakarta Selatan'), true);
+asa('DA28 prefiks KOTA ADM tanpa titik dilepas', kotaCocok('KOTA ADM JAKARTA BARAT', 'JAKARTA BARAT'), true);
 
 // ── 4. TUBUH LAPORAN PDF ──
 // Terukur 2026-09-24 di browser: `head: [[...]]` + `body: [objek]` membuat jspdf-autotable

@@ -4,8 +4,15 @@ import { cleanProvinsi } from './normalizer';
 
 export const normWilayah = (s: string) => String(s || '').toUpperCase().replace(/\s+/g, ' ').trim();
 
-/** Lepas "KABUPATEN " / "KOTA " — tabel kode pos memakai prefiks, data PTEN tidak. */
-export const lepasPrefiks = (s: string) => normWilayah(s).replace(/^(KABUPATEN|KOTA)\s+/, '');
+/**
+ * Lepas "KABUPATEN " / "KOTA " / "KOTA ADMINISTRASI " / "KOTA ADM. " — tabel kode pos
+ * dan data master memakai prefiks, data PTEN maupun Tracking Merchant tidak.
+ * Terukur di data lokal 2026-10-29: pin DKI berlabel "KOTA ADMINISTRASI JAKARTA PUSAT"
+ * sedangkan Tracking Merchant menyimpan "JAKARTA PUSAT", sehingga tanpa prefiks ini
+ * busur cabang → merchant tidak pernah digambar untuk kota-kota DKI.
+ */
+export const lepasPrefiks = (s: string) =>
+  normWilayah(s).replace(/^(KABUPATEN|KOTA\s+ADMINISTRASI|KOTA\s+ADM\.?|KOTA)\s+/, '');
 
 /**
  * Kunci cadangan bila kode pos baris tidak ada / belum bertitik di tabel kode pos.
