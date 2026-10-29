@@ -1,8 +1,8 @@
 import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshCw, X, CloudUpload, CheckCircle2, AlertCircle, ShieldCheck, ExternalLink } from 'lucide-react';
+import { RefreshCw, X, CloudUpload, CheckCircle2, AlertCircle, ShieldCheck, ExternalLink, Info } from 'lucide-react';
 import {
   runKodePosLiveSync,
-  importSemuaPatokan,
+  importSemuaPos,
   salinKoordinatPatokan,
   cakupanKoordinat,
   type KodePosSyncPlan,
@@ -52,7 +52,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [cakupan, setCakupan] = useState<KoordinatCakupan | null>(null);
-  // "Isi Semua Patokan + Titik" menulis langsung ke database produksi, jadi tidak
+  // "Isi Semua dari Pos Indonesia" menulis langsung ke database produksi, jadi tidak
   // boleh jalan dari satu klik tanpa angka berapa yang akan masuk terlihat lebih dulu.
   const [konfirmasiIsiSemua, setKonfirmasiIsiSemua] = useState(false);
 
@@ -77,7 +77,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
     setPct(percent);
   };
 
-  const startCheck = async (keepMsg?: string) => {
+  const startCheck = async (keepMsg?: string, autoImport = true) => {
     setPhase('checking');
     setErrorMsg(null);
     setImportMsg(keepMsg ?? null);
@@ -85,12 +85,12 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
     setSelected(new Set());
     setSearch('');
     try {
-      const result = await runKodePosLiveSync(onProgress);
+      const result = await runKodePosLiveSync(onProgress, autoImport);
       setPlan(result);
       setSelected(new Set(result.missingInCloud.map(rowKey)));
       setPhase('ready');
       if (result.barisDisalin) {
-        setImportMsg(`${fmt(result.barisDisalin)} baris patokan disalin ke tabel kerja — tabel di belakang jendela ini dimuat ulang.`);
+        setImportMsg(`${fmt(result.barisDisalin)} baris dari situs Pos Indonesia disalin ke tabel kerja — tabel di belakang jendela ini dimuat ulang.`);
         onImported?.();
       }
       void cakupanKoordinat().then((c) => c && setCakupan(c));
@@ -111,7 +111,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
 
   const tipKoordinat = !cakupan
     ? 'Endpoint ?view=koordinat belum tersedia di deployment ini.'
-    : `Titik per kode wilayah desa, sumber kodepos.co.id — ${fmt(cakupan.patokanTitik)} titik${
+    : `Situs Pos Indonesia tidak memuat titik koordinat; titik di sini berasal dari kodepos.co.id yang sudah tersimpan — ${fmt(cakupan.patokanTitik)} titik${
         cakupan.terakhir
           ? `, terakhir diperbarui ${new Date(cakupan.terakhir).toLocaleDateString('id-ID', {
               day: '2-digit',
@@ -149,7 +149,7 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
 
   const handleImport = async () => {
     if (selectedRows.length === 0) {
-      setErrorMsg('Pilih dulu minimal satu baris patokan untuk disalin.');
+      setErrorMsg('Pilih dulu minimal satu baris kode pos untuk disalin.');
       return;
     }
     setPhase('importing');
@@ -161,37 +161,42 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
       const msg = `${fmt(selectedRows.length)} baris berhasil dikirim ke database Supabase.`;
       setImportMsg(msg);
       onImported?.();
-      await startCheck(msg);
+      // Jangan minta server melengkapi sisanya: pengguna memilih baris tertentu.
+      await startCheck(msg, false);
     } catch (err: any) {
       setErrorMsg(err?.message || 'Gagal menyimpan ke database.');
       setPhase('ready');
     }
   };
 
-  // Salin seluruh patokan yang belum ada, langsung di database (tanpa batas daftar contoh),
-  // lalu turunkan titik koordinat per desa ke baris kerja yang sama.
+  // Salin SELURUH baris situs Pos Indonesia yang belum ada, langsung di database (tanpa
+  // batas daftar contoh), lalu turunkan titik koordinat yang cocok dari tabel patokan.
   const handleImportAll = async () => {
     setPhase('importing');
-    setStep('Menyalin seluruh patokan ke tabel kerja...');
+    setStep('Menarik seluruh kode pos dari kodepos.posindonesia.co.id...');
     try {
-      const { masuk, totalSetelah } = await importSemuaPatokan(onProgress);
-      setStep('Menyalin titik koordinat per desa ke baris kerja...');
+      const { masuk, totalSetelah, totalSitus, barisSitus, duplikatSitus } = await importSemuaPos(onProgress);
+      setStep('Menyalin titik koordinat yang cocok ke baris kerja...');
       const titik = await salinKoordinatPatokan();
-      const bagian = [`${fmt(masuk)} baris patokan disalin ke tabel kerja`];
+      const bagian = [`${fmt(masuk)} baris situs Pos Indonesia disalin ke tabel kerja`];
+      if (duplikatSitus > 0) {
+        bagian.push(`situs mengirim ${fmt(barisSitus)} baris, ${fmt(duplikatSitus)} duplikat identik tidak disimpan`);
+      }
+      bagian.push(`${fmt(totalSetelah)} baris tersimpan dari ${fmt(totalSitus)} baris unik situs`);
       if (titik) {
         bagian.push(
           titik.disalin > 0
-            ? `${fmt(titik.disalin)} baris mendapat titik`
-            : 'titik sudah sesuai patokan'
+            ? `${fmt(titik.disalin)} baris mendapat titik koordinat`
+            : 'titik koordinat sudah sesuai'
         );
         if (titik.tanpaTitik > 0) bagian.push(`${fmt(titik.tanpaTitik)} baris masih tanpa titik`);
       }
-      const msg = `${bagian.join(' · ')} — total ${fmt(totalSetelah)} baris.`;
+      const msg = `${bagian.join(' · ')}.`;
       setImportMsg(msg);
       onImported?.();
       await startCheck(msg);
     } catch (err: any) {
-      setErrorMsg(err?.message || 'Penyalinan patokan gagal.');
+      setErrorMsg(err?.message || 'Penyalinan dari situs Pos Indonesia gagal.');
       setPhase('ready');
     }
   };
@@ -228,9 +233,9 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                 <div style={{ width: `${pct}%`, height: '100%', background: '#299cdb', transition: 'width .2s' }} />
               </div>
               <p style={{ fontSize: '0.76rem', color: '#878a99', marginTop: '0.7rem' }}>
-                Server mengambil halaman kecamatan kodepos.co.id sebagai patokan (wilayah, kode pos,
-                titik sekaligus), memeriksa jejak terakhir kodepos.id, lalu hasilnya diadu dengan
-                basis data Supabase.
+                Server menarik SELURUH kode pos dari kodepos.posindonesia.co.id (pencarian wildcard),
+                lalu hasilnya diadu baris-per-baris dengan basis data Supabase. Bila tabel kerja masih
+                kosong, seluruh baris unik situs langsung disalin.
               </p>
             </div>
           )}
@@ -269,9 +274,14 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                 <StatCard
                   tipProps={tipProps}
                   label="2. Kode Pos belum ada"
-                  value={fmt(rows.length)}
-                  sub="baris patokan yang belum tersimpan di Supabase Postgres"
-                  color={rows.length > 0 ? '#f06548' : '#0ab39c'}
+                  value={fmt(plan.missingTotal ?? rows.length)}
+                  sub="baris situs resmi yang belum tersimpan di Supabase Postgres"
+                  color={(plan.missingTotal ?? rows.length) > 0 ? '#f06548' : '#0ab39c'}
+                  tip={
+                    plan.listTruncated
+                      ? `Dihitung tepat dari seluruh ${fmt(plan.compareTotal)} baris unik situs; tabel di bawah menampilkan ${fmt(rows.length)} contoh pertama.`
+                      : `Dihitung dari seluruh ${fmt(plan.compareTotal)} baris unik situs resmi Pos Indonesia.`
+                  }
                 />
                 <StatCard
                   tipProps={tipProps}
@@ -288,6 +298,13 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                   color={!cakupan ? '#5b5f6e' : cakupan.tanpaTitik > 0 ? '#d68b0c' : '#0ab39c'}
                   tip={tipKoordinat}
                 />
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', fontSize: '0.74rem', color: '#5b5f6e', lineHeight: 1.6 }}>
+                <Info size={14} style={{ marginTop: '2px', flexShrink: 0 }} />
+                <span>
+                  {plan.sourceDetail}
+                  {plan.note ? ` ${plan.note}` : ''}
+                </span>
               </div>
               {importMsg && (
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.8rem', color: '#0ab39c' }}>
@@ -316,14 +333,41 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
                   Database kita sudah versi terbaru dan valid.
                 </div>
                 <div style={{ fontSize: '0.79rem', color: '#495057', marginTop: '0.3rem', lineHeight: 1.6 }}>
-                  Tidak ada selisih: seluruh kode pos dari {plan.compareLabel.toLowerCase()} sudah tersimpan di Supabase Postgres.
-                  {plan.lastUpdated ? ` Diperbarui: ${new Date(plan.lastUpdated).toLocaleString('id-ID')}.` : ''}
+                  Tidak ada selisih: seluruh {fmt(plan.compareTotal)} baris unik dari situs resmi Pos Indonesia
+                  sudah tersimpan persis di Supabase Postgres.
+                  {plan.lastUpdated ? ` Situs dibaca: ${new Date(plan.lastUpdated).toLocaleString('id-ID')}.` : ''}
                 </div>
               </div>
             </div>
           )}
 
-          {!checking && !errorMsg && plan && plan.status === 'DIFF' && (
+          {!checking && !errorMsg && plan && plan.status === 'DIFF' && rows.length === 0 && (
+            <div
+              style={{
+                display: 'flex',
+                gap: '0.7rem',
+                alignItems: 'flex-start',
+                background: 'rgba(214, 139, 12, 0.08)',
+                border: '1px solid rgba(214, 139, 12, 0.3)',
+                borderRadius: '6px',
+                padding: '1rem',
+              }}
+            >
+              <AlertCircle size={20} color="#d68b0c" style={{ marginTop: '2px', flexShrink: 0 }} />
+              <div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#d68b0c' }}>
+                  Semua baris situs sudah ada, tetapi database berisi baris lain.
+                </div>
+                <div style={{ fontSize: '0.79rem', color: '#495057', marginTop: '0.3rem', lineHeight: 1.6 }}>
+                  Database: {fmt(plan.dbRows || 0)} baris · situs resmi Pos Indonesia: {fmt(plan.compareTotal)} baris unik.
+                  Selisihnya baris lama yang tidak dikenal situs. Bila ingin jumlahnya sama persis, kosongkan
+                  dulu tabel kerja lewat tombol Reset Data Kode Pos di tabel utama, lalu tekan Sync Data lagi.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!checking && !errorMsg && plan && plan.status === 'DIFF' && rows.length > 0 && (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                 <input
@@ -457,25 +501,32 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
         </div>
 
         <div className="modal-footer">
-          <button type="button" className="btn btn-outline btn-sm" onClick={() => void startCheck()} disabled={phase !== 'ready'}>
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => void startCheck(undefined, false)} disabled={phase !== 'ready'}>
             <RefreshCw size={13} style={{ marginRight: '0.3rem' }} />
             Periksa Ulang
           </button>
           <button type="button" className="btn btn-outline btn-sm" onClick={onClose}>
             Tutup
           </button>
-          {((plan?.listTruncated && (plan.missingTotal ?? 0) > 0) ||
-            (plan && (cakupan?.tanpaTitik ?? 0) > 0)) && (
+          {plan && ((plan.missingTotal ?? 0) > 0 || (cakupan?.tanpaTitik ?? 0) > 0) && (
             <button
               type="button"
               className="btn btn-primary btn-sm"
               onClick={() => setKonfirmasiIsiSemua(true)}
               disabled={phase !== 'ready'}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-              title="Menyalin semua baris patokan yang belum ada dan menurunkan titik koordinat per desa — bukan hanya daftar contoh yang tampil di layar ini."
+              title={
+                (plan.missingTotal ?? 0) > 0
+                  ? 'Menarik ulang seluruh data dari kodepos.posindonesia.co.id dan menyalin semua baris yang belum ada — bukan hanya daftar contoh yang tampil di layar ini. Titik koordinat yang cocok ikut diturunkan.'
+                  : 'Menurunkan titik koordinat yang sudah tersimpan ke baris kerja yang wilayahnya cocok.'
+              }
             >
               <CloudUpload size={13} />
-              {phase === 'importing' ? 'Menyalin...' : 'Isi Semua Patokan + Titik'}
+              {phase === 'importing'
+                ? 'Menyalin...'
+                : (plan.missingTotal ?? 0) > 0
+                  ? 'Isi Semua dari Pos Indonesia'
+                  : 'Salin Titik Koordinat'}
             </button>
           )}
           <button
@@ -494,15 +545,24 @@ export const KodePosSyncModal: React.FC<KodePosSyncModalProps> = ({ open, onClos
         isOpen={konfirmasiIsiSemua}
         icon={<CloudUpload size={20} />}
         accent="#405189"
-        title="Salin seluruh patokan ke tabel kerja?"
+        title={
+          (plan?.missingTotal ?? 0) > 0
+            ? 'Isi seluruh data dari situs Pos Indonesia?'
+            : 'Salin titik koordinat ke baris kerja?'
+        }
         message={
-          <>
-            {fmt(plan?.missingTotal ?? 0)} baris patokan yang belum ada akan disalin ke tabel kerja,
-            lalu titik koordinat per desa ikut diturunkan.
-          </>
+          (plan?.missingTotal ?? 0) > 0 ? (
+            <>
+              {fmt(plan?.missingTotal ?? 0)} baris dari kodepos.posindonesia.co.id yang belum ada akan
+              disalin ke tabel kerja, lalu titik koordinat yang sudah tersimpan untuk wilayah yang sama
+              ikut diturunkan.
+            </>
+          ) : (
+            <>Titik koordinat yang sudah tersimpan akan diturunkan ke baris kerja yang wilayahnya cocok.</>
+          )
         }
         detail="Penulisan ini masuk ke database cloud (Supabase) dan memakan tempat — bukan hanya daftar contoh yang tampil di layar ini."
-        confirmLabel="Ya, Isi Semua"
+        confirmLabel={(plan?.missingTotal ?? 0) > 0 ? 'Ya, Isi Semua' : 'Ya, Salin Titik'}
         cancelLabel="Batal"
         onClose={() => setKonfirmasiIsiSemua(false)}
         onConfirm={() => {

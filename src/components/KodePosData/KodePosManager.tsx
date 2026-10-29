@@ -519,7 +519,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
       setSelectedProvinsi('ALL');
       setSelectedKota('ALL');
       setSearchTerm('');
-      setSuccessMsg('Seluruh data Kode Pos dikosongkan. Titik koordinat & daftar baseline tetap.');
+      setSuccessMsg('Seluruh data Kode Pos dikosongkan. Titik koordinat tetap tersimpan.');
       refreshAfterMutation();
       setTimeout(() => setSuccessMsg(null), 4000);
     } else {
@@ -631,7 +631,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               {/* F5-K1: Badge peringatan saat database masih pakai data seed bawaan */}
               {stats.total <= SEED_THRESHOLD && (
                 <span
-                  title="Database Kode Pos belum diisi. Analisa hanya memakai ~140 baris seed bawaan, bukan 83.000+ baris lengkap. Lakukan Sync Data untuk mengisi database."
+                  title="Database Kode Pos belum diisi. Analisa hanya memakai ~140 baris seed bawaan, bukan 85.000+ baris dari situs resmi Pos Indonesia. Lakukan Sync Data untuk mengisi database."
                   style={{
                     fontSize: '0.68rem',
                     fontWeight: 700,
@@ -651,7 +651,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               Referensi resmi kode pos wilayah kelurahan, kecamatan, kota/kabupaten & provinsi seluruh Indonesia.
               {stats.total <= SEED_THRESHOLD && (
                 <span style={{ color: '#d68b0c', fontWeight: 600 }}>
-                  {' '}— Klik <strong>Sync Data</strong> untuk mengisi 83.000+ baris dari database cloud.
+                  {' '}— Klik <strong>Sync Data</strong> untuk mengisi 85.000+ baris dari kodepos.posindonesia.co.id.
                 </span>
               )}
             </div>
@@ -676,7 +676,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
             className="btn btn-primary btn-sm"
             onClick={() => setShowSyncModal(true)}
             style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-            title="Periksa kelengkapan & kevalidan kode pos terhadap database Supabase"
+            title="Tarik seluruh kode pos dari kodepos.posindonesia.co.id lalu samakan dengan database Supabase"
           >
             <RefreshCw size={13} />
             <span>Sync Data</span>
@@ -687,7 +687,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
             className="btn btn-outline btn-sm"
             onClick={() => setShowResetConfirm(true)}
             style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#f06548', borderColor: 'rgba(240, 101, 72, 0.3)' }}
-            title="Kosongkan seluruh baris Kode Pos. Titik koordinat dan daftar baseline tetap."
+            title="Kosongkan seluruh baris Kode Pos. Titik koordinat tetap tersimpan."
           >
             <Trash2 size={13} />
             <span>Kosongkan Data</span>
@@ -1868,7 +1868,7 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
     </DialogPanel>
       )}
 
-      {/* Modal: Sync Data (bandingkan master lokal vs Neon, import terpilih ke cloud) */}
+      {/* Modal: Sync Data (tarik situs resmi Pos Indonesia, samakan dengan cloud) */}
       <KodePosSyncModal
         open={showSyncModal}
         onClose={() => setShowSyncModal(false)}
@@ -1914,8 +1914,8 @@ export const KodePosManager: React.FC<KodePosManagerProps> = ({
               </div>
               <p style={{ fontSize: '0.82rem', color: '#5b5f6e', margin: 0, lineHeight: 1.5 }}>
                 Seluruh baris wilayah di tabel Kode Pos akan <strong>dikosongkan (0 baris)</strong>, bukan diganti dengan
-                daftar bawaan. Titik koordinat dan daftar baseline dari kodepos.id tetap tersimpan, jadi isi lagi datanya
-                cukup lewat <strong>Sync Data</strong> atau impor Excel.
+                daftar bawaan. Titik koordinat tetap tersimpan, jadi isi lagi datanya cukup lewat <strong>Sync Data</strong>{' '}
+                (menarik ulang dari kodepos.posindonesia.co.id) atau impor Excel.
               </p>
             </div>
 

@@ -96,7 +96,7 @@ async function fetchJson(url: string, init?: RequestInit): Promise<any> {
   }
   if (!res.ok || !json?.ok) {
     if (res.status === 404) {
-      throw new Error('Endpoint /api/kodepos?view=sync-meta tidak ditemukan. Jalankan dari aplikasi yang sudah ter-deploy (Vercel), karena fungsi API tidak tersedia di dev server lokal.');
+      throw new Error(`Endpoint ${url} tidak ditemukan. Pastikan aplikasi sudah ter-deploy ulang (Vercel) karena fungsi api/ tidak ikut build statis.`);
     }
     const detail =
       json?.error || json?.message || (text ? text.slice(0, 200).replace(/\s+/g, ' ') : `HTTP ${res.status}`);
@@ -312,71 +312,6 @@ export async function runKodePosSourceAudit(
       'Perbandingan di level kode pos, karena dataset komunitas ini memakai penamaan wilayah berbeda ' +
       'di level kelurahan.',
   };
-}
-
-/** Bangun rencana hasil adu dari respons /api/kodepos-baseline?view=diff. */
-function planFromBaselineDiff(json: any, noteTambahan?: string): KodePosSyncPlan {
-  const rows: KodePosRow[] = json.missingInDb || [];
-  const provinces = Array.from(new Set(rows.map((r) => kodePosProvinceOf(r)))).sort();
-  return {
-    status: rows.length > 0 ? 'DIFF' : 'SYNCED',
-    localTotal: json.dbCodes ?? 0,
-    cloudTotal: json.baselineCodes ?? 0,
-    lastUpdated: json.takenAt ?? null,
-    missingInCloud: rows,
-    missingInLocal: [],
-    cloudOnlyProvinces: [],
-    diffProvinces: [],
-    sourceLabel: json.source,
-    compareUnit: 'kode pos',
-    dbTotal: json.dbCodes ?? 0,
-    dbRows: json.dbRows ?? 0,
-    compareTotal: json.baselineCodes ?? 0,
-    compareLabel: 'patokan di database kita',
-    sourceDetail:
-      `Tarikan ke-${json.version ?? '?'} pada tabel \`kodepos_baseline\` ` +
-      `(${(json.baselineRows ?? 0).toLocaleString('id-ID')} baris, ${(json.baselineCodes ?? 0).toLocaleString('id-ID')} kode pos unik) ` +
-      `- sumber: ${json.source}. ` +
-      `${(json.missingCodesTotal ?? 0).toLocaleString('id-ID')} kode pos patokan belum ada di Supabase, ` +
-      `${(json.codesOnlyInDb ?? 0).toLocaleString('id-ID')} kode pos hanya ada di Supabase.`,
-    provincesAffected: provinces,
-    importable: true,
-    missingCodes: [],
-    missingTotal: json.missingCodesTotal ?? rows.length,
-    listTruncated: Boolean(json.truncated),
-    note:
-      (noteTambahan ? noteTambahan + ' ' : '') +
-      (json.truncated
-        ? `Daftar dibatasi ${rows.length.toLocaleString('id-ID')} baris pertama; `
-        : '') +
-      'Perbandingan dilakukan di level kode pos, jadi nama wilayah yang ditulis beda (mis. UPPERCASE) ' +
-      'tidak dianggap data baru.',
-  };
-}
-
-/** Lantai baris patokan: dump resmi Kemendagri memuat 83.762 desa (diukur 2026-09-20). */
-const PATOKAN_LANTAI_BARIS = 83_000;
-const PATOKAN_MAKS_UMUR_HARI = 30;
-
-/**
- * Lantai titik koordinat: crawl penuh kodepos.co.id menghasilkan ±81.654 titik desa
- * (diukur 2026-09-20) — bukan 83.762, karena situs itu tidak memuat setiap desa.
- * Di bawah angka ini berarti crawl-nya belum pernah selesai, bukan belum pernah jalan.
- */
-const TITIK_LANTAI = 75_000;
-
-/** Alasan penarikan ulang, atau null bila patokan sudah layak dipakai. */
-function alasanTarikPatokan(json: any): string | null {
-  if (!json?.ready) return 'Patokan belum ada';
-  const baris = Number(json.baselineRows || 0);
-  if (baris < PATOKAN_LANTAI_BARIS) {
-    return `Patokan baru ${baris.toLocaleString('id-ID')} baris, di bawah ${PATOKAN_LANTAI_BARIS.toLocaleString('id-ID')} daftar resmi`;
-  }
-  const diambil = new Date(json.takenAt || 0).getTime();
-  if (!diambil || Date.now() - diambil > PATOKAN_MAKS_UMUR_HARI * 86_400_000) {
-    return `Patokan sudah lebih dari ${PATOKAN_MAKS_UMUR_HARI} hari`;
-  }
-  return null;
 }
 
 /**
@@ -643,172 +578,98 @@ export async function crawlKodePosId(
 }
 
 /**
- * Pastikan tabel patokan terisi dan layak dipakai: kosong, di bawah daftar resmi,
- * atau lebih dari 30 hari -> tarik sendiri dari dump resmi Kemendagri. Sumber ini
- * layanannya GitHub, jadi tidak ikut diblokir Cloudflare saat aplikasi jalan di server.
+ * INI YANG JALAN SAAT KLIK "Sync Data" — satu sumber: kodepos.posindonesia.co.id.
+ *
+ * Server menarik SELURUH isi situs lewat pencarian wildcard `%` (terukur 2026-10-29:
+ * 85.595 baris, 85.575 unik, 11.594 kode pos unik), lalu:
+ * 1) tabel kerja kosong -> seluruh baris unik langsung disalin (sekali tekan beres);
+ * 2) tabel kerja terisi -> sidik jari per provinsi dipakai untuk memastikan "sama
+ *    persis" tanpa memindahkan puluhan ribu baris; bila berbeda, selisih tingkat
+ *    baris dihitung dan dikembalikan sebagai daftar contoh untuk disalin.
+ *
+ * Situs ini tidak menyediakan titik koordinat. Titik yang sudah ada di tabel kerja
+ * tidak diubah; baris baru bisa diberi titik lewat tindakan Titik Koordinat.
  */
-async function pastikanPatokanTerisi(
-  onProgress?: SyncProgress
-): Promise<{ baris: number; sumber: string; cadangan: boolean }> {
-  const bacaPatokan = async () => {
-    const m = await fetchJson('/api/kodepos-baseline?view=meta');
-    return {
-      ready: Boolean(m.ready),
-      baselineRows: Number(m.stats?.baris || 0),
-      takenAt: m.stats?.diambil_pada || null,
-      sumber: String(m.stats?.sumber || ''),
-    };
+export async function runKodePosLiveSync(
+  onProgress?: SyncProgress,
+  autoImport = true
+): Promise<KodePosSyncPlan> {
+  onProgress?.('Menarik seluruh kode pos dari kodepos.posindonesia.co.id...', 12);
+  const json = await fetchJson('/api/kodepos-pos?view=sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ import: autoImport }),
+  });
+
+  onProgress?.('Menyusun hasil pemeriksaan...', 95);
+  const situs = json.situs || {};
+  const db = json.db || {};
+  const missing = json.missing || {};
+  const rows: KodePosRow[] = Array.isArray(missing.rows) ? missing.rows : [];
+  const provincesAffected: string[] = Array.isArray(missing.provinces) ? missing.provinces : [];
+  const compareTotal = Number(situs.unik || 0);
+  const dbRows = Number(db.baris || 0);
+  const duplikat = Number(situs.duplikat || 0);
+  const missingTotal = Number(missing.total || 0);
+
+  const sourceDetail =
+    `Sumber ${json.sumber || 'kodepos.posindonesia.co.id'}: ` +
+    `${Number(situs.baris || 0).toLocaleString('id-ID')} baris dibaca, ` +
+    `${compareTotal.toLocaleString('id-ID')} baris unik` +
+    (duplikat > 0 ? ` (${duplikat.toLocaleString('id-ID')} duplikat identik di situs)` : '') +
+    `, ${Number(situs.kodePosUnik || 0).toLocaleString('id-ID')} kode pos unik, ` +
+    `${Number(situs.provinsi || 0)} provinsi / ${Number(situs.kota || 0)} kota-kabupaten / ` +
+    `${Number(situs.kecamatan || 0)} kecamatan. ` +
+    `Database: ${dbRows.toLocaleString('id-ID')} baris / ${Number(db.kodePosUnik || 0).toLocaleString('id-ID')} kode pos unik.`;
+
+  onProgress?.('Selesai', 100);
+  return {
+    status: missingTotal > 0 || dbRows !== compareTotal ? 'DIFF' : 'SYNCED',
+    localTotal: dbRows,
+    cloudTotal: compareTotal,
+    lastUpdated: situs.diambilPada ?? null,
+    missingInCloud: rows,
+    missingInLocal: [],
+    cloudOnlyProvinces: [],
+    diffProvinces: provincesAffected,
+    sourceLabel: json.sumber || 'kodepos.posindonesia.co.id',
+    compareUnit: 'baris',
+    note: json.catatan,
+    dbTotal: Number(db.kodePosUnik || 0),
+    dbRows,
+    compareTotal,
+    barisDisalin: Number(json.barisDisalin || 0),
+    compareLabel: 'situs resmi Pos Indonesia',
+    sourceDetail,
+    provincesAffected,
+    importable: true,
+    missingCodes: [],
+    missingTotal,
+    listTruncated: Boolean(missing.truncated),
   };
-
-  const alasan = alasanTarikPatokan(await bacaPatokan());
-  if (!alasan) return { baris: 0, sumber: (await bacaPatokan()).sumber, cadangan: false };
-
-  /*
-   * URUTAN SUMBER (permintaan pemilik produk 2026-09-23): kodepos.co.id dulu, dump
-   * Kemendagri HANYA kalau situs gagal. Setiap kali cadangan terpakai, alasannya dan
-   * jumlah barisnya ikut dilaporkan — tidak diam-diam.
-   */
-  onProgress?.(`${alasan} — mengambil wilayah + kode pos + titik dari kodepos.co.id...`, 5);
-  let sebabCadangan = '';
-  try {
-    const situs = await pullPatokanDariSitus((pesan, pct) => onProgress?.(pesan, 5 + Math.round(pct * 0.25)));
-    const sesudah = await bacaPatokan();
-    if (sesudah.baselineRows >= PATOKAN_LANTAI_BARIS) {
-      return { baris: situs.rows, sumber: 'kodepos.co.id', cadangan: false };
-    }
-    sebabCadangan = `scrape kodepos.co.id hanya meninggalkan ${sesudah.baselineRows.toLocaleString('id-ID')} baris patokan (lantai ${PATOKAN_LANTAI_BARIS.toLocaleString('id-ID')})`;
-  } catch (err: any) {
-    sebabCadangan = `kodepos.co.id tidak selesai discrape: ${String(err?.message || err).slice(0, 150)}`;
-  }
-
-  onProgress?.(`${sebabCadangan} — memakai SUMBER CADANGAN dump resmi Kemendagri...`, 22);
-  const hasil = await pullKodePosBaseline((pesan, pct) => onProgress?.(pesan, 22 + Math.round(pct * 0.1)));
-  const sesudah = await bacaPatokan();
-  if (sesudah.baselineRows < PATOKAN_LANTAI_BARIS) {
-    throw new Error(
-      `${sebabCadangan}; sumber cadangan Kemendagri pun hanya ${sesudah.baselineRows.toLocaleString('id-ID')} baris ` +
-        `(di bawah ${PATOKAN_LANTAI_BARIS.toLocaleString('id-ID')}). Coba lagi, atau periksa apakah GitHub/GitLab sedang menolak server ini.`
-    );
-  }
-  return { baris: hasil.rows, sumber: `SUMBER CADANGAN ${hasil.sumber}`, cadangan: true };
 }
 
 /**
- * INI YANG JALAN SAAT KLIK "Sync Data" — satu tekan, tabel kerja berdiri lengkap:
- * 1) patokan terisi: kosong / kurang / usang -> scrape SEMUA dari kodepos.co.id
- *    (wilayah 5 level + kode pos + titik); dump resmi Kemendagri hanya dipakai kalau
- *    situs gagal, dan Pemakaian cadangan itu dilaporkan dengan angka barisnya
- * 2) titik per desa terisi: belum ada -> crawl 7.277 halaman kecamatan kodepos.co.id
- *    dari server (terukur 220 ms + 98.719 byte per halaman, HTTP 200, tidak diblokir)
- * 3) kodepos.id ditanya untuk perubahan provinsi — diblokir Cloudflare: dilewati, dicatat
- * 4) tabel kerja diisi penuh dari patokan, SEKALIAN titik tiap desanya
- * 5) selisih dibaca ulang supaya angka di layar kondisi terakhir, bukan perkiraan
+ * Salin SEMUA baris situs Pos Indonesia yang belum ada di tabel kerja. Dipakai tombol
+ * "Isi Semua" — server yang menarik situs dan menyalin per pecahan, jadi browser tidak
+ * perlu membawa puluhan ribu baris.
  */
-export async function runKodePosLiveSync(onProgress?: SyncProgress): Promise<KodePosSyncPlan> {
-  const patokan = await pastikanPatokanTerisi(onProgress);
-  const barisPatokanBaru = patokan.baris;
-
-  const titikAwal = await cakupanKoordinat();
-  let titikBaru = 0;
-  if (!titikAwal || titikAwal.patokanTitik < TITIK_LANTAI) {
-    onProgress?.('Titik koordinat belum ada — mengambil dari kodepos.co.id...', 30);
-    titikBaru = await crawlKoordinatPatokan((pesan, pct) => onProgress?.(pesan, 30 + Math.round(pct * 0.25)));
-  }
-
-  onProgress?.('Menanyakan kondisi terbaru ke kodepos.id...', 58);
-  const fresh = await fetchJson('/api/kodepos-id?view=fresh');
-
-  const ambilPatokan = async () => {
-    onProgress?.('Membandingkan dengan database Supabase...', 62);
-    const json = await fetchJson('/api/kodepos-baseline?view=diff');
-    if (!json.ready) {
-      throw new Error('Patokan masih kosong setelah ditarik dari sumber resmi. Coba lagi satu kali.');
-    }
-    return { ...json, source: fresh.source || json.source };
+export async function importSemuaPos(
+  onProgress?: SyncProgress
+): Promise<{ masuk: number; totalSetelah: number; totalSitus: number; barisSitus: number; duplikatSitus: number }> {
+  onProgress?.('Menarik seluruh kode pos dari kodepos.posindonesia.co.id...', 10);
+  const json = await fetchJson('/api/kodepos-pos?view=import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+  onProgress?.('Selesai', 100);
+  return {
+    masuk: Number(json.masuk || 0),
+    totalSetelah: Number(json.totalSetelah || 0),
+    totalSitus: Number(json.totalSitus || 0),
+    barisSitus: Number(json.barisSitus || 0),
+    duplikatSitus: Number(json.duplikatSitus || 0),
   };
-
-  const perlu: string[] = fresh.blocked
-    ? []
-    : [
-        ...((fresh.belumPernah || []) as string[]),
-        ...((fresh.berubah || []) as any[]).map((b) => String(b.provinsi)),
-      ];
-
-  let versi: number | undefined;
-  for (let i = 0; i < perlu.length; i++) {
-    onProgress?.(
-      `Ada perubahan — mengambil ulang ${perlu[i]} (${i + 1}/${perlu.length})...`,
-      58 + Math.round(((i + 1) / perlu.length) * 4)
-    );
-    const r = await crawlKodePosIdProvince(perlu[i], versi);
-    versi = r.versi;
-  }
-
-  let json = await ambilPatokan();
-
-  let catatan = fresh.blocked
-    ? `kodepos.id menolak server ini (${fresh.reason || '403'}) — perbandingan memakai patokan resmi di database.`
-    : perlu.length
-      ? `${perlu.length} provinsi diperbarui barusan dari kodepos.id (${perlu.slice(0, 4).join(', ')}${perlu.length > 4 ? ', ...' : ''}).`
-      : 'kodepos.id masih sama dengan patokan terakhir, jadi tidak perlu ambil ulang.';
-  if (barisPatokanBaru > 0) {
-    catatan =
-      `Patokan baru diambil dari ${patokan.sumber} (${barisPatokanBaru.toLocaleString('id-ID')} baris${patokan.cadangan ? ' — SUMBER CADANGAN, scrape kodepos.co.id gagal' : ''}). ` +
-      catatan;
-  } else if (patokan.sumber) {
-    catatan = `Patokan masih berasal dari ${patokan.sumber}. ` + catatan;
-  }
-  if (titikBaru > 0) {
-    catatan = `Titik koordinat per desa baru diambil dari kodepos.co.id (${titikBaru.toLocaleString('id-ID')} titik). ` + catatan;
-  }
-
-  /*
-   * Tabel kerja masih kosong = pertama kali dipakai. Salin penuh supaya satu kali
-   * tekan Sync Data langsung menampilkan data beserta titik tiap desa.
-   */
-  let disalin = 0;
-  if (Number(json.dbRows || 0) === 0 && Number(json.missingCodesTotal || 0) > 0) {
-    onProgress?.('Tabel kerja kosong — menyalin seluruh patokan ke tabel kerja...', 66);
-    const { masuk, bertitik, totalSetelah } = await importSemuaPatokan((pesan, pct) =>
-      onProgress?.(pesan, 66 + Math.round(pct * 0.3))
-    );
-    /*
-     * Penyalinan window sudah membawa titik tiap desa sejak INSERT; `koordinat_salin()`
-     * tetap dipanggil sesudahnya sebagai penambal baris yang sudah ada di tabel kerja
-     * sebelum titik tersedia. Fungsinya hanya mengubah nilai yang `is distinct from`,
-     * dan kegagalannya (statement besar bisa dipotong batas 8 detik role `anon`) tidak
-     * menghentikan pemeriksaan — titik utama sudah masuk lewat INSERT.
-     */
-    const susulan = await salinKoordinatPatokan();
-    json = await ambilPatokan();
-    disalin = masuk;
-    catatan =
-      `${masuk.toLocaleString('id-ID')} baris patokan disalin ke tabel kerja (total ${totalSetelah.toLocaleString('id-ID')} baris)` +
-      `, ${bertitik.toLocaleString('id-ID')} baris langsung membawa titik koordinat` +
-      (susulan && susulan.disalin > 0 ? `, ${susulan.disalin.toLocaleString('id-ID')} baris lama menyusul` : '') +
-      `. ` + catatan;
-  } else if (titikBaru > 0 || (titikAwal?.patokanTitik ?? 0) >= TITIK_LANTAI) {
-    /*
-     * Titik sudah tersedia tapi tabel kerja terisi sebelum fitur titik ada: salin
-     * penuh tidak jalan (barisnya sudah ada), dan memperbarui 85 ribu baris dalam
-     * satu statement akan dipotong 8 detik oleh batas role `anon`. Yang aman dan
-     * tidak menghapus apa pun: isi ulang dari nol sekali, itu perintah operator.
-     */
-    const cakupan = await cakupanKoordinat();
-    if (Number(json.dbRows || 0) > 0 && Number(cakupan?.dataTitik || 0) === 0) {
-      const salinan = await salinKoordinatPatokan();
-      if (!salinan || salinan.disalin === 0) {
-        catatan =
-          `Titik per desa sudah ada di database (${(cakupan?.patokanTitik ?? 0).toLocaleString('id-ID')} titik) ` +
-          `tetapi ${(json.dbRows || 0).toLocaleString('id-ID')} baris kerja terisi sebelum titik itu ada. ` +
-          'Tekan "Kosongkan Data" lalu Sync Data sekali lagi supaya setiap baris ikut membawa titiknya. ' +
-          catatan;
-      }
-    }
-  }
-
-  const plan = planFromBaselineDiff(json, catatan);
-  if (disalin > 0) plan.barisDisalin = disalin;
-  return plan;
 }
 
