@@ -15,6 +15,7 @@ export { BATAS_DAFTAR_NILAI, KOSONG, barisLolosFilter, cariDalamNilai, daftarNil
 export { resolveBranchCoordinates, kategoriUnitCabang, clusterMasterRowsForMap, sumberPerkiraan } from '../src/utils/geoCoder';
 export { gabungImporRole, kunciOrganisasiRole, punyaTigaRole } from '../src/utils/roleMerge';
 export { STATUS_PAKAI, STATUS_BELUM_PAKAI, kunciIdentitasCabang, indeksCabangTerpakai, adalahCabangTerpakai, statusPakaiCabang, himpunCabangTerpakai } from '../src/utils/cabangUsage';
+export { KOLOM_STATUS_PAKAI_PTEN, normKodePosPten, indeksKodePosPtenTerpakai, adalahPtenTerpakai, statusPakaiPten, himpunPtenTerpakai } from '../src/utils/ptenUsage';
 export {
   SUMBER_ANALISA, sumberFase, nilaiKesiapan, hitungKesiapan, statusFase, alasanFaseTerkunci,
   halanganNyalakanRole, jumlahBarisDilewati, catatanSumber, faseWajib, KUNCI_SUMBER_DIPILIH,

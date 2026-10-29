@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef, useDeferredValue } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useDeferredValue, useCallback } from 'react';
 import {
   ShieldCheck,
   Search,
@@ -23,11 +23,19 @@ import * as XLSX from 'xlsx';
 import { tulisLembarExcel } from '../../utils/excel';
 import { tanggalBerkas, kapital } from '../../utils/normalizer';
 import type { TargetRow, MasterRow } from '../../types';
+import type { AnalystRow } from '../../utils/analystPipeline';
 import { getItem, setItem } from '../../utils/storage';
 import { loadPtenFromNeon, savePtenToNeon } from '../../utils/neonSync';
 import type { KodePosRow } from '../../utils/neonSync';
 import { tabrakKotaPtenKodePos } from '../../utils/tabrakKotaPten';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
+import {
+  KOLOM_STATUS_PAKAI_PTEN,
+  STATUS_BELUM_PAKAI,
+  STATUS_PAKAI,
+  himpunPtenTerpakai,
+  indeksKodePosPtenTerpakai,
+} from '../../utils/ptenUsage';
 
 import { DEFAULT_PTEN_DATA } from './defaultPtenData';
 import { useNotification } from '../Notification/NotificationContext';
@@ -38,6 +46,8 @@ interface PTENManagerProps {
   masterRows?: MasterRow[];
   /** Master Kode Pos — dipakai memeriksa tabrakan nama kota dengan berkas PTEN. */
   kodePosRows?: KodePosRow[];
+  /** Data Final — sumber Status Pakai: kode pos PTEN yang muncul di sana sudah dipakai. */
+  finalRows?: AnalystRow[];
   onPtenCountChange?: (count: number) => void;
 }
 
@@ -52,6 +62,7 @@ export interface PTENRecord {
 export const PTENManager: React.FC<PTENManagerProps> = ({
   targetRows = [],
   kodePosRows = [],
+  finalRows = [],
   onPtenCountChange,
 }) => {
   const { add: notify } = useNotification();
@@ -165,6 +176,19 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
       matchPercentage: targetRows.length > 0 ? ((same / targetRows.length) * 100).toFixed(1) : '100',
     };
   }, [targetRows]);
+
+  // ── Status Pakai: diturunkan dari Data Final, tidak disimpan di baris PTEN ──
+  // Kode pos yang muncul di Data Final sudah dipakai hasil analisa yang selesai;
+  // yang belum muncul tetap "Belum digunakan". Sel dan ekspor membaca Set yang sama.
+  const indeksPtenTerpakai = useMemo(() => indeksKodePosPtenTerpakai(finalRows), [finalRows]);
+  const barisPtenTerpakai = useMemo(
+    () => himpunPtenTerpakai(ptenList, indeksPtenTerpakai),
+    [ptenList, indeksPtenTerpakai]
+  );
+  const labelStatusPakai = useCallback(
+    (r: PTENRecord): string => (barisPtenTerpakai.has(r) ? STATUS_PAKAI : STATUS_BELUM_PAKAI),
+    [barisPtenTerpakai]
+  );
 
   // Unique Kota list + per-kota record counts (for dropdown totals)
   const { kotaList, kotaCountMap } = useMemo(() => {
@@ -388,12 +412,16 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
     // Dulu: kalau hasil saring kosong, diam-diam mengunduh SELURUH pustaka.
     const exportData = filteredPten;
     const kolom = [
+      KOLOM_STATUS_PAKAI_PTEN,
       'No',
       'KODEPOS (yang digunakan untuk pendaftaran merchant)',
       'KOTA/KABUPATEN',
       'KOTA/KABUPATEN MAX 15 DIGIT (yang digunakan untuk pendaftaran merchant)',
     ];
+    // Status Pakai hanya cuplikan untuk dibaca orang: saat berkas diimpor lagi nilainya
+    // dihitung ulang dari Data Final, bukan diambil dari kolom Excel.
     const baris = exportData.map((p, i) => ({
+      [KOLOM_STATUS_PAKAI_PTEN]: labelStatusPakai(p),
       'No': i + 1,
       'KODEPOS (yang digunakan untuk pendaftaran merchant)': p.kodePosPten,
       'KOTA/KABUPATEN': p.kotaPten,
@@ -933,12 +961,18 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
                 </div>
               </div>
 
-              {/* Table Master PTEN (Exact Columns: No, Kodepos, Kota, Kota Max 15, Status, Aksi) */}
+              {/* Table Master PTEN (Exact Columns: No, Status Pakai, Kodepos, Kota, Kota Max 15, Aksi) */}
               <div ref={ptenScrollRef} className="table-container" style={{ border: '1px solid #e9ebec', borderRadius: '6px', overflow: 'auto', maxHeight: '580px' }}>
                 <table className="modern-table" style={{ width: '100%', fontSize: '0.78rem' }}>
                   <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
                     <tr>
                       <th style={{ width: '50px', textAlign: 'center' }}>No</th>
+                      <th
+                        style={{ width: '125px', textAlign: 'center' }}
+                        title="Kode pos ini dipakai bila ada baris Data Final yang memakainya"
+                      >
+                        {KOLOM_STATUS_PAKAI_PTEN}
+                      </th>
                       <th style={{ width: '130px', textAlign: 'center' }}>KODEPOS</th>
                       <th>KOTA / KABUPATEN</th>
                       <th>KOTA/KABUPATEN MAX 15 DIGIT</th>
@@ -948,7 +982,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
                   <tbody>
                     {filteredPten.length === 0 ? (
                       <tr>
-                        <td colSpan={5} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
+                        <td colSpan={6} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
                           Tidak ada data master PTEN yang cocok dengan filter pencarian.
                         </td>
                       </tr>
@@ -966,6 +1000,11 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
                         return (
                           <tr key={`${item.id || idx}`} data-vrow={i === 0 ? 'true' : undefined} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f9fbfd' }}>
                             <td style={{ textAlign: 'center', color: '#878a99' }}>{displayRowNo}</td>
+                            <td style={{ textAlign: 'center' }}>
+                              <span className={barisPtenTerpakai.has(item) ? 'badge badge-match' : 'badge badge-unmatched'}>
+                                {labelStatusPakai(item)}
+                              </span>
+                            </td>
                             <td style={{ textAlign: 'center' }}>
                               <span className="code-cell" style={{ background: '#fff9e6', color: '#d68b0c', fontWeight: 700 }}>
                                 {item.kodePosPten}

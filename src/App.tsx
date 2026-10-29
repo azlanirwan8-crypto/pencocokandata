@@ -1725,6 +1725,7 @@ export const App: React.FC = () => {
               targetRows={targetRows}
               masterRows={masterRows}
               kodePosRows={kodePosMasterRows}
+              finalRows={finalRows}
               onPtenCountChange={(count) => setPtenCount(count)}
             />
           )}
