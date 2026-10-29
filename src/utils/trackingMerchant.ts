@@ -65,9 +65,6 @@ export interface BarisMerchant {
 export interface KartuRingkasan {
   label: string;
   nilai: string;
-  keterangan: string;
-  kakiKiri: string;
-  kakiKanan: string;
   warna: 'biru' | 'hijau' | 'merah' | 'ungu';
 }
 
@@ -248,17 +245,6 @@ export const DEFINISI_KOLOM_TM: readonly DefinisiKolomFilter<BarisMerchant>[] = 
   nilai: k.nilai,
   jenis: k.jenis,
 }));
-
-export const KOLOM_EKSPOR_TM: readonly string[] = ['No', ...KOLOM_TM.map((k) => k.label)];
-
-/** Baris untuk berkas Excel: urutan & label sama persis dengan tabel. */
-export function barisKeExcelTm(baris: readonly BarisMerchant[]): Record<string, string | number>[] {
-  return baris.map((r, i) => {
-    const out: Record<string, string | number> = { No: i + 1 };
-    for (const k of KOLOM_TM) out[k.label] = k.nilai(r);
-    return out;
-  });
-}
 
 /** Pencarian bebas: satu kotak cari, semua kolom yang tampil di tabel. */
 export function cocokCari(baris: BarisMerchant, teks: string): boolean {

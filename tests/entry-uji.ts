@@ -22,8 +22,8 @@ export {
   faseDipilih, toggleFase,
 } from '../src/utils/analystSources';
 export {
-  KOLOM_TM, KOLOM_EKSPOR_TM, DEFINISI_KOLOM_TM, KUNCI_STORAGE_TRACKING, KETERANGAN_STATUS, LABEL_KERANJANG,
-  barisKeExcelTm, cocokCari, kartuMerchant,
+  KOLOM_TM, DEFINISI_KOLOM_TM, KUNCI_STORAGE_TRACKING, KETERANGAN_STATUS, LABEL_KERANJANG,
+  cocokCari, kartuMerchant,
   keranjangStatus, keteranganRef, labelStatusSumber, riwayatMerchant, ringkasTracking, temukanMerchant,
   kelasAlamatMerchant, kueriPetaMerchant,
   daftarMerchantPeta, kelompokkanMerchantPeta, ringkasMerchantPeta,

@@ -3,7 +3,6 @@ import {
   Radar,
   RefreshCw,
   Search,
-  Download,
   AlertCircle,
   Timer,
   Flag,
@@ -17,9 +16,7 @@ import type {
   MuatanTracking,
 } from '../../utils/trackingMerchant';
 import {
-  KOLOM_EKSPOR_TM,
   KUNCI_STORAGE_TRACKING,
-  barisKeExcelTm,
   kartuMerchant,
   keranjangStatus,
   keteranganRef,
@@ -28,11 +25,8 @@ import {
   ringkasTracking,
   temukanMerchant,
 } from '../../utils/trackingMerchant';
-import { tulisLembarExcel } from '../../utils/excel';
-import { tanggalBerkas } from '../../utils/normalizer';
 import { getItem, setItem } from '../../utils/storage';
 import { loadTrackingMerchantFromNeon } from '../../utils/neonSync';
-import { useNotification } from '../Notification/NotificationContext';
 
 interface TrackingMerchantManagerProps {
   /** Identik dengan badge sidebar: berapa merchant yang tampil. */
@@ -66,8 +60,6 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
   onTrackingCountChange,
   onTrackingRowsChange,
 }) => {
-  const { add: notify } = useNotification();
-
   const [baris, setBaris] = useState<BarisMerchant[]>([]);
   const [ringkasan, setRingkasan] = useState<KartuRingkasan[]>([]);
   const [distribusi, setDistribusi] = useState<KartuTahun[]>([]);
@@ -132,20 +124,6 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
     if (baris.length > 0) onTrackingRowsChange?.(baris);
   }, [baris, onTrackingRowsChange]);
 
-  const handleExport = () => {
-    if (baris.length === 0) {
-      notify('Belum ada data tersimpan — tidak ada yang bisa diunduh.', 'warning');
-      return;
-    }
-    tulisLembarExcel({
-      namaLembar: 'Tracking_Merchant',
-      namaBerkas: `Tracking_Merchant_${tanggalBerkas()}.xlsx`,
-      kolom: [...KOLOM_EKSPOR_TM],
-      baris: barisKeExcelTm(baris),
-    });
-    notify(`${baris.length.toLocaleString('id-ID')} riwayat merchant diunduh.`, 'success');
-  };
-
   const jejak = useMemo(
     () => (midJejak ? riwayatMerchant(baris, midJejak) : []),
     [baris, midJejak]
@@ -192,26 +170,12 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
 
   return (
     <div>
-      {/* 1. Kepala menu + aksi ekspor */}
+      {/* 1. Kepala menu */}
       <div className="glass-card tm-kepala-kartu">
         <div className="tm-kepala">
-          <div>
-            <div className="section-title tm-kepala-judul">
-              <Radar size={18} />
-              <span>Tracking Merchant</span>
-            </div>
-          </div>
-          <div className="tm-kepala-aksi">
-            <button
-              type="button"
-              className="btn btn-outline"
-              onClick={handleExport}
-              disabled={baris.length === 0}
-              title="Unduh daftar yang sedang tampil ke Excel"
-            >
-              <Download size={16} />
-              <span>Export Excel</span>
-            </button>
+          <div className="section-title tm-kepala-judul">
+            <Radar size={18} />
+            <span>Tracking Merchant</span>
           </div>
         </div>
       </div>
@@ -222,13 +186,6 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
             <div key={k.label} className={`tm-kartu tm-kartu--${k.warna}`}>
               <div className="tm-kartu-label">{k.label}</div>
               <div className="tm-kartu-nilai">{k.nilai}</div>
-              {k.keterangan && <p className="tm-kartu-ket">{k.keterangan}</p>}
-              {(k.kakiKiri || k.kakiKanan) && (
-                <div className="tm-kartu-kaki">
-                  <span>{k.kakiKiri}</span>
-                  <span>{k.kakiKanan}</span>
-                </div>
-              )}
             </div>
           ))}
         </div>
@@ -254,10 +211,6 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
         <div className="glass-card tm-aktivitas" ref={panelJejakRef}>
           <div className="tm-aktivitas-kepala">
             <div className="section-title">Aktivitas Tracking Merchant</div>
-            <div className="section-subtitle">
-              Pantau riwayat lengkap perubahan pengajuan satu MID: jenis pengajuan, jenis QR,
-              tanggal pengajuan, last update, dan status permohonan.
-            </div>
           </div>
 
           <div className="tm-aktivitas-cari">

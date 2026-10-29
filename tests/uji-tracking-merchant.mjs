@@ -1,4 +1,4 @@
-// Tracking Merchant — uji angka turunan, kolom ekspor, jejak per MID, dan titik peta.
+// Tracking Merchant — uji angka turunan, definisi kolom, jejak per MID, dan titik peta.
 // Menu ini hanya menampilkan muatan tersimpan, jadi fixture-nya berbentuk
 // `BarisMerchant` langsung (tidak ada lagi parser sumber yang perlu dijalankan).
 // Jalankan:
@@ -7,8 +7,8 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
-  DEFINISI_KOLOM_TM, KOLOM_EKSPOR_TM, KOLOM_TM, KUNCI_STORAGE_TRACKING, KETERANGAN_STATUS,
-  LABEL_KERANJANG, barisKeExcelTm, cocokCari, kartuMerchant,
+  DEFINISI_KOLOM_TM, KOLOM_TM, KUNCI_STORAGE_TRACKING, KETERANGAN_STATUS,
+  LABEL_KERANJANG, cocokCari, kartuMerchant,
   keranjangStatus, keteranganRef, labelStatusSumber, riwayatMerchant,
   ringkasTracking, temukanMerchant,
   kelasAlamatMerchant, kueriPetaMerchant, daftarMerchantPeta, kelompokkanMerchantPeta, ringkasMerchantPeta,
@@ -104,13 +104,7 @@ asa('badge status: Active selalu tertulis NMID Terbit', [labelStatusSumber('Acti
 
 asa('label keranjang dipakai bersama', [LABEL_KERANJANG.aktif, LABEL_KERANJANG.tolak], ['Active', 'Reject']);
 asa('kunci saringan = teks header tabel', DEFINISI_KOLOM_TM.map((d) => d.kunci), KOLOM_TM.map((c) => c.label));
-asa('header ekspor = No + kolom tabel', KOLOM_EKSPOR_TM, ['No', ...KOLOM_TM.map((c) => c.label)]);
 
-const excel = barisKeExcelTm(baris);
-asa('baris Excel memakai label header tabel', Object.keys(excel[0]), KOLOM_EKSPOR_TM);
-asa('nomor urut Excel mulai 1', excel.map((r) => r.No), [1, 2, 3]);
-asa('kolom wilayah ditampilkan kapital di ekspor', excel[0]['Provinsi'], 'SUMATERA UTARA');
-asa('kolom yang kosong di muatan tetap kosong di Excel', excel[2]['Segmen Merchant'], '');
 asa('kunci storage cloud & lokal sama', KUNCI_STORAGE_TRACKING, 'tracking_merchant_data');
 
 // ── (3) Kelengkapan kolom: urutan mengikuti sumber + kolom turunan ──────────

@@ -2334,13 +2334,6 @@ body {
   gap: 0.5rem;
 }
 
-.tm-kepala-aksi {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
 /* Empat kartu ringkasan — angkanya dibaca apa adanya dari halaman sumber. */
 .tm-ringkasan {
   display: grid;
@@ -2375,26 +2368,6 @@ body {
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
   color: var(--text-heading);
-}
-
-.tm-kartu-ket {
-  margin: 0;
-  font-size: 0.72rem;
-  line-height: 1.4;
-  color: var(--text-secondary);
-}
-
-.tm-kartu-kaki {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin-top: auto;
-  padding-top: 0.55rem;
-  border-top: 1px solid var(--border-subtle);
-  font-size: 0.64rem;
-  font-weight: 700;
-  color: var(--text-muted);
 }
 
 .tm-kartu--biru { border-color: rgba(53, 119, 241, 0.35); }
