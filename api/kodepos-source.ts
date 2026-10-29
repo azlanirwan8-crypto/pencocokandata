@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 // KLIEN MANDIRI: setiap fungsi di api/ harus berdiri sendiri. Impor relatif (../server/rest
 // maupun ./status) ter-bundle tapi gagal di runtime Vercel — terukur 2026-09-23: hanya
 // /api/status yang hidup, sembilan rute lain 500 FUNCTION_INVOCATION_FAILED. Jadi blok di
@@ -479,14 +481,21 @@ async function loadCommunity() {
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
+  const view = url.searchParams.get('view') || '';
+
+  if (view.startsWith('pos-')) return handlePos(req, res, view);
 
   try {
-    if (url.searchParams.get('view') !== 'audit') {
-      return res.status(400).json({ ok: false, error: 'Gunakan ?view=audit&source=resmi|komunitas' });
+    if (view !== 'audit') {
+      return res.status(400).json({
+        ok: false,
+        error: 'Gunakan ?view=audit&source=resmi|komunitas atau ?view=pos-ringkasan|pos-sync|pos-import',
+      });
     }
     const sourceKey = url.searchParams.get('source') === 'komunitas' ? 'komunitas' : 'resmi';
 
@@ -576,5 +585,463 @@ export default async function handler(req: any, res: any) {
   } catch (error: any) {
     console.error('Kodepos source audit error:', error);
     return res.status(500).json({ ok: false, configured: true, error: pesanRest(error, 'Audit sumber eksternal gagal.') });
+  }
+}
+
+// ── Sumber resmi Pos Indonesia ──────────────────────────────────────────────
+// Digabung ke berkas ini karena Vercel Hobby membatasi 12 fungsi api/. Rute:
+// GET ?view=pos-ringkasan, POST ?view=pos-sync, POST ?view=pos-import.
+
+const POS_URL = 'https://kodepos.posindonesia.co.id/CariKodepos';
+const POS_LABEL = 'kodepos.posindonesia.co.id (situs resmi Pos Indonesia)';
+const POS_BROWSER_HEADERS = {
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+  'Content-Type': 'application/x-www-form-urlencoded',
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+  'Accept-Language': 'id-ID,id;q=0.9,en;q=0.8',
+  Referer: 'https://kodepos.posindonesia.co.id/',
+  Origin: 'https://kodepos.posindonesia.co.id',
+};
+
+/** Lantai kewarasan: situs resmi memuat >80 ribu baris; di bawah ini berarti tarikan gagal. */
+const POS_MIN_BARIS = 60_000;
+const POS_TIMEOUT_MS = 45_000;
+const POS_COBA = 3;
+const CONTOH_CAP = 5000;
+const TULIS_BATCH = 1000;
+const TULIS_PARALEL = 6;
+
+interface BarisPos {
+  kodePos: string;
+  kelurahan: string;
+  kecamatan: string;
+  kabupatenKota: string;
+  provinsi: string;
+}
+
+interface KunciDb {
+  kode_pos?: unknown;
+  kelurahan?: unknown;
+  kecamatan?: unknown;
+  kabupaten_kota?: unknown;
+  provinsi?: unknown;
+}
+
+/** btrim() SQL hanya membuang spasi, bukan tab — dipakai agar sidik jari sama persis. */
+const btrim = (v: unknown) => String(v ?? '').replace(/^ +| +$/g, '');
+
+function decodeHtml(html: string): string {
+  return html
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0*39;/g, "'")
+    .replace(/&#x0*27;/gi, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Baris tabel hasil pencarian. DataTables merender seluruh hasil di server, jadi satu
+ * balasan berisi semua baris; tidak ada endpoint JSON berpaginasi.
+ */
+function parseBaris(html: string): BarisPos[] {
+  const out: BarisPos[] = [];
+  for (const row of html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) {
+    const sel = [...row[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map((m) => decodeHtml(m[1]));
+    if (sel.length < 6 || !/^\d+$/.test(sel[0])) continue;
+    const kodePos = sel[1];
+    if (!/^\d{5}$/.test(kodePos)) continue;
+    out.push({
+      kodePos,
+      kelurahan: sel[2],
+      kecamatan: sel[3],
+      kabupatenKota: sel[4],
+      provinsi: sel[5],
+    });
+  }
+  return out;
+}
+
+const kunciBaris = (r: Partial<BarisPos> | KunciDb): string => {
+  const get = (camel: keyof BarisPos, snake: keyof KunciDb) =>
+    btrim((r as any)[camel] ?? (r as any)[snake] ?? '').toUpperCase();
+  return [
+    get('kodePos', 'kode_pos'),
+    get('kelurahan', 'kelurahan'),
+    get('kecamatan', 'kecamatan'),
+    get('kabupatenKota', 'kabupaten_kota'),
+    get('provinsi', 'provinsi'),
+  ].join('|');
+};
+
+const provinsiDari = (r: Partial<BarisPos> | KunciDb): string => {
+  const v = btrim((r as any).provinsi ?? '').toUpperCase();
+  return v || '(TANPA PROVINSI)';
+};
+
+/** Urutan byte UTF-8, sama dengan `ORDER BY ... COLLATE "C"` di Postgres. */
+function urutByte(a: string, b: string): number {
+  return Buffer.compare(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'));
+}
+
+interface SitusHasil {
+  baris: number;
+  unik: BarisPos[];
+  duplikat: number;
+  kodePosUnik: number;
+  provinsi: number;
+  kota: number;
+  kecamatan: number;
+  diambilPada: string;
+}
+
+/** Bentuk ringkas yang dikirim ke klien — daftar barisnya tidak ikut. */
+function ringkasanSitus(situs: SitusHasil) {
+  return {
+    baris: situs.baris,
+    unik: situs.unik.length,
+    duplikat: situs.duplikat,
+    kodePosUnik: situs.kodePosUnik,
+    provinsi: situs.provinsi,
+    kota: situs.kota,
+    kecamatan: situs.kecamatan,
+  };
+}
+
+async function tarikSitus(): Promise<SitusHasil> {
+  let terakhir: Error | null = null;
+  for (let coba = 1; coba <= POS_COBA; coba++) {
+    try {
+      const res = await fetch(POS_URL, {
+        method: 'POST',
+        headers: POS_BROWSER_HEADERS,
+        body: 'kodepos=%25',
+        signal: AbortSignal.timeout(POS_TIMEOUT_MS),
+      });
+      const html = await res.text();
+      if (res.status === 403 || /Akses Diblokir/i.test(html.slice(0, 5000))) {
+        throw new Error('Situs Pos Indonesia menolak permintaan (Akamai 403).');
+      }
+      if (!res.ok) throw new Error(`Situs Pos Indonesia membalas HTTP ${res.status}.`);
+
+      const semua = parseBaris(html);
+      if (semua.length < POS_MIN_BARIS) {
+        throw new Error(
+          `Situs Pos Indonesia hanya mengirim ${semua.length.toLocaleString('id-ID')} baris ` +
+            `(minimum ${POS_MIN_BARIS.toLocaleString('id-ID')}) — tarikan dibatalkan supaya data lama tidak tertimpa.`
+        );
+      }
+
+      const unik = new Map<string, BarisPos>();
+      for (const r of semua) if (!unik.has(kunciBaris(r))) unik.set(kunciBaris(r), r);
+      const rows = [...unik.values()];
+
+      return {
+        baris: semua.length,
+        unik: rows,
+        duplikat: semua.length - rows.length,
+        kodePosUnik: new Set(rows.map((r) => r.kodePos)).size,
+        provinsi: new Set(rows.map((r) => provinsiDari(r))).size,
+        kota: new Set(rows.map((r) => r.kabupatenKota.toUpperCase())).size,
+        kecamatan: new Set(rows.map((r) => `${r.kecamatan.toUpperCase()}|${r.kabupatenKota.toUpperCase()}|${provinsiDari(r)}`)).size,
+        diambilPada: new Date().toISOString(),
+      };
+    } catch (err: any) {
+      terakhir = err instanceof Error ? err : new Error(String(err));
+      if (coba < POS_COBA) await new Promise((r) => setTimeout(r, 900 * coba));
+    }
+  }
+  throw terakhir || new Error('Situs Pos Indonesia tidak dapat diambil.');
+}
+
+interface MetaProvinsi {
+  provinsi: string;
+  total: number;
+  fingerprint: string;
+}
+
+/**
+ * Sidik jari per provinsi dihitung dengan rumus yang sama seperti `kp_sync_meta()`
+ * (kunci 5 kolom, urut byte, gabung newline, SHA-256). Bila seluruh sidik jari sama,
+ * himpunan baris database identik dengan situs — tanpa perlu membaca 85 ribu baris.
+ */
+function sidikSitus(rows: BarisPos[]): Map<string, MetaProvinsi> {
+  const per = new Map<string, string[]>();
+  for (const r of rows) {
+    const prov = provinsiDari(r);
+    const daftar = per.get(prov);
+    if (daftar) daftar.push(kunciBaris(r));
+    else per.set(prov, [kunciBaris(r)]);
+  }
+  const out = new Map<string, MetaProvinsi>();
+  for (const [provinsi, keys] of per) {
+    keys.sort(urutByte);
+    out.set(provinsi, {
+      provinsi,
+      total: keys.length,
+      fingerprint: createHash('sha256').update(keys.join('\n'), 'utf8').digest('hex'),
+    });
+  }
+  return out;
+}
+
+function metaCocok(situs: Map<string, MetaProvinsi>, meta: MetaProvinsi[]): boolean {
+  if (meta.length !== situs.size) return false;
+  for (const m of meta) {
+    const s = situs.get(m.provinsi);
+    if (!s || Number(m.total) !== s.total || m.fingerprint !== s.fingerprint) return false;
+  }
+  return true;
+}
+
+async function bacaKunciDb(r: Rest): Promise<{ keys: Set<string>; baris: number; kodePosUnik: number }> {
+  const rows = await r.semuaBaris<KunciDb>('kodepos_data', {
+    kolom: 'kode_pos,kelurahan,kecamatan,kabupaten_kota,provinsi',
+  });
+  const keys = new Set(rows.map((x) => kunciBaris(x)));
+  const kode = new Set(rows.map((x) => btrim(x.kode_pos).toUpperCase()).filter(Boolean));
+  return { keys, baris: rows.length, kodePosUnik: kode.size };
+}
+
+function barisDb(r: BarisPos) {
+  return {
+    kode_pos: r.kodePos,
+    kelurahan: r.kelurahan,
+    kecamatan: r.kecamatan,
+    kabupaten_kota: r.kabupatenKota,
+    provinsi: r.provinsi,
+    status: 'AKTIF',
+  };
+}
+
+async function simpanBaris(r: Rest, rows: BarisPos[]): Promise<void> {
+  for (let i = 0; i < rows.length; i += TULIS_BATCH * TULIS_PARALEL) {
+    const potongan: BarisPos[][] = [];
+    for (let j = i; j < Math.min(i + TULIS_BATCH * TULIS_PARALEL, rows.length); j += TULIS_BATCH) {
+      potongan.push(rows.slice(j, j + TULIS_BATCH));
+    }
+    await Promise.all(potongan.map((bagian) => r.simpan('kodepos_data', bagian.map(barisDb))));
+  }
+}
+
+function contoh(r: BarisPos) {
+  return {
+    kodePos: r.kodePos,
+    kelurahan: r.kelurahan,
+    kecamatan: r.kecamatan,
+    kabupatenKota: r.kabupatenKota,
+    provinsi: r.provinsi,
+    status: 'AKTIF',
+    latitude: null,
+    longitude: null,
+  };
+}
+
+function rencanaKurang(situs: SitusHasil, keys: Set<string>) {
+  const kurang = situs.unik.filter((r) => !keys.has(kunciBaris(r)));
+  const provinsi = [...new Set(kurang.map((r) => provinsiDari(r)))].sort(urutByte);
+  return {
+    total: kurang.length,
+    rows: kurang.slice(0, CONTOH_CAP).map(contoh),
+    truncated: kurang.length > CONTOH_CAP,
+    provinces: provinsi,
+    semua: kurang,
+  };
+}
+
+async function handlePos(req: any, res: any, view: string) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.status(200).end();
+
+
+  try {
+    const r = rest();
+    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
+    // HanyaSync otomatis mengisi bila klien memintanya; setelah impor manual client
+    // mengirim import:false supaya pilihan baris pengguna tidak dilengkapi diam-diam.
+    const bolehIsi = body?.import === true;
+
+    if (req.method === 'GET' && view === 'pos-ringkasan') {
+      const situs = await tarikSitus();
+      return res.status(200).json({
+        ok: true,
+        configured: true,
+        sumber: POS_LABEL,
+        url: POS_URL,
+        diambilPada: situs.diambilPada,
+        situs: ringkasanSitus(situs),
+        contoh: situs.unik.slice(0, 5).map(contoh),
+      });
+    }
+
+    if (req.method === 'POST' && view === 'pos-sync') {
+      const situs = await tarikSitus();
+      const stats = await r.rpc<Record<string, number>>('kp_stats');
+      let dbBaris = Number(stats?.total || 0);
+
+      // Tabel kerja kosong = pemakaian pertama. Isi penuh supaya satu kali Sync Data
+      // langsung menghasilkan seluruh dataset situs (85.575 baris unik).
+      if (bolehIsi && dbBaris === 0) {
+        await simpanBaris(r, situs.unik);
+        dbBaris = await r.hitung('kodepos_data');
+        if (dbBaris !== situs.unik.length) {
+          throw new Error(
+            `Database menerima ${dbBaris.toLocaleString('id-ID')} dari ${situs.unik.length.toLocaleString('id-ID')} baris. ` +
+              'Tekan Sync Data lagi — baris yang sudah masuk tidak akan digandakan.'
+          );
+        }
+        return res.status(200).json({
+          ok: true,
+          configured: true,
+          sumber: POS_LABEL,
+          url: POS_URL,
+          diambilPada: situs.diambilPada,
+          situs: ringkasanSitus(situs),
+          db: { baris: dbBaris, kodePosUnik: situs.kodePosUnik },
+          missing: { total: 0, rows: [], truncated: false, provinces: [] },
+          barisDisalin: situs.unik.length,
+          totalSetelah: dbBaris,
+          catatan:
+            `Tabel kerja kosong, jadi seluruh ${situs.unik.length.toLocaleString('id-ID')} baris unik situs ` +
+            `langsung disalin. Situs memuat ${situs.baris.toLocaleString('id-ID')} baris; ` +
+            `${situs.duplikat.toLocaleString('id-ID')} di antaranya duplikat identik.`,
+        });
+      }
+
+      // Database sudah terisi: sidik jari per provinsi menjawab "sama persis" tanpa
+      // memindahkan puluhan ribu baris. Bila berbeda, kunci dibaca sekali untuk
+      // menghitung selisih tingkat baris yang tepat.
+      const meta = (await r.rpc<{ provinces?: MetaProvinsi[] }>('kp_sync_meta'))?.provinces || [];
+      const sidik = sidikSitus(situs.unik);
+      if (metaCocok(sidik, meta)) {
+        return res.status(200).json({
+          ok: true,
+          configured: true,
+          sumber: POS_LABEL,
+          url: POS_URL,
+          diambilPada: situs.diambilPada,
+          situs: ringkasanSitus(situs),
+          db: {
+            baris: meta.reduce((s, p) => s + Number(p.total || 0), 0),
+            kodePosUnik: situs.kodePosUnik,
+          },
+          missing: { total: 0, rows: [], truncated: false, provinces: [] },
+          barisDisalin: 0,
+          totalSetelah: dbBaris,
+          catatan: 'Sidik jari seluruh provinsi sama dengan database — tidak ada yang perlu disalin.',
+        });
+      }
+
+      const db = await bacaKunciDb(r);
+      const kurang = rencanaKurang(situs, db.keys);
+
+      /*
+       * Database yang hanya KEKURANGAN baris situs (sync pertama terputus di tengah,
+       * atau tabel lama yang seluruh isinya ada di situs) dilengkapi pada panggilan ini
+       * juga. Himpunan baris asing TIDAK pernah dihapus di sini.
+       */
+      const kunciSitus = new Set(situs.unik.map(kunciBaris));
+      const adaBarisAsing = [...db.keys].some((k) => !kunciSitus.has(k));
+      if (bolehIsi && !adaBarisAsing && kurang.semua.length > 0) {
+        await simpanBaris(r, kurang.semua);
+        const totalSetelah = await r.hitung('kodepos_data');
+        const diharapkan = db.baris + kurang.semua.length;
+        if (totalSetelah !== diharapkan) {
+          throw new Error(
+            `Database menerima ${totalSetelah.toLocaleString('id-ID')} dari ${diharapkan.toLocaleString('id-ID')} baris yang diharapkan. ` +
+              'Tekan Sync Data lagi — baris yang sudah masuk tidak akan digandakan.'
+          );
+        }
+        return res.status(200).json({
+          ok: true,
+          configured: true,
+          sumber: POS_LABEL,
+          url: POS_URL,
+          diambilPada: situs.diambilPada,
+          situs: ringkasanSitus(situs),
+          db: { baris: totalSetelah, kodePosUnik: situs.kodePosUnik },
+          missing: { total: 0, rows: [], truncated: false, provinces: [] },
+          barisDisalin: kurang.semua.length,
+          totalSetelah,
+          catatan:
+            `${kurang.semua.length.toLocaleString('id-ID')} baris situs yang belum ada langsung disalin, ` +
+            `sehingga database kini memuat ${totalSetelah.toLocaleString('id-ID')} baris — ` +
+            `sama dengan ${situs.unik.length.toLocaleString('id-ID')} baris unik situs.`,
+        });
+      }
+
+      return res.status(200).json({
+        ok: true,
+        configured: true,
+        sumber: POS_LABEL,
+        url: POS_URL,
+        diambilPada: situs.diambilPada,
+        situs: ringkasanSitus(situs),
+        db: { baris: db.baris, kodePosUnik: db.kodePosUnik },
+        missing: {
+          total: kurang.total,
+          rows: kurang.rows,
+          truncated: kurang.truncated,
+          provinces: kurang.provinces,
+        },
+        barisDisalin: 0,
+        totalSetelah: db.baris,
+        catatan:
+          kurang.total > 0
+            ? `${kurang.total.toLocaleString('id-ID')} baris situs belum ada di tabel kerja.`
+            : 'Semua baris situs sudah ada di tabel kerja; selisih hanya pada baris lama database.',
+      });
+    }
+
+    if (req.method === 'POST' && view === 'pos-import') {
+      const situs = await tarikSitus();
+      const db = await bacaKunciDb(r);
+      const kurang = rencanaKurang(situs, db.keys);
+      if (kurang.semua.length > 0) await simpanBaris(r, kurang.semua);
+
+      const totalSetelah = await r.hitung('kodepos_data');
+      const diharapkan = db.baris + kurang.semua.length;
+      if (totalSetelah !== diharapkan) {
+        throw new Error(
+          `Setelah penyalinan database berisi ${totalSetelah.toLocaleString('id-ID')} baris, ` +
+            `diharapkan ${diharapkan.toLocaleString('id-ID')}. Tekan Sync Data lagi untuk melanjutkan.`
+        );
+      }
+
+      return res.status(200).json({
+        ok: true,
+        configured: true,
+        sumber: POS_LABEL,
+        url: POS_URL,
+        diambilPada: situs.diambilPada,
+        totalSitus: situs.unik.length,
+        barisSitus: situs.baris,
+        duplikatSitus: situs.duplikat,
+        masuk: kurang.semua.length,
+        totalSetelah,
+      });
+    }
+
+    return res.status(400).json({
+      ok: false,
+      error: 'Gunakan GET ?view=pos-ringkasan atau POST ?view=pos-sync|pos-import.',
+    });
+  } catch (error: any) {
+    console.error('Kodepos Pos Indonesia error:', error);
+    const status = Number(error?.status) || 500;
+    return res.status(status >= 400 && status < 600 ? status : 500).json({
+      ok: false,
+      configured: true,
+      error: pesanRest(error, 'Pengambilan data kodepos.posindonesia.co.id gagal.'),
+    });
   }
 }

@@ -595,7 +595,7 @@ export async function runKodePosLiveSync(
   autoImport = true
 ): Promise<KodePosSyncPlan> {
   onProgress?.('Menarik seluruh kode pos dari kodepos.posindonesia.co.id...', 12);
-  const json = await fetchJson('/api/kodepos-pos?view=sync', {
+  const json = await fetchJson('/api/kodepos-source?view=pos-sync', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ import: autoImport }),
@@ -658,7 +658,7 @@ export async function importSemuaPos(
   onProgress?: SyncProgress
 ): Promise<{ masuk: number; totalSetelah: number; totalSitus: number; barisSitus: number; duplikatSitus: number }> {
   onProgress?.('Menarik seluruh kode pos dari kodepos.posindonesia.co.id...', 10);
-  const json = await fetchJson('/api/kodepos-pos?view=import', {
+  const json = await fetchJson('/api/kodepos-source?view=pos-import', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({}),
