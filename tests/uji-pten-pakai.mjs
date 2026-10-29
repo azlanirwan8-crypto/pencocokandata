@@ -5,6 +5,8 @@
 // Jalankan:
 //   npx vite build --ssr tests/entry-uji.ts --outDir tests/out
 //   node tests/uji-pten-pakai.mjs
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   STATUS_BELUM_PAKAI, STATUS_PAKAI, adalahPtenTerpakai, himpunPtenTerpakai,
   indeksKodePosPtenTerpakai, normKodePosPten, statusPakaiPten,
@@ -52,6 +54,31 @@ const terhimpun = himpunPtenTerpakai(master, pakai);
 asa('penghitung pakai = jumlah badge Digunakan', terhimpun.size, master.filter((m) => adalahPtenTerpakai(m, pakai)).length);
 asa('kode pos kembar ikut Digunakan', terhimpun.has(kembar), true);
 asa('tiga baris (dua kode pos) dari lima dipakai', terhimpun.size, 3);
+
+// 6. Kepala tabel: sort asc/desc + saringan lewat primitif yang sama dengan tabel lain
+const komponenPten = readFileSync(
+  fileURLToPath(new URL('../src/components/PTENData/PTENManager.tsx', import.meta.url)), 'utf8');
+const selHeader = (kolom) => {
+  const mulai = komponenPten.indexOf(`label={${kolom}}`);
+  return mulai < 0 ? '' : komponenPten.slice(mulai, komponenPten.indexOf('/>', mulai));
+};
+for (const [nama, kolom] of [
+  ['Status Pakai', 'KOLOM_STATUS_PAKAI_PTEN'],
+  ['Kodepos', 'KOLOM_KODEPOS_PTEN'],
+  ['Kota', 'KOLOM_KOTA_PTEN'],
+  ['Kota max 15', 'KOLOM_KOTA15_PTEN'],
+]) {
+  const sel = selHeader(kolom);
+  asa(`kepala ${nama}: tombol urut dan popover filter terpasang`,
+    [/onUrut=\{\(\) => gantiUrut\(/.test(sel), /onTerapkan=\{/.test(sel)], [true, true]);
+}
+asa('kepala tabel: hanya 4 kolom yang dibekali sort/filter (No & Aksi tetap bisu)',
+  (komponenPten.match(/<ThFilter/g) || []).length, 4);
+asa('tabel, pagination, dan ekspor membaca hasil saringan yang sama',
+  [/baris: ptenTampil,/, /tersaring: ptenTersaring,/, /const exportData = ptenTersaring;/,
+    /useFilterSort\('pten', definisiHeader, filteredPten\)/]
+    .map((p) => p.test(komponenPten)),
+  [true, true, true, true]);
 
 console.log(gagal === 0 ? 'SEMUA LULUS' : `${gagal} UJI GAGAL`);
 process.exit(gagal === 0 ? 0 : 1);

@@ -29,6 +29,9 @@ import { loadPtenFromNeon, savePtenToNeon } from '../../utils/neonSync';
 import type { KodePosRow } from '../../utils/neonSync';
 import { tabrakKotaPtenKodePos } from '../../utils/tabrakKotaPten';
 import { useVirtualWindow } from '../../utils/useVirtualWindow';
+import { useFilterSort } from '../../utils/useFilterSort';
+import type { DefinisiKolomFilter } from '../../utils/filterSort';
+import { ThFilter } from '../ThFilter';
 import {
   KOLOM_STATUS_PAKAI_PTEN,
   STATUS_BELUM_PAKAI,
@@ -58,6 +61,11 @@ export interface PTENRecord {
   kotaPtenMax15?: string;
   status: 'AKTIF' | 'NON-AKTIF';
 }
+
+/** Kunci kolom yang bisa disortir/disaring = teks header persis (dipakai sebagai kunci state). */
+const KOLOM_KODEPOS_PTEN = 'KODEPOS';
+const KOLOM_KOTA_PTEN = 'KOTA / KABUPATEN';
+const KOLOM_KOTA15_PTEN = 'KOTA/KABUPATEN MAX 15 DIGIT';
 
 export const PTENManager: React.FC<PTENManagerProps> = ({
   targetRows = [],
@@ -219,17 +227,41 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
     });
   }, [ptenList, selectedKota, deferredSearch]);
 
+  // Kepala tabel: sort asc/desc + saringan ala Excel lewat primitif yang sama dengan
+  // tabel Master Cabang & Data Final. Nilainya dibaca dari teks yang tampil di sel,
+  // termasuk Status Pakai yang diturunkan — supaya urutan dan angka tidak bercabang.
+  const definisiHeader = useMemo<readonly DefinisiKolomFilter<PTENRecord>[]>(
+    () => [
+      { kunci: KOLOM_STATUS_PAKAI_PTEN, nilai: labelStatusPakai },
+      { kunci: KOLOM_KODEPOS_PTEN, nilai: (r: PTENRecord) => r.kodePosPten },
+      { kunci: KOLOM_KOTA_PTEN, nilai: (r: PTENRecord) => kapital(r.kotaPten) },
+      { kunci: KOLOM_KOTA15_PTEN, nilai: (r: PTENRecord) => kapital(r.kotaPtenMax15 || r.kotaPten) },
+    ],
+    [labelStatusPakai]
+  );
+
+  const {
+    baris: ptenTampil,
+    tersaring: ptenTersaring,
+    urut: urutPten,
+    saring: saringPten,
+    gantiUrut,
+    setNilaiKolom,
+    bersihkanSemua,
+    jumlahAktif,
+  } = useFilterSort('pten', definisiHeader, filteredPten);
+
   // PTEN Master Pagination
-  const totalMasterPages = masterPageSize === 'ALL' ? 1 : Math.max(1, Math.ceil(filteredPten.length / masterPageSize));
+  const totalMasterPages = masterPageSize === 'ALL' ? 1 : Math.max(1, Math.ceil(ptenTampil.length / masterPageSize));
   useEffect(() => {
     if (masterPage > totalMasterPages) setMasterPage(1);
   }, [totalMasterPages, masterPage]);
 
   const paginatedPten = useMemo(() => {
-    if (masterPageSize === 'ALL') return filteredPten;
+    if (masterPageSize === 'ALL') return ptenTampil;
     const start = (masterPage - 1) * masterPageSize;
-    return filteredPten.slice(start, start + masterPageSize);
-  }, [filteredPten, masterPage, masterPageSize]);
+    return ptenTampil.slice(start, start + masterPageSize);
+  }, [ptenTampil, masterPage, masterPageSize]);
 
   // Windowing "Lihat Semua" + indeks O(1) pengganti ptenList.indexOf() per baris
   const ptenScrollRef = useRef<HTMLDivElement | null>(null);
@@ -246,7 +278,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
 
   useEffect(() => {
     ptenScrollRef.current?.scrollTo({ top: 0 });
-  }, [masterPage, masterPageSize, selectedKota, deferredSearch]);
+  }, [masterPage, masterPageSize, selectedKota, deferredSearch, urutPten, jumlahAktif]);
 
   // Helper for compact sliding pagination
   const getPaginationRange = (curr: number, total: number): (number | string)[] => {
@@ -410,7 +442,7 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
   // Export PTEN Master to Excel matching exact column format
   const handleExport = () => {
     // Dulu: kalau hasil saring kosong, diam-diam mengunduh SELURUH pustaka.
-    const exportData = filteredPten;
+    const exportData = ptenTersaring;
     const kolom = [
       KOLOM_STATUS_PAKAI_PTEN,
       'No',
@@ -956,9 +988,22 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
                     <option value={25}>25 Baris</option>
                     <option value={50}>50 Baris</option>
                     <option value={100}>100 Baris</option>
-                    <option value="ALL">Lihat Semua ({filteredPten.length})</option>
+                    <option value="ALL">Lihat Semua ({ptenTampil.length})</option>
                   </select>
                 </div>
+
+                {jumlahAktif > 0 && (
+                  <div className="filter-group">
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => { bersihkanSemua(); setMasterPage(1); }}
+                      title="Hapus semua saringan kolom"
+                    >
+                      <X size={12} /> Bersihkan saringan ({jumlahAktif})
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Table Master PTEN (Exact Columns: No, Status Pakai, Kodepos, Kota, Kota Max 15, Aksi) */}
@@ -967,23 +1012,71 @@ export const PTENManager: React.FC<PTENManagerProps> = ({
                   <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f3f6f9' }}>
                     <tr>
                       <th style={{ width: '50px', textAlign: 'center' }}>No</th>
-                      <th
-                        style={{ width: '125px', textAlign: 'center' }}
+                      <ThFilter
+                        label={KOLOM_STATUS_PAKAI_PTEN}
+                        definisi={definisiHeader[0]}
+                        sumber={filteredPten}
+                        semuaDefinisi={definisiHeader}
+                        saringSemua={saringPten}
+                        urutKolom={urutPten.kolom}
+                        urutNaik={urutPten.naik}
+                        onUrut={() => gantiUrut(KOLOM_STATUS_PAKAI_PTEN)}
+                        terpilih={saringPten[KOLOM_STATUS_PAKAI_PTEN] || []}
+                        onTerapkan={(n) => { setNilaiKolom(KOLOM_STATUS_PAKAI_PTEN, n); setMasterPage(1); }}
+                        tengah
+                        gayaSel={{ width: '145px', minWidth: '145px' }}
                         title="Kode pos ini dipakai bila ada baris Data Final yang memakainya"
-                      >
-                        {KOLOM_STATUS_PAKAI_PTEN}
-                      </th>
-                      <th style={{ width: '130px', textAlign: 'center' }}>KODEPOS</th>
-                      <th>KOTA / KABUPATEN</th>
-                      <th>KOTA/KABUPATEN MAX 15 DIGIT</th>
+                      />
+                      <ThFilter
+                        label={KOLOM_KODEPOS_PTEN}
+                        definisi={definisiHeader[1]}
+                        sumber={filteredPten}
+                        semuaDefinisi={definisiHeader}
+                        saringSemua={saringPten}
+                        urutKolom={urutPten.kolom}
+                        urutNaik={urutPten.naik}
+                        onUrut={() => gantiUrut(KOLOM_KODEPOS_PTEN)}
+                        terpilih={saringPten[KOLOM_KODEPOS_PTEN] || []}
+                        onTerapkan={(n) => { setNilaiKolom(KOLOM_KODEPOS_PTEN, n); setMasterPage(1); }}
+                        tengah
+                        gayaSel={{ width: '150px', minWidth: '150px' }}
+                      />
+                      <ThFilter
+                        label={KOLOM_KOTA_PTEN}
+                        definisi={definisiHeader[2]}
+                        sumber={filteredPten}
+                        semuaDefinisi={definisiHeader}
+                        saringSemua={saringPten}
+                        urutKolom={urutPten.kolom}
+                        urutNaik={urutPten.naik}
+                        onUrut={() => gantiUrut(KOLOM_KOTA_PTEN)}
+                        terpilih={saringPten[KOLOM_KOTA_PTEN] || []}
+                        onTerapkan={(n) => { setNilaiKolom(KOLOM_KOTA_PTEN, n); setMasterPage(1); }}
+                        gayaSel={{ minWidth: '200px' }}
+                      />
+                      <ThFilter
+                        label={KOLOM_KOTA15_PTEN}
+                        definisi={definisiHeader[3]}
+                        sumber={filteredPten}
+                        semuaDefinisi={definisiHeader}
+                        saringSemua={saringPten}
+                        urutKolom={urutPten.kolom}
+                        urutNaik={urutPten.naik}
+                        onUrut={() => gantiUrut(KOLOM_KOTA15_PTEN)}
+                        terpilih={saringPten[KOLOM_KOTA15_PTEN] || []}
+                        onTerapkan={(n) => { setNilaiKolom(KOLOM_KOTA15_PTEN, n); setMasterPage(1); }}
+                        gayaSel={{ minWidth: '220px' }}
+                      />
                       <th style={{ width: '95px', textAlign: 'center' }}>AKSI</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredPten.length === 0 ? (
+                    {ptenTampil.length === 0 ? (
                       <tr>
                         <td colSpan={6} style={{ textAlign: 'center', padding: '2.5rem', color: '#878a99' }}>
-                          Tidak ada data master PTEN yang cocok dengan filter pencarian.
+                          {jumlahAktif > 0
+                            ? 'Tidak ada data master PTEN yang cocok dengan pencarian dan saringan kolom.'
+                            : 'Tidak ada data master PTEN yang cocok dengan filter pencarian.'}
                         </td>
                       </tr>
                     ) : (
