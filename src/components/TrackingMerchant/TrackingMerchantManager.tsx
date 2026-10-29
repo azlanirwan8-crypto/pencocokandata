@@ -4,7 +4,6 @@ import {
   RefreshCw,
   Search,
   Download,
-  X,
   AlertCircle,
   Timer,
   Flag,
@@ -26,7 +25,6 @@ import {
   KUNCI_STORAGE_TRACKING,
   PERIODE_QR_DEFAULT,
   SARINGAN_REKAP_KOSONG,
-  SUMUR_TRACKING,
   barisKeExcelTm,
   daftarMerchantTerverifikasi,
   daftarPeriodeQr,
@@ -48,11 +46,11 @@ import {
 import { tulisLembarExcel } from '../../utils/excel';
 import { tanggalBerkas } from '../../utils/normalizer';
 import { getItem, setItem } from '../../utils/storage';
-import { loadTrackingMerchantFromNeon, syncTrackingMerchantDariSumber } from '../../utils/neonSync';
+import { loadTrackingMerchantFromNeon } from '../../utils/neonSync';
 import { useNotification } from '../Notification/NotificationContext';
 
 interface TrackingMerchantManagerProps {
-  /** Identik dengan badge sidebar: berapa merchant yang ikut ter-sync. */
+  /** Identik dengan badge sidebar: berapa merchant yang tampil. */
   onTrackingCountChange?: (jumlahMerchant: number) => void;
   /** Baris terbaru untuk peta Dashboard (klik KC → busur ke merchant sekota). */
   onTrackingRowsChange?: (baris: BarisMerchant[]) => void;
@@ -159,15 +157,13 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
   const [periodePilih, setPeriodePilih] = useState(PERIODE_QR_DEFAULT);
   const [saringanRekap, setSaringanRekap] = useState<SaringanRekap>(SARINGAN_REKAP_KOSONG);
   const [halamanRekap, setHalamanRekap] = useState(1);
-  const [statusMuat, setStatusMuat] = useState<'memuat' | 'siap' | 'syncing'>('memuat');
-  const [galat, setGalat] = useState<string | null>(null);
+  const [statusMuat, setStatusMuat] = useState<'memuat' | 'siap'>('memuat');
 
   // Panel Aktivitas Tracking Merchant: MID yang jejaknya sedang dibuka + kata kunci input.
   const [midJejak, setMidJejak] = useState<string | null>(null);
   const [kueriJejak, setKueriJejak] = useState<string>('');
   /** Kueri yang tidak punya padanan di data nyata — ditampilkan sebagai pemberitahuan, bukan kartu. */
   const [kueriKosong, setKueriKosong] = useState<string>('');
-  const [memeriksaSumber, setMemeriksaSumber] = useState(false);
   const panelJejakRef = useRef<HTMLDivElement | null>(null);
   const panelRekapRef = useRef<HTMLDivElement | null>(null);
   /** Stempel `diambilPada` data yang sedang tampil — pembanding saat cloud diperiksa ulang. */
@@ -205,8 +201,8 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
     };
   }, [uatMuatan]);
 
-  // Realtime ringan: cloud hanya dibaca (tidak menulis, tidak menyentuh sumber), jadi
-  // aman dijalankan berkala. Hasil sync siapa pun langsung terlihat tanpa reload.
+  // Realtime ringan: cloud hanya dibaca, jadi aman dijalankan berkala. Perubahan dari
+  // perangkat lain langsung terlihat tanpa reload.
   useEffect(() => {
     let hidup = true;
     let sedangDiperiksa = false;
@@ -221,7 +217,7 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
         uatMuatan(cloud);
         setItem(KUNCI_STORAGE_TRACKING, cloud).catch(() => undefined);
         notify(
-          `Data Tracking Merchant diperbarui otomatis: ${ringkasTracking(cloud.baris).riwayat.toLocaleString('id-ID')} riwayat tersinkron.`,
+          `Data Tracking Merchant diperbarui otomatis: ${ringkasTracking(cloud.baris).riwayat.toLocaleString('id-ID')} riwayat tersimpan.`,
           'info'
         );
       } catch {
@@ -245,35 +241,6 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
     };
   }, [notify, uatMuatan]);
 
-  const handleSync = useCallback(async (): Promise<BarisMerchant[] | null> => {
-    setStatusMuat('syncing');
-    setGalat(null);
-    const hasil = await syncTrackingMerchantDariSumber();
-    if (!hasil.muatan) {
-      setStatusMuat('siap');
-      const pesan = hasil.pesan || `Tidak bisa menghubungi ${SUMUR_TRACKING}.`;
-      setGalat(pesan);
-      notify(`Sync gagal: ${pesan}`, 'error');
-      return null;
-    }
-    uatMuatan(hasil.muatan);
-    setStatusMuat('siap');
-    try {
-      await setItem(KUNCI_STORAGE_TRACKING, hasil.muatan);
-    } catch {
-      notify('Hasil sync gagal disimpan di browser ini.', 'warning');
-    }
-    const k = ringkasTracking(hasil.muatan.baris);
-    notify(
-      `Sync selesai: ${k.merchant.toLocaleString('id-ID')} merchant / ${k.riwayat.toLocaleString('id-ID')} riwayat diambil dari ${SUMUR_TRACKING}.`,
-      hasil.tersimpanDiCloud ? 'success' : 'warning'
-    );
-    if (!hasil.tersimpanDiCloud) {
-      notify('Cloud gagal menerima hasil sync — data ini hanya tersimpan di browser ini.', 'warning');
-    }
-    return hasil.muatan.baris;
-  }, [notify, uatMuatan]);
-
   // Satu sumber angka merchant — diturunkan dari baris, dipakai baris meta DAN badge
   // sidebar, jadi keduanya tidak mungkin menunjukkan angka berbeda.
   const ringkasSemua = useMemo(() => ringkasTracking(baris), [baris]);
@@ -283,14 +250,14 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
   }, [ringkasSemua.merchant, onTrackingCountChange]);
 
   // Baris kosong saat mount bukan kabar bahwa data hilang (App sudah memuatnya
-  // sendiri); hanya hasil sync yang benar-benar berisi yang diteruskan ke peta.
+  // sendiri); hanya muatan yang benar-benar berisi yang diteruskan ke peta.
   useEffect(() => {
     if (baris.length > 0) onTrackingRowsChange?.(baris);
   }, [baris, onTrackingRowsChange]);
 
   const handleExport = () => {
     if (baris.length === 0) {
-      notify('Belum ada data tersinkron — tidak ada yang bisa diunduh.', 'warning');
+      notify('Belum ada data tersimpan — tidak ada yang bisa diunduh.', 'warning');
       return;
     }
     tulisLembarExcel({
@@ -314,7 +281,7 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
     return `${bersih(distribusi[0].label)} – ${bersih(distribusi[distribusi.length - 1].label)}`;
   }, [distribusi]);
 
-  // ── Komposisi jenis QR: angka literal sumber, disalin saat sync ────────────
+  // ── Komposisi jenis QR: angka literal yang tersimpan di muatan ─────────────
   const periodeTersedia = useMemo(() => daftarPeriodeQr(periodeQr || undefined), [periodeQr]);
   const periodeData = useMemo(
     () => periodeQrAktif(periodeQr || undefined, periodePilih),
@@ -385,7 +352,7 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
   // bukan hitungan baris perwakilan.
   const eksporRekapQr = useCallback(() => {
     if (!periodeData) {
-      notify('Komposisi jenis QR belum tersinkron — tidak ada yang bisa diekspor.', 'warning');
+      notify('Komposisi jenis QR belum ada di muatan — tidak ada yang bisa diekspor.', 'warning');
       return;
     }
     const kolomRaw = `Raw Data (${periodeData.shortLabel})`;
@@ -435,33 +402,14 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
     [baris, tampilkanHasilCari]
   );
 
-  // Dipakai tombol "Cek ke sumber": tarik data terbaru dulu (aksi yang sama dengan Sync
-  // Data), lalu ulangi pencarian atas baris baru — bukan atas data lama.
-  const cekSumberLaluCari = useCallback(async () => {
-    const kueri = kueriJejak;
-    if (!kueri.trim() || memeriksaSumber) return;
-    setMemeriksaSumber(true);
-    try {
-      const barisBaru = await handleSync();
-      if (!barisBaru) return;
-      if (tampilkanHasilCari(kueri, barisBaru) === 'kosong') {
-        notify(`"${kueri.trim()}" juga tidak ada di hasil sinkron terbaru ${SUMUR_TRACKING}.`, 'warning');
-      }
-    } finally {
-      setMemeriksaSumber(false);
-    }
-  }, [handleSync, kueriJejak, memeriksaSumber, notify, tampilkanHasilCari]);
-
   // Klik "Lihat jejak" / pencarian membawa operator ke panel ini, bukan membuka lapisan lain.
   useEffect(() => {
     if (midJejak || kueriKosong) panelJejakRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [midJejak, kueriKosong]);
 
-  const sinkronSedang = statusMuat === 'syncing';
-
   return (
     <div>
-      {/* 1. Kepala menu + aksi sync */}
+      {/* 1. Kepala menu + aksi ekspor */}
       <div className="glass-card tm-kepala-kartu">
         <div className="tm-kepala">
           <div>
@@ -480,16 +428,6 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
             >
               <Download size={16} />
               <span>Export Excel</span>
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => void handleSync()}
-              disabled={sinkronSedang || statusMuat === 'memuat'}
-              title={`Ambil data terbaru dari ${SUMUR_TRACKING} lewat serverless proxy (anonim, tanpa login)`}
-            >
-              <RefreshCw size={16} className={sinkronSedang ? 'tm-putar' : undefined} />
-              <span>{sinkronSedang ? 'Mengambil data…' : 'Sync Data'}</span>
             </button>
           </div>
         </div>
@@ -513,37 +451,20 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
         </div>
       )}
 
-      {galat && (
-        <div className="glass-card tm-galat">
-          <div className="tm-galat-isi">
-            <AlertCircle size={16} />
-            <span>{galat}</span>
-          </div>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setGalat(null)}>
-            <X size={13} />
-          </button>
-        </div>
-      )}
-
       {/* 2. Panel aktivitas satu MID / keadaan kosong */}
       {statusMuat === 'memuat' ? (
         <div className="glass-card tm-kosong">
           <RefreshCw size={20} className="tm-putar" />
-          <span>Memuat hasil sync tersimpan…</span>
+          <span>Memuat data tersimpan…</span>
         </div>
       ) : baris.length === 0 ? (
         <div className="glass-card tm-kosong">
           <Radar size={26} />
           <div className="tm-kosong-judul">Belum ada data Tracking Merchant di sini.</div>
           <div className="tm-kosong-isi">
-            Klik <strong>Sync Data</strong> untuk menariknya dari {SUMUR_TRACKING}. Unduhan dilakukan
-            fungsi serverless di sisi server — browser tidak bisa membuka halaman itu langsung
-            (sumbernya HTTP dan tanpa CORS).
+            Menu ini hanya menampilkan data yang sudah tersimpan di cloud. Tidak ada pengambilan
+            data dari sini.
           </div>
-          <button type="button" className="btn btn-primary" onClick={() => void handleSync()} disabled={sinkronSedang}>
-            <RefreshCw size={16} className={sinkronSedang ? 'tm-putar' : undefined} />
-            <span>{sinkronSedang ? 'Mengambil data…' : 'Sync Data sekarang'}</span>
-          </button>
         </div>
       ) : (
         // Aktivitas satu MID — pintu masuk dari kotak cari.
@@ -596,19 +517,10 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
                 <AlertCircle size={14} />
                 <span>
                   <strong>&ldquo;{kueriKosong}&rdquo;</strong> tidak ditemukan di{' '}
-                  {baris.length.toLocaleString('id-ID')} baris hasil sinkron — bukan MID terdaftar dan tidak
+                  {baris.length.toLocaleString('id-ID')} baris tersimpan — bukan MID terdaftar dan tidak
                   ada nama merchant yang cocok. Hanya data nyata yang ditampilkan di sini.
                 </span>
               </div>
-              <button
-                type="button"
-                className="btn btn-outline btn-sm tm-aktivitas-catatan-aksi"
-                onClick={() => void cekSumberLaluCari()}
-                disabled={memeriksaSumber || sinkronSedang}
-              >
-                <RefreshCw size={13} className={memeriksaSumber || sinkronSedang ? 'tm-putar' : undefined} />
-                <span>{memeriksaSumber ? 'Memeriksa sumber…' : 'Cek ke sumber'}</span>
-              </button>
             </div>
           )}
 
@@ -752,9 +664,9 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
         </div>
       )}
 
-      {/* 3. Komposisi & rekap jenis QR. Angkanya literal PERIODS_MASTER_DATA di halaman
-          sumber (data lake nasional), disalin apa adanya saat sync — bukan hasil hitung
-          `baris`. Periode yang tidak tersimpan dikatakan apa adanya, tidak dikarang. */}
+      {/* 3. Komposisi & rekap jenis QR. Angkanya literal yang tersimpan di muatan —
+          bukan hasil hitung `baris`. Periode yang tidak tersimpan dikatakan apa adanya,
+          tidak dikarang. */}
       {statusMuat !== 'memuat' && baris.length > 0 && (
         <>
           {/* Kontrol periode meniru sumber: tahun berjalan, kumulatif, lalu tahun lampau. */}
@@ -816,7 +728,7 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
                   <div className="tm-qr-sub">
                     {periodeData
                       ? 'Berdasarkan nomor MID unik terverifikasi'
-                      : `Komposisi jenis QR dibaca dari ${SUMUR_TRACKING} saat sync.`}
+                      : 'Komposisi jenis QR belum ada di muatan yang tersimpan.'}
                   </div>
                 </div>
                 {periodeData && (
@@ -902,9 +814,8 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
                 <div className="tm-qr-nihil">
                   <AlertCircle size={14} />
                   <span>
-                    Komposisi belum ada di data yang tampil. Angka ini ikut dibaca saat{' '}
-                    <strong>Sync Data</strong>; muatan lama tidak menyimpannya dan angka tidak
-                    dikarang di sini.
+                    Komposisi belum ada di data yang tampil. Muatan lama tidak menyimpannya dan
+                    angka tidak dikarang di sini.
                   </span>
                 </div>
               )}
@@ -1004,7 +915,7 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
               ) : (
                 <div className="tm-qr-nihil">
                   <AlertCircle size={14} />
-                  <span>Rekap belum tersedia — tekan <strong>Sync Data</strong> untuk membacanya dari sumber.</span>
+                  <span>Rekap belum tersedia — muatan yang tersimpan tidak memuat angka periode ini.</span>
                 </div>
               )}
               {periodeData && (
@@ -1086,7 +997,7 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
               <div className="tm-qr-judul">Daftar Merchant Terverifikasi (MID Unik)</div>
               <div className="tm-qr-sub">
                 Satu baris per MID. Nama, kriteria, dan wilayah dibaca dari objek induk seperti
-                tabel sumber — nomor rekening tidak ikut karena dipotong parser.
+                tabel sumber — nomor rekening tidak ikut tersimpan.
               </div>
             </div>
             <div className="tm-rekap-lencana">

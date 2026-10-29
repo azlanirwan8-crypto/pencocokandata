@@ -1,10 +1,9 @@
 /**
- * Tracking Merchant — cermin menu "Tracking History Merchant" di 154.19.37.201/migrasi.
+ * Tracking Merchant — pembacaan muatan yang sudah tersimpan di cloud.
  *
- * Sumber aslinya bukan API: datanya literal JS `trackingMIDDatabase = [...]` di dalam
- * HTML halaman itu. `api/rolemapping.ts?tm=1` yang mengunduh HTML-nya tanpa kredensial
- * dan MEMOTONG kolomnya di sana, jadi identitas nasabah (KTP, nomor rekening, e-mail,
- * nomor HP, nama penginput) tidak pernah masuk ke aplikasi ini maupun ke cloud.
+ * Menu ini tidak lagi mengambil data dari mana pun: `api/rolemapping.ts?tm=1`
+ * hanya mengembalikan muatan terakhir di app_store. Identitas nasabah (KTP, nomor
+ * rekening, e-mail, nomor HP, nama penginput) tidak ada di muatan itu.
  *
  * Satu baris = satu riwayat pengajuan merchant (satu MID bisa punya lebih dari satu).
  */
@@ -129,15 +128,14 @@ export interface MuatanTracking {
   diambilPada: string;
   sumber: string;
   baris: BarisMerchant[];
-  /** Kosong/tidak ada pada muatan lama yang tersimpan sebelum kartu ini ikut disinkron. */
+  /** Kosong/tidak ada pada muatan lama yang tersimpan sebelum kartu ini ikut disalin. */
   ringkasan?: KartuRingkasan[];
   distribusi?: KartuTahun[];
-  /** Kosong/tidak ada pada muatan lama sebelum komposisi QR ikut disinkron. */
+  /** Kosong/tidak ada pada muatan lama sebelum komposisi QR ikut disalin. */
   periodeQr?: Record<string, PeriodeQr>;
 }
 
 export const KUNCI_STORAGE_TRACKING = 'tracking_merchant_data';
-export const SUMUR_TRACKING = '154.19.37.201/migrasi';
 
 export type KeranjangStatus = 'aktif' | 'proses' | 'tolak' | 'lain';
 

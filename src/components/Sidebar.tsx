@@ -119,13 +119,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </button>
 
-          {/* 4. Tracking Merchant (salinan data dari 154.19.37.201, hanya-baca) */}
+          {/* 4. Tracking Merchant (menampilkan data tersimpan, hanya-baca) */}
           <button
             type="button"
             className={`sidebar-nav-item ${activeTab === 'tracking_merchant' ? 'active' : ''}`}
             onClick={() => setActiveTab('tracking_merchant')}
             id="sidebar-btn-tracking-merchant"
-            title="Tracking Merchant (sync dari 154.19.37.201/migrasi)"
+            title="Tracking Merchant (data tersimpan di cloud)"
           >
             <div className="nav-item-icon">
               <Radar size={17} />

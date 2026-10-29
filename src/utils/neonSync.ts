@@ -971,9 +971,8 @@ export function saveRoleMappingToNeon(rows: any[]): Promise<boolean> {
 }
 
 /**
- * Tracking Merchant. Data ini bukan milik aplikasi: sumbernya halaman tracking di
- * 154.19.37.201, jadi cloud hanya menyimpan hasil sync terakhir supaya semua pengguna
- * membuka menu ini dengan angka yang sama. Tidak ada jalur tulis dari aplikasi ke sumber.
+ * Tracking Merchant. Cloud menyimpan muatan terakhir supaya semua pengguna membuka
+ * menu ini dengan data yang sama. Aplikasi hanya membaca — tidak ada jalur tulis.
  *
  * Rutenya `?tm=1` di fungsi Role Mapping, bukan fungsi sendiri: Vercel Hobby hanya
  * mengizinkan 12 fungsi per deployment dan api/ sudah berisi 12 sebelum menu ini ada.
@@ -982,56 +981,4 @@ export const JALUR_TRACKING_MERCHANT = '/api/rolemapping?tm=1';
 
 export function loadTrackingMerchantFromNeon(): Promise<MuatanTracking | null> {
   return loadKeyFromNeon<MuatanTracking>(JALUR_TRACKING_MERCHANT);
-}
-
-export function saveTrackingMerchantToNeon(muatan: MuatanTracking): Promise<boolean> {
-  return saveKeyToNeon(JALUR_TRACKING_MERCHANT, muatan);
-}
-
-export interface HasilSyncTracking {
-  muatan: MuatanTracking | null;
-  /** false = baris berhasil diambil dari sumber, tapi gagal masuk cloud. */
-  tersimpanDiCloud: boolean;
-  pesan?: string;
-}
-
-/**
- * Tarik ulang dari sumber lewat fungsi serverless. Timeout klien lebih panjang dari
- * durasi maksimum fungsi (60 s di api/rolemapping.ts) supaya yang dilaporkan ke
- * operator adalah kegagalan sebenarnya, bukan abort kita sendiri. Retri 0: satu
- * percobaan sudah bisa makan 50 detik, mengulanginya hanya membekukan tombol.
- */
-export async function syncTrackingMerchantDariSumber(): Promise<HasilSyncTracking> {
-  try {
-    const res = await fetchWithRetry(`${JALUR_TRACKING_MERCHANT}&ambil=1`, { method: 'GET' }, 75_000, 0);
-    const teks = await res.text();
-    let json: any = null;
-    try {
-      json = JSON.parse(teks);
-    } catch {
-      // Rute serverless yang belum ter-deploy menghasilkan HTTP 200 berisi HTML aplikasi
-      // (rewrite SPA). Tanpa pemeriksaan ini operator hanya melihat error parser yang bingung.
-      const halamanHtml = /^\s*<(!doctype|html)/i.test(teks);
-      return {
-        muatan: null,
-        tersimpanDiCloud: false,
-        pesan: halamanHtml
-          ? 'Rute sync Tracking Merchant belum terpasang di server — yang dibalas adalah halaman aplikasi (HTML). Deploy dulu, lalu Sync lagi.'
-          : `Balasan server bukan JSON yang sah (HTTP ${res.status}).`,
-      };
-    }
-    if (!res.ok || !json.ok || !json.data || !Array.isArray(json.data.baris)) {
-      return { muatan: null, tersimpanDiCloud: false, pesan: json.error || `Gagal mengambil data (HTTP ${res.status}).` };
-    }
-    return { muatan: json.data as MuatanTracking, tersimpanDiCloud: Boolean(json.tersimpanDiCloud) };
-  } catch (err: any) {
-    const dibatalkan = String(err?.name || '') === 'AbortError';
-    return {
-      muatan: null,
-      tersimpanDiCloud: false,
-      pesan: dibatalkan
-        ? 'Permintaan sync melewati 75 detik dan dibatalkan. Data yang sudah ada tidak diubah — coba Sync lagi.'
-        : err?.message || 'Gagal menghubungi sumber data.',
-    };
-  }
 }

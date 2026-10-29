@@ -1746,7 +1746,7 @@ export const App: React.FC = () => {
             />
           )}
 
-          {/* MENU UTAMA: TRACKING MERCHANT (sync hanya-baca dari 154.19.37.201) */}
+          {/* MENU UTAMA: TRACKING MERCHANT (menampilkan data tersimpan, hanya-baca) */}
           {activeTab === 'tracking_merchant' && (
             <TrackingMerchantManager
               onTrackingCountChange={setTrackingMerchantCount}
