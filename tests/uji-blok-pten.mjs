@@ -4,7 +4,7 @@
 // Jalankan:
 //   npx vite build --ssr tests/entry-uji.ts --outDir tests/out
 //   node tests/uji-blok-pten.mjs
-import { indeksBlokPtenPerKota, pilihBlokPten } from './out/entry-uji.js';
+import { indeksBlokPtenPerKota, pilihBlokPten, sisaBlokPten } from './out/entry-uji.js';
 
 let gagal = 0;
 const asa = (label, dapat, harus) => {
@@ -75,6 +75,29 @@ asa('kelurahan tanpa prefik sekota tidak mengarang blok (jatuh ke blok kota)',
   diambil[5], '');
 asa('blok terserap semua kecuali yang tak berprefik sama sekali', [...terpakai].sort(),
   ['10110', '10115', '10120', '10131', '10240']);
+
+// ── Akuntansi arah PTEN: yang kalah tabrak harus kelihatan, bukan menguap ──
+const masterPten = [
+  { kotaPten: 'JAKARTA PUSAT', kodePosPten: '10110' },
+  { kotaPten: 'JAKARTA PUSAT', kodePosPten: '10115' },
+  { kotaPten: 'JAKARTA PUSAT', kodePosPten: '10199' },
+  { kotaPten: 'BANDUNG', kodePosPten: '40111' },
+  { kotaPten: 'BANDUNG', kodePosPten: '' },
+];
+asa('blok yang sudah terpakai tidak dilaporkan sebagai sisa',
+  sisaBlokPten(masterPten, new Set(['10110', '40111'])).map((p) => p.kodePosPten),
+  ['10115', '10199', '']);
+asa('baris PTEN tanpa kode pos ikut tercatat sebagai sisa, bukan hilang',
+  sisaBlokPten(masterPten, new Set(['10110', '10115', '10199', '40111'])).map((p) => p.kodePosPten), ['']);
+asa('daftar PTEN kosong tidak melempar', sisaBlokPten(undefined, new Set()), []);
+
+const terpakaiTutup = new Set();
+for (const k of ['10110', '10115', '10120']) {
+  const h = pilihBlokPten(k, ['10110', '10115', '10120'], terpakaiTutup);
+  if (h.blok) terpakaiTutup.add(h.blok);
+}
+asa('kota yang tuntas terserap tidak menyisakan antrean review',
+  sisaBlokPten([{ kodePosPten: '10110' }, { kodePosPten: '10115' }], terpakaiTutup).length, 0);
 
 console.log(gagal === 0 ? 'SEMUA LULUS' : `${gagal} UJIAN GAGAL`);
 process.exit(gagal === 0 ? 0 : 1);

@@ -1098,6 +1098,45 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
       )}
 
       {/* ────────────────────────────────────────────────────────────────────────── */}
+      {/* 1c. LAPORAN CAKUPAN ARAH PTEN (patokannya Master PTEN, bukan kodepos)      */}
+      {/* ────────────────────────────────────────────────────────────────────────── */}
+      {coverage && coverage.ptenRowsSisa > 0 && (
+        <details className="ar-cakupan-pten" open>
+          <summary>
+            Cakupan PTEN → KodePos: {coverage.ptenRowsTerpakai.toLocaleString('id-ID')} dari{' '}
+            {coverage.ptenRowsTotal.toLocaleString('id-ID')} baris Master PTEN terpakai —{' '}
+            {coverage.ptenRowsSisa.toLocaleString('id-ID')} blok tanpa padanan di{' '}
+            {(coverage.sisaBlokPtenKota || []).length} kota masuk antrean &quot;Perlu Analisa Manual&quot;
+          </summary>
+          <p>
+            Patokannya PTEN: tiap barisnya wajib selesai — dapat kelurahan, atau muncul di sini. Blok
+            di bawah tidak dimiliki satu pun kelurahan di kota yang sama, jadi ia tidak akan pernah
+            masuk Data Final dan tetap berstatus &quot;Belum digunakan&quot; di menu Data PTEN.
+          </p>
+          <div className="ar-cakupan-pten-gulung">
+            <table className="modern-table" style={{ width: '100%', fontSize: '0.75rem' }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left' }}>Kota / Kabupaten (di PTEN)</th>
+                  <th style={{ textAlign: 'center', width: '140px' }}>Contoh blok</th>
+                  <th style={{ textAlign: 'right', width: '90px' }}>Blok tersisa</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(coverage.sisaBlokPtenKota || []).map((c) => (
+                  <tr key={c.city}>
+                    <td style={{ fontWeight: 600 }}>{kapital(c.city)}</td>
+                    <td style={{ textAlign: 'center' }}>{c.sampleKodePos || '-'}</td>
+                    <td className="ar-cakupan-pten-angka">{c.rows.toLocaleString('id-ID')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
+
+      {/* ────────────────────────────────────────────────────────────────────────── */}
       {/* 2. SMART ACTION CONTROLS & DECISION TOOLBAR                              */}
       {/* ────────────────────────────────────────────────────────────────────────── */}
       <div

@@ -298,6 +298,21 @@ export function indeksBlokPtenPerKota(
 }
 
 /**
+ * Baris Master PTEN yang tidak tersentuh satu pun kelurahan. Patokannya PTEN, jadi
+ * baris semacam ini tidak boleh lenyap tanpa jejak: ia keluar sebagai antrean review.
+ * Baris tanpa kode pos 5 digit ikut tersisa — ia memang tidak pernah bisa dijodohkan.
+ */
+export function sisaBlokPten<T extends { kodePosPten?: unknown }>(
+  barisPten: readonly T[],
+  terpakai: ReadonlySet<string>
+): T[] {
+  return (barisPten || []).filter((p) => {
+    const k = kodeBlok(p?.kodePosPten);
+    return !k || !terpakai.has(k);
+  });
+}
+
+/**
  * Baris salinan cloud `final_rows` yang BELUM ada di daftar lokal (G9).
  * Non-destruktif: baris lokal tidak pernah ditimpa, hanya ditambah; penyaringan pakai
  * kunci alami (makeFinalKey), bukan `id` yang berubah tiap run (G12) — kalau tidak,
@@ -1190,6 +1205,15 @@ export interface AnalystCoverage {
   resultRows: number;
   unanalysedRows: number;
   unmappedCities: CoverageCity[];
+  /**
+   * Akuntansi arah PTEN (patokan): baris Master PTEN yang tidak dipakai kelurahan mana
+   * pun setelah pencocokan berjenjang. `sisaBlokPtenKota` = rinciannya per kota, dan tiap
+   * barisnya ikut keluar sebagai antrean "Perlu Analisa Manual".
+   */
+  ptenRowsTotal: number;
+  ptenRowsTerpakai: number;
+  ptenRowsSisa: number;
+  sisaBlokPtenKota: CoverageCity[];
   includedCities: CoverageCity[];
   // Grup yang menampung "KOTA X" sekaligus "KABUPATEN X" (26 grup pada data kode pos
   // nasional 2026-09-21). Kelurahan keduanya disatukan di satu kota PTEN.
@@ -2613,6 +2637,84 @@ export async function executeAnalystPipeline(
     });
   });
   unmappedCities.sort((a, b) => b.rows - a.rows);
+
+  // ── Akuntansi arah PTEN — patokannya memang PTEN ─────────────────────────────
+  // Di atas baris Master Kode Pos yang tidak terpetakan; ini kebalikannya: setiap baris
+  // Master PTEN wajib selesai, dapat kelurahan atau jadi antrean review. Tanpa ini blok
+  // yang kalah tabrak lenyap tanpa jejak dan satu-satunya gejalanya badge
+  // "Belum digunakan" di menu Data PTEN.
+  const sisaBlokPtenKota: CoverageCity[] = [];
+  let ptenRowsSisa = 0;
+  const grupBlokPten = new Map<string, PTENRecord[]>();
+  for (const p of ptenList || []) {
+    const ck = cityMatchKey(String(p?.kotaPten ?? '')) || '(tanpa nama kota)';
+    const g = grupBlokPten.get(ck);
+    if (g) g.push(p);
+    else grupBlokPten.set(ck, [p]);
+  }
+  grupBlokPten.forEach((recs, ck) => {
+    const sisa = sisaBlokPten(recs, blokPtenTerpakai.get(ck) || new Set<string>());
+    if (sisa.length === 0) return;
+    ptenRowsSisa += sisa.length;
+    sisaBlokPtenKota.push({
+      city: recs[0]?.kotaPten || ck,
+      rows: sisa.length,
+      status: 'REVIEW',
+      sampleKodePos: String(sisa[0]?.kodePosPten || ''),
+      provinsi: '',
+    });
+    sisa.forEach((p, seq) => {
+      unanalysedRows.push({
+        id: `analyst-pten-${ck}-${String(p.kodePosPten || 'tanpakode')}-${seq + 1}-${Date.now()}`,
+        no: 0,
+        kotaPten: p.kotaPten || '',
+        kodePosPten: p.kodePosPten || '',
+        kodePosKelurahan: '',
+        kelurahan: '',
+        kecamatan: '',
+        provinsi: '',
+        statusPten: 'UNCHECKED',
+        placementStatus: 'REVIEW',
+        placementMethod: `Blok PTEN ${p.kodePosPten || '(tanpa kode)'} tidak dipakai kelurahan mana pun di kota ini`,
+        groupKota: p.kotaPten || ck,
+        kategori: 'TIDAK_ANALISA',
+        fase1Approved: false,
+        sourceRowIndex: -1,
+        allKelurahanCount: sisa.length,
+        kelurahanSeq: seq + 1,
+        wilayah: '',
+        kotaPtenMax15: p.kotaPtenMax15 || '',
+        sandiCabang: '',
+        sandi: '',
+        cabang: '',
+        branchCode: '',
+        kodeCabang: '',
+        namaOutlet: '',
+        statusOutlet: '',
+        alamat: '',
+        fase2Approved: false,
+        fase2JarakKm: 0,
+        fase2Tier: 3,
+        fase2Temuan: [],
+        organisasiTujuan: '',
+        tipeUnit: 'OUTLET',
+        is3RoleLengkap: false,
+        roleCabsal: 0,
+        roleCabapv1: 0,
+        roleCabapv2: 0,
+        roleGrandTotal: 0,
+        alurWondr: '',
+        flowDescription: '',
+        fase3Approved: false,
+        confidenceScore: 0,
+        matchingAlgorithm: 'Belum dianalisa (blok PTEN tanpa padanan di Master Kode Pos)',
+        statusAnalisa: 'PERLU_REVIEW',
+        isFinalApproved: false,
+      });
+    });
+  });
+  sisaBlokPtenKota.sort((a, b) => b.rows - a.rows);
+
   unanalysedRows.sort((a, b) => a.groupKota.localeCompare(b.groupKota) || a.kelurahan.localeCompare(b.kelurahan));
   const coverage: AnalystCoverage = {
     kodePosTotal: kodePosList.length,
@@ -2622,6 +2724,10 @@ export async function executeAnalystPipeline(
     resultRows: results.length,
     unanalysedRows: unanalysedRows.length,
     unmappedCities,
+    ptenRowsTotal: ptenList.length,
+    ptenRowsTerpakai: ptenList.length - ptenRowsSisa,
+    ptenRowsSisa,
+    sisaBlokPtenKota,
     includedCities: Array.from(includedCityMap.values()).sort((a, b) => b.rows - a.rows),
     mergedCities: Array.from(mergedCityMap.values()).sort((a, b) => b.rows - a.rows),
     // G3: baris yang dilewati karena sudah ada di Final Data.
@@ -2639,6 +2745,7 @@ export async function executeAnalystPipeline(
       `${kodePosConflictCities > 0 ? `, ${kodePosConflictCities} kota ditandai konflik kode pos` : ''}` +
       `${safetyNetCities > 0 ? `, jaring pengaman: ${fmt(safetyNetRows)} baris dari ${safetyNetCities} kota sisa dilampirkan` : ''}` +
       `${unmappedKodePos > 0 ? `, belum masuk ${fmt(unmappedKodePos)} di ${unmappedCities.length} kota (kotanya tidak ada di PTEN)` : ''}` +
+      `${ptenRowsSisa > 0 ? `, ${fmt(ptenRowsSisa)} baris Master PTEN tidak dipakai kelurahan mana pun (${sisaBlokPtenKota.length} kota) dan masuk antrean review` : ''}` +
       `${reviewCityCount > 0 ? `. Kota perlu review manual: ${reviewCityCount}` : ''}` +
       `${fallbackCityCount > 0 ? `. Kota tanpa data kodepos (baris fallback): ${fallbackCityCount}` : ''}` +
       `${mergedCityMap.size > 0 ? `. Perhatian: ${mergedCityMap.size} nama kota menampung KOTA sekaligus KABUPATEN, kelurahannya digabung jadi satu grup (lihat daftar "kota kembar" di laporan cakupan)` : ''}.`);

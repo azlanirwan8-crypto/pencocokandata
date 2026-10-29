@@ -1054,6 +1054,45 @@ body {
   gap: 0.4rem;
 }
 
+/* Laporan cakupan arah PTEN — satu bahasa dengan panel cakupan kodepos di atasnya. */
+.ar-cakupan-pten {
+  background: var(--accent-amber-subtle);
+  border: 1px solid rgba(242, 217, 168, 0.9);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+}
+
+.ar-cakupan-pten summary {
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--text-heading);
+}
+
+.ar-cakupan-pten > p {
+  margin: 0.5rem 0;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.ar-cakupan-pten-gulung {
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid rgba(242, 217, 168, 0.9);
+  border-radius: var(--radius-sm);
+}
+
+.ar-cakupan-pten th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-card);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.ar-cakupan-pten td { white-space: nowrap; }
+.ar-cakupan-pten-angka { text-align: right; font-weight: 700; }
+
 .code-cell {
   font-family: var(--font-mono);
   font-weight: 600;
