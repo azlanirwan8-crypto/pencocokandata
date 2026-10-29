@@ -54,6 +54,8 @@ import { useNotification } from '../Notification/NotificationContext';
 interface TrackingMerchantManagerProps {
   /** Identik dengan badge sidebar: berapa merchant yang ikut ter-sync. */
   onTrackingCountChange?: (jumlahMerchant: number) => void;
+  /** Baris terbaru untuk peta Dashboard (klik KC → busur ke merchant sekota). */
+  onTrackingRowsChange?: (baris: BarisMerchant[]) => void;
 }
 
 const KELAS_KERANJANG: Record<string, string> = {
@@ -146,6 +148,7 @@ const CincinKomposisi: React.FC<{ kelompok: KelompokQr[]; total: number; label: 
 
 export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = ({
   onTrackingCountChange,
+  onTrackingRowsChange,
 }) => {
   const { add: notify } = useNotification();
 
@@ -278,6 +281,12 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
   useEffect(() => {
     onTrackingCountChange?.(ringkasSemua.merchant);
   }, [ringkasSemua.merchant, onTrackingCountChange]);
+
+  // Baris kosong saat mount bukan kabar bahwa data hilang (App sudah memuatnya
+  // sendiri); hanya hasil sync yang benar-benar berisi yang diteruskan ke peta.
+  useEffect(() => {
+    if (baris.length > 0) onTrackingRowsChange?.(baris);
+  }, [baris, onTrackingRowsChange]);
 
   const handleExport = () => {
     if (baris.length === 0) {

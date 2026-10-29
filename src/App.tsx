@@ -23,12 +23,15 @@ import { jalankanAnalisaDiWorker, batalAnalisaDiWorker } from './utils/analystRu
 import {
   KUNCI_SUMBER_DIPILIH,
   catatanSumber,
+  faseDipilih,
   hitungKesiapan,
   halanganNyalakanRole,
   jumlahBarisDilewati,
+  toggleFase,
+  type FaseSampai,
 } from './utils/analystSources';
 import { SinyalTemuanModal } from './components/WorkingEngine/SinyalTemuanModal';
-import { KUNCI_STORAGE_TRACKING, type MuatanTracking } from './utils/trackingMerchant';
+import { KUNCI_STORAGE_TRACKING, type BarisMerchant, type MuatanTracking } from './utils/trackingMerchant';
 import { detectFinalAnomalies, indeksWilayahCabang, nyebrangWilayahCabang } from './utils/finalAnomaly';
 import type { ActiveTab } from './components/Sidebar';
 
@@ -110,9 +113,10 @@ export const App: React.FC = () => {
   const [ptenCount, setPtenCount] = useState<number>(DEFAULT_PTEN_DATA.length);
   const [roleMappingCount, setRoleMappingCount] = useState<number>(DEFAULT_ROLE_MAPPING_DATA.length);
   const [kodePosCount, setKodePosCount] = useState<number>(0);
-  // Tracking Merchant: jumlahnya saja yang naik ke App (untuk badge sidebar); isinya
-  // tetap milik managernya karena datanya datang dari luar, bukan dari pipeline.
+  // Tracking Merchant: jumlahnya untuk badge sidebar, barisnya untuk peta Dashboard
+  // (klik KC → busur ke merchant di kota yang sama). Isi lengkapnya tetap milik manager.
   const [trackingMerchantCount, setTrackingMerchantCount] = useState<number>(0);
+  const [trackingRows, setTrackingRows] = useState<BarisMerchant[]>([]);
 
   // New Data Analyst 3-Phase Engine State (100% Data Master Driven)
   const [analystRows, setAnalystRows] = useState<AnalystRow[]>([]);
@@ -124,9 +128,11 @@ export const App: React.FC = () => {
   const [cityOverrides, setCityOverrides] = useState<Record<string, string>>({});
   // Kartu sinyal yang sedang dibuka detail temuannya (nomor 1..13, null = tertutup).
   const [sinyalDibuka, setSinyalDibuka] = useState<number | null>(null);
-  // 🧷 Checklist Kesiapan Data: satu-satunya sumber yang boleh dilepas adalah Mapping
-  // Role. Melepasnya berarti Fase 3 dilewati, bukan sekadar kolomnya dikosongkan.
-  const [roleDipakai, setRoleDipakai] = useState<boolean>(true);
+  // 🧷 Checklist Kesiapan Data: centangan kartu fase disimpan sebagai awalan 1..n.
+  // Fase yang tidak dicentang tidak dianalisa sama sekali (bukan sekadar disembunyikan),
+  // dan Fase 3 hanya ikut bila pemilihan mencapai 3 — itu yang dikirim ke mesin.
+  const [faseSampai, setFaseSampai] = useState<FaseSampai>(3);
+  const roleDipakai = faseSampai >= 3;
   // A7: penanda "N baris belum disetujui" yang bisa diklik — fase yang sedang disaring.
   // Full Master Kode Pos list (loaded once from cloud, cached in memory for pipeline runs)
   const kodePosListRef = useRef<KodePosRow[] | null>(null);
@@ -241,6 +247,7 @@ export const App: React.FC = () => {
         // Badge Tracking Merchant = merchant yang ter-sync terakhir di browser ini.
         if (savedTracking && Array.isArray(savedTracking.baris) && savedTracking.baris.length > 0) {
           setTrackingMerchantCount(new Set(savedTracking.baris.map((b) => b.mid)).size);
+          setTrackingRows(savedTracking.baris);
         }
 
         const savedKodePos = await getItem<any[]>('kodepos_master_data');
@@ -266,7 +273,7 @@ export const App: React.FC = () => {
           const [savedAnalyst, savedFinal, savedPilihanSumber] = await Promise.all([
             getItem<AnalystRow[]>('analyst_results_data'),
             getItem<AnalystRow[]>('analyst_final_data'),
-            getItem<{ roleDipakai: boolean }>(KUNCI_SUMBER_DIPILIH),
+            getItem<{ roleDipakai: boolean; faseSampai?: FaseSampai }>(KUNCI_SUMBER_DIPILIH),
           ]);
           if (savedAnalyst && Array.isArray(savedAnalyst) && savedAnalyst.length > 0) {
             setAnalystRows(savedAnalyst);
@@ -276,8 +283,14 @@ export const App: React.FC = () => {
           }
           // Pilihan dibaca sepasang dengan hasilnya: hasil yang dikerjakan tanpa role
           // tidak boleh ditampilkan seolah-olah role ikut dipakai, dan sebaliknya.
+          // Simpanan versi lama hanya punya `roleDipakai`; terjemahkan ke awalan fase.
           if (savedPilihanSumber && typeof savedPilihanSumber.roleDipakai === 'boolean') {
-            setRoleDipakai(savedPilihanSumber.roleDipakai);
+            const tersimpan = savedPilihanSumber.faseSampai;
+            setFaseSampai(
+              typeof tersimpan === 'number' && tersimpan >= 0 && tersimpan <= 3
+                ? (tersimpan as FaseSampai)
+                : savedPilihanSumber.roleDipakai ? 3 : 2
+            );
           }
         }
       } catch (err) {
@@ -304,6 +317,7 @@ export const App: React.FC = () => {
           // membaca populasi yang sama dengan yang dilihat pengguna lain.
           if (neonTracking.status === 'fulfilled' && neonTracking.value?.baris?.length) {
             setTrackingMerchantCount(new Set(neonTracking.value.baris.map((b) => b.mid)).size);
+            setTrackingRows(neonTracking.value.baris);
           }
 
           if (neonCheck.status === 'fulfilled' && neonCheck.value.connected) {
@@ -564,21 +578,27 @@ export const App: React.FC = () => {
     return { ...kesiapanSumber, role: { ...kesiapanSumber.role, dipakai } };
   }, [kesiapanSumber, analystRows]);
 
-  const handleToggleRole = () => {
-    const mau = !roleDipakai;
-    if (mau) {
+  // Centang kartu fase. Menyalakan fase n ikut menyalakan 1..n; melepas fase n ikut
+  // melepas n..3 — aturannya ada di `toggleFase` supaya layar dan mesin tidak bisa
+  // berbeda pendapat soal fase mana yang benar-benar dijalankan.
+  const handleToggleFase = (fase: 1 | 2 | 3) => {
+    if (isAnalyzing) return;
+    const aktif = !faseDipilih(fase, faseSampai);
+    if (aktif && fase === 3) {
       const halangan = halanganNyalakanRole(roleDipakai, finalRows.length);
       if (halangan) {
         notify(halangan, 'warning');
         return;
       }
     }
-    setRoleDipakai(mau);
-    void setItem(KUNCI_SUMBER_DIPILIH, { roleDipakai: mau });
+    const next = toggleFase(faseSampai, fase, aktif);
+    setFaseSampai(next);
+    void setItem(KUNCI_SUMBER_DIPILIH, { roleDipakai: next >= 3, faseSampai: next });
     notify(
-      mau
-        ? 'Mapping Role ikut dianalisa — Fase 3 berjalan lagi pada analisa berikutnya.'
-        : 'Mapping Role dilepas — Fase 3 dilewati dan barisnya ditandai "Dilewati", bukan "Belum selesai".'
+      next === 0
+        ? 'Semua fase dicabut — analisa tidak dijalankan sampai minimal Fase 1 dicentang lagi.'
+        : `Fase 1${next > 1 ? `–${next}` : ''} dianalisa berurutan${next < 3 ? `; Fase ${next + 1}${next < 2 ? '–3' : ''} tidak dicentang dan tidak dijalankan` : ''}.`,
+      'info'
     );
   };
 
@@ -703,7 +723,14 @@ export const App: React.FC = () => {
     // diberikan akan tertimpa hasil run.
     barisDasar?: AnalystRow[]
   ) => {
-    const targetFase = sampaiFase ?? faseBerikutnya;
+    // Fase yang tidak dicentang tidak boleh ikut dihitung, dan tanpa centangan sama
+    // sekali tidak ada yang perlu dijalankan. `sampaiFase` tetap boleh eksplisit,
+    // tapi tidak pernah melewati centangan di kartu.
+    if (faseSampai === 0) {
+      notify('Centang minimal Fase 1 dulu — belum ada fase yang dipilih untuk dianalisa.', 'warning');
+      return;
+    }
+    const targetFase = Math.min(sampaiFase ?? faseBerikutnya, faseSampai) as 1 | 2 | 3;
     const lama = barisDasar ?? analystRows;
     setIsCancelling(false);
     setIsAnalyzing(true);
@@ -911,9 +938,12 @@ export const App: React.FC = () => {
     };
   }, [analystRows]);
 
-  // Alur bertahap: fase pertama yang belum disetujui penuh adalah fase yang berikutnya
-  // dikerjakan — tombol, kartu, dan engine memakai angka yang sama.
-  const faseBerikutnya: 1 | 2 | 3 = !phaseApproval.selesai[1] ? 1 : !phaseApproval.selesai[2] ? 2 : 3;
+  // Alur bertahap: fase pertama yang belum disetujui penuh DAN masih dicentang adalah
+  // fase berikutnya. Fase yang dicabut tidak pernah menjadi target run.
+  const faseBerikutnya: 1 | 2 | 3 =
+    faseDipilih(1, faseSampai) && !phaseApproval.selesai[1] ? 1
+      : faseDipilih(2, faseSampai) && !phaseApproval.selesai[2] ? 2
+        : 3;
 
   const handleResetAnalyst = async () => {
     const tadi = analystRows.length;
@@ -1555,6 +1585,7 @@ export const App: React.FC = () => {
                 targetRows={targetRows}
                 finalRows={finalRows}
                 kodePosRows={kodePosMasterRows}
+                trackingRows={trackingRows}
                 selectedWilayah={dashboardWilayahFilter}
                 onNavigateToMaster={() => setActiveTab('master')}
                 onNavigateToEngine={() => {
@@ -1616,7 +1647,8 @@ export const App: React.FC = () => {
                 hasExistingResults={analystRows.length > 0}
                 kesiapan={kesiapanSumber}
                 roleDipakai={roleDipakai}
-                onToggleRole={handleToggleRole}
+                faseSampai={faseSampai}
+                onToggleFase={handleToggleFase}
                 jumlahBarisDilewati={jumlahBarisDilewati(analystRows)}
                 phaseProgress={phaseProgress}
                 currentActivePhase={currentActivePhase}
@@ -1656,7 +1688,7 @@ export const App: React.FC = () => {
                   onRemoveCityOverride={handleRemoveCityOverride}
                   masterRows={masterRows}
                   roleMappingList={roleMappingList}
-                  catatanSumber={catatanSumber(kesiapanHasil)}
+                  catatanSumber={catatanSumber(kesiapanHasil, faseSampai)}
                 />
               )}
             </div>
@@ -1716,7 +1748,10 @@ export const App: React.FC = () => {
 
           {/* MENU UTAMA: TRACKING MERCHANT (sync hanya-baca dari 154.19.37.201) */}
           {activeTab === 'tracking_merchant' && (
-            <TrackingMerchantManager onTrackingCountChange={setTrackingMerchantCount} />
+            <TrackingMerchantManager
+              onTrackingCountChange={setTrackingMerchantCount}
+              onTrackingRowsChange={setTrackingRows}
+            />
           )}
         </main>
       </div>

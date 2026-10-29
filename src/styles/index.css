@@ -1756,6 +1756,106 @@ body {
   filter: none;
 }
 
+/* Tombol toolbar peta untuk lapisan busur Merchant Tracking. */
+.bni-map-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0.25rem 0.55rem;
+  border: 1px solid #ced4da;
+  border-radius: 5px;
+  background: var(--bg-card);
+  color: #6c757d;
+  font-size: 0.73rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.bni-map-toggle--aktif {
+  border-color: #d68b0c;
+  background: rgba(214, 139, 12, 0.1);
+  color: #b45309;
+}
+
+.bni-map-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Kartu merchant di panel pin: angka kota, progres geocoding, pilihan titik perkiraan. */
+.bni-merchant-panel {
+  margin-bottom: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  background: rgba(214, 139, 12, 0.06);
+  border: 1px solid rgba(214, 139, 12, 0.28);
+  border-radius: var(--radius-md);
+}
+
+.bni-merchant-panel__kepala {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #8a5a00;
+}
+
+.bni-merchant-panel__proses {
+  font-size: 0.64rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.bni-merchant-panel__angka {
+  margin-top: 0.2rem;
+  font-size: 0.68rem;
+  color: #495057;
+}
+
+.bni-merchant-panel__angka strong {
+  font-size: 0.8rem;
+  color: #212529;
+}
+
+.bni-merchant-panel__angka span {
+  margin-left: 0.2rem;
+}
+
+.bni-merchant-panel__invalid {
+  color: #b45309;
+}
+
+.bni-merchant-panel__ket,
+.bni-merchant-panel__kosong,
+.bni-merchant-panel__catatan {
+  margin-top: 0.25rem;
+  font-size: 0.66rem;
+  line-height: 1.35;
+  color: #878a99;
+}
+
+.bni-merchant-panel__kosong {
+  color: #495057;
+}
+
+.bni-merchant-panel__toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+  font-size: 0.66rem;
+  color: #495057;
+  cursor: pointer;
+}
+
+.bni-merchant-panel__toggle input {
+  margin-top: 0.15rem;
+  accent-color: #d68b0c;
+}
+
 .bni-origin-halo {
   animation: flowPulse 1.6s ease-out infinite;
 }

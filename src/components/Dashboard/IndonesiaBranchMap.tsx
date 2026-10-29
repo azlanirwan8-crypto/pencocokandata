@@ -51,6 +51,12 @@ import {
   type BatchProgress,
 } from '../../utils/onlineGeoCoder';
 import { get, keys } from 'idb-keyval';
+import {
+  daftarMerchantPeta,
+  kelompokkanMerchantPeta,
+  ringkasMerchantPeta,
+  type BarisMerchant,
+} from '../../utils/trackingMerchant';
 
 import { cleanDati, cleanProvinsi, kapital } from '../../utils/normalizer';
 import { getUnitCategory } from '../../utils/roleHelpers';
@@ -70,6 +76,17 @@ const PIN_LABEL: Record<PinKind, string> = { KODEPOS: 'Kode Pos', KC: 'KC (Caban
 const WARNA_PIN = '#405189';
 const WARNA_PIN_TERPILIH = '#299cdb';
 const WARNA_GARIS = '#299cdb';
+// Busur merchant Tracking: kuning tua = alamat presisi, abu-abu putus = titik perkiraan.
+const WARNA_MERCHANT = '#d68b0c';
+const WARNA_MERCHANT_KASAR = '#adb5bd';
+/** Batas busur per klik, sama dengan batas garis pasangan kode pos. */
+const BATAS_BUSUR_MERCHANT = 30;
+
+/** Teks dari sumber eksternal masuk ke HTML tooltip Leaflet — harus di-escape. */
+const escHtml = (v: unknown) =>
+  String(v ?? '').replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string)
+  );
 
 function makePinIcon(kind: PinKind, color: string, selected: boolean): L.DivIcon {
   const s = selected ? 34 : 26; // diameter kepala pin
@@ -102,6 +119,8 @@ interface IndonesiaBranchMapProps {
   finalRows?: AnalystRow[];
   /** Tabel Data Kode Pos — dipakai sebagai kunci cadangan penentuan titik (lihat `kunciTitikNama`). */
   kodePosRows?: KodePosRow[];
+  /** Baris Tracking Merchant — sumber busur "cabang → alamat merchant" di kota yang sama. */
+  trackingRows?: BarisMerchant[];
   selectedWilayah?: string;
   onNavigateToMaster?: () => void;
   onNavigateToEngine?: (searchFilter?: string) => void;
@@ -219,6 +238,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   targetRows = [],
   finalRows = [],
   kodePosRows = [],
+  trackingRows = [],
   selectedWilayah = 'ALL',
   onNavigateToMaster,
   onNavigateToEngine,
@@ -230,6 +250,10 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
   const svgRendererRef = useRef<L.SVG | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const arcsLayerRef = useRef<L.LayerGroup | null>(null);
+  // Lapisan busur merchant terpisah: efek busur Final Data memanggil clearLayers()
+  // pada arcsLayer, jadi menumpang di sana berarti busur merchant terhapus tiap klik.
+  const merchantLayerRef = useRef<L.LayerGroup | null>(null);
+  const merchantQueriesRef = useRef<Set<string>>(new Set());
   const tileLayerRef = useRef<L.TileLayer | null>(null);
 
 
@@ -260,6 +284,11 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
   // Toggle for Curved Arcs and Matched Detail Modal
   const [showCurvedArcs, setShowCurvedArcs] = useState(true);
+  // Busur ke merchant Tracking aktif secara bawaan: itulah alur yang diminta
+  // (klik pin KC/KCP → garis lengkung ke alamat merchant di kota yang sama).
+  const [showMerchantArcs, setShowMerchantArcs] = useState(true);
+  const [showMerchantKasar, setShowMerchantKasar] = useState(false);
+  const [merchantGeoProgress, setMerchantGeoProgress] = useState<{ selesai: number; total: number } | null>(null);
   const [cameraLocked, setCameraLocked] = useState(false);
   const [showMatchedModal, setShowMatchedModal] = useState(false);
   const [modalSearchTerm, setModalSearchTerm] = useState('');
@@ -405,6 +434,26 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     };
   }, [cachePreloaded, targetRows]);
 
+  // ── Merchant Tracking di kota pin terpilih ───────────────────────────────
+  // Sumber tidak mengisi branch_code sama sekali, jadi kota adalah satu-satunya
+  // penghubung yang jujur antara cabang dan merchant. Titiknya baru dicari saat
+  // sebuah pin dibuka — bukan 262 alamat saat dashboard dimuat.
+  const merchantPeta = useMemo(() => daftarMerchantPeta(trackingRows), [trackingRows]);
+
+  const merchantKota = useMemo(() => {
+    if (!selectedPin || selectedPin.isTitikKodePos) return [];
+    const kota = selectedPin.dati2;
+    if (!kota || kota === '-') return [];
+    return merchantPeta.filter((m) => kotaCocok(m.kota, kota));
+  }, [selectedPin, merchantPeta]);
+
+  const merchantRingkas = useMemo(() => ringkasMerchantPeta(merchantKota), [merchantKota]);
+
+  const merchantKelompok = useMemo(
+    () => kelompokkanMerchantPeta(merchantKota, showMerchantKasar),
+    [merchantKota, showMerchantKasar]
+  );
+
   // Realtime Geocoding Hook: Resolves unique branch & target coordinates via Google Maps / Online API
   // Only runs AFTER cache preload & stored kode pos points so it fetches truly unknown addresses
   useEffect(() => {
@@ -491,6 +540,53 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
       isMounted = false;
     };
   }, [cachePreloaded, titikKodePosSiap, titikKodePos, masterRows, targetRows]);
+
+  // Geocoding malas untuk merchant Tracking: HANYA alamat di kota pin yang sedang
+  // dibuka. Hasilnya masuk `resolvedCoords` (cache IndexedDB yang sama), jadi klik
+  // berikutnya di kota itu tidak menyentuh jaringan lagi.
+  //
+  // Tidak ada setState di badan efek: progres baru muncul dari callback batch. Batch
+  // kota sebelumnya yang selesai belakangan hanya menghapus progres yang sudah basi.
+  useEffect(() => {
+    if (!cachePreloaded || !showMerchantArcs || merchantKelompok.length === 0) return;
+    const perlu = merchantKelompok
+      .map((g) => g.kueri)
+      .filter(
+        (q) =>
+          q &&
+          !resolvedCoords.has(q) &&
+          !resolvedCoords.has(q.toLowerCase()) &&
+          !merchantQueriesRef.current.has(q)
+      );
+    if (perlu.length === 0) return;
+
+    perlu.forEach((q) => merchantQueriesRef.current.add(q));
+    void batchGeocodeUniqueQueries(perlu, (p) => {
+      setMerchantGeoProgress({ selesai: p.completed, total: p.total });
+    })
+      .then((hasil) => {
+        perlu.forEach((q) => merchantQueriesRef.current.delete(q));
+        // Hasil tetap disimpan walau pin sudah berganti: biayanya sudah dibayar,
+        // dan kota berikutnya yang memakai alamat sama tidak perlu mencari ulang.
+        if (hasil.size > 0) {
+          setResolvedCoords((prev) => {
+            const next = new Map(prev);
+            hasil.forEach((v, k) => {
+              next.set(k, v);
+              // Cache IndexedDB memakai kunci huruf kecil; samakan supaya pencarian
+              // berikutnya (beda kapitalisasi) tetap kena tanpa jaringan.
+              next.set(String(k).toLowerCase(), v);
+            });
+            return next;
+          });
+        }
+        setMerchantGeoProgress(null);
+      })
+      .catch(() => {
+        perlu.forEach((q) => merchantQueriesRef.current.delete(q));
+        setMerchantGeoProgress(null);
+      });
+  }, [cachePreloaded, showMerchantArcs, merchantKelompok, resolvedCoords]);
 
   // List of exact Wilayah for map filtering
   const mapWilayahList = useMemo(() => {
@@ -1019,11 +1115,13 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
 
       // Add arcs layer first, then markers layer on top
       const arcsLayer = L.layerGroup().addTo(map);
+      const merchantLayer = L.layerGroup().addTo(map);
       const markersLayer = L.layerGroup().addTo(map);
 
       mapInstanceRef.current = map;
       markersLayerRef.current = markersLayer;
       arcsLayerRef.current = arcsLayer;
+      merchantLayerRef.current = merchantLayer;
 
       const pauseMarkerRedraw = () => { mapInteractionRef.current = true; };
       const resumeMarkerRedraw = () => {
@@ -1551,6 +1649,81 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
     }
   }, [selectedPin, showCurvedArcs, jembatanFinal, cameraLocked]);
 
+  // 9c. Pin KC/KCP terpilih → busur ke titik ALAMAT merchant Tracking di kota yang
+  //     sama. Satu busur per alamat (merchant yang berbagi alamat tampil di tooltip
+  //     titiknya). Titik perkiraan digambar abu-abu putus-putus dan hanya bila
+  //     diminta lewat panel, supaya peta tidak berpura-pura tahu jalan yang tidak ada.
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const merchantLayer = merchantLayerRef.current;
+    if (!map || !merchantLayer) return;
+
+    merchantLayer.clearLayers();
+    if (!showMerchantArcs || !selectedPin) return;
+
+    const dari = clampToIndonesia(selectedPin.lat, selectedPin.lng);
+    let urutan = 0;
+
+    for (const g of merchantKelompok) {
+      if (urutan >= BATAS_BUSUR_MERCHANT) break;
+      const coord = resolvedCoords.get(g.kueri) || resolvedCoords.get(g.kueri.toLowerCase());
+      if (!coord) continue;
+
+      const ke = clampToIndonesia(coord.lat, coord.lng);
+      const km = calculateDistanceKm(dari[0], dari[1], ke[0], ke[1]);
+      const kasar = g.kelas === 'kasar';
+      const warna = kasar ? WARNA_MERCHANT_KASAR : WARNA_MERCHANT;
+      const jumlah = g.merchants.length;
+      const daftarNama = g.merchants
+        .slice(0, 3)
+        .map((m) => escHtml(m.nama))
+        .join('<br/>');
+
+      // Titik yang jatuh persis di pin tidak perlu garis nol panjang.
+      if (km > 0.05) {
+        const garis = L.polyline(createCurvedArcPoints(dari, ke, urutan % 2 === 0 ? 0.1 : -0.08, 22), {
+          pane: 'arcsPane',
+          renderer: svgRendererRef.current || undefined,
+          color: warna,
+          weight: Math.min(2 + Math.log10(jumlah + 1), 3.5),
+          opacity: kasar ? 0.55 : 0.85,
+          interactive: false,
+          className: kasar ? 'bni-flow-arc bni-flow-arc--approx' : 'bni-flow-arc',
+        });
+        garis.bindTooltip(
+          `<div style="font-size:11px;font-weight:600;color:${kasar ? '#495057' : '#8a5a00'};">
+            ${jumlah.toLocaleString('id-ID')} merchant · ${km.toLocaleString('id-ID', { maximumFractionDigits: 1 })} km<br/>
+            <span style="font-size:10px;color:#878a99;">${escHtml(g.alamat)}${kasar ? ' · titik perkiraan (tingkat kota/desa)' : ''}</span>
+          </div>`,
+          { sticky: true }
+        );
+        merchantLayer.addLayer(garis);
+      }
+
+      const titik = L.circleMarker(ke, {
+        pane: 'arcsPane',
+        renderer: svgRendererRef.current || undefined,
+        radius: Math.min(4 + Math.log10(jumlah + 1) * 2, 8),
+        fillColor: warna,
+        color: '#ffffff',
+        weight: 1.6,
+        fillOpacity: 0.95,
+      });
+      titik.bindTooltip(
+        `<div style="font-size:11px;padding:2px 4px;max-width:300px;">
+          <strong style="color:${kasar ? '#495057' : '#8a5a00'};">🏪 ${jumlah.toLocaleString('id-ID')} merchant Tracking</strong>
+          <div style="color:#495057;margin-top:2px;">${escHtml(g.alamat)}</div>
+          <div style="color:#878a99;font-size:10px;">${escHtml(g.kota)} · ${km.toLocaleString('id-ID', { maximumFractionDigits: 1 })} km dari ${escHtml(selectedPin.primaryOutletName)}</div>
+          <div style="color:#495057;font-size:10px;margin-top:3px;">${daftarNama}${jumlah > 3 ? `<br/>+${(jumlah - 3).toLocaleString('id-ID')} merchant lain` : ''}</div>
+          ${kasar ? '<div style="color:#f06548;font-size:10px;margin-top:2px;">Alamat hanya tingkat kota/desa — titik perkiraan.</div>' : ''}
+        </div>`,
+        { direction: 'top', className: 'bni-map-fast-tooltip' }
+      );
+      merchantLayer.addLayer(titik);
+      urutan++;
+    }
+  }, [showMerchantArcs, selectedPin, merchantKelompok, resolvedCoords]);
+
 
   // Handle Quick Island Navigation
   const handleJumpRegion = (regionKey: keyof typeof INDONESIA_REGIONS) => {
@@ -2048,6 +2221,22 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
         >
           <Share2 size={12} />
           <span>Garis Match</span>
+        </button>
+
+        {/* 4b. Busur merchant Tracking dari cabang terpilih */}
+        <button
+          type="button"
+          onClick={() => setShowMerchantArcs((v) => !v)}
+          title={
+            trackingRows.length === 0
+              ? 'Belum ada data Tracking Merchant tersinkron — buka menu Tracking Merchant lalu Sync'
+              : 'Tampilkan busur dari cabang terpilih ke alamat merchant Tracking di kota yang sama'
+          }
+          disabled={trackingRows.length === 0}
+          className={`bni-map-toggle${showMerchantArcs && trackingRows.length > 0 ? ' bni-map-toggle--aktif' : ''}`}
+        >
+          <MapPin size={12} />
+          <span>Merchant</span>
         </button>
 
         {/* 5. Aceh Tracking (conditional) */}
@@ -2634,6 +2823,65 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
                   </div>
                 );
               })()}
+
+              {/* Merchant Tracking di kota pin ini — sumber busur 9c di peta */}
+              {!selectedPin.isTitikKodePos && trackingRows.length > 0 && (
+                <div className="bni-merchant-panel">
+                  <div className="bni-merchant-panel__kepala">
+                    <span>🏪 Merchant Tracking · {kapital(selectedPin.dati2) || '-'}</span>
+                    {merchantGeoProgress && merchantGeoProgress.total > 0 && (
+                      <span className="bni-merchant-panel__proses">
+                        mencari alamat {merchantGeoProgress.selesai}/{merchantGeoProgress.total}
+                      </span>
+                    )}
+                  </div>
+                  {merchantRingkas.total === 0 ? (
+                    <div className="bni-merchant-panel__kosong">
+                      Tidak ada merchant Tracking berkota ini. Sumber tidak mengisi branch_code,
+                      jadi kota adalah satu-satunya penghubung yang dipakai peta.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="bni-merchant-panel__angka">
+                        <strong>{merchantRingkas.total.toLocaleString('id-ID')}</strong> merchant
+                        <span>· {merchantRingkas.presisi.toLocaleString('id-ID')} alamat presisi</span>
+                        {merchantRingkas.kasar > 0 && (
+                          <span>· {merchantRingkas.kasar.toLocaleString('id-ID')} perkiraan</span>
+                        )}
+                        {merchantRingkas.tidakValid > 0 && (
+                          <span className="bni-merchant-panel__invalid">
+                            · {merchantRingkas.tidakValid.toLocaleString('id-ID')} alamat tidak valid
+                          </span>
+                        )}
+                      </div>
+                      <div className="bni-merchant-panel__ket">
+                        {showMerchantArcs
+                          ? `${merchantKelompok.length > BATAS_BUSUR_MERCHANT ? `${BATAS_BUSUR_MERCHANT} dari ` : ''}${merchantKelompok.length.toLocaleString('id-ID')} titik alamat ditarik sebagai busur ke cabang ini.`
+                          : 'Busur merchant dimatikan lewat tombol Merchant di toolbar peta.'}
+                      </div>
+                      {merchantRingkas.titikKasar > 0 && (
+                        <label className="bni-merchant-panel__toggle">
+                          <input
+                            type="checkbox"
+                            checked={showMerchantKasar}
+                            onChange={(e) => setShowMerchantKasar(e.target.checked)}
+                          />
+                          <span>
+                            Ikutkan {merchantRingkas.titikKasar.toLocaleString('id-ID')} titik perkiraan
+                            (alamat hanya nama kota/desa) — garis abu-abu putus-putus.
+                          </span>
+                        </label>
+                      )}
+                      {merchantRingkas.tidakValid > 0 && (
+                        <div className="bni-merchant-panel__catatan">
+                          Alamat uji/placeholder (“tes”, angka saja, URL) tidak dikirim ke geocoder,
+                          jadi merchant itu memang tidak punya titik.
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
 
               {/* Matched Data Collaboration Highlight Box (INTERACTIVE CLICKABLE) */}
               {!selectedPin.isTitikKodePos && (

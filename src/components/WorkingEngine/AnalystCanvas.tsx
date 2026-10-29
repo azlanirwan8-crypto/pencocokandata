@@ -17,8 +17,10 @@ import { SINYAL_PENCOCOKAN } from '../../utils/analystPipeline';
 import {
   SUMBER_ANALISA,
   alasanFaseTerkunci,
+  faseDipilih,
   faseWajib,
   statusFase,
+  type FaseSampai,
   type Kesiapan,
 } from '../../utils/analystSources';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -42,7 +44,9 @@ interface AnalystCanvasProps {
   kesiapan: Kesiapan;
   /**false = Mapping Role dilepas, Fase 3 dilewati. */
   roleDipakai: boolean;
-  onToggleRole: () => void;
+  /** Fase yang dicentang di kartu (awalan 1..n); fase di atasnya tidak dianalisa. */
+  faseSampai: FaseSampai;
+  onToggleFase: (fase: 1 | 2 | 3) => void;
   /** Baris hasil lama yang Fase 3-nya memang tidak dihitung mesin. */
   jumlahBarisDilewati?: number;
   phaseProgress?: { 1: number; 2: number; 3: number };
@@ -88,7 +92,8 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
   hasExistingResults,
   kesiapan,
   roleDipakai,
-  onToggleRole,
+  faseSampai,
+  onToggleFase,
   jumlahBarisDilewati = 0,
   phaseProgress = { 1: 0, 2: 0, 3: 0 },
   currentActivePhase = 0,
@@ -112,7 +117,7 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
   // SATU tombol = satu langkah berikutnya. Dulu "Jalankan Fase N" (kartu ini) dan
   // "Setujui Fase N" (baris di bawah tabel) dua tombol terpisah, dan yang pertama mengunci
   // dengan tulisan "setujui dulu di bawah" — operator harus mencari tombolnya sendiri.
-  const statusFaseAktif = (f: 1 | 2 | 3) => statusFase(f, kesiapan);
+  const statusFaseAktif = (f: 1 | 2 | 3) => statusFase(f, kesiapan, faseSampai);
   const dilewati = (f: 1 | 2 | 3) => statusFaseAktif(f) === 'dilewati';
   const faseAktif: 1 | 2 | 3 = !phaseApproval.selesai[1] && !dilewati(1) ? 1 : !phaseApproval.selesai[2] && !dilewati(2) ? 2 : 3;
   const sudahDijalankan = (f: 1 | 2 | 3) => (f === 1 ? !!hasExistingResults : faseTertulis[f]);
@@ -120,7 +125,9 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
   const terkunciAktif = statusFaseAktif(faseAktif) === 'terkunci';
   const langkah: { jenis: 'proses' | 'jalankan' | 'setujui' | 'final' | 'selesai' | 'terkunci'; label: string; ket: string } = isAnalyzing
     ? { jenis: 'proses', label: `Sedang Memproses Fase ${faseBerikutnya} (${progressPercent}%)...`, ket: 'Tekan Batalkan untuk menghentikan run ini tanpa menyimpan.' }
-    : semuaFaseSetuju
+    : faseSampai === 0
+      ? { jenis: 'terkunci', label: 'Pilih fase dulu', ket: 'Centang minimal Fase 1 di kartu fase — belum ada fase yang dipilih untuk dianalisa.' }
+      : semuaFaseSetuju
       ? semuaSudahFinal
         ? { jenis: 'selesai', label: 'Semua baris sudah di Data Final', ket: 'Tidak ada yang menunggu persetujuan.' }
         : { jenis: 'final', label: 'Masuk ke Data Final', ket: 'Baris yang sudah punya cabang dipindahkan ke menu Data Final.' }
@@ -154,14 +161,22 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
     kosong: 'belum terisi',
   };
   const belumSiap = SUMBER_ANALISA.filter((d) => kesiapan[d.kunci].status !== 'siap');
+  // Fase yang dicabut tidak cuma "tidak jalan": akibatnya pada kolom hasil ikut disebut,
+  // supaya tidak ada yang mengira baris hasil Fase 1 saja bisa langsung masuk Data Final.
+  const akibatFaseCabut =
+    faseSampai === 1
+      ? ' Fase 2–3 tidak dianalisa; tanpa Fase 2 baris belum punya cabang untuk masuk Data Final.'
+      : faseSampai === 2
+        ? ' Fase 3 tidak dianalisa.'
+        : '';
   const keteranganKesiapan =
     roleDipakai && jumlahBarisDilewati > 0
       ? `${jumlahBarisDilewati.toLocaleString('id-ID')} baris hasil lama dikerjakan tanpa Mapping Role — jalankan ulang Fase 3 untuk mengisinya.`
-      : belumSiap.length > 0
-        ? belumSiap.map((d) => `${d.label} ${ARTI_STATUS[kesiapan[d.kunci].status as 'contoh' | 'kosong']}`).join('; ') + '.'
-        : roleDipakai
-          ? 'Kelima sumber ikut dianalisa.'
-          : 'Mapping Role dilepas — Fase 3 dilewati, empat sumber lainnya tetap jalan.';
+      : faseSampai === 0
+        ? 'Belum ada fase dicentang — analisa tidak akan dijalankan.'
+        : belumSiap.length > 0
+          ? belumSiap.map((d) => `${d.label} ${ARTI_STATUS[kesiapan[d.kunci].status as 'contoh' | 'kosong']}`).join('; ') + '.' + akibatFaseCabut
+          : `Fase 1${faseSampai > 1 ? `–${faseSampai}` : ''} dianalisa berurutan — ${roleDipakai ? 'kelima' : 'empat'} sumber diikutkan.${akibatFaseCabut}`;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginBottom: '1.25rem' }}>
@@ -237,7 +252,8 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
                 Data Analyst Engine
               </h2>
               <p style={{ fontSize: '0.8rem', color: '#6c757d', margin: 0, lineHeight: 1.45, maxWidth: '320px' }}>
-                Pengolahan & validasi lintas {roleDipakai ? '5' : '4'} Data Master secara otomatis dengan 3 Fase Analisis berurutan tanpa perlu unggah berkas.
+                Pengolahan & validasi lintas {roleDipakai ? '5' : '4'} Data Master dengan fase analisis
+                berurutan sesuai centangan di kartu — Fase 2 otomatis mengikutkan Fase 1, Fase 3 mengikutkan 1–2.
               </p>
             </div>
           </div>
@@ -254,9 +270,9 @@ export const AnalystCanvas: React.FC<AnalystCanvasProps> = ({
                   key={f.phase}
                   definisi={f}
                   wajib={faseWajib(f.phase)}
-                  dicentang={f.phase === 3 ? kesiapan.role.dipakai : true}
-                  bisaDilepas={f.phase === 3 && kesiapan.role.status !== 'kosong'}
-                  onToggle={onToggleRole}
+                  dicentang={faseDipilih(f.phase, faseSampai)}
+                  bisaDilepas={!isAnalyzing && (f.phase !== 3 || kesiapan.role.status !== 'kosong')}
+                  onToggle={() => onToggleFase(f.phase)}
                   berjalan={isAnalyzing}
                   aktif={currentActivePhase === f.phase}
                   persenJalan={phaseProgress[f.phase]}
@@ -660,7 +676,9 @@ const KartuFase: React.FC<KartuFaseProps> = ({
         ? pesanLangkah
         : 'Menunggu...'
     : dilewati
-      ? 'Dilewati — Mapping Role dilepas'
+      ? dicentang
+        ? 'Dilewati — sumbernya belum terisi'
+        : 'Tidak dicentang — tidak dianalisa'
       : disetujui
         ? 'Berhasil diselesaikan'
         : pesanKunci
@@ -675,7 +693,9 @@ const KartuFase: React.FC<KartuFaseProps> = ({
     <div
       style={{
         background: '#ffffff',
-        border: `1px solid ${aktif ? aksen : sudahBeres && !berjalan ? '#d5f3ee' : '#e9ebec'}`,
+        borderTop: `1px solid ${aktif ? aksen : sudahBeres && !berjalan ? '#d5f3ee' : '#e9ebec'}`,
+        borderRight: `1px solid ${aktif ? aksen : sudahBeres && !berjalan ? '#d5f3ee' : '#e9ebec'}`,
+        borderBottom: `1px solid ${aktif ? aksen : sudahBeres && !berjalan ? '#d5f3ee' : '#e9ebec'}`,
         borderRadius: '6px',
         padding: '0.75rem 0.9rem',
         boxShadow: aktif ? `0 0 0 3px ${aksen}26` : '0 1px 3px rgba(0,0,0,0.03)',
@@ -692,17 +712,15 @@ const KartuFase: React.FC<KartuFaseProps> = ({
             title={
               terkunciData
                 ? pesanKunci
-                : !wajib
-                  ? dicentang
-                    ? 'Tekan untuk melewati fase ini — Mapping Role tidak diikutkan analisa'
-                    : 'Tekan untuk mengikutkan Mapping Role dan menjalankan Fase 3'
-                  : 'Wajib — fase ini selalu dianalisa selama data sumbernya siap'
+                : dicentang
+                  ? `Tekan untuk mencabut Fase ${phase} — fase ini${phase < 3 ? ' dan fase di atasnya' : ''} tidak dianalisa`
+                  : `Tekan untuk menganalisa Fase ${phase}${phase > 1 ? ` — Fase 1–${phase - 1} otomatis ikut dicentang` : ''}`
             }
           >
             <input type="checkbox" checked={dicentang} disabled={!bisaDilepas} onChange={bisaDilepas ? onToggle : undefined} />
           </label>
           <span style={{ fontSize: '0.74rem', fontWeight: 800, color: warnaTeks, whiteSpace: 'nowrap' }}>FASE {phase}</span>
-          <span className={`fase-tag ${wajib ? 'is-wajib' : 'is-opsional'}`} title={wajib ? 'Sumber datanya wajib — tidak bisa dilepas dari analisa' : 'Opsional — dilepas lewat checklist Kesiapan Data, fase ini ikut dilewati'}>
+          <span className={`fase-tag ${wajib ? 'is-wajib' : 'is-opsional'}`} title={wajib ? 'Sumber datanya wajib bila fase ini dicentang' : 'Opsional — boleh tidak dicentang'}>
             {wajib ? 'WAJIB' : 'OPSIONAL'}
           </span>
         </div>

@@ -514,6 +514,188 @@ export function daftarMerchantTerverifikasi(baris: readonly BarisMerchant[]): Me
   return urut.map((mid) => peta.get(mid) as MerchantTerverifikasi);
 }
 
+// ─── Titik merchant untuk peta Dashboard ───────────────────────────────────
+// Sumber tidak menyimpan koordinat dan `branch_code` semua merchant kosong, jadi
+// titiknya harus dicari dari TEKS ALAMAT dan cabangnya hanya bisa didekati lewat kota.
+// Dua hal itu tidak boleh disembunyikan: alamat yang isinya "tes" tidak boleh dicari
+// ke geocoder (hasilnya kota acak), dan alamat yang hanya berisi nama kota hanya
+// pantas jadi titik perkiraan.
+
+export type KelasAlamatMerchant = 'presisi' | 'kasar' | 'tidak-valid';
+
+export interface MerchantPeta {
+  mid: string;
+  nama: string;
+  alamat: string;
+  kota: string;
+  provinsi: string;
+  kelas: KelasAlamatMerchant;
+  /** Kueri geocoding; kosong bila alamat tidak layak dicari. */
+  kueri: string;
+}
+
+/** Penanda tingkat jalan/bangunan — satu-satunya dasar "presisi" di sini. */
+const PENANDA_ALAMAT_JALAN =
+  /\b(jl|jln|jalan|gg|gang|blok|blk|ruko|perum|komplek|komp|kav|no|nomor|rt|rw|lt|lantai|unit|mall|tower|gedung|booth|superblock|pertokoan)\b/i;
+/** Alamat uji/placeholder yang tidak menunjuk tempat mana pun. */
+const KATA_ALAMAT_UJI = /^(tes|test|testing|coba|cobaan|asdf|asd|qwerty|xxx+|n\/?a|null|undefined|-+)$/i;
+
+/**
+ * `presisi` = ada penanda jalan/bangunan; `kasar` = hanya nama kota/desa/daerah;
+ * `tidak-valid` = kosong, tanpa huruf, URL, atau berisi kata uji ("tes").
+ */
+export function kelasAlamatMerchant(alamat: unknown): KelasAlamatMerchant {
+  const teks = String(alamat ?? '').trim();
+  if (teks.length < 4) return 'tidak-valid';
+  if (!/[a-z]/i.test(teks)) return 'tidak-valid';
+  if (/:\/\//.test(teks) || /^www\./i.test(teks)) return 'tidak-valid';
+  const kata = teks.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(' ');
+  if (kata.some((k) => KATA_ALAMAT_UJI.test(k))) return 'tidak-valid';
+  return PENANDA_ALAMAT_JALAN.test(teks) ? 'presisi' : 'kasar';
+}
+
+/**
+ * Kueri geocoder: alamat + wilayah administratif + Indonesia. Bagian yang sudah
+ * termuat di alamat tidak diulang supaya hasil pencarian tidak bias ke nama kota.
+ */
+export function kueriPetaMerchant(m: {
+  alamat?: unknown;
+  kelurahan?: unknown;
+  kecamatan?: unknown;
+  kota?: unknown;
+  provinsi?: unknown;
+}): string {
+  const teks = (v: unknown) => String(v ?? '').trim();
+  // Bandingkan tanpa prefiks wilayah: "Kota Bandung" dan "Bandung" itu kota yang sama.
+  const inti = (v: string) =>
+    v
+      .toLowerCase()
+      .replace(/^(kota|kabupaten|kab\.?|provinsi|prov\.?)\s+/, '')
+      .trim();
+  const alamat = teks(m.alamat);
+  const bagian: string[] = [];
+  const tambah = (nilai: string) => {
+    const v = nilai.trim();
+    if (!v) return;
+    const kecil = v.toLowerCase();
+    const dasar = inti(v);
+    if (bagian.some((b) => b.toLowerCase() === kecil || inti(b) === dasar)) return;
+    // Hanya bagian wilayah yang boleh dilewati karena sudah ada di alamat; alamat
+    // sendiri selalu dipakai apa adanya.
+    if (bagian.length > 0 && dasar && inti(alamat).includes(dasar)) return;
+    bagian.push(v);
+  };
+  tambah(alamat);
+  tambah(teks(m.kelurahan));
+  tambah(teks(m.kecamatan));
+  tambah(teks(m.kota));
+  tambah(teks(m.provinsi));
+  if (bagian.length === 0) return '';
+  const dasar = bagian.join(', ');
+  return /indonesia\s*$/i.test(dasar) ? dasar : `${dasar}, Indonesia`;
+}
+
+/**
+ * Satu titik per MID, memakai identitas INDUK seperti tabel sumber. Muatan lama tanpa
+ * kolom induk jatuh ke nilai event pertama.
+ */
+export function daftarMerchantPeta(baris: readonly BarisMerchant[]): MerchantPeta[] {
+  const urut: string[] = [];
+  const peta = new Map<string, MerchantPeta>();
+  for (const r of baris) {
+    if (!r.mid || peta.has(r.mid)) continue;
+    const alamat = String(r.alamat || '').trim();
+    const kota = String(r.kotaInduk || r.kabupatenKota || '').trim();
+    const provinsi = String(r.provinsiInduk || r.provinsi || '').trim();
+    const kelas = kelasAlamatMerchant(alamat);
+    const kueri = kelas === 'tidak-valid' ? '' : kueriPetaMerchant({ alamat, kelurahan: r.kelurahan, kecamatan: r.kecamatan, kota, provinsi });
+    urut.push(r.mid);
+    peta.set(r.mid, {
+      mid: r.mid,
+      nama: r.namaMerchantInduk || r.namaMerchant || r.mid,
+      alamat,
+      kota,
+      provinsi,
+      kelas,
+      kueri,
+    });
+  }
+  return urut.map((mid) => peta.get(mid) as MerchantPeta);
+}
+
+export interface KelompokMerchantPeta {
+  kueri: string;
+  alamat: string;
+  kota: string;
+  kelas: 'presisi' | 'kasar';
+  merchants: MerchantPeta[];
+}
+
+/**
+ * Satu kelompok = satu alamat = satu busur. Merchant yang berbagi alamat tidak
+ * digambar bertumpuk; mereka muncul bersama di tooltip titik itu.
+ */
+export function kelompokkanMerchantPeta(
+  daftar: readonly MerchantPeta[],
+  ikutKasar = false
+): KelompokMerchantPeta[] {
+  const peta = new Map<string, KelompokMerchantPeta>();
+  for (const m of daftar) {
+    if (!m.kueri || m.kelas === 'tidak-valid') continue;
+    if (m.kelas === 'kasar' && !ikutKasar) continue;
+    const ada = peta.get(m.kueri);
+    if (ada) {
+      ada.merchants.push(m);
+      continue;
+    }
+    peta.set(m.kueri, {
+      kueri: m.kueri,
+      alamat: m.alamat,
+      kota: m.kota,
+      kelas: m.kelas,
+      merchants: [m],
+    });
+  }
+  return Array.from(peta.values()).sort((a, b) => {
+    if (a.kelas !== b.kelas) return a.kelas === 'presisi' ? -1 : 1;
+    if (a.merchants.length !== b.merchants.length) return b.merchants.length - a.merchants.length;
+    return a.alamat.localeCompare(b.alamat);
+  });
+}
+
+export interface RingkasanMerchantPeta {
+  total: number;
+  presisi: number;
+  kasar: number;
+  tidakValid: number;
+  /** Jumlah alamat unik (satu busur per alamat), bukan jumlah merchant. */
+  titikPresisi: number;
+  titikKasar: number;
+}
+
+/** Angka panel peta: merchant di satu kota + berapa titik yang benar-benar bisa digambar. */
+export function ringkasMerchantPeta(daftar: readonly MerchantPeta[]): RingkasanMerchantPeta {
+  let presisi = 0;
+  let kasar = 0;
+  let tidakValid = 0;
+  const titikPresisi = new Set<string>();
+  const titikKasar = new Set<string>();
+  for (const m of daftar) {
+    if (m.kelas === 'tidak-valid') {
+      tidakValid++;
+      continue;
+    }
+    if (m.kelas === 'presisi') {
+      presisi++;
+      titikPresisi.add(m.kueri);
+    } else {
+      kasar++;
+      titikKasar.add(m.kueri);
+    }
+  }
+  return { total: daftar.length, presisi, kasar, tidakValid, titikPresisi: titikPresisi.size, titikKasar: titikKasar.size };
+}
+
 export interface SaringanRekap {
   kueri: string;
   /** '' | 'GROUP_API' | 'GROUP_NON_API' | nama jenis QR persis. */

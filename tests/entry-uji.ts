@@ -18,11 +18,13 @@ export { STATUS_PAKAI, STATUS_BELUM_PAKAI, kunciIdentitasCabang, indeksCabangTer
 export {
   SUMBER_ANALISA, sumberFase, nilaiKesiapan, hitungKesiapan, statusFase, alasanFaseTerkunci,
   halanganNyalakanRole, jumlahBarisDilewati, catatanSumber, faseWajib, KUNCI_SUMBER_DIPILIH,
+  faseDipilih, toggleFase,
 } from '../src/utils/analystSources';
 export {
   KOLOM_TM, KOLOM_EKSPOR_TM, DEFINISI_KOLOM_TM, KUNCI_STORAGE_TRACKING, KETERANGAN_STATUS, LABEL_KERANJANG,
   SUMUR_TRACKING, PERIODE_QR_DEFAULT, SARINGAN_REKAP_KOSONG, barisKeExcelTm, cocokCari, kartuMerchant,
   keranjangStatus, keteranganRef, labelStatusSumber, riwayatMerchant, ringkasTracking, temukanMerchant,
   daftarPeriodeQr, periodeQrAktif, formatAngka, ringkasAngkaBesar, segmenDonat, daftarMerchantTerverifikasi,
-  saringMerchantTerverifikasi, halamanDaftar, warnaLembut,
+  saringMerchantTerverifikasi, halamanDaftar, warnaLembut, kelasAlamatMerchant, kueriPetaMerchant,
+  daftarMerchantPeta, kelompokkanMerchantPeta, ringkasMerchantPeta,
 } from '../src/utils/trackingMerchant';

@@ -13,6 +13,7 @@ import {
   daftarMerchantTerverifikasi, daftarPeriodeQr, formatAngka, halamanDaftar, kartuMerchant,
   keranjangStatus, keteranganRef, labelStatusSumber, periodeQrAktif, ringkasAngkaBesar, riwayatMerchant,
   ringkasTracking, saringMerchantTerverifikasi, segmenDonat, temukanMerchant, warnaLembut,
+  kelasAlamatMerchant, kueriPetaMerchant, daftarMerchantPeta, kelompokkanMerchantPeta, ringkasMerchantPeta,
 } from './out/entry-uji.js';
 
 let gagal = 0;
@@ -535,6 +536,58 @@ asa('komponen: pil angka memakai warna jenis QR dari data',
 asa('komponen: total rekap menyebut periode & menyatakan 100% unik',
   [komponenTm.includes('TOTAL REKAP ({periodeData.shortLabel})'), komponenTm.includes('100% Unik')],
   [true, true]);
+
+// ── Titik peta: kelas alamat, kueri, kelompok, dan angka panel ─────────────
+const barisPeta = [
+  {
+    mid: 'A1', namaMerchant: 'Toko Satu', namaMerchantInduk: 'Toko Satu',
+    alamat: 'Jl. Merdeka No. 10', kelurahan: '', kecamatan: '',
+    kabupatenKota: 'Bandung', provinsi: 'Jawa Barat', kotaInduk: 'Kota Bandung', provinsiInduk: 'Jawa Barat',
+  },
+  {
+    mid: 'A2', namaMerchant: 'Toko Dua', namaMerchantInduk: 'Toko Dua',
+    alamat: 'Jl. Merdeka No. 10', kelurahan: '', kecamatan: '',
+    kabupatenKota: 'Bandung', provinsi: 'Jawa Barat', kotaInduk: 'Kota Bandung', provinsiInduk: 'Jawa Barat',
+  },
+  {
+    mid: 'A3', namaMerchant: 'Toko Tiga', namaMerchantInduk: 'Toko Tiga',
+    alamat: 'PANGKALPINANG', kelurahan: '', kecamatan: '',
+    kabupatenKota: 'Pangkal Pinang', provinsi: 'Bangka Belitung', kotaInduk: '', provinsiInduk: '',
+  },
+  {
+    mid: 'A4', namaMerchant: 'Toko Empat', namaMerchantInduk: 'Toko Empat',
+    alamat: 'tes', kelurahan: '', kecamatan: '',
+    kabupatenKota: 'Jakarta Pusat', provinsi: 'DKI Jakarta', kotaInduk: '', provinsiInduk: '',
+  },
+];
+asa('peta: kelas alamat membedakan presisi, kasar, dan tidak valid', [
+  kelasAlamatMerchant('Jl. Merdeka No. 10'),
+  kelasAlamatMerchant('Lantai 2, Grand Mall, Sudirman'),
+  kelasAlamatMerchant('Jakarta Pusat, Tanah Abang'),
+  kelasAlamatMerchant('Desa Passo'),
+  kelasAlamatMerchant('tes'),
+  kelasAlamatMerchant('8398'),
+  kelasAlamatMerchant('http://192.168.123.132'),
+  kelasAlamatMerchant(''),
+], ['presisi', 'presisi', 'kasar', 'kasar', 'tidak-valid', 'tidak-valid', 'tidak-valid', 'tidak-valid']);
+asa('peta: kueri tidak mengulang kota yang sudah ada di alamat',
+  kueriPetaMerchant({ alamat: 'Jl. Merdeka No. 10, Bandung', kota: 'Kota Bandung', provinsi: 'Jawa Barat' }),
+  'Jl. Merdeka No. 10, Bandung, Jawa Barat, Indonesia');
+asa('peta: kueri menambah kota dan negara bila belum ada',
+  kueriPetaMerchant({ alamat: 'Jl. Merdeka No. 10', kota: 'Bandung', provinsi: 'Jawa Barat' }),
+  'Jl. Merdeka No. 10, Bandung, Jawa Barat, Indonesia');
+const petaA = daftarMerchantPeta(barisPeta);
+asa('peta: satu baris per MID dengan identitas induk',
+  [petaA.length, petaA.map((m) => m.mid)], [4, ['A1', 'A2', 'A3', 'A4']]);
+asa('peta: alamat tidak valid tidak punya kueri', petaA.find((m) => m.mid === 'A4').kueri, '');
+const kelPresisi = kelompokkanMerchantPeta(petaA);
+asa('peta: kelompok bawaan hanya alamat presisi, satu busur per alamat',
+  [kelPresisi.length, kelPresisi[0].merchants.length], [1, 2]);
+const kelSemua = kelompokkanMerchantPeta(petaA, true);
+asa('peta: alamat perkiraan ikut bila diminta',
+  [kelSemua.length, kelSemua.some((k) => k.kelas === 'kasar')], [2, true]);
+asa('peta: ringkasan menghitung titik unik, bukan baris', ringkasMerchantPeta(petaA),
+  { total: 4, presisi: 2, kasar: 1, tidakValid: 1, titikPresisi: 1, titikKasar: 1 });
 
 // Animasi chart: cincin digambar setelah frame pertama, bilah & legenda lewat CSS,
 // dan semuanya harus dimatikan saat pengguna memilih reduced motion.

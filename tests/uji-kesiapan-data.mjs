@@ -8,7 +8,7 @@
 //   node tests/uji-kesiapan-data.mjs
 import {
   SUMBER_ANALISA, alasanFaseTerkunci, catatanSumber, executeAnalystPipeline, faseWajib, halanganNyalakanRole,
-  hitungKesiapan, jumlahBarisDilewati, nilaiKesiapan, sumberFase, statusFase,
+  hitungKesiapan, jumlahBarisDilewati, nilaiKesiapan, sumberFase, statusFase, faseDipilih, toggleFase,
 } from './out/entry-uji.js';
 
 let gagal = 0;
@@ -119,6 +119,21 @@ asa('role off: tidak ada role yang tertempel', tanpaRole.some((r) => r.organisas
 asa('Fase 1 & 2 identik dengan atau tanpa role',
   denganRole.map((r) => `${r.kelurahan}|${r.kodePosPten}|${r.namaOutlet}|${r.wilayah}`),
   tanpaRole.map((r) => `${r.kelurahan}|${r.kodePosPten}|${r.namaOutlet}|${r.wilayah}`));
+
+// 10. Centang kartu fase = awalan 1..n. Ini aturan yang memutuskan fase mana yang
+//     benar-benar dijalankan mesin, jadi bentuknya diuji, bukan diasumsikan.
+asa('centang Fase 1 = hanya Fase 1', toggleFase(0, 1, true), 1);
+asa('centang Fase 2 otomatis mengikutkan Fase 1', toggleFase(0, 2, true), 2);
+asa('centang Fase 3 otomatis mengikutkan 1 dan 2', toggleFase(1, 3, true), 3);
+asa('pilihan Fase 1 dan 2 sah = 1–2 saja', [1, 2, 3].map((f) => faseDipilih(f, 2)), [true, true, false]);
+asa('lepas Fase 2 mematikan 2 dan 3', toggleFase(3, 2, false), 1);
+asa('lepas Fase 1 mematikan semuanya', toggleFase(3, 1, false), 0);
+asa('lepas Fase 3 hanya mematikan Fase 3', toggleFase(3, 3, false), 2);
+asa('fase di atas centangan = dilewati', [1, 2, 3].map((f) => statusFase(f, kesiapanFull, 2)), ['siap', 'siap', 'dilewati']);
+asa('tanpa fase dicentang = semua dilewati', [1, 2, 3].map((f) => statusFase(f, kesiapanFull, 0)), ['dilewati', 'dilewati', 'dilewati']);
+asa('fase tercabut tidak punya alasan terkunci', alasanFaseTerkunci(1, siap({ kodepos: 139 }), 0), '');
+asa('catatan ekspor menyebut fase yang tidak dianalisa', catatanSumber(kesiapanFull, 2).includes('Fase 3 tidak dicentang'), true);
+asa('catatan ekspor default tetap tanpa tambahan', catatanSumber(kesiapanFull, 3).includes('tidak dicentang'), false);
 
 console.log(gagal === 0 ? 'SEMUA LULUS' : `${gagal} UJI GAGAL`);
 process.exit(gagal === 0 ? 0 : 1);

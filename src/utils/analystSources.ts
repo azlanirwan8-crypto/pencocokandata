@@ -58,6 +58,25 @@ export const KUNCI_SUMBER_DIPILIH = 'analyst_sumber_dipilih';
 export type StatusKesiapan = 'siap' | 'contoh' | 'kosong';
 export type StatusFase = 'siap' | 'terkunci' | 'dilewati';
 
+/**
+ * Fase yang dicentang selalu berbentuk awalan 1..n. Bentuk lain tidak masuk akal:
+ * Fase 2 membaca hasil Fase 1, Fase 3 membaca hasil Fase 2. Jadi centangan disimpan
+ * sebagai satu angka (0..3), bukan tiga boolean yang bisa saling bertentangan.
+ */
+export type FaseSampai = 0 | 1 | 2 | 3;
+
+export function faseDipilih(fase: 1 | 2 | 3, sampai: FaseSampai): boolean {
+  return fase <= sampai;
+}
+
+/**
+ * Mencentang fase n menyalakan 1..n (prasyaratnya ikut); melepas fase n mematikan
+ * n..3 (fase di atasnya kehilangan bahan). Ini aturan yang dipakai kartu fase.
+ */
+export function toggleFase(sampai: FaseSampai, fase: 1 | 2 | 3, aktif: boolean): FaseSampai {
+  return (aktif ? Math.max(sampai, fase) : Math.min(sampai, fase - 1)) as FaseSampai;
+}
+
 export interface KesiapanSumber {
   kunci: KunciSumber;
   status: StatusKesiapan;
@@ -105,15 +124,18 @@ export function faseWajib(fase: 1 | 2 | 3): boolean {
 /**
  * Fase 3 berstatus `dilewati` (bukan `belum selesai`) saat role lepas. Tanpa keadaan
  * ketiga ini tombol "Masuk ke Data Final" tidak pernah aktif, karena gerbang alur
- * menuntut seluruh fase disetujui.
+ * menuntut seluruh fase disetujui. Fase yang tidak dicentang juga `dilewati` — bukan
+ * menunggu, karena memang tidak akan pernah dijalankan.
  */
-export function statusFase(fase: 1 | 2 | 3, kesiapan: Kesiapan): StatusFase {
+export function statusFase(fase: 1 | 2 | 3, kesiapan: Kesiapan, sampaiFase: FaseSampai = 3): StatusFase {
+  if (!faseDipilih(fase, sampaiFase)) return 'dilewati';
   const sumber = sumberFase(fase);
   if (!sumber.some((d) => d.wajib) && !sumber.some((d) => kesiapan[d.kunci].dipakai)) return 'dilewati';
   return sumber.some((d) => d.wajib && kesiapan[d.kunci].status !== 'siap') ? 'terkunci' : 'siap';
 }
 
-export function alasanFaseTerkunci(fase: 1 | 2 | 3, kesiapan: Kesiapan): string {
+export function alasanFaseTerkunci(fase: 1 | 2 | 3, kesiapan: Kesiapan, sampaiFase: FaseSampai = 3): string {
+  if (!faseDipilih(fase, sampaiFase)) return '';
   const kurang = sumberFase(fase).filter((d) => d.wajib && kesiapan[d.kunci].status !== 'siap');
   if (kurang.length === 0) return '';
   const sebut = kurang.map((d) => `${d.label} (${kesiapan[d.kunci].jumlah.toLocaleString('id-ID')})`).join(' dan ');
@@ -121,8 +143,8 @@ export function alasanFaseTerkunci(fase: 1 | 2 | 3, kesiapan: Kesiapan): string 
   return `Fase ${fase} terkunci — ${sebut} ${kata}.`;
 }
 
-export function faseDilewati(fase: 1 | 2 | 3, kesiapan: Kesiapan): boolean {
-  return statusFase(fase, kesiapan) === 'dilewati';
+export function faseDilewati(fase: 1 | 2 | 3, kesiapan: Kesiapan, sampaiFase: FaseSampai = 3): boolean {
+  return statusFase(fase, kesiapan, sampaiFase) === 'dilewati';
 }
 
 /**
@@ -144,9 +166,15 @@ export function jumlahBarisDilewati(rows: { fase3Dilewati?: boolean }[]): number
   return rows.filter((r) => r.fase3Dilewati === true).length;
 }
 
-export function catatanSumber(kesiapan: Kesiapan): string {
+export function catatanSumber(kesiapan: Kesiapan, sampaiFase: FaseSampai = 3): string {
   const pakai = SUMBER_ANALISA.filter((d) => kesiapan[d.kunci].dipakai).map((d) => d.label);
   const lepas = SUMBER_ANALISA.filter((d) => !kesiapan[d.kunci].dipakai).map((d) => d.label);
   const dasar = `Sumber analisa: ${pakai.join(', ')}`;
-  return lepas.length ? `${dasar} — ${lepas.join(', ')} tidak diikutkan (Fase 3 dilewati).` : `${dasar} — semuanya diikutkan.`;
+  const utama = lepas.length
+    ? `${dasar} — ${lepas.join(', ')} tidak diikutkan (Fase 3 dilewati).`
+    : `${dasar} — semuanya diikutkan.`;
+  const faseLewat = ([1, 2, 3] as const).filter((f) => !faseDipilih(f, sampaiFase));
+  return faseLewat.length
+    ? `${utama} Fase ${faseLewat.join(', ')} tidak dicentang, jadi tidak dianalisa.`
+    : utama;
 }
