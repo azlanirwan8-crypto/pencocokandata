@@ -166,11 +166,8 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
   const [kueriKosong, setKueriKosong] = useState<string>('');
   const panelJejakRef = useRef<HTMLDivElement | null>(null);
   const panelRekapRef = useRef<HTMLDivElement | null>(null);
-  /** Stempel `diambilPada` data yang sedang tampil — pembanding saat cloud diperiksa ulang. */
-  const stempelRef = useRef<string>('');
 
   const uatMuatan = useCallback((muatan: MuatanTracking) => {
-    stempelRef.current = String(muatan.diambilPada || '');
     setBaris(muatan.baris);
     setRingkasan(Array.isArray(muatan.ringkasan) ? muatan.ringkasan : []);
     setDistribusi(Array.isArray(muatan.distribusi) ? muatan.distribusi : []);
@@ -208,46 +205,6 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
       hidup = false;
     };
   }, [simpanLokal, uatMuatan]);
-
-  // Realtime ringan: cloud hanya dibaca, jadi aman dijalankan berkala. Perubahan dari
-  // perangkat lain langsung terlihat tanpa reload.
-  useEffect(() => {
-    let hidup = true;
-    let sedangDiperiksa = false;
-
-    const periksaCloud = async () => {
-      if (!hidup || sedangDiperiksa || document.visibilityState === 'hidden') return;
-      sedangDiperiksa = true;
-      try {
-        const cloud = await loadTrackingMerchantFromNeon();
-        if (!hidup || !cloud || !Array.isArray(cloud.baris) || cloud.baris.length === 0) return;
-        if (String(cloud.diambilPada) <= stempelRef.current) return;
-        uatMuatan(cloud);
-        void simpanLokal(cloud);
-        notify(
-          `Data Tracking Merchant diperbarui otomatis: ${ringkasTracking(cloud.baris).riwayat.toLocaleString('id-ID')} riwayat tersimpan.`,
-          'info'
-        );
-      } catch {
-        // Diamkan; percobaan berikutnya mengulang sendiri.
-      } finally {
-        sedangDiperiksa = false;
-      }
-    };
-
-    const saatTerlihat = () => {
-      if (document.visibilityState === 'visible') void periksaCloud();
-    };
-    const pewaktu = window.setInterval(() => void periksaCloud(), 60_000);
-    document.addEventListener('visibilitychange', saatTerlihat);
-    window.addEventListener('focus', saatTerlihat);
-    return () => {
-      hidup = false;
-      window.clearInterval(pewaktu);
-      document.removeEventListener('visibilitychange', saatTerlihat);
-      window.removeEventListener('focus', saatTerlihat);
-    };
-  }, [notify, simpanLokal, uatMuatan]);
 
   // Satu sumber angka merchant — diturunkan dari baris, dipakai baris meta DAN badge
   // sidebar, jadi keduanya tidak mungkin menunjukkan angka berbeda.
