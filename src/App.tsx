@@ -244,7 +244,7 @@ export const App: React.FC = () => {
           setCityOverrides(savedCityOverrides);
         }
 
-        // Badge Tracking Merchant = merchant yang ter-sync terakhir di browser ini.
+        // Badge Tracking Merchant = merchant yang tersimpan terakhir di browser ini.
         if (savedTracking && Array.isArray(savedTracking.baris) && savedTracking.baris.length > 0) {
           setTrackingMerchantCount(new Set(savedTracking.baris.map((b) => b.mid)).size);
           setTrackingRows(savedTracking.baris);

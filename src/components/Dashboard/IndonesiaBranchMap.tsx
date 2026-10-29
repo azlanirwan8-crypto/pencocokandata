@@ -2229,7 +2229,7 @@ export const IndonesiaBranchMap: React.FC<IndonesiaBranchMapProps> = ({
           onClick={() => setShowMerchantArcs((v) => !v)}
           title={
             trackingRows.length === 0
-              ? 'Belum ada data Tracking Merchant tersinkron — buka menu Tracking Merchant lalu Sync'
+              ? 'Belum ada data Tracking Merchant tersimpan — buka menu Tracking Merchant'
               : 'Tampilkan busur dari cabang terpilih ke alamat merchant Tracking di kota yang sama'
           }
           disabled={trackingRows.length === 0}

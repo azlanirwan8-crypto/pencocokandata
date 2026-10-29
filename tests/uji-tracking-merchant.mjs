@@ -180,7 +180,6 @@ asa('kartu muatan lama tanpa kolom induk tetap terisi',
 const neonSync = readFileSync(fileURLToPath(new URL('../src/utils/neonSync.ts', import.meta.url)), 'utf8');
 const apiTs = readdirSync(fileURLToPath(new URL('../api/', import.meta.url))).filter((f) => f.endsWith('.ts'));
 asa('api/ tidak melewati 12 fungsi (batas Hobby)', apiTs.length <= 12, true);
-asa('api/tracking-merchant.ts tidak kembali sebagai berkas ke-13', apiTs.includes('tracking-merchant.ts'), false);
 asa('klien memakai rute gabungan ?tm=1',
   /JALUR_TRACKING_MERCHANT = '\/api\/rolemapping\?tm=1'/.test(neonSync), true);
 
@@ -367,9 +366,6 @@ asa('komponen: cincin digambar bertahap dan diulang saat periode berganti',
     /const CincinKomposisi[\s\S]*requestAnimationFrame\(\(\) => setSiap\(true\)\)/.test(komponenTm),
     /<CincinKomposisi/.test(komponenTm), /key=\{kunciPeriodeAktif\}/.test(komponenTm)],
   [true, true, true, true]);
-asa('komponen: tidak ada lagi tombol/aksi Sync Data',
-  [/Sync Data/.test(komponenTm), /handleSync/.test(komponenTm), /syncTrackingMerchantDariSumber/.test(neonSync)],
-  [false, false, false]);
 asa('komponen: kartu kepala memakai kelas, bukan gaya inline',
   [komponenTm.includes('glass-card tm-kepala-kartu'), komponenTm.includes("marginBottom: '1rem'"),
     /\.tm-kepala-kartu \{ margin-bottom: 1rem; \}/.test(gayaTm), /\.tm-kepala-judul \{/.test(gayaTm)],

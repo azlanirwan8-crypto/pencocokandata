@@ -179,19 +179,27 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
     setKueriKosong('');
   }, []);
 
+  const simpanLokal = useCallback((muatan: MuatanTracking) => {
+    const { sumber: _abaikan, ...isi } = muatan as MuatanTracking & { sumber?: string };
+    return setItem(KUNCI_STORAGE_TRACKING, isi);
+  }, []);
+
   // Muat: browser dulu supaya tabel langsung terisi, lalu cloud menang kalau lebih baru.
   useEffect(() => {
     let hidup = true;
     (async () => {
-      const lokal = await getItem<MuatanTracking>(KUNCI_STORAGE_TRACKING).catch(() => null);
-      if (hidup && lokal && Array.isArray(lokal.baris) && lokal.baris.length > 0) uatMuatan(lokal);
+      const lokal = await getItem<MuatanTracking & { sumber?: string }>(KUNCI_STORAGE_TRACKING).catch(() => null);
+      if (hidup && lokal && Array.isArray(lokal.baris) && lokal.baris.length > 0) {
+        uatMuatan(lokal);
+        if (lokal.sumber !== undefined) void simpanLokal(lokal);
+      }
       const cloud = await loadTrackingMerchantFromNeon();
       if (!hidup) return;
       if (cloud && Array.isArray(cloud.baris) && cloud.baris.length > 0) {
         const lebihBaru = !lokal || String(cloud.diambilPada) > String(lokal.diambilPada);
         if (lebihBaru) {
           uatMuatan(cloud);
-          setItem(KUNCI_STORAGE_TRACKING, cloud).catch(() => undefined);
+          void simpanLokal(cloud);
         }
       }
       setStatusMuat('siap');
@@ -199,7 +207,7 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
     return () => {
       hidup = false;
     };
-  }, [uatMuatan]);
+  }, [simpanLokal, uatMuatan]);
 
   // Realtime ringan: cloud hanya dibaca, jadi aman dijalankan berkala. Perubahan dari
   // perangkat lain langsung terlihat tanpa reload.
@@ -215,7 +223,7 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
         if (!hidup || !cloud || !Array.isArray(cloud.baris) || cloud.baris.length === 0) return;
         if (String(cloud.diambilPada) <= stempelRef.current) return;
         uatMuatan(cloud);
-        setItem(KUNCI_STORAGE_TRACKING, cloud).catch(() => undefined);
+        void simpanLokal(cloud);
         notify(
           `Data Tracking Merchant diperbarui otomatis: ${ringkasTracking(cloud.baris).riwayat.toLocaleString('id-ID')} riwayat tersimpan.`,
           'info'
@@ -239,7 +247,7 @@ export const TrackingMerchantManager: React.FC<TrackingMerchantManagerProps> = (
       document.removeEventListener('visibilitychange', saatTerlihat);
       window.removeEventListener('focus', saatTerlihat);
     };
-  }, [notify, uatMuatan]);
+  }, [notify, simpanLokal, uatMuatan]);
 
   // Satu sumber angka merchant — diturunkan dari baris, dipakai baris meta DAN badge
   // sidebar, jadi keduanya tidak mungkin menunjukkan angka berbeda.

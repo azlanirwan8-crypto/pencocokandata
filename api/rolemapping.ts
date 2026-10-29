@@ -431,6 +431,7 @@ export default async function handler(req: any, res: any) {
 /**
  * Muatan Tracking Merchant — hanya-baca. Menu tidak punya aksi tulis; muatan diisi di
  * luar aplikasi dan di sini cuma dikembalikan supaya semua pengguna melihat data sama.
+ * Kunci `sumber` pada muatan lama (asal pengambilan data) tidak diteruskan ke klien.
  */
 async function muatTrackingMerchant(res: any) {
   try {
@@ -439,12 +440,18 @@ async function muatTrackingMerchant(res: any) {
       .status(200)
       .json(
         baris
-          ? { ok: true, configured: true, data: baris.data, updatedAt: baris.updated_at }
+          ? { ok: true, configured: true, data: tanpaSumber(baris.data), updatedAt: baris.updated_at }
           : { ok: true, configured: true, data: null }
       );
   } catch (error: any) {
     console.error('Supabase API Error (Tracking Merchant):', error);
     return res.status(500).json({ ok: false, configured: true, error: pesanRest(error) });
   }
+}
+
+function tanpaSumber(data: any) {
+  if (!data || typeof data !== 'object') return data;
+  const { sumber: _abaikan, ...sisa } = data;
+  return sisa;
 }
 

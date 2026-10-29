@@ -41,7 +41,7 @@ export interface BarisMerchant {
   /**
    * Identitas tingkat merchant di sumber. Kartu MID di halaman sumber dibaca dari objek
    * induk, bukan dari event — nilainya bisa berbeda (nama, kriteria, status terakhir).
-   * Tidak ada pada muatan lama yang tersimpan sebelum kolom ini ikut disinkron.
+   * Tidak ada pada muatan lama yang tersimpan sebelum kolom ini ikut tersalin.
    */
   namaMerchantInduk?: string;
   kriteriaInduk?: string;
@@ -59,8 +59,8 @@ export interface BarisMerchant {
  * `ringkasTracking`), supaya angka di badge, kartu, dan tabel tidak mungkin berbeda.
  */
 /**
- * Kartu ringkasan di halaman sumber. Angkanya teks statis di HTML sumber, bukan hasil
- * hitung tabel, jadi nilainya dibaca apa adanya saat sync.
+ * Kartu ringkasan pada muatan tersimpan. Angkanya nilai literal, bukan hasil hitung
+ * tabel, jadi dibaca apa adanya.
  */
 export interface KartuRingkasan {
   label: string;
@@ -72,9 +72,9 @@ export interface KartuRingkasan {
 }
 
 /**
- * Enam kartu "Kinerja Onboarding Merchant (2021 – 2026)" di halaman sumber. Sama seperti
- * kartu ringkasan, angkanya teks statis di HTML — bukan hasil hitung tabel — jadi dibaca
- * apa adanya saat sync: label tahun, emblem, total, keterangan, segmen bar, dan baris kaki.
+ * Enam kartu "Kinerja Onboarding Merchant (2021 – 2026)" pada muatan tersimpan. Sama seperti
+ * kartu ringkasan, angkanya nilai literal — bukan hasil hitung tabel — jadi dibaca apa
+ * adanya: label tahun, emblem, total, keterangan, segmen bar, dan baris kaki.
  */
 export interface KartuTahunSegmen {
   jenis: 'aktif' | 'tolak' | 'lain';
@@ -99,9 +99,9 @@ export interface KartuTahun {
 }
 
 /**
- * Satu kelompok jenis QR pada komposisi per periode. Angkanya literal
- * `PERIODS_MASTER_DATA` di halaman sumber (jumlah MID di seluruh data lake), bukan hasil
- * hitung 262 merchant perwakilan — karena itu nilainya disalin saat sync, tidak dihitung.
+ * Satu kelompok jenis QR pada komposisi per periode. Angkanya literal dari muatan
+ * tersimpan (jumlah MID seluruh nasional), bukan hasil hitung 262 merchant perwakilan
+ * — karena itu nilainya disalin apa adanya, tidak dihitung.
  */
 export interface KelompokQr {
   name: string;
@@ -126,7 +126,6 @@ export interface PeriodeQr {
 
 export interface MuatanTracking {
   diambilPada: string;
-  sumber: string;
   baris: BarisMerchant[];
   /** Kosong/tidak ada pada muatan lama yang tersimpan sebelum kartu ini ikut disalin. */
   ringkasan?: KartuRingkasan[];
@@ -378,12 +377,12 @@ export function kartuMerchant(jejak: readonly BarisMerchant[]): KartuMerchant | 
   };
 }
 
-// ─── Komposisi jenis QR (literal PERIODS_MASTER_DATA) ───────────────────────
+// ─── Komposisi jenis QR (angka literal dari muatan tersimpan) ────────────────
 // Angka-angka di bawah adalah isi data lake seluruh nasional (jutaan MID) yang
-// ditulis langsung di halaman sumber, BUKAN hasil hitung `baris` (262 merchant
-// perwakilan). Jangan menurunkannya dari `baris`: hasilnya akan beda dari sumber.
+// tersimpan apa adanya, BUKAN hasil hitung `baris` (262 merchant perwakilan).
+// Jangan menurunkannya dari `baris`: hasilnya akan beda dari angka tersimpan.
 
-/** Periode yang dipilih halaman sumber saat dibuka (tombol "2026"). */
+/** Periode default saat muatan dibuka. */
 export const PERIODE_QR_DEFAULT = '2026';
 
 export function daftarPeriodeQr(periode: Record<string, PeriodeQr> | undefined): string[] {
