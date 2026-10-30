@@ -1822,6 +1822,7 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                               const p = penjelasanFase1(r);
                               const cls = p.nada === 'ok' ? 'badge-match' : p.nada === 'waspada' ? 'badge-level2' : 'badge-diff';
                               const usulan = r.kandidatBlokPten || [];
+                              const jejak = r.masterPunyaKode;
                               const dipatok = blokOverrides[String(r.kodePosKelurahan || '').trim()];
                               return (
                                 <>
@@ -1840,6 +1841,18 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                   >
                                     {p.alasan}
                                   </div>
+                                  {/* Blok yatim TAPI master punya kelurahan berkode sama:
+                                      baris itu tidak ikut diproses run ini, bukan kalah tabrak. */}
+                                  {r.blokPtenYatim && jejak && jejak.jumlah > 0 && (
+                                    <div className="ar-usulan">
+                                      <span
+                                        className="ar-usulan-teks ar-usulan-teks--waspada"
+                                        title={`Master Kode Pos memuat ${jejak.jumlah} kelurahan berkode ${r.kodePosPten} (kota: ${jejak.kota}), tapi tidak satu pun ikut diproses pada run ini — cek sumber Master Kode Pos yang dipakai, atau peta kotanya ke PTEN lain.`}
+                                      >
+                                        master punya {jejak.jumlah} kelurahan {r.kodePosPten} — tak ikut diproses
+                                      </span>
+                                    </div>
+                                  )}
                                   {/* Blok yatim: usulan kelurahan + tombolnya. Mesin tidak
                       pernah mempatok sendiri — ini keputusan operator. */}
                                   {usulan.length > 0 && onSetujuiBlok && (

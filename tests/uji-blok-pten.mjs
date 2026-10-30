@@ -128,6 +128,16 @@ asa('sisi Data Pos baris blok yatim memang belum ada isinya',
   [barisYatim?.kelurahan, barisYatim?.kodePosKelurahan], ['', '']);
 asa('blok yang kodenya persis dipakai kelurahan tidak menjadi baris yatim',
   hasilYatim.some((r) => r.blokPtenYatim && r.kodePosPten === '10110'), false);
+// Mode "Ulangi yang Salah Saja": seluruh baris kota ini dilewati dan dipakai apa adanya.
+// Penandaan blok wajib tetap jalan — kalau tidak, semua blok kota itu dilaporkan yatim.
+const ulangAnomali = await executeAnalystPipeline(
+  [], ptenYatim, kpYatim, [], [], undefined, true,
+  [{ isFinalApproved: true, statusAnalisa: 'EXACT_MATCH' }], undefined, 1, { batal: false }, false, {}
+);
+asa('kota yang dilewati di mode anomali tetap menandai blok yang memang dipakai kelurahannya',
+  [ulangAnomali.coverage.ptenRowsTerpakai, ulangAnomali.coverage.ptenRowsSisa], [1, 1]);
+asa('blok yatim yang kodenya TIDAK ADA di master dilaporkan tanpa jejak',
+  barisYatim?.masterPunyaKode, { jumlah: 0, kota: '' });
 
 console.log(gagal === 0 ? 'SEMUA LULUS' : `${gagal} UJIAN GAGAL`);
 process.exit(gagal === 0 ? 0 : 1);

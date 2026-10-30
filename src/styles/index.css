@@ -1075,6 +1075,11 @@ body {
   text-overflow: ellipsis;
 }
 
+/* Master ternyata punya kelurahan berkode sama: sebabnya lain, jadi warnanya lain. */
+.ar-usulan-teks--waspada {
+  color: var(--accent-amber);
+}
+
 .ar-usulan-btn,
 .ar-usulan-batal {
   display: inline-flex;

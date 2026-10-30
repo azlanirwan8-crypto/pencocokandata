@@ -34,6 +34,8 @@ export interface AnalystRow {
   kandidatBlokPten?: Array<{ kodePos: string; kelurahan: string; kecamatan: string; provinsi: string }>;
   /** Baris ini mewakili blok Master PTEN yang yatim — kode pos di barisnya ASLI dari PTEN. */
   blokPtenYatim?: boolean;
+  /** Jejak Master Kode Pos atas kode blok ini: berapa kelurahan yang memakainya & kotanya. */
+  masterPunyaKode?: { jumlah: number; kota: string };
   // 'DIANALISA' = terpetakan ke kota PTEN; 'TIDAK_ANALISA' = kotanya tak ada di PTEN
   kategori: 'DIANALISA' | 'TIDAK_ANALISA';
   fase1Approved: boolean;
@@ -2400,17 +2402,13 @@ export async function executeAnalystPipeline(
 
     if (i % 50 === 0) await tick();
 
-    // Jika mode "Ulangi yang Salah Saja", lewati baris yang sudah valid & disetujui
-    if (reRunOnlyAnomalies && prevRow && prevRow.isFinalApproved && prevRow.statusAnalisa === 'EXACT_MATCH') {
-      results.push(prevRow);
-      kelurahanProcessedSoFar += meta.matchedKodePosEntries.length;
-      continue;
-    }
-
     const allKelurahanCount = meta.matchedKodePosEntries.length;
 
     // Blok PTEN kota ini: tandani lebih dulu yang memang kode kelurahan di sini, supaya
-    // akuntansi sisa tidak menyebut blok yang pasti terpakai sebagai yatim.
+    // akuntansi sisa tidak menyebut blok yang pasti terpakai sebagai yatim. WAJIB terjadi
+    // sebelum kota ini boleh dilewati — di mode "Ulangi yang Salah Saja" seluruh baris
+    // kota yang sudah valid ikut dilewati, dan kalau penandaan ini ikut terlewat maka
+    // semua blok kota itu dilaporkan yatim padahal kelurahannya cuma tidak diulang.
     const kunciKotaBlok = cityMatchKey(meta.finalKotaPten);
     const blokKotaIni = blokPtenPerKota.get(kunciKotaBlok) || [];
     let blokTerpakaiKota = blokPtenTerpakai.get(kunciKotaBlok);
@@ -2421,6 +2419,13 @@ export async function executeAnalystPipeline(
     for (const e of meta.matchedKodePosEntries) {
       const k = kodeBlok(e.kodePos);
       if (k && blokKotaIni.includes(k)) blokTerpakaiKota.add(k);
+    }
+
+    // Jika mode "Ulangi yang Salah Saja", lewati baris yang sudah valid & disetujui
+    if (reRunOnlyAnomalies && prevRow && prevRow.isFinalApproved && prevRow.statusAnalisa === 'EXACT_MATCH') {
+      results.push(prevRow);
+      kelurahanProcessedSoFar += allKelurahanCount;
+      continue;
     }
 
     for (let seq = 0; seq < meta.matchedKodePosEntries.length; seq++) {
@@ -2708,6 +2713,19 @@ export async function executeAnalystPipeline(
   // "Belum digunakan" di menu Data PTEN.
   const sisaBlokPtenKota: CoverageCity[] = [];
   let ptenRowsSisa = 0;
+  // Jejak Master Kode Pos per kode: kalau blok PTEN dinyatakan yatim padahal master
+  // MEMANG punya kelurahan berkode sama, itu bukan kegagalan pencocokan — baris itu tidak
+  // ikut diproses run ini (master berbeda / kota dipatok ke PTEN lain). Tanpa jejak ini
+  // operator cuma melihat "—" dan tidak bisa membedakan dua sebab itu.
+  const jejakKodeMaster = new Map<string, { jumlah: number; kota: string }>();
+  for (const k of kodePosList || []) {
+    const kode = kodeBlok(k?.kodePos);
+    if (kode.length < 5) continue;
+    const kotaAsli = String(k?.kabupatenKota || '').trim();
+    const lama = jejakKodeMaster.get(kode);
+    if (lama) lama.jumlah++;
+    else jejakKodeMaster.set(kode, { jumlah: 1, kota: kotaAsli });
+  }
   const grupBlokPten = new Map<string, PTENRecord[]>();
   for (const p of ptenList || []) {
     const ck = cityMatchKey(String(p?.kotaPten ?? '')) || '(tanpa nama kota)';
@@ -2745,6 +2763,7 @@ export async function executeAnalystPipeline(
         groupKota: p.kotaPten || ck,
         kandidatBlokPten: usulan,
         blokPtenYatim: true,
+        masterPunyaKode: jejakKodeMaster.get(kodeBlok(String(p.kodePosPten || ''))) || { jumlah: 0, kota: '' },
         kategori: 'TIDAK_ANALISA',
         fase1Approved: false,
         sourceRowIndex: -1,
