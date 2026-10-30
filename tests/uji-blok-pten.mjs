@@ -7,7 +7,7 @@
 // Jalankan:
 //   npx vite build --ssr tests/entry-uji.ts --outDir tests/out
 //   node tests/uji-blok-pten.mjs
-import { indeksBlokPtenPerKota, pilihBlokPten, kandidatKelurahanBlok, sisaBlokPten } from './out/entry-uji.js';
+import { executeAnalystPipeline, indeksBlokPtenPerKota, pilihBlokPten, kandidatKelurahanBlok, sisaBlokPten } from './out/entry-uji.js';
 
 let gagal = 0;
 const asa = (label, dapat, harus) => {
@@ -109,6 +109,25 @@ for (const k of ['10110', '10115', '10120']) {
 }
 asa('kota yang kodenya cocok semua tidak menyisakan antrean review',
   sisaBlokPten([{ kodePosPten: '10110' }, { kodePosPten: '10115' }], terpakaiTutup).length, 0);
+
+// ── Baris antrean wajib membawa identitas PTEN-nya, bukan kosong melompong ──
+const ptenYatim = [
+  { kotaPten: 'JAKARTA PUSAT', kotaPtenMax15: 'JAKARTA PUSAT', kodePosPten: '10110' },
+  { kotaPten: 'JAKARTA PUSAT', kotaPtenMax15: 'JAKARTA PUSAT', kodePosPten: '10115' },
+];
+const kpYatim = [
+  { kodePos: '10110', kelurahan: 'Duri Pulo', kecamatan: 'Gambir', kabupatenKota: 'KOTA ADM. JAKARTA PUSAT', provinsi: 'DKI JAKARTA', status: 'AKTIF' },
+];
+const hasilYatim = (await executeAnalystPipeline([], ptenYatim, kpYatim, [], [], undefined, false, undefined, undefined, 1)).rows;
+const barisYatim = hasilYatim.find((r) => r.kategori === 'TIDAK_ANALISA' && r.blokPtenYatim);
+asa('blok yatim keluar sebagai baris review yang menyebut kode pos PTEN-nya',
+  [barisYatim?.kodePosPten, barisYatim?.kotaPten], ['10115', 'JAKARTA PUSAT']);
+asa('baris review blok yatim menawarkan usulan kelurahan',
+  (barisYatim?.kandidatBlokPten || []).map((k) => `${k.kodePos} ${k.kelurahan}`), ['10110 Duri Pulo']);
+asa('sisi Data Pos baris blok yatim memang belum ada isinya',
+  [barisYatim?.kelurahan, barisYatim?.kodePosKelurahan], ['', '']);
+asa('blok yang kodenya persis dipakai kelurahan tidak menjadi baris yatim',
+  hasilYatim.some((r) => r.blokPtenYatim && r.kodePosPten === '10110'), false);
 
 console.log(gagal === 0 ? 'SEMUA LULUS' : `${gagal} UJIAN GAGAL`);
 process.exit(gagal === 0 ? 0 : 1);

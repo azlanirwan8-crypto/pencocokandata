@@ -32,6 +32,8 @@ export interface AnalystRow {
    * di baris antrean review, dan hanya jadi kenyataan kalau operator menyetujuinya.
    */
   kandidatBlokPten?: Array<{ kodePos: string; kelurahan: string; kecamatan: string; provinsi: string }>;
+  /** Baris ini mewakili blok Master PTEN yang yatim — kode pos di barisnya ASLI dari PTEN. */
+  blokPtenYatim?: boolean;
   // 'DIANALISA' = terpetakan ke kota PTEN; 'TIDAK_ANALISA' = kotanya tak ada di PTEN
   kategori: 'DIANALISA' | 'TIDAK_ANALISA';
   fase1Approved: boolean;
@@ -2742,6 +2744,7 @@ export async function executeAnalystPipeline(
         placementMethod: `Blok PTEN ${p.kodePosPten || '(tanpa kode)'} tidak dipakai kelurahan mana pun di kota ini`,
         groupKota: p.kotaPten || ck,
         kandidatBlokPten: usulan,
+        blokPtenYatim: true,
         kategori: 'TIDAK_ANALISA',
         fase1Approved: false,
         sourceRowIndex: -1,

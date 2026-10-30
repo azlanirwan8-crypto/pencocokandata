@@ -1786,8 +1786,10 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                           <td>{kapital(r.provinsi)}</td>
                           <td style={{ fontWeight: 700, borderLeft: '2px solid #b7ebe4' }} title={`Nama persis di PTEN: ${kapital(r.kotaPten) || '-'}`}>{kapital(r.kotaPtenMax15 || r.kotaPten) || '—'}</td>
                           <td className="code-cell" style={{ textAlign: 'center', color: '#0ab39c', fontWeight: 700 }}>
-                            {/* Baris belum terpetakan warisi kode pos kelurahan, bukan dari PTEN */}
-                            {r.kategori === 'TIDAK_ANALISA' ? '—' : r.kodePosPten || '—'}
+                            {/* Baris kelurahan yang belum terpetakan warisi kode pos kelurahan,
+                                bukan dari PTEN. Baris blok PTEN yatim justru MEMANG membawa kode
+                                pos PTEN-nya — itu identitasnya, jangan disembunyikan. */}
+                            {r.kategori === 'TIDAK_ANALISA' && !r.blokPtenYatim ? '—' : r.kodePosPten || '—'}
                           </td>
                           <SelValidasi p={penjelasanFase1(r)} warnaGaris="2px solid #d8ecff" />
                           <SelValidasi p={penjelasanFase2(r)} warnaGaris="2px solid #f7e3bf" />
@@ -1810,8 +1812,9 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                             {kapital(r.kotaPten) || `${kapital(r.groupKota)} (belum terpetakan ke PTEN)`}
                           </td>
                           <td className="code-cell" style={{ textAlign: 'center', color: '#0ab39c', fontWeight: 700 }}>
-                            {/* Baris belum terpetakan warisi kode pos kelurahan, bukan dari PTEN */}
-                            {r.kategori === 'TIDAK_ANALISA' ? '—' : r.kodePosPten}
+                            {/* Kelurahan yang belum terpetakan warisi kode posnya sendiri, bukan
+                                dari PTEN. Blok PTEN yatim justru membawa kode PTEN aslinya. */}
+                            {r.kategori === 'TIDAK_ANALISA' && !r.blokPtenYatim ? '—' : r.kodePosPten || '—'}
                           </td>
                           {/* Satu kartu label: warna = status, teks kecil di bawahnya = alasannya */}
                           <td style={{ textAlign: 'center' }} title={r.placementMethod || ''}>
