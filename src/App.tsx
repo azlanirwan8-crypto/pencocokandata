@@ -758,6 +758,18 @@ export const App: React.FC = () => {
       // ── Pastikan pipeline memakai SELURUH Master Kode Pos (puluhan ribu baris),
       //    bukan DEFAULT_KODEPOS_DATA yang cuma ~140 baris ──
       let kodePosForPipeline = kodePosListRef.current;
+      // Salinan lokal hanya boleh dipakai kalau isinya SAMA dengan cloud. Tanpa perbandingan
+      // ini Analisa berjalan di atas master versi lama sementara tab Data Kode Pos menampilkan
+      // yang baru — operator lalu melihat kode pos yang jelas ada tapi blok PTEN-nya
+      // dilaporkan yatim (terukur: 24783 punya 25 kelurahan di cloud, 19 di salinan run).
+      if (kodePosForPipeline) {
+        setAnalystMessage('Memeriksa kelengkapan Master Kode Pos terhadap cloud...');
+        const statsKodePos = await fetchKodePosStats();
+        if (statsKodePos && statsKodePos.total !== kodePosForPipeline.length) {
+          kodePosListRef.current = null;
+          kodePosForPipeline = null;
+        }
+      }
       if (!kodePosForPipeline) {
         setAnalystMessage('Mengunduh seluruh Master Data Kode Pos dari cloud (83 ribu+ baris)...');
         const cloudKodePos = await fetchKodePosExport({});
