@@ -27,6 +27,11 @@ export interface AnalystRow {
   placementStatus: 'VERIFIED' | 'REVIEW' | 'FALLBACK';
   placementMethod: string;
   groupKota: string;
+  /**
+   * Usulan kelurahan untuk blok PTEN yang tidak diambil kelurahan mana pun. Hanya ada
+   * di baris antrean review, dan hanya jadi kenyataan kalau operator menyetujuinya.
+   */
+  kandidatBlokPten?: Array<{ kodePos: string; kelurahan: string; kecamatan: string; provinsi: string }>;
   // 'DIANALISA' = terpetakan ke kota PTEN; 'TIDAK_ANALISA' = kotanya tak ada di PTEN
   kategori: 'DIANALISA' | 'TIDAK_ANALISA';
   fase1Approved: boolean;
@@ -125,6 +130,8 @@ export function penjelasanFase1(r: {
     return { label: 'KOTA BELUM ADA DI PTEN', alasan: 'nama kota ini tidak ada di daftar PTEN — isi kotanya manual', nada: 'buruk' };
   }
   const padan: Array<[RegExp, string]> = [
+    [/tidak dipakai kelurahan mana pun/i, 'blok PTEN tidak diambil kelurahan mana pun — pilih usulan di kolom kanan'],
+    [/dipatok operator/i, 'blok PTEN dipatok tangan oleh operator ke kelurahan ini'],
     [/pemekaran/i, 'kota hasil pemekaran — pakainya kota induknya'],
     [/saring blok/i, 'nama kota sama, kode pos disaring ke blok PTEN'],
     [/Join nama kota/i, 'nama kota + rentang kode pos sama dengan PTEN'],
@@ -252,32 +259,70 @@ export function barisFinalLengkap(r: Pick<AnalystRow, 'namaOutlet'> | null | und
 /** Kode pos dipotong ke 5 digit angka — skala blok PTEN. */
 const kodeBlok = (v: unknown): string => String(v ?? '').replace(/\D/g, '').slice(0, 5);
 
-export type TingkatBlokPten = 'persis' | 'prefik4' | 'prefik3' | 'tidak';
+export type TingkatBlokPten = 'persis' | 'manual' | 'tidak';
 
 /**
- * Blok PTEN mana yang dibawa sebuah kelurahan. Patokannya PTEN, bukan daftar kelurahan:
- * Master Kode Pos menyimpan satu kode per kelurahan, sedangkan PTEN menyimpan setiap
- * blok di kota yang sama (10115, 11111, 11116 … di Jakarta Pusat/Barat tidak dimiliki
- * kelurahan mana pun). Selama pencocokan hanya menerima 5 digit persis, satu kota cuma
- * pernah menyumbang satu blok dan ribuan baris Master PTEN berstatus "Belum digunakan"
- * padahal padanannya ada. Jadi: persis dulu, lalu blok sekota dengan prefik 4 digit,
- * baru 3 digit, dan tiap blok hanya boleh dipakai satu kelurahan.
+ * Blok PTEN mana yang dibawa sebuah kelurahan. Patokannya PTEN, dan kodenya harus
+ * PERSIS: Master Kode Pos menyimpan satu kode per kelurahan, sedangkan PTEN menyimpan
+ * setiap blok di kota yang sama (10115, 11111, 11116 … di Jakarta Pusat/Barat tidak
+ * dimiliki kelurahan mana pun). Blok semacam itu tidak boleh dipinjamkan ke kelurahan
+ * yang kodenya berbeda — dulu prefik 4/3 digit boleh, dan hasilnya Canggu (80365)
+ * membawa blok 80364: baris Final yang terbaca cocok padahal tidak.
+ *
+ * Satu-satunya jalan lain adalah keputusan operator: `blokManual` = blok yang dipatok
+ * tangan ke kelurahan ini lewat antrean review. Ia hanya berlaku kalau blok itu memang
+ * baris Master PTEN sekota.
  */
 export function pilihBlokPten(
   kodeKelurahan: string,
   blokKota: readonly string[],
-  terpakai: ReadonlySet<string>
+  blokManual?: string
 ): { blok: string; tingkat: TingkatBlokPten } {
   const kode = kodeBlok(kodeKelurahan);
   if (!kode) return { blok: '', tingkat: 'tidak' };
   if (blokKota.includes(kode)) return { blok: kode, tingkat: 'persis' };
-  const tingkat: Array<[number, TingkatBlokPten]> = [[4, 'prefik4'], [3, 'prefik3']];
-  for (const [n, nama] of tingkat) {
-    const pre = kode.slice(0, n);
-    const kandidat = blokKota.find((b) => b.startsWith(pre) && !terpakai.has(b));
-    if (kandidat) return { blok: kandidat, tingkat: nama };
+  const manual = kodeBlok(blokManual);
+  if (manual.length === 5 && manual !== kode && blokKota.includes(manual)) {
+    return { blok: manual, tingkat: 'manual' };
   }
   return { blok: '', tingkat: 'tidak' };
+}
+
+/**
+ * Kelurahan sekota yang paling mungkin memegang sebuah blok yatim: 4 digit depan
+ * sama dulu, baru 3 digit. Dipakai untuk mengisi kolom usulan di antrean review —
+ * mesin tidak pernah memakainya sendiri, operator yang memutuskan.
+ */
+export function kandidatKelurahanBlok(
+  blok: string,
+  kelurahanKota: readonly { kodePos?: unknown; kelurahan?: unknown; kecamatan?: unknown; provinsi?: unknown }[],
+  batas = 3
+): Array<{ kodePos: string; kelurahan: string; kecamatan: string; provinsi: string }> {
+  const b = kodeBlok(blok);
+  if (b.length < 5) return [];
+  for (const n of [4, 3]) {
+    const terlihat = new Set<string>();
+    const hasil = (kelurahanKota || [])
+      .filter((k) => {
+        const kode = kodeBlok(k?.kodePos);
+        return kode.length === 5 && kode !== b && kode.startsWith(b.slice(0, n));
+      })
+      .map((k) => ({
+        kodePos: kodeBlok(k?.kodePos),
+        kelurahan: String(k?.kelurahan || ''),
+        kecamatan: String(k?.kecamatan || ''),
+        provinsi: String(k?.provinsi || ''),
+      }))
+      .filter((h) => {
+        const id = `${h.kodePos}|${h.kelurahan}`;
+        if (terlihat.has(id)) return false;
+        terlihat.add(id);
+        return true;
+      })
+      .slice(0, batas);
+    if (hasil.length > 0) return hasil;
+  }
+  return [];
 }
 
 /** Daftar blok PTEN per kota (kunci = cityMatchKey), terurut supaya hasil run stabil. */
@@ -1285,7 +1330,10 @@ export async function executeAnalystPipeline(
   pembatal?: { batal: boolean },
   // 🧷 Checklist Kesiapan Data: `false` = Mapping Role dilepas, Fase 3 tidak dihitung
   // dan setiap baris ditandai `fase3Dilewati` supaya gerbang persetujuan tidak macet.
-  roleDipakai = true
+  roleDipakai = true,
+  // 🧷 Keputusan operator di antrean review: kode pos kelurahan → blok PTEN yang dipatok
+  // untuknya. Tanpa ini sebuah blok hanya dipakai kalau kodenya persis sama.
+  blokOverrides?: Record<string, string>
 ): Promise<{ rows: AnalystRow[]; coverage: AnalystCoverage }> {
   const startTime = performance.now();
   // 🚦 Alur bertahap: fase di atas `sampaiFase` tidak dihitung (Fase 3 = bagian termahal)
@@ -1323,6 +1371,15 @@ export async function executeAnalystPipeline(
   // per kota + blok yang sudah diambil, dipakai perlu-asangan di loop kelurahan.
   const blokPtenPerKota = indeksBlokPtenPerKota(ptenList);
   const blokPtenTerpakai = new Map<string, Set<string>>();
+
+  // Patokan tangan operator (antrean review): kode pos kelurahan → blok PTEN. Dikunci ke
+  // 5 digit supaya bisa dibandingkan dengan kode kelurahan apa adanya.
+  const blokDipatok = new Map<string, string>();
+  for (const [kodeKel, blok] of Object.entries(blokOverrides || {})) {
+    const k = kodeBlok(kodeKel);
+    const b = kodeBlok(blok);
+    if (k.length === 5 && b.length === 5) blokDipatok.set(k, b);
+  }
 
   // Nama "KOTA/KABUPATEN MAX 15 DIGIT" per grup kota = hasil TERBANYAK di grup itu, bukan
   // hasil baris pertama. Berkas PTEN punya baris menyimpang: 38 blok Surakarta bernama
@@ -2350,8 +2407,8 @@ export async function executeAnalystPipeline(
 
     const allKelurahanCount = meta.matchedKodePosEntries.length;
 
-    // Blok PTEN kota ini: cadangkan lebih dulu yang memang kode kelurahan di sini, supaya
-    // pencocokan prefik tidak merebut blok yang akan dipakai persis oleh baris lain.
+    // Blok PTEN kota ini: tandani lebih dulu yang memang kode kelurahan di sini, supaya
+    // akuntansi sisa tidak menyebut blok yang pasti terpakai sebagai yatim.
     const kunciKotaBlok = cityMatchKey(meta.finalKotaPten);
     const blokKotaIni = blokPtenPerKota.get(kunciKotaBlok) || [];
     let blokTerpakaiKota = blokPtenTerpakai.get(kunciKotaBlok);
@@ -2387,15 +2444,16 @@ export async function executeAnalystPipeline(
       const kodePosBaris = String(kpEntry.kodePos || '').trim();
 
       // ── Blok PTEN milik kelurahan ini (patokan PTEN, dibuktikan kode pos) ──
-      // Kode kelurahan yang persis ada di PTEN menang. Kalau tidak ada, blok PTEN SEKOTA
-      // yang paling dekat yang mengambilnya (prefik 4, lalu 3) selama blok itu belum
-      // dipakai kelurahan lain; baru kalau kota itu kehabisan blok, baris membawa blok
-      // kotanya. "KODE POS" vs "KODE POS KELURAHAN" yang BEDA tetap penanda bahwa PTEN
-      // tidak mengenal blok persis kelurahan ini.
+      // Hanya dua hal yang boleh menaruh blok PTEN di baris ini: kodenya PERSIS sama,
+      // atau operator mematoknya tangan dari antrean review. Selain itu baris membawa
+      // blok kotanya — dan "KODE POS" vs "KODE POS KELURAHAN" yang BEDA adalah penanda
+      // bahwa PTEN memang tidak mengenal blok kelurahan ini. Dulu prefik 4/3 digit boleh
+      // meminjam blok sekota; hasilnya kelurahan berkode 80365 membawa blok 80364 dan
+      // terbaca cocok padahal tidak.
       const ptenBlokPersis = ptenBlokMap.get(kodePosBaris) || null;
       const pilihanBlok = ptenBlokPersis
         ? { blok: String(ptenBlokPersis.kodePosPten || '').trim(), tingkat: 'persis' as const }
-        : pilihBlokPten(kodePosBaris, blokKotaIni, blokTerpakaiKota);
+        : pilihBlokPten(kodePosBaris, blokKotaIni, blokDipatok.get(kodeBlok(kodePosBaris)));
       if (pilihanBlok.blok) blokTerpakaiKota.add(kodeBlok(pilihanBlok.blok));
       const blokBaris = pilihanBlok.blok || meta.finalKodePosPten;
       const statusPtenBaris = pilihanBlok.tingkat === 'persis' ? ('SAME' as const) : meta.statusPten;
@@ -2484,7 +2542,10 @@ export async function executeAnalystPipeline(
         provinsi,
         statusPten: statusPtenBaris,
         placementStatus: meta.placementStatus,
-        placementMethod: snNote || meta.placementMethod,
+        placementMethod:
+          pilihanBlok.tingkat === 'manual'
+            ? `Blok PTEN ${pilihanBlok.blok} dipatok operator ke kelurahan ini`
+            : snNote || meta.placementMethod,
         groupKota: meta.finalKotaPten,
         kategori: 'DIANALISA',
         fase1Approved: false,
@@ -2664,6 +2725,9 @@ export async function executeAnalystPipeline(
       provinsi: '',
     });
     sisa.forEach((p, seq) => {
+      // Usulan, bukan keputusan: kandidat kelurahan sekota yang paling dekat dengan
+      // blok ini. Operator yang memilih, dan pilihannya jadi patokan di run berikutnya.
+      const usulan = kandidatKelurahanBlok(String(p.kodePosPten || ''), kodePosByCity.get(ck) || []);
       unanalysedRows.push({
         id: `analyst-pten-${ck}-${String(p.kodePosPten || 'tanpakode')}-${seq + 1}-${Date.now()}`,
         no: 0,
@@ -2677,6 +2741,7 @@ export async function executeAnalystPipeline(
         placementStatus: 'REVIEW',
         placementMethod: `Blok PTEN ${p.kodePosPten || '(tanpa kode)'} tidak dipakai kelurahan mana pun di kota ini`,
         groupKota: p.kotaPten || ck,
+        kandidatBlokPten: usulan,
         kategori: 'TIDAK_ANALISA',
         fase1Approved: false,
         sourceRowIndex: -1,

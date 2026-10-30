@@ -126,6 +126,9 @@ export const App: React.FC = () => {
   // Pemetaan manual hasil "Setujui" di laporan cakupan: kunci kota master (cityMatchKey)
   // → nama kota PTEN. Baris master kota itu dipakai atas nama kota PTEN terpilih.
   const [cityOverrides, setCityOverrides] = useState<Record<string, string>>({});
+  // Patokan tangan untuk blok PTEN yang tidak diambil kelurahan mana pun: kode pos
+  // kelurahan → blok PTEN. Blok hanya pindah ke baris kalau operator menyetujui usulannya.
+  const [blokOverrides, setBlokOverrides] = useState<Record<string, string>>({});
   // Kartu sinyal yang sedang dibuka detail temuannya (nomor 1..13, null = tertutup).
   const [sinyalDibuka, setSinyalDibuka] = useState<number | null>(null);
   // 🧷 Checklist Kesiapan Data: centangan kartu fase disimpan sebagai awalan 1..n.
@@ -191,7 +194,7 @@ export const App: React.FC = () => {
       // Read local IndexedDB immediately in parallel so the UI is ready instantly
       // -----------------------------------------------------------------------
       try {
-        const [savedMaster, savedTarget, savedWilayah, savedPten, savedRoleMapping, savedCityOverrides, savedTracking] = await Promise.all([
+        const [savedMaster, savedTarget, savedWilayah, savedPten, savedRoleMapping, savedCityOverrides, savedBlokOverrides, savedTracking] = await Promise.all([
           getItem<{ rows: MasterRow[]; fileName: string }>('master_data').catch(() => null),
           getItem<{
             rows: TargetRow[];
@@ -203,6 +206,7 @@ export const App: React.FC = () => {
           getItem<PTENRecord[]>('pten_master_data').catch(() => null),
           getItem<RoleMappingRecord[]>('role_mapping_data').catch(() => null),
           getItem<Record<string, string>>('analyst_city_overrides').catch(() => null),
+          getItem<Record<string, string>>('pten_blok_overrides').catch(() => null),
           getItem<MuatanTracking>(KUNCI_STORAGE_TRACKING).catch(() => null),
         ]);
 
@@ -242,6 +246,10 @@ export const App: React.FC = () => {
 
         if (savedCityOverrides && typeof savedCityOverrides === 'object' && !Array.isArray(savedCityOverrides)) {
           setCityOverrides(savedCityOverrides);
+        }
+
+        if (savedBlokOverrides && typeof savedBlokOverrides === 'object' && !Array.isArray(savedBlokOverrides)) {
+          setBlokOverrides(savedBlokOverrides);
         }
 
         // Badge Tracking Merchant = merchant yang tersimpan terakhir di browser ini.
@@ -721,7 +729,10 @@ export const App: React.FC = () => {
     // "Setujui Fase": state `analystRows` di closure ini masih berisi array
     // SEBELUM persetujuan, jadi tanpa parameter ini persetujuan yang baru saja
     // diberikan akan tertimpa hasil run.
-    barisDasar?: AnalystRow[]
+    barisDasar?: AnalystRow[],
+    // Patokan blok PTEN yang baru saja disetujui operator — state `blokOverrides` belum
+    // ter-update di render ini, jadi nilainya dikirim eksplisit seperti `overrides`.
+    blokPatokan?: Record<string, string>
   ) => {
     // Fase yang tidak dicentang tidak boleh ikut dihitung, dan tanpa centangan sama
     // sekali tidak ada yang perlu dijalankan. `sampaiFase` tetap boleh eksplisit,
@@ -778,6 +789,7 @@ export const App: React.FC = () => {
       }
 
       const activeOverrides = overrides || cityOverrides;
+      const activeBlok = blokPatokan ?? blokOverrides;
       // ── Pemetaan manual (Setujui di laporan cakupan): baris master kota yang
       //    dipetakan operator dipakai ATAS NAMA kota PTEN pilihan, sehingga ikut
       //    join nama-kota deterministik seperti kota asli PTEN (bukan fuzzy). ──
@@ -804,6 +816,8 @@ export const App: React.FC = () => {
           // kosong terkunci selamanya (jalur perbaikan lewat "Ulangi Analisa" mati).
           excludeFinalKeys: finalRows.filter(barisFinalLengkap).map((fr) => makeFinalKey(fr.kodePosPten, fr.kelurahan, fr.kecamatan, fr.kotaPten)),
           sampaiFase: targetFase,
+          // Patokan blok PTEN hasil keputusan operator di antrean review.
+          blokOverrides: activeBlok,
           // Sumber terpakai yang EFEKTIF, bukan sekadar centangan: tabel role kosong
           // berarti Fase 3 memang tidak ada bahannya, jadi mesin harus melewatinya.
           roleDipakai: kesiapanSumber.role.dipakai,
@@ -984,6 +998,29 @@ export const App: React.FC = () => {
       'info'
     );
     if (analystRows.length > 0) await handleStartAnalystPipeline(false, next);
+  };
+
+  // Jalur (a): operator menyetujui usulan kelurahan untuk blok PTEN yang yatim. Blok
+  // dipatok ke kode pos kelurahan itu, lalu analisa dijalankan ulang — barisnya jadi
+  // baris normal (Fase 2/3 ikut) dan masuk Data Final lewat gerbang biasa.
+  const handleSetujuiBlokPten = async (blok: string, kodeKelurahan: string) => {
+    const next = { ...blokOverrides, [kodeKelurahan]: blok };
+    setBlokOverrides(next);
+    await setItem('pten_blok_overrides', next);
+    notify(`Blok PTEN ${blok} dipatok ke kelurahan berkode ${kodeKelurahan} — analisa dijalankan ulang.`, 'info');
+    await handleStartAnalystPipeline(false, undefined, undefined, undefined, next);
+  };
+
+  const handleBatalkanPatokBlok = async (kodeKelurahan: string) => {
+    const next = { ...blokOverrides };
+    delete next[kodeKelurahan];
+    setBlokOverrides(next);
+    await setItem('pten_blok_overrides', next);
+    notify(
+      `Patokan blok untuk kelurahan ${kodeKelurahan} dihapus${analystRows.length > 0 ? ' — analisa dijalankan ulang.' : '.'}`,
+      'info'
+    );
+    if (analystRows.length > 0) await handleStartAnalystPipeline(false, undefined, undefined, undefined, next);
   };
 
   const handleUpdateAnalystRow = (updated: AnalystRow) => {
@@ -1686,6 +1723,9 @@ export const App: React.FC = () => {
                   cityOverrides={cityOverrides}
                   onApproveCityOverride={handleApproveCityOverride}
                   onRemoveCityOverride={handleRemoveCityOverride}
+                  blokOverrides={blokOverrides}
+                  onSetujuiBlok={handleSetujuiBlokPten}
+                  onBatalkanPatokBlok={handleBatalkanPatokBlok}
                   masterRows={masterRows}
                   roleMappingList={roleMappingList}
                   catatanSumber={catatanSumber(kesiapanHasil, faseSampai)}

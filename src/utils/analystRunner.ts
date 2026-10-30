@@ -21,6 +21,8 @@ export interface KirimanAnalisa {
   sampaiFase?: 1 | 2 | 3;
   /** false = Mapping Role dilepas di checklist Kesiapan Data, Fase 3 tidak dihitung. */
   roleDipakai?: boolean;
+  /** Keputusan operator: kode pos kelurahan → blok PTEN yang dipatok untuknya. */
+  blokOverrides?: Record<string, string>;
 }
 
 export type ProgresAnalisa = (phase: 1 | 2 | 3, pct: number, processed: number, total: number, msg: string) => void;

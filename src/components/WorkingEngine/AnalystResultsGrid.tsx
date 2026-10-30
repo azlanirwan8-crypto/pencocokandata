@@ -98,6 +98,11 @@ interface AnalystResultsGridProps {
   cityOverrides?: Record<string, string>;
   onApproveCityOverride?: (masterCity: string, ptenKota: string) => void;
   onRemoveCityOverride?: (masterKey: string) => void;
+  /** Patokan blok PTEN hasil keputusan operator: kode pos kelurahan → blok PTEN. */
+  blokOverrides?: Record<string, string>;
+  /** Setujui usulan: blok PTEN yatim dipatok ke kelurahan berkode `kodeKelurahan`. */
+  onSetujuiBlok?: (blok: string, kodeKelurahan: string) => void;
+  onBatalkanPatokBlok?: (kodeKelurahan: string) => void;
   masterRows?: MasterRow[];
   roleMappingList?: RoleMappingRecord[];
   /** N0 butir 4: baris manual tidak bisa dibetulkan di sini — bawa operator ke menu Data Cabang. */
@@ -132,6 +137,9 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
   cityOverrides = {},
   onApproveCityOverride,
   onRemoveCityOverride,
+  blokOverrides = {},
+  onSetujuiBlok,
+  onBatalkanPatokBlok,
   masterRows = [],
   roleMappingList = [],
   onBukaMasterCabang,
@@ -1810,6 +1818,8 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                             {(() => {
                               const p = penjelasanFase1(r);
                               const cls = p.nada === 'ok' ? 'badge-match' : p.nada === 'waspada' ? 'badge-level2' : 'badge-diff';
+                              const usulan = r.kandidatBlokPten || [];
+                              const dipatok = blokOverrides[String(r.kodePosKelurahan || '').trim()];
                               return (
                                 <>
                                   <span className={`badge ${cls}`}>{p.label}</span>
@@ -1827,6 +1837,39 @@ export const AnalystResultsGrid: React.FC<AnalystResultsGridProps> = ({
                                   >
                                     {p.alasan}
                                   </div>
+                                  {/* Blok yatim: usulan kelurahan + tombolnya. Mesin tidak
+                      pernah mempatok sendiri — ini keputusan operator. */}
+                                  {usulan.length > 0 && onSetujuiBlok && (
+                                    <div className="ar-usulan">
+                                      <span className="ar-usulan-teks" title={usulan.map((u) => `${u.kodePos} ${u.kelurahan} / ${u.kecamatan}`).join(' · ')}>
+                                        usulan {usulan[0].kodePos} {kapital(usulan[0].kelurahan)}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        className="ar-usulan-btn"
+                                        disabled={isProcessing || !r.kodePosPten}
+                                        onClick={() => onSetujuiBlok(String(r.kodePosPten), usulan[0].kodePos)}
+                                        title={`Patok blok ${r.kodePosPten} ke kelurahan berkode ${usulan[0].kodePos} (${usulan[0].kelurahan}) lalu jalankan ulang analisa`}
+                                      >
+                                        <Check size={11} />
+                                        <span>Setujui</span>
+                                      </button>
+                                    </div>
+                                  )}
+                                  {dipatok && onBatalkanPatokBlok && (
+                                    <div className="ar-usulan">
+                                      <span className="ar-usulan-teks">dipatok operator → blok {dipatok}</span>
+                                      <button
+                                        type="button"
+                                        className="ar-usulan-batal"
+                                        disabled={isProcessing}
+                                        onClick={() => onBatalkanPatokBlok(String(r.kodePosKelurahan))}
+                                        title="Batalkan patokan — blok kembali ke antrean review"
+                                      >
+                                        <span>Batalkan</span>
+                                      </button>
+                                    </div>
+                                  )}
                                 </>
                               );
                             })()}

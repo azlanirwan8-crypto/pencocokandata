@@ -36,7 +36,8 @@ self.onmessage = (e: MessageEvent) => {
     p.excludeFinalKeys ? new Set<string>(p.excludeFinalKeys) : undefined,
     p.sampaiFase,
     pembatal,
-    p.roleDipakai ?? true
+    p.roleDipakai ?? true,
+    p.blokOverrides || {}
   )
     .then(({ rows, coverage }) => {
       self.postMessage({ type: 'selesai', rows, coverage });
